@@ -1398,6 +1398,8 @@ fun TandemApp(
                             null
                         },
                     addTransactionEnabled = !state.readOnlyMode,
+                    onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
+                    refreshingBudgets = mobileSession.isLoadingBudgets,
                 )
             }
         }

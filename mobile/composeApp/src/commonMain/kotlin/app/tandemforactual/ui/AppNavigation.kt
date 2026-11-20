@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemBackButton
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.TandemModalCloseButton
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
@@ -88,6 +89,7 @@ import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tags
@@ -262,6 +264,8 @@ internal fun AppHeader(
     compactLandscape: Boolean = false,
     onAddTransaction: (() -> Unit)? = null,
     addTransactionEnabled: Boolean = true,
+    onRefreshBudgets: (() -> Unit)? = null,
+    refreshingBudgets: Boolean = false,
 ) {
     val palette = tandemPalette
     var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
@@ -468,6 +472,17 @@ internal fun AppHeader(
                                 onOpenRoute(AppRoute.SYNC_CENTER)
                             },
                         )
+                    }
+                }
+                AppRoute.SWITCH_BUDGET -> {
+                    if (onRefreshBudgets != null) {
+                        if (refreshingBudgets) {
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                TandemLoadingIndicator(Modifier.size(20.dp), palette.accent, 2.dp)
+                            }
+                        } else {
+                            TandemIconButton(Lucide.RefreshCw, "Refresh budgets", onClick = onRefreshBudgets)
+                        }
                     }
                 }
                 AppRoute.SYNC_CENTER -> {
