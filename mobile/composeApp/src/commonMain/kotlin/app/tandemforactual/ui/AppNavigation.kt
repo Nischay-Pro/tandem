@@ -802,6 +802,14 @@ internal fun isLandscapeViewport(
     heightPx: Int,
 ): Boolean = widthPx > heightPx
 
+internal const val RAIL_NAVIGATION_MIN_WIDTH_DP = 600f
+
+/** Wide windows (tablets, unfolded foldables) and landscape phones use the side rail instead of the tab bar. */
+internal fun usesRailNavigation(
+    widthDp: Float,
+    isLandscape: Boolean,
+): Boolean = isLandscape || widthDp >= RAIL_NAVIGATION_MIN_WIDTH_DP
+
 @Composable
 internal fun SideNavigationRail(
     selected: AppRoute,
