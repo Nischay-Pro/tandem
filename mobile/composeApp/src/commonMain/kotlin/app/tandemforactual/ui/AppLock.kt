@@ -102,7 +102,13 @@ internal val LocalEncryptedBudgetVault = staticCompositionLocalOf<EncryptedBudge
 
 internal const val APP_LOCK_GRACE_MILLIS = 60_000L
 internal const val UNLOCK_ATTEMPTS_BEFORE_WAIT = 5
-internal const val UNLOCK_WAIT_MILLIS = 30_000L
+private val UNLOCK_WAIT_STEPS_MILLIS = listOf(30_000L, 120_000L, 600_000L, 1_800_000L)
+
+internal fun unlockWaitMillis(failures: Int): Long {
+    if (failures <= 0 || failures % UNLOCK_ATTEMPTS_BEFORE_WAIT != 0) return 0L
+    val step = failures / UNLOCK_ATTEMPTS_BEFORE_WAIT - 1
+    return UNLOCK_WAIT_STEPS_MILLIS[step.coerceAtMost(UNLOCK_WAIT_STEPS_MILLIS.lastIndex)]
+}
 
 internal fun budgetPasswordSecretId(budgetId: String): String = "budget-password:$budgetId"
 
@@ -233,8 +239,7 @@ private fun EncryptedBudgetUnlock(
         )
     }
     var prompting by remember { mutableStateOf(false) }
-    var failedAttempts by remember(budgetId) { mutableStateOf(0) }
-    var retryAtMillis by remember(budgetId) { mutableStateOf(0L) }
+    val retryAtMillis = state.unlockRetryAtEpochMillis
     var nowMillis by remember { mutableStateOf(mobileSession.nowEpochMillis()) }
     LaunchedEffect(retryAtMillis) {
         while (mobileSession.nowEpochMillis() < retryAtMillis) {
@@ -254,6 +259,8 @@ private fun EncryptedBudgetUnlock(
         error = null
         scope.launch {
             val unlockWith = {
+                state.unlockFailureCount = 0
+                state.unlockRetryAtEpochMillis = 0L
                 state.encryptedPassword = candidate
                 lockState.unlock()
                 onUnlocked()
@@ -270,9 +277,9 @@ private fun EncryptedBudgetUnlock(
                 }
             }
             val rejectStoredPassword = {
-                failedAttempts += 1
-                if (failedAttempts % UNLOCK_ATTEMPTS_BEFORE_WAIT == 0) {
-                    retryAtMillis = mobileSession.nowEpochMillis() + UNLOCK_WAIT_MILLIS
+                state.unlockFailureCount += 1
+                unlockWaitMillis(state.unlockFailureCount).takeIf { it > 0 }?.let {
+                    state.unlockRetryAtEpochMillis = mobileSession.nowEpochMillis() + it
                 }
                 if (fromBiometrics) {
                     authenticator?.deleteSecret(secretId)

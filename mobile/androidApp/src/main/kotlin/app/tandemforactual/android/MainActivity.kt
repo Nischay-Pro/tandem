@@ -86,6 +86,7 @@ class MainActivity : FragmentActivity() {
       !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
     }
     super.onCreate(savedInstanceState)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
     intent?.dataString?.let { AuthReturnEvents.publish(it) }
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
