@@ -1,0 +1,5 @@
+package = app.tandemforactual.data.sqlcipher
+headers = tandem_sqlcipher.h
+headerFilter = tandem_sqlcipher.h
+staticLibraries = libtandemsqlcipher.a
+linkerOpts = -framework Security
