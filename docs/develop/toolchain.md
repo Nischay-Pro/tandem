@@ -73,14 +73,10 @@ those tasks locally, use:
 ./gradlew :api-client:compileKotlinIosArm64 :api-client:compileKotlinIosSimulatorArm64
 ```
 
-Kover enforces 100% JVM line coverage for the generated API operations, auth
-adapter, and API holder. Its report treats the generated `@SerialName("status")`
-annotation on the readiness model as an uncovered executable line, although
-that annotation is compile-time serialization metadata. Kover therefore filters
-that generated model and its nested classes from the line denominator; the JVM
-test still decodes the readiness response, reads its status, and asserts the
-serialized JSON field name and value. Kover currently collects KMP coverage only
-from common and JVM source sets; it does not report iOS/native test coverage.
+The API client Kover gate requires 100% JVM line coverage for handwritten code
+and excludes the generated API package. Contract tests check the generated
+client's routes, methods, and headers. Kover reports coverage for common and
+JVM source sets. iOS simulator tests run separately.
 
 Do not edit generated files. Change Fastify schemas, regenerate the OpenAPI
 contract, then rebuild the client. Review generated API/model changes as part of

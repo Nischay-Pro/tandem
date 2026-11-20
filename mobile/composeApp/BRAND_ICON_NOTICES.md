@@ -1,6 +1,6 @@
 # TheSVG merchant artwork notices
 
-Tandem generates its offline merchant image resources from the pinned `@thesvg/icons` 4.0.4 and `@rei/cedar-icons` 2.6.1 packages, plus the Panera Bread wordmark recorded as public domain on Wikimedia Commons. The package code and tooling are MIT licensed; the package license texts are included in the generated app resources. `resvg` is only a build-time renderer and is not shipped as an app dependency.
+Tandem generates its offline merchant image resources from the pinned `@thesvg/icons` 4.0.6 and `@rei/cedar-icons` 2.6.1 packages, plus the Panera Bread wordmark recorded as public domain on Wikimedia Commons. The package code and tooling are MIT licensed; the package license texts are included in the generated app resources. `resvg` is only a build-time renderer and is not shipped as an app dependency.
 
 The generator checks the complete TheSVG catalog and includes every entry reported as `CC0-1.0`, `MIT`, `Apache-2.0`, public domain, `Fair Use`, or nominative fair use. It no longer filters by category. Other license labels are excluded. The standalone REI Cedar merchant icon is MIT licensed. The Panera Bread wordmark's source file is stored in `third_party/merchant-icons/`; the Wikimedia Commons file page reports it as public domain. The source snapshot keeps builds deterministic and does not require a Commons request. The app's About screen has a searchable index of every bundled icon, its reported license, source page, and associated brand site when available.
 
