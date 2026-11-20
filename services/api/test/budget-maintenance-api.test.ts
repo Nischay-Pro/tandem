@@ -2033,6 +2033,44 @@ describe("Actual budget maintenance API", () => {
       fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 1),
     ).rejects.toThrow("There is no money ready to assign in this month");
 
+    fake.client.holdBudgetForNextMonth.mockClear();
+    fake.client.resetBudgetHold.mockClear();
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      toBudget: -20_000,
+      forNextMonth: 100_000,
+      categoryGroups: [],
+    } as never);
+    await fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 80_000);
+    expect(fake.client.resetBudgetHold).toHaveBeenCalledWith("2026-11");
+    expect(fake.client.holdBudgetForNextMonth).toHaveBeenCalledWith(
+      "2026-11",
+      80_000,
+    );
+
+    fake.client.holdBudgetForNextMonth.mockClear();
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      toBudget: 0,
+      forNextMonth: 50_000,
+      categoryGroups: [],
+    } as never);
+    await fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 50_000);
+    expect(fake.client.holdBudgetForNextMonth).not.toHaveBeenCalled();
+
+    fake.client.holdBudgetForNextMonth.mockClear();
+    fake.client.getBudgetMonth.mockResolvedValueOnce({
+      toBudget: 0,
+      forNextMonth: 50_000,
+      categoryGroups: [],
+    } as never);
+    fake.client.holdBudgetForNextMonth.mockResolvedValueOnce(false);
+    await expect(
+      fake.api.holdBudgetForNextMonth("budget-1", "2026-11", 20_000),
+    ).rejects.toThrow("There is no money ready to assign in this month");
+    expect(fake.client.holdBudgetForNextMonth).toHaveBeenLastCalledWith(
+      "2026-11",
+      50_000,
+    );
+
     await fake.api.resetBudgetHold("budget-1", "2026-11");
     expect(fake.client.resetBudgetHold).toHaveBeenCalledWith("2026-11");
     await expect(

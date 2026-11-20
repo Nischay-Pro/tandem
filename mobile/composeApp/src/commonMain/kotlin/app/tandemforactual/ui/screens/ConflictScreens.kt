@@ -1154,7 +1154,7 @@ internal fun BudgetMutationReviewScreen(
                         "Check Actual’s order. Confirm the Tandem server is updated, then make this reorder again.",
                 )
             }
-            if (mutation?.requiresEncryptionPassword == true) {
+            if (mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()) {
                 BudgetMutationReasonCard(
                     title = "ENCRYPTED BUDGET",
                     explanation = "Unlock this budget before Tandem can refresh or try again.",

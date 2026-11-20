@@ -263,6 +263,8 @@ internal class TandemMobileSession(
 
     internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
 
+    private var isRetryingScheduleAction by mutableStateOf(false)
+
     var isUsingLocalServer by mutableStateOf(false)
         private set
 
@@ -679,7 +681,7 @@ internal class TandemMobileSession(
                 continue
             }
             snapshotFlow {
-                !isSigningOut && authenticatedDevice != null && !isSyncing && !isPerformingBudgetAction
+                !isSigningOut && authenticatedDevice != null && !isSyncing && !isPerformingBudgetAction && !isRetryingScheduleAction
             }.first { it }
             if (!isCurrentIdentityCacheOwner()) {
                 observedRetrySignal = snapshotFlow { scheduleActionRetrySignal }.first { it != observedRetrySignal }
@@ -718,7 +720,7 @@ internal class TandemMobileSession(
                 continue
             }
             refreshScheduleActionQueue(request.budgetId)
-            isPerformingBudgetAction = true
+            isRetryingScheduleAction = true
             try {
                 apiClient.withExclusiveSession {
                     apiClient.manageBudgetSchedule(
@@ -774,7 +776,7 @@ internal class TandemMobileSession(
                 observedRetrySignal = scheduleActionRetrySignal
                 pauseUntilRetrySignal = true
             } finally {
-                isPerformingBudgetAction = false
+                isRetryingScheduleAction = false
             }
             observedRetrySignal = scheduleActionRetrySignal
         }

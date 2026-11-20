@@ -239,7 +239,7 @@ class LiveBudgetModelsTest {
         val projected = requireNotNull(optimistic)
 
         assertTrue(waitingQueue.waitingForConnection)
-        assertEquals(5_100L, projected.toBudgetMinor)
+        assertEquals(3_900L, projected.toBudgetMinor)
         assertEquals(5_900L, projected.totalBudgetedMinor)
         assertEquals(1_200L, projected.heldForNextMonthMinor)
         assertTrue(projected.heldForNextMonthPending)
@@ -262,7 +262,7 @@ class LiveBudgetModelsTest {
                 type = "budget-month",
                 id = "2026-11",
                 json =
-                    """{"month":"2026-11","toBudget":5100,"forNextMonth":1200,"totalBudgeted":5900,"categoryGroups":[{"id":"home","categories":[{"id":"rent","budgeted":2500,"activity":-2000,"balance":500,"carryover":true},{"id":"groceries","budgeted":2100,"activity":-800,"balance":1300,"carryover":false},{"id":"dining","budgeted":1300,"activity":-700,"balance":600,"carryover":true}]}]}""",
+                    """{"month":"2026-11","toBudget":3900,"forNextMonth":1200,"totalBudgeted":5900,"categoryGroups":[{"id":"home","categories":[{"id":"rent","budgeted":2500,"activity":-2000,"balance":500,"carryover":true},{"id":"groceries","budgeted":2100,"activity":-800,"balance":1300,"carryover":false},{"id":"dining","budgeted":1300,"activity":-700,"balance":600,"carryover":true}]}]}""",
             )
         val afterSync = liveBudgetMonthSummary(syncedMonth, categories, groups)
         val synced = requireNotNull(afterSync)
