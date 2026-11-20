@@ -42,6 +42,7 @@ import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.ShieldCheck
@@ -77,6 +78,7 @@ internal fun SettingsScreen(
         SectionCard("Personalization") {
             ListRow(
                 "Appearance",
+                "Theme, accent color, and motion",
                 leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
             )
@@ -84,37 +86,43 @@ internal fun SettingsScreen(
         SectionCard("Budget") {
             ListRow(
                 "Budget preferences",
+                "Number format and planning",
                 leading = RowLeading.Icon(Lucide.WalletCards),
                 onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
             )
             DividerLine()
             ListRow(
                 "Manage payees",
+                "Rename, merge, and set default categories",
                 leading = RowLeading.Icon(Lucide.Tags),
                 onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
             )
             DividerLine()
             ListRow(
                 "Budget rules",
-                leading = RowLeading.Icon(Lucide.Tags),
+                "Rules that categorize transactions",
+                leading = RowLeading.Icon(Lucide.ListChecks),
                 onClick = { navigation.open(AppRoute.BUDGET_RULES) },
             )
         }
         SectionCard("Connection") {
             ListRow(
                 "Sync preferences",
+                "When and over which network to sync",
                 leading = RowLeading.Icon(Lucide.CloudSync),
                 onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
             )
             DividerLine()
             ListRow(
                 "Server and device",
+                "Server address, local address, and this device",
                 leading = RowLeading.Icon(Lucide.Smartphone),
                 onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
             )
             DividerLine()
             ListRow(
                 "Notifications",
+                "Sync problems and changes to review",
                 leading = RowLeading.Icon(Lucide.Bell),
                 onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
             )
@@ -122,7 +130,7 @@ internal fun SettingsScreen(
         SectionCard("Privacy") {
             ListRow(
                 "Security and privacy",
-                "Read-only access and device protection",
+                "Biometric unlock, encrypted budget, and hidden amounts",
                 leading = RowLeading.Icon(Lucide.ShieldCheck),
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
@@ -137,6 +145,7 @@ internal fun SettingsScreen(
         SectionCard("Support") {
             ListRow(
                 "Getting started",
+                "Tips for using Tandem",
                 leading = RowLeading.Icon(Lucide.BookOpen),
                 onClick = {
                     state.hasDismissedBudgetHint = false

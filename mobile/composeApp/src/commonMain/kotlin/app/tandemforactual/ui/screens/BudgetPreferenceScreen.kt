@@ -81,9 +81,9 @@ internal fun SyncPreferencesScreen(
                 ToggleRow(
                     "Schedule background sync",
                     if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets can’t sync in the background."
+                        "Encrypted budgets sync only while unlocked."
                     } else {
-                        "Refresh the selected budget about every six hours"
+                        "About every six hours, even when Tandem is closed"
                     },
                     state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
                     enabled = !state.selectedBudgetEncrypted,

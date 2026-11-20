@@ -92,14 +92,14 @@ internal fun LocalDataScreen(
             ListRow("Accounts", trailing = formatInteger(mobileSession.accountRecords.size))
             DividerLine()
             ListRow(
-                "Pending Changes",
+                "Pending changes",
                 leading = RowLeading.Icon(Lucide.CloudSync),
                 trailing = formatInteger(queuedCount),
             )
             DividerLine()
             ListRow(
                 "Needs review",
-                "Choose a version",
+                "Changes waiting for your decision",
                 formatInteger(conflictCount),
                 leading = RowLeading.Icon(Lucide.CloudAlert),
             )
@@ -258,7 +258,13 @@ internal fun AboutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 TandemBrandMark(Modifier.size(84.dp), contentDescription = "Tandem app icon")
-                Text("Tandem", color = tandemPalette.text, fontSize = TandemTypography.pageTitle, fontWeight = FontWeight.Bold)
+                Text(
+                    "Tandem",
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.pageTitle,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = tandemAlloFamily(),
+                )
                 Badge("Version ${platformAppVersionName()}")
                 Text(
                     "Your budget stays on this device and remains available when Tandem is offline.",
