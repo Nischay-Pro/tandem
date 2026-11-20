@@ -145,14 +145,17 @@ internal fun ScreenContent(
                 mobileSession.ruleRecords,
                 merchantIconMatcher,
             )
-        AppRoute.BUDGET_RULES ->
+        AppRoute.BUDGET_RULES -> {
             BudgetRulesScreen(
                 mobileSession.ruleRecords,
                 mobileSession.accountRecords,
                 mobileSession.categoryRecords,
                 mobileSession.categoryGroupRecords,
                 mobileSession.payeeRecords,
+                onOpenRule = { ruleId -> state.ruleEditorRuleId = ruleId },
             )
+            RuleEditorSheet(state, mobileSession)
+        }
         AppRoute.ACCOUNTS ->
             AccountsScreen(
                 state,

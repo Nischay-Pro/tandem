@@ -109,6 +109,7 @@ internal class AppState {
     var selectedTransactionPayeeName by mutableStateOf("")
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
+    var ruleEditorRuleId by mutableStateOf<String?>(null)
     var pointerInputSequence by mutableStateOf(0)
     var serverUrl by mutableStateOf("")
     var recentServerUrls by mutableStateOf("")
