@@ -16,6 +16,8 @@ interface EncryptedBudgetVault {
         password: String,
     ): PendingEncryptedBudget
 
+    fun delete(budgetId: String)
+
     fun deleteAll()
 }
 

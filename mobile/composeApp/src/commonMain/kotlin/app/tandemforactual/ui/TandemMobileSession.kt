@@ -334,6 +334,22 @@ internal class TandemMobileSession(
         scheduleActionEncryptionPasswords.clear()
     }
 
+    internal suspend fun removeBudgetFromDevice(
+        budgetId: String,
+        vault: EncryptedBudgetVault?,
+    ): String? {
+        val unsynced =
+            pendingBudgetMutationCount(budgetId) > 0 ||
+                repository?.readPendingWrites(budgetId).orEmpty().any { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
+        if (unsynced) return "Sync or resolve this budget’s changes before removing it from this device."
+        if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
+        mainStorage?.repository?.removeBudget(budgetId)
+        vault?.delete(budgetId)
+        cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
+        loadLocalRecords(budgetId)
+        return null
+    }
+
     internal suspend fun mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =
         mainStorage?.repository?.budgetWrites(budgetId).orEmpty()
 

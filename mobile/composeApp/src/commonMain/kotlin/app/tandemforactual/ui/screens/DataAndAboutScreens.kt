@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,10 +34,12 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.Badge
 import app.tandemforactual.ui.components.BodyText
+import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
+import app.tandemforactual.ui.components.InlineMessage
+import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
@@ -46,14 +49,22 @@ import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Trash2
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
 internal fun LocalDataScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
-    onSyncNow: () -> Unit,
+    navigation: AppNavigation,
 ) {
+    val scope = rememberCoroutineScope()
+    val vault = LocalEncryptedBudgetVault.current
+    val authenticator = LocalDeviceAuthenticator.current
+    var confirmRemove by rememberSaveable { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    var removeError by remember { mutableStateOf<String?>(null) }
     val hasSelectedBudget = state.selectedBudgetId.isNotBlank()
     val recordCount =
         mobileSession.cachedTransactionCount +
@@ -110,21 +121,64 @@ internal fun LocalDataScreen(
                 }
             }
         }
-        SectionCard("Storage actions") {
-            ListRow(
-                "Sync budget",
-                "Update this device from Actual",
-                when {
-                    mobileSession.isSyncing -> "Syncing"
-                    hasSelectedBudget -> null
-                    else -> "Unavailable"
-                },
-                options = ListRowOptions(animateChanges = true),
-                onClick = onSyncNow.takeIf { hasSelectedBudget && !mobileSession.isSyncing },
-            )
+        if (hasSelectedBudget) {
+            SectionCard("Storage") {
+                ListRow(
+                    "Remove from this device",
+                    "Deletes the copy saved here. Your budget in Actual isn’t changed.",
+                    leading = RowLeading.Icon(Lucide.Trash2),
+                    onClick = {
+                        if (!removing) {
+                            removeError = null
+                            confirmRemove = true
+                        }
+                    },
+                )
+            }
+            removeError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
         AnimatedPreviewNote(mobileSession.syncError)
         if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")
+    }
+    if (confirmRemove) {
+        val budgetName = state.selectedBudget.ifBlank { "this budget" }
+        DestructiveConfirmationDialog(
+            title = "Remove $budgetName from this device?",
+            message =
+                "Tandem deletes the copy saved on this device, including any saved password for it. " +
+                    "You can download it again from your server. Your budget in Actual isn’t changed.",
+            confirmLabel = "Remove",
+            dismissLabel = "Cancel",
+            enabled = !removing,
+            onDismissRequest = { if (!removing) confirmRemove = false },
+            onConfirm = {
+                removing = true
+                scope.launch {
+                    val budgetId = state.selectedBudgetId
+                    val error = mobileSession.removeBudgetFromDevice(budgetId, vault)
+                    removing = false
+                    confirmRemove = false
+                    if (error != null) {
+                        removeError = error
+                        return@launch
+                    }
+                    authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
+                    authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
+                    state.cachedBudgetCatalogJson =
+                        encodeCachedBudgetCatalog(
+                            decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot {
+                                it.budgetId ==
+                                    budgetId
+                            },
+                        )
+                    state.encryptedPassword = ""
+                    state.selectedBudget = ""
+                    state.selectedBudgetId = ""
+                    state.selectedBudgetEncrypted = false
+                    navigation.reset(AppRoute.BUDGET_CHOOSER)
+                }
+            },
+        )
     }
 }
 
