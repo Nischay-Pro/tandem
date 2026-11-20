@@ -1,5 +1,9 @@
 package app.tandemforactual.android
 
+import app.tandemforactual.ui.QuickActionEvents
+import androidx.core.graphics.drawable.IconCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.content.pm.ShortcutInfoCompat
 import app.tandemforactual.ui.SyncNetwork
 import app.tandemforactual.ui.NetworkKind
 import android.net.NetworkCapabilities
@@ -88,6 +92,8 @@ class MainActivity : FragmentActivity() {
     super.onCreate(savedInstanceState)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
     intent?.dataString?.let { AuthReturnEvents.publish(it) }
+    handleQuickAction(intent)
+    publishQuickAddShortcut()
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
@@ -128,6 +134,22 @@ class MainActivity : FragmentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     intent.dataString?.let { AuthReturnEvents.publish(it) }
+    handleQuickAction(intent)
+  }
+
+  private fun handleQuickAction(intent: Intent?) {
+    if (intent?.action == ACTION_ADD_TRANSACTION) QuickActionEvents.requestAddTransaction()
+  }
+
+  private fun publishQuickAddShortcut() {
+    val shortcut =
+      ShortcutInfoCompat
+        .Builder(this, "add-transaction")
+        .setShortLabel("Add transaction")
+        .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_add_transaction))
+        .setIntent(Intent(this, MainActivity::class.java).setAction(ACTION_ADD_TRANSACTION))
+        .build()
+    runCatching { ShortcutManagerCompat.pushDynamicShortcut(this, shortcut) }
   }
 
   private fun requestNotificationPermission() = askForNotifications(openSettingsIfBlocked = false)
@@ -200,3 +222,5 @@ class MainActivity : FragmentActivity() {
 }
 
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
+
+internal const val ACTION_ADD_TRANSACTION = "app.tandemforactual.action.ADD_TRANSACTION"

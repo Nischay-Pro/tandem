@@ -53,6 +53,17 @@
   </dict>
   <key>NSFaceIDUsageDescription</key>
   <string>Tandem uses Face ID to unlock your encrypted budgets and the app.</string>
+  <key>UIApplicationShortcutItems</key>
+  <array>
+    <dict>
+      <key>UIApplicationShortcutItemType</key>
+      <string>app.tandemforactual.add-transaction</string>
+      <key>UIApplicationShortcutItemTitle</key>
+      <string>Add transaction</string>
+      <key>UIApplicationShortcutItemIconType</key>
+      <string>UIApplicationShortcutIconTypeAdd</string>
+    </dict>
+  </array>
   <key>UILaunchStoryboardName</key>
   <string>LaunchScreen</string>
   <key>UIBackgroundModes</key>
