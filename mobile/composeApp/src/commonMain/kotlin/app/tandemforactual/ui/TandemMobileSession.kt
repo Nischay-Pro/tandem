@@ -10,6 +10,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.api.client.ServerCapabilities
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
@@ -267,6 +268,23 @@ internal class TandemMobileSession(
 
     var isUsingLocalServer by mutableStateOf(false)
         private set
+
+    var serverCapabilities by mutableStateOf<ServerCapabilities?>(null)
+        private set
+
+    private var capabilitiesCheckedAtEpochMs = 0L
+
+    suspend fun refreshServerCapabilities(force: Boolean = false) {
+        if (!force && nowEpochMillis() - capabilitiesCheckedAtEpochMs < CAPABILITIES_REFRESH_MILLIS) return
+        val latest = apiClient.readServerCapabilities() ?: return
+        capabilitiesCheckedAtEpochMs = nowEpochMillis()
+        if (latest != serverCapabilities) {
+            serverCapabilities = latest
+            budgetReorderRetrySignal += 1
+        }
+    }
+
+    internal fun missingServerFeature(kind: BudgetReorderKind): String? = missingServerFeature(kind, serverCapabilities)
 
     var localServerError by mutableStateOf<String?>(null)
         private set
@@ -1864,6 +1882,16 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
                 continue
             }
+            if (missingServerFeature(request.kind) != null) {
+                budgetReorderQueue =
+                    budgetReorderQueue.waitForConnection(
+                        request,
+                        "Saved on this device. Waiting for your Tandem server to be updated.",
+                    )
+                observedRetrySignal = snapshotFlow { budgetReorderRetrySignal }.first { it != observedRetrySignal }
+                budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+                continue
+            }
             snapshotFlow { isCorrectingBudgetMutation || isPerformingBudgetAction || isSyncing }.first { !it }
             if (budgetReorderQueue.moves.firstOrNull() != request) continue
 
@@ -3217,6 +3245,7 @@ internal class TandemMobileSession(
                     )
                 }
             isServerReachable = true
+            refreshServerCapabilities()
             retryQueuedScheduleActions()
             lastSyncSummary = summary
             loadLocalRecords(budgetId)
@@ -5560,3 +5589,20 @@ internal val BUDGET_PASSWORD_ERROR_CODES =
     setOf("budget_password_required", "budget_password_incorrect", BUDGET_PASSWORD_ATTEMPTS_EXCEEDED)
 
 internal const val ENCRYPTED_DATABASE_CLOSE_DELAY_MILLIS = 3_000L
+
+internal const val CAPABILITIES_REFRESH_MILLIS = 10 * 60_000L
+
+internal fun requiredServerFeature(kind: BudgetReorderKind): String? =
+    when (kind) {
+        BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "hold-total"
+        BudgetReorderKind.SET_ORDER -> "budget-order-merge"
+        else -> null
+    }
+
+internal fun missingServerFeature(
+    kind: BudgetReorderKind,
+    capabilities: ServerCapabilities?,
+): String? {
+    val feature = requiredServerFeature(kind) ?: return null
+    return feature.takeUnless { capabilities == null || capabilities.supports(it) }
+}

@@ -31,6 +31,7 @@ import {
 } from "./actual/budget-maintenance-routes.js";
 import { registerBudgetReadRoutes } from "./budget-projection/budget-read-routes.js";
 import { registerHealthRoutes } from "./health/health-routes.js";
+import { registerCapabilitiesRoute } from "./capabilities.js";
 import { registerOpenApiRoute } from "./openapi/openapi-route.js";
 import { registerTransactionRoutes } from "./actual/transaction-routes.js";
 import {
@@ -239,6 +240,7 @@ export async function buildApiApp(
       },
     },
   });
+  registerCapabilitiesRoute(app);
   registerHealthRoutes(app, {
     database,
     readinessTimeoutMs,

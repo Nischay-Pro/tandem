@@ -38,6 +38,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -233,6 +234,30 @@ class TandemApiClient(
             verifiedLocalServerUrl = if (verified && localServerUrl == candidate) candidate else null
         }
         return verifiedLocalServerUrl != null
+    }
+
+    suspend fun readServerCapabilities(): ServerCapabilities? {
+        val base = activeServerUrl ?: return null
+        return try {
+            val response = Api.client.get(endpointUrl(Url(base), "/api/v1/capabilities"))
+            when (response.status) {
+                HttpStatusCode.OK -> {
+                    val payload = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+                    ServerCapabilities(
+                        apiVersion = payload.requiredInt("apiVersion"),
+                        minimumClientApiVersion = payload.requiredInt("minimumClientApiVersion"),
+                        features = payload.requiredStringArray("features").toSet(),
+                        actualVersion = payload.optionalString("actualVersion"),
+                    )
+                }
+                HttpStatusCode.NotFound -> ServerCapabilities.LEGACY
+                else -> null
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun useExternalServerAfterLocalFailure() {
@@ -1646,6 +1671,9 @@ private fun JsonObject.optionalString(name: String): String? =
 private fun JsonObject.requiredBoolean(name: String): Boolean =
     (this[name] as? JsonPrimitive)?.booleanOrNull
         ?: throw TandemApiProtocolException("Server response is missing a valid $name")
+
+private fun JsonObject.requiredInt(name: String): Int =
+    (this[name] as? JsonPrimitive)?.intOrNull ?: throw TandemApiProtocolException("$name is required")
 
 private fun JsonObject.requiredStringArray(name: String): List<String> {
     val values =
