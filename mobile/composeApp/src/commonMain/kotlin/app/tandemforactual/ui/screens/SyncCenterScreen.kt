@@ -31,6 +31,8 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,7 +49,11 @@ import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
+import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PrimaryButton
+import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -75,6 +81,10 @@ import com.composables.icons.lucide.WalletCards
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 
 internal fun openNeedsReview(
     state: AppState,
@@ -257,7 +267,59 @@ internal fun SyncCenterScreen(
             }
         }
 
+        item(key = "sync-center-history") { DeviceWriteHistory(state, mobileSession) }
         item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+private const val DEVICE_HISTORY_PREVIEW = 8
+
+@Composable
+private fun DeviceWriteHistory(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    val budgetId = state.selectedBudgetId
+    val history by produceState(emptyList<OutboxOperationEntity>(), budgetId, mobileSession.pendingWrites, mobileSession.localSyncState) {
+        value = mobileSession.deviceWriteHistory(budgetId)
+    }
+    var showAll by rememberSaveable(budgetId) { mutableStateOf(false) }
+    if (history.isEmpty()) return
+    val payeeNames = remember(mobileSession.payeeRecords) { mobileSession.payeeRecords.associate { it.recordId to it.recordName() } }
+    val now = mobileSession.nowEpochMillis()
+    SectionCard("Sent from this device", "Your transaction changes from the last 90 days") {
+        val shown = if (showAll) history else history.take(DEVICE_HISTORY_PREVIEW)
+        shown.forEachIndexed { index, write ->
+            if (index > 0) DividerLine()
+            val body =
+                runCatching {
+                    Json
+                        .parseToJsonElement(
+                            write.optimisticJson ?: write.baseSnapshotJson ?: "{}",
+                        ).jsonObject
+                }.getOrNull()
+            val payee = (body?.get("payee") as? JsonPrimitive)?.contentOrNull?.let { payeeNames[it] }
+            val amount = (body?.get("amount") as? JsonPrimitive)?.longOrNull
+            ListRow(
+                "${deviceWriteActionLabel(write.action)} ${payee ?: "a transaction"}",
+                "${deviceWriteStatusLabel(
+                    write.status,
+                    write.lastErrorCode,
+                )} · ${formatMomentAtEpochMilliseconds(write.updatedAtEpochMs, now)}",
+                amount?.let { state.formatCurrency(it) },
+                leading = RowLeading.None,
+                options = ListRowOptions(dense = true, trailingColor = tandemPalette.muted),
+            )
+        }
+        if (history.size > DEVICE_HISTORY_PREVIEW) {
+            DividerLine()
+            ListRow(
+                if (showAll) "Show fewer" else "Show all ${history.size}",
+                leading = RowLeading.None,
+                options = ListRowOptions(dense = true),
+                onClick = { showAll = !showAll },
+            )
+        }
     }
 }
 
