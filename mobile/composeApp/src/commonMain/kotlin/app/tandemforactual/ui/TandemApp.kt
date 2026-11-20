@@ -59,9 +59,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -383,7 +385,9 @@ fun TandemApp(
             val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
                 if (state.selectedBudgetId.isNotBlank()) {
-                    eligibleAccounts.firstOrNull { it.id == requestedAccountId } ?: eligibleAccounts.firstOrNull()
+                    eligibleAccounts.firstOrNull { it.id == requestedAccountId }
+                        ?: eligibleAccounts.firstOrNull { it.id == state.lastTransactionAccountId }
+                        ?: eligibleAccounts.firstOrNull()
                 } else {
                     null
                 }
@@ -1171,6 +1175,7 @@ fun TandemApp(
             }
         }
     }
+    val haptics = LocalHapticFeedback.current
     val saveTransaction: (String?, (Boolean) -> Unit) -> Unit = { confirmedFutureDate, onComplete ->
         val transactionId = state.selectedTransactionRecordId
         val originalAmount = state.selectedTransactionAmountMinor
@@ -1193,6 +1198,7 @@ fun TandemApp(
                         confirmedFutureDate = confirmedFutureDate,
                     )
                 if (saved) {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                     val amount = state.parseAmountMinorUnits(state.transactionAmount) ?: kotlin.math.abs(originalAmount)
                     state.selectedTransactionAmountMinor =
                         when {
@@ -1250,6 +1256,8 @@ fun TandemApp(
                         confirmedFutureDate = confirmedFutureDate,
                     )
                 if (created) {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    state.lastTransactionAccountId = state.newTransactionAccountId
                     restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)
                     navigation.back()
                 }
@@ -1427,7 +1435,6 @@ fun TandemApp(
                         ),
                     onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
                     refreshingBudgets = mobileSession.isLoadingBudgets,
-                    canAddRules = mobileSession.canEditRules && !state.readOnlyMode,
                 )
             }
         }

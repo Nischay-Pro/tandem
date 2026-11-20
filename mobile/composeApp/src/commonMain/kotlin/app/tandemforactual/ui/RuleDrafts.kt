@@ -72,10 +72,11 @@ internal enum class RuleActionKind(
 internal enum class RuleStage(
     val wire: String,
     val label: String,
+    val detail: String,
 ) {
-    PRE("pre", "First"),
-    DEFAULT("default", "Normal"),
-    POST("post", "Last"),
+    PRE("pre", "First", "Runs before other rules, so later rules can build on what it sets."),
+    DEFAULT("default", "Normal", "Runs with most rules, after any set to run first."),
+    POST("post", "Last", "Runs after every other rule, so its changes win."),
 }
 
 internal data class RuleConditionDraft(

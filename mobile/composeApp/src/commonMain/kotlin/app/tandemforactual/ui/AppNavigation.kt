@@ -273,7 +273,6 @@ internal fun AppHeader(
     syncCaption: String? = null,
     onRefreshBudgets: (() -> Unit)? = null,
     refreshingBudgets: Boolean = false,
-    canAddRules: Boolean = false,
 ) {
     val palette = tandemPalette
     var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
@@ -501,11 +500,6 @@ internal fun AppHeader(
                         } else {
                             TandemIconButton(Lucide.RefreshCw, "Refresh budgets", onClick = onRefreshBudgets)
                         }
-                    }
-                }
-                AppRoute.BUDGET_RULES -> {
-                    if (canAddRules) {
-                        TandemIconButton(Lucide.Plus, "Add rule") { state.ruleEditorRuleId = "" }
                     }
                 }
                 AppRoute.SYNC_CENTER -> {
