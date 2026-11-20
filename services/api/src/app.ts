@@ -41,6 +41,10 @@ import {
   SERVER_STORAGE_FULL_ERROR,
 } from "./storage-failure.js";
 import { BudgetEncryptionPasswordError } from "./actual/budget-encryption-errors.js";
+import {
+  BudgetPasswordAttemptLimiter,
+  budgetPasswordAttemptKey,
+} from "./actual/budget-password-attempts.js";
 
 declare module "fastify" {
   interface FastifySchema {
@@ -123,11 +127,37 @@ export async function buildApiApp(
       },
     });
   });
+  const passwordAttempts = new BudgetPasswordAttemptLimiter();
+  const passwordAttemptKeys = new WeakMap<FastifyRequest, string>();
+  app.addHook("preHandler", async (request, reply) => {
+    const key = budgetPasswordAttemptKey(request);
+    if (key === undefined) return;
+    passwordAttemptKeys.set(request, key);
+    const retryAfterSeconds = passwordAttempts.retryAfterSeconds(key);
+    if (retryAfterSeconds === 0) return;
+    reply.header("retry-after", String(retryAfterSeconds));
+    return reply.code(429).send({
+      error: {
+        code: "budget_password_attempts_exceeded",
+        message:
+          "Too many incorrect budget passwords. Wait a few minutes, then try again.",
+      },
+    });
+  });
   app.addHook("onSend", async (request, reply, payload) => {
     const statusCode = reply.statusCode;
+    let errorCode: string | undefined;
     if (statusCode === 409 || statusCode >= 500) {
-      const errorCode = responseErrorCode(payload, statusCode);
+      errorCode = responseErrorCode(payload, statusCode);
       responseErrorCodes.set(request, errorCode);
+    }
+    const attemptKey = passwordAttemptKeys.get(request);
+    if (attemptKey !== undefined) {
+      if (errorCode === "budget_password_incorrect") {
+        passwordAttempts.recordFailure(attemptKey);
+      } else if (statusCode < 400) {
+        passwordAttempts.recordSuccess(attemptKey);
+      }
     }
     return payload;
   });

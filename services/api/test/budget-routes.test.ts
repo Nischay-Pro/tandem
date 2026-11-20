@@ -422,6 +422,34 @@ describe("budget snapshot and change feed routes", () => {
     await app.close();
   });
 
+  it("stops accepting budget passwords after repeated wrong attempts", async () => {
+    const lockedApi = createBudgetReadApi({
+      getSnapshot: vi.fn(async (_budgetId, password?: string) => {
+        if (password !== "right") {
+          throw new BudgetEncryptionPasswordError("budget_password_incorrect");
+        }
+        return snapshot;
+      }),
+    });
+    const app = await buildApp(lockedApi);
+    const attempt = (password: string) =>
+      app.inject({
+        method: "GET",
+        url: "/api/v1/budgets/budget-1/snapshot",
+        headers: { ...authHeaders, "x-budget-encryption-password": password },
+      });
+
+    expect((await attempt("right")).statusCode).toBe(200);
+    for (let index = 0; index < 5; index += 1) {
+      expect((await attempt("wrong")).statusCode).toBe(502);
+    }
+    const blocked = await attempt("right");
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers["retry-after"]).toBeDefined();
+    expect(blocked.json().error.code).toBe("budget_password_attempts_exceeded");
+    await app.close();
+  });
+
   it("asks the device to sign in again when Actual expired a budget session", async () => {
     const expiredApi = createBudgetReadApi({
       getSnapshot: vi.fn(async () => {
