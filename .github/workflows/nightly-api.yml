@@ -313,7 +313,6 @@ jobs:
           NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
         run: |
           ./gradlew \
-            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
             :androidApp:assembleRelease \
             -PtandemVersionCode="$NIGHTLY_VERSION_CODE" \
             -PtandemVersionName="$NIGHTLY_VERSION_NAME"
