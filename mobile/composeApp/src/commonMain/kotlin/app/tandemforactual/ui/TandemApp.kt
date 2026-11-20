@@ -702,6 +702,9 @@ fun TandemApp(
     val currentNetworkKind by currentNetwork.collectAsState()
     LaunchedEffect(state.localServerUrl, mobileSession.authenticatedDevice?.deviceId, currentNetworkKind) {
         mobileSession.configureLocalServer(state.localServerUrl.ifBlank { null })
+        if (currentNetworkKind != null && mobileSession.budgetError != null && mobileSession.isAuthenticated) {
+            mobileSession.loadBudgets()
+        }
     }
     val automaticSyncRequest =
         rememberUpdatedState(
@@ -1587,7 +1590,7 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
+                if (shouldRenderRouteHeader(route, tabShellRoute != null) && !needsEncryptedBudgetUnlock(state, shellHeaderRoute)) {
                     AnimatedContent(
                         targetState = shellHeaderRoute,
                         transitionSpec = {
