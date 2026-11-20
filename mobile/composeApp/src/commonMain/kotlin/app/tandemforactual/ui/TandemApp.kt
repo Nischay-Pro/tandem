@@ -1310,6 +1310,7 @@ fun TandemApp(
         val palette = tandemPalette
         val windowSize = LocalWindowInfo.current.containerSize
         val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
+        val useRail = usesRailNavigation(with(LocalDensity.current) { windowSize.width.toDp().value }, isLandscape)
         val isDark =
             state.theme == ThemeMode.DARK ||
                 state.theme == ThemeMode.PURE_BLACK ||
@@ -1551,7 +1552,7 @@ fun TandemApp(
                                 )
                             }
                         }
-                        if (includeChrome && visibleRoute.isTab() && !isLandscape) {
+                        if (includeChrome && visibleRoute.isTab() && !useRail) {
                             BottomNavigation(visibleRoute, navigation.selectTab)
                         }
                     }
@@ -1576,8 +1577,8 @@ fun TandemApp(
                 transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
                 else -> route
             }
-        val showLandscapeRail =
-            isLandscape &&
+        val showRail =
+            useRail &&
                 tabShellRoute != null &&
                 route.showsBottomNavigation() &&
                 !imeVisible &&
@@ -1589,7 +1590,7 @@ fun TandemApp(
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {
-            if (showLandscapeRail) {
+            if (showRail) {
                 SideNavigationRail(
                     selected = requireNotNull(tabShellRoute),
                     selectTab = navigation.selectTab,
@@ -1599,7 +1600,7 @@ fun TandemApp(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
+                    .padding(start = if (showRail) 80.dp else 0.dp),
             ) {
                 if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
                     AnimatedContent(
@@ -1729,7 +1730,7 @@ fun TandemApp(
                         )
                     }
                 }
-                if (tabShellRoute != null && !isLandscape) {
+                if (tabShellRoute != null && !useRail) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
                         modifier = Modifier.fillMaxWidth(),

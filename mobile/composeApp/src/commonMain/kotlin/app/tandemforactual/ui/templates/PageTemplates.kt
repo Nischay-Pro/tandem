@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,6 +48,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
@@ -60,16 +62,28 @@ internal fun PageColumn(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = LocalRouteScrollState.current ?: rememberScrollState()
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(verticalSpacing),
-        content = content,
-    )
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(
+                        horizontal = readablePadding(maxWidth, horizontalPadding, TandemLayout.readableContentWidth),
+                        vertical = TandemSpacing.medium,
+                    ),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+            content = content,
+        )
+    }
 }
+
+/** Keeps content at a readable width on tablets and unfolded foldables, centered, while the whole width still scrolls. */
+internal fun readablePadding(
+    availableWidth: Dp,
+    minimumPadding: Dp,
+    contentWidth: Dp,
+): Dp = maxOf(minimumPadding, (availableWidth - contentWidth) / 2)
 
 @Composable
 internal fun OnboardingLayout(
@@ -80,25 +94,28 @@ internal fun OnboardingLayout(
     actions: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = LocalRouteScrollState.current ?: rememberScrollState()
-    Column(modifier.fillMaxSize().imePadding()) {
-        Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
-            content = content,
-        )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
-            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
-            content = actions,
-        )
+    BoxWithConstraints(modifier.fillMaxSize().imePadding()) {
+        val sidePadding = readablePadding(maxWidth, horizontalPadding, TandemLayout.setupContentWidth)
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = sidePadding, vertical = TandemSpacing.medium),
+                verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+                content = content,
+            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = sidePadding, vertical = TandemSpacing.medium),
+                verticalArrangement = Arrangement.spacedBy(verticalSpacing),
+                content = actions,
+            )
+        }
     }
 }
 
@@ -112,6 +129,29 @@ internal fun PageLazyColumn(
     content: LazyListScope.() -> Unit,
 ) {
     val routeListState = LocalRouteLazyListState.current ?: rememberLazyListState()
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        PageLazyColumnContent(
+            verticalSpacing,
+            readablePadding(maxWidth, horizontalPadding, TandemLayout.readableContentWidth),
+            Modifier.fillMaxSize(),
+            routeListState,
+            isRefreshing,
+            onRefresh,
+            content,
+        )
+    }
+}
+
+@Composable
+private fun PageLazyColumnContent(
+    verticalSpacing: androidx.compose.ui.unit.Dp,
+    horizontalPadding: androidx.compose.ui.unit.Dp,
+    modifier: Modifier,
+    routeListState: androidx.compose.foundation.lazy.LazyListState,
+    isRefreshing: Boolean,
+    onRefresh: (() -> Unit)?,
+    content: LazyListScope.() -> Unit,
+) {
     if (onRefresh == null) {
         LazyColumn(
             state = routeListState,
