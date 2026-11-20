@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +46,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,7 +75,11 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.History
+import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LockKeyhole
+import com.composables.icons.lucide.LockOpen
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
@@ -314,6 +323,16 @@ internal fun ServerAddressScreen(
     state: AppState,
     navigation: AppNavigation,
 ) {
+    val completedAddress = completeServerAddress(state.serverUrl)
+    val canContinue = serverAddressIsValid(completedAddress)
+    val secureAddress = completedAddress.startsWith("https://", ignoreCase = true)
+    val continueToSignIn = {
+        if (canContinue) {
+            state.serverUrl = completedAddress
+            navigation.open(AppRoute.SIGN_IN)
+        }
+    }
+    val suggestions = serverAddressSuggestions(state.serverUrl, recentServerAddresses(state.recentServerUrls))
     OnboardingLayout(
         content = {
             SetupStepHeader(step = 1, navigation = navigation)
@@ -322,10 +341,37 @@ internal fun ServerAddressScreen(
                 "Server URL",
                 state.serverUrl,
                 { state.serverUrl = it },
-                TextFieldOptions(placeholder = "https://"),
+                TextFieldOptions(
+                    placeholder = "budget.example.com",
+                    keyboardOptions =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.None,
+                            autoCorrectEnabled = false,
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go,
+                        ),
+                    keyboardActions = KeyboardActions(onGo = { continueToSignIn() }),
+                    leadingIcon = if (canContinue) (if (secureAddress) Lucide.Lock else Lucide.LockOpen) else null,
+                    leadingIconTint = if (secureAddress) tandemPalette.positive else tandemPalette.negative,
+                    leadingIconDescription = if (secureAddress) "Secure connection" else "Not secure",
+                ),
             )
+            AnimatedReveal(visible = suggestions.isNotEmpty()) {
+                SurfaceCard {
+                    suggestions.forEachIndexed { index, suggestion ->
+                        if (index > 0) DividerLine()
+                        ListRow(
+                            suggestion.address,
+                            suggestion.detail,
+                            leading = RowLeading.Icon(if (suggestion.recent) Lucide.History else Lucide.Globe),
+                            options = ListRowOptions(dense = true),
+                            onClick = { state.serverUrl = suggestion.address },
+                        )
+                    }
+                }
+            }
             InfoBubble("Tandem checks for the Actual API Gateway at /api/v1/.")
-            if (serverAddressMayBeInsecure(state.serverUrl)) {
+            if (serverAddressMayBeInsecure(completedAddress)) {
                 val palette = tandemPalette
                 Row(
                     Modifier
@@ -348,12 +394,66 @@ internal fun ServerAddressScreen(
             }
         },
         actions = {
-            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = serverAddressIsValid(state.serverUrl)) {
-                navigation.open(AppRoute.SIGN_IN)
-            }
+            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = canContinue) { continueToSignIn() }
         },
     )
 }
+
+internal data class ServerAddressSuggestion(
+    val address: String,
+    val detail: String,
+    val recent: Boolean,
+)
+
+internal fun completeServerAddress(value: String): String {
+    val address = value.trim().trimEnd('/')
+    if (address.isEmpty() || "://" in address) return address
+    val host =
+        address
+            .substringBefore('/')
+            .let { if (it.startsWith("[")) it.substringBefore(']') + "]" else it.substringBeforeLast(':') }
+    return (if (isLocalHttpHost(host)) "http://" else "https://") + address
+}
+
+internal fun recentServerAddresses(saved: String): List<String> = saved.lines().map(String::trim).filter(String::isNotEmpty)
+
+internal fun rememberRecentServerAddress(
+    saved: String,
+    address: String,
+): String {
+    val cleaned = address.trim().trimEnd('/')
+    if (cleaned.isEmpty()) return saved
+    return (listOf(cleaned) + recentServerAddresses(saved).filterNot { it.equals(cleaned, ignoreCase = true) })
+        .take(MAX_RECENT_SERVER_ADDRESSES)
+        .joinToString("\n")
+}
+
+internal fun serverAddressSuggestions(
+    input: String,
+    recent: List<String>,
+): List<ServerAddressSuggestion> {
+    val typed = input.trim().trimEnd('/')
+    val needle = typed.substringAfter("://").lowercase()
+    val recentMatches =
+        recent
+            .filter { !it.equals(typed, ignoreCase = true) && it.substringAfter("://").lowercase().contains(needle) }
+            .map { ServerAddressSuggestion(it, "Used before", recent = true) }
+    val completed = completeServerAddress(typed)
+    val completion =
+        if (typed.isNotEmpty() && "://" !in typed && serverAddressIsValid(completed)) {
+            ServerAddressSuggestion(
+                completed,
+                if (completed.startsWith("http://")) "Home network address" else "Secure connection",
+                recent = false,
+            )
+        } else {
+            null
+        }
+    return (recentMatches + listOfNotNull(completion)).distinctBy { it.address.lowercase() }.take(MAX_SERVER_ADDRESS_SUGGESTIONS)
+}
+
+private const val MAX_RECENT_SERVER_ADDRESSES = 5
+private const val MAX_SERVER_ADDRESS_SUGGESTIONS = 3
 
 internal fun cleanServerAddress(value: String): String =
     value.trim().takeUnless { it.equals("https://budget.example.com", ignoreCase = true) }.orEmpty()
