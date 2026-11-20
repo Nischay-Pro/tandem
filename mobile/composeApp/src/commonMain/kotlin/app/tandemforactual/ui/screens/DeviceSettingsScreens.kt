@@ -21,12 +21,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.FieldErrorMessage
+import app.tandemforactual.ui.components.InlineMessage
+import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
+import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import com.composables.icons.lucide.FolderKey
+import com.composables.icons.lucide.House
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.LogIn
 import com.composables.icons.lucide.LogOut
@@ -62,6 +68,22 @@ internal fun ServerDeviceScreen(
                         trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
                     ),
                 onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+            )
+            DividerLine()
+            ListRow(
+                "Local address",
+                state.localServerUrl.ifBlank { "Optional · faster on your home network" },
+                when {
+                    state.localServerUrl.isBlank() -> null
+                    mobileSession.isUsingLocalServer -> "In use"
+                    else -> "Not in use"
+                },
+                leading = RowLeading.Icon(Lucide.House),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isUsingLocalServer) tandemPalette.positive else tandemPalette.muted,
+                    ),
+                onClick = { navigation.open(AppRoute.LOCAL_SERVER_ADDRESS) },
             )
             DividerLine()
             ListRow(
@@ -358,5 +380,62 @@ internal fun NotificationsScreen(
             }
         }
         InfoBubble("In-app banners always show, even when phone notifications are off.")
+    }
+}
+
+@Composable
+internal fun LocalServerAddressScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+) {
+    val scope = rememberCoroutineScope()
+    var address by rememberSaveable { mutableStateOf(state.localServerUrl) }
+    var checking by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf<Boolean?>(null) }
+    PageColumn {
+        val mainAddress = state.serverUrl.ifBlank { "your server address" }
+        InfoBubble(
+            "On your home network or VPN, Tandem can talk to your server directly. It uses this address only after " +
+                "your server proves it’s yours, and uses $mainAddress everywhere else.",
+        )
+        TextFieldCard(
+            "Local address",
+            address,
+            {
+                address = it
+                checked = null
+            },
+            TextFieldOptions(placeholder = "http://192.168.1.10:19753"),
+        )
+        FieldErrorMessage(mobileSession.localServerError)
+        when (checked) {
+            true -> InlineMessage("Your server confirmed this address. Tandem uses it on this network.", InlineMessageKind.SUCCESS)
+            false ->
+                if (mobileSession.localServerError == null) {
+                    InlineMessage(
+                        "Tandem couldn’t confirm your server at this address on this network. It will keep using your main address and try again when the network changes.",
+                        InlineMessageKind.INFO,
+                    )
+                }
+            null -> Unit
+        }
+        PrimaryButton(if (checking) "Checking…" else "Save and check", enabled = address.isNotBlank() && !checking, loading = checking) {
+            checking = true
+            scope.launch {
+                val saved = address.trim()
+                checked = mobileSession.configureLocalServer(saved)
+                if (mobileSession.localServerError == null) state.localServerUrl = saved
+                checking = false
+            }
+        }
+        if (state.localServerUrl.isNotBlank()) {
+            SecondaryButton("Remove local address") {
+                state.localServerUrl = ""
+                address = ""
+                checked = null
+                scope.launch { mobileSession.configureLocalServer(null) }
+            }
+        }
     }
 }

@@ -717,6 +717,21 @@ describe("durable write journal integration", () => {
     });
     await database.journal.enqueue(queuedInput);
 
+    const maintenanceInput = {
+      ...createOperation({
+        principalId: committedInput.principalId,
+        budgetId: committedInput.budgetId,
+      }),
+      entityType: "budget-maintenance",
+      baseSnapshot: {},
+      patch: { name: "Private category" },
+    };
+    await database.journal.enqueue(maintenanceInput);
+    await database.journal.claim(maintenanceInput.operationId);
+    await database.journal.markCommitted(maintenanceInput.operationId, {
+      categoryId: "category-1",
+    });
+
     const uncertainInput = createOperation({
       principalId: committedInput.principalId,
       budgetId: committedInput.budgetId,
@@ -750,6 +765,7 @@ describe("durable write journal integration", () => {
           committedInput.operationId,
           rejectedInput.operationId,
           queuedInput.operationId,
+          maintenanceInput.operationId,
           uncertainInput.operationId,
           conflictInput.operationId,
         ],
@@ -761,8 +777,15 @@ describe("durable write journal integration", () => {
       throw new Error("Journal payload compaction is unavailable");
     }
     await expect(compactTerminalPayloads.call(database.journal)).resolves.toBe(
-      2,
+      3,
     );
+    await expect(
+      database.journal.get(maintenanceInput.operationId),
+    ).resolves.toMatchObject({
+      status: "committed",
+      patch: {},
+      actualResult: null,
+    });
     const compacted = await database.journal.get(committedInput.operationId);
     expect(compacted).toMatchObject({
       operationId: committedInput.operationId,

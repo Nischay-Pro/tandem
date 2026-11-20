@@ -26,7 +26,7 @@ internal expect fun secureRandomBytes(size: Int): ByteArray
 
 internal expect fun sha256(input: ByteArray): ByteArray
 
-private fun encodeBase64Url(input: ByteArray): String {
+internal fun encodeBase64Url(input: ByteArray): String {
     val output = StringBuilder((input.size * 4 + 2) / 3)
     var index = 0
     while (index + 2 < input.size) {
