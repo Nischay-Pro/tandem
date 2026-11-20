@@ -20,7 +20,6 @@ import app.tandemforactual.data.sqlcipher.tandem_column_int64
 import app.tandemforactual.data.sqlcipher.tandem_column_name
 import app.tandemforactual.data.sqlcipher.tandem_column_text
 import app.tandemforactual.data.sqlcipher.tandem_column_type
-import app.tandemforactual.data.sqlcipher.tandem_db
 import app.tandemforactual.data.sqlcipher.tandem_errmsg
 import app.tandemforactual.data.sqlcipher.tandem_finalize
 import app.tandemforactual.data.sqlcipher.tandem_key
@@ -28,7 +27,8 @@ import app.tandemforactual.data.sqlcipher.tandem_open
 import app.tandemforactual.data.sqlcipher.tandem_prepare
 import app.tandemforactual.data.sqlcipher.tandem_reset
 import app.tandemforactual.data.sqlcipher.tandem_step
-import app.tandemforactual.data.sqlcipher.tandem_stmt
+import cnames.structs.tandem_db
+import cnames.structs.tandem_stmt
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
