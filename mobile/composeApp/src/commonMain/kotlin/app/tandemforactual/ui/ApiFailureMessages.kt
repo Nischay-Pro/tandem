@@ -34,6 +34,8 @@ internal fun apiFailureMessage(
         "statement_preview_failed" -> "Tandem couldn’t check which statement rows are already in Actual. Check your connection."
         "actual_operation_failed" -> "Actual couldn’t save this change. Refresh the budget before trying again."
         "budget_sync_failed" -> "Tandem couldn’t refresh this budget from Actual. Check the Actual connection."
+        "budget_password_required" -> "This budget is encrypted. Unlock it with its encryption password."
+        "budget_password_incorrect" -> "That password didn’t unlock this encrypted budget. Check the budget password."
         "operation_uncertain" -> "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."
         "operation_in_progress" -> "Tandem is still processing this change. Wait for it to finish."
         "operation_not_found" -> "Tandem can’t find this edit’s status. Check Actual before removing the edit."

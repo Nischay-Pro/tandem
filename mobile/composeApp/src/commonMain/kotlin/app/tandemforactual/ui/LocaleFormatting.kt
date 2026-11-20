@@ -42,6 +42,8 @@ internal expect fun platformFormatDate(
 
 internal expect fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String
 
+internal expect fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Long): String
+
 internal expect fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String
 
 internal expect fun platformTodayIsoDate(): String
@@ -111,6 +113,19 @@ internal fun formatSignedCurrency(
 internal fun formatDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
 
 internal fun formatDateAtEpochMilliseconds(epochMilliseconds: Long): String = platformFormatDateAtEpochMilliseconds(epochMilliseconds)
+
+internal fun formatMomentAtEpochMilliseconds(
+    epochMilliseconds: Long,
+    nowEpochMilliseconds: Long,
+): String {
+    val day = platformIsoDateAtEpochMilliseconds(epochMilliseconds)
+    val time = platformFormatTimeAtEpochMilliseconds(epochMilliseconds)
+    return when (day) {
+        platformIsoDateAtEpochMilliseconds(nowEpochMilliseconds) -> "today at $time"
+        platformIsoDateAtEpochMilliseconds(nowEpochMilliseconds - 86_400_000L) -> "yesterday at $time"
+        else -> "${platformFormatDateAtEpochMilliseconds(epochMilliseconds)} at $time"
+    }
+}
 
 internal fun formatShortDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = false)
 

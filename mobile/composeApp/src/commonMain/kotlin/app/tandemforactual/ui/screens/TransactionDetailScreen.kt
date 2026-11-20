@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -66,12 +67,8 @@ internal fun TransactionDetailScreen(
         remember(state.categoryIconOverrides, state.transactionCategory, state.newTransactionCategoryId) {
             state.categoryIconFor(state.newTransactionCategoryId, state.transactionCategory)
         }
-    val hasUnsentTransactionChange =
-        mobileSession.pendingWrites.any { operation ->
-            operation.recordType == "transaction" &&
-                operation.recordId == state.selectedTransactionRecordId &&
-                operation.status in UNSYNCED_TRANSACTION_WRITE_STATUSES
-        }
+    val syncOperation = transactionSyncOperations(mobileSession.pendingWrites)[state.selectedTransactionRecordId]
+    val hasUnsentTransactionChange = syncOperation != null
     val isSyncedToActual = isLive && state.selectedTransactionRecordId.isNotBlank() && !hasUnsentTransactionChange
     val syncDescription =
         when {
@@ -127,6 +124,9 @@ internal fun TransactionDetailScreen(
                     tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
                 )
             }
+        }
+        AnimatedVisibility(syncOperation != null) {
+            syncOperation?.let { TransactionSyncNotice(it, state, navigation) }
         }
         SectionCard(title = "") {
             ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = state.transactionAccount)

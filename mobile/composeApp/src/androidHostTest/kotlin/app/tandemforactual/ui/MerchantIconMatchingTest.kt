@@ -14,6 +14,9 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
 import com.composables.icons.lucide.ShoppingCart
 import com.composables.icons.lucide.WalletCards
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -169,13 +172,58 @@ class MerchantIconMatchingTest {
         val ordered =
             sortAccountsForList(
                 listOf(
-                    LiveAccountSummary("closed", "Closed Account", 0, "checking", false, closed = true, sortOrder = 0),
-                    LiveAccountSummary("later", "Later Checking", 0, "checking", false, sortOrder = 20),
-                    LiveAccountSummary("earlier", "Earlier Checking", 0, "checking", false, sortOrder = 10),
+                    LiveAccountSummary("closed", "Closed Account", 0, "checking", false, closed = true, sortOrder = 0.0),
+                    LiveAccountSummary("later", "Later Checking", 0, "checking", false, sortOrder = 20.0),
+                    LiveAccountSummary("earlier", "Earlier Checking", 0, "checking", false, sortOrder = 10.0),
                 ),
             )
 
         assertEquals(listOf("earlier", "later", "closed"), ordered.map { it.id })
         assertEquals(Int.MAX_VALUE, accountGroupOrder("Closed"))
+    }
+
+    @Test
+    fun accountsFollowActualsSortOrderIncludingFractionalValuesNotTheirNames() {
+        val records =
+            listOf(
+                """{"id":"b","name":"AMEX","type":"checking","sort_order":2048.5}""",
+                """{"id":"a","name":"Zeta","type":"checking","sort_order":1024}""",
+                """{"id":"c","name":"Bank","type":"checking","sort_order":2048.25}""",
+            ).map { json ->
+                app.tandemforactual.data.database.BudgetRecordEntity(
+                    budgetId = "budget-1",
+                    recordType = "account",
+                    recordId =
+                        Json
+                            .parseToJsonElement(json)
+                            .jsonObject["id"]!!
+                            .jsonPrimitive.content,
+                    remoteJson = json,
+                    remoteRevision = "r1",
+                    localJson = null,
+                    localDeleted = false,
+                    remoteDeleted = false,
+                    syncGeneration = "g1",
+                    recordDate = null,
+                    accountId = null,
+                    categoryId = null,
+                    payeeId = null,
+                    amountMinor = null,
+                    budgetMonth = null,
+                    displayName =
+                        Json
+                            .parseToJsonElement(json)
+                            .jsonObject["name"]!!
+                            .jsonPrimitive.content,
+                )
+            }
+
+        val ordered =
+            sortAccountsForList(
+                app.tandemforactual.ui.model
+                    .liveAccountSummaries(records),
+            )
+
+        assertEquals(listOf("a", "c", "b"), ordered.map { it.id })
     }
 }

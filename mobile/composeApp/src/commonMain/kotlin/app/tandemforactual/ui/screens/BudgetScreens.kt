@@ -68,6 +68,7 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
+import app.tandemforactual.ui.model.LiveCategoryGroupSummary
 import app.tandemforactual.ui.model.LiveCategorySummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
 import com.composables.icons.lucide.CalendarDays
@@ -245,6 +246,20 @@ internal fun BudgetScreen(
     val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
     val displayGroups = orderedGroups
 
+    fun latestQueuedGroupOrder(): List<String> =
+        budgetOrderForScreen(
+            groups.map { it.id },
+            mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
+            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
+        )
+
+    fun latestQueuedCategoryOrder(group: LiveCategoryGroupSummary): List<String> =
+        budgetOrderForScreen(
+            group.categories.map { it.id },
+            mobileSession.budgetReorderStatus(state.selectedBudgetId, group.id),
+            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, group.id),
+        )
+
     fun saveGroupOrder(
         groupId: String,
         requestedOrder: List<String>,
@@ -252,7 +267,7 @@ internal fun BudgetScreen(
         // Actual always lists income groups after expense groups, so keep that on screen too.
         val incomeGroupIds = groups.filter { it.isIncome }.mapTo(mutableSetOf()) { it.id }
         val nextOrder = requestedOrder.filterNot { it in incomeGroupIds } + requestedOrder.filter { it in incomeGroupIds }
-        if (nextOrder == queuedGroupOrder) {
+        if (nextOrder == latestQueuedGroupOrder()) {
             // Nothing changes (for example, Income dropped among expense groups).
             groupDrag.releaseHeldDrop()
             return
@@ -277,10 +292,10 @@ internal fun BudgetScreen(
 
     fun enqueueGroupMove(
         groupId: String,
-        nextIndex: Int,
+        direction: Int,
     ) {
-        val oldOrder = displayGroups.map { it.id }
-        val nextOrder = reorderItemToIndex(oldOrder, groupId, nextIndex)
+        val oldOrder = groupDrag.currentOrder(latestQueuedGroupOrder())
+        val nextOrder = reorderItemToIndex(oldOrder, groupId, oldOrder.indexOf(groupId) + direction)
         if (oldOrder == nextOrder) return
         saveGroupOrder(groupId, nextOrder)
     }
@@ -613,7 +628,7 @@ internal fun BudgetScreen(
                             selectedBudgetCategoryOrderId = null
                             selectedBudgetCategoryGroupId = null
                             selectedGroupOrderId = group.id
-                            groupDrag.start(orderedGroupIds, group.id)
+                            groupDrag.start(groupDrag.currentOrder(latestQueuedGroupOrder()), group.id)
                         }
 
                         fun dropDrag() {
@@ -736,10 +751,10 @@ internal fun BudgetScreen(
                                             onDragBy = { groupDrag.dragBy(it) },
                                             onDragStopped = ::dropDrag,
                                             onMoveUp = {
-                                                enqueueGroupMove(group.id, groupIndex - 1)
+                                                enqueueGroupMove(group.id, -1)
                                             },
                                             onMoveDown = {
-                                                enqueueGroupMove(group.id, groupIndex + 1)
+                                                enqueueGroupMove(group.id, 1)
                                             },
                                         )
                                     } else {
@@ -786,7 +801,7 @@ internal fun BudgetScreen(
                                 selectedBudgetCategoryOrderId = category.id
                                 mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, group.id)
                                 mobileSession.clearBudgetActionMessage()
-                                budgetCategoryDrag.start(categoryOrderIds, category.id)
+                                budgetCategoryDrag.start(budgetCategoryDrag.currentOrder(latestQueuedCategoryOrder(group)), category.id)
                             }
 
                             fun dragCategoryBy(delta: Float) {
@@ -817,8 +832,8 @@ internal fun BudgetScreen(
                             }
 
                             fun moveCategory(direction: Int) {
-                                val currentOrder = budgetCategoryDrag.currentOrder(queuedCategoryOrder)
-                                val nextOrder = reorderItemToIndex(currentOrder, category.id, categoryIndex + direction)
+                                val currentOrder = budgetCategoryDrag.currentOrder(latestQueuedCategoryOrder(group))
+                                val nextOrder = reorderItemToIndex(currentOrder, category.id, currentOrder.indexOf(category.id) + direction)
                                 if (nextOrder == currentOrder) return
                                 scope.launch {
                                     mobileSession.enqueueBudgetReorder(

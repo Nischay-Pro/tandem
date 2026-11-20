@@ -12,6 +12,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -23,16 +24,16 @@ import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
-import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
-import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.KeyRound
-import com.composables.icons.lucide.LockKeyhole
+import com.composables.icons.lucide.LogIn
+import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Wifi
 import kotlinx.coroutines.launch
 
@@ -108,39 +109,52 @@ internal fun ServerDeviceScreen(
             InfoBubble(mobileSession.signOutError.orEmpty())
         }
         mobileSession.deviceRevocationError?.let { message ->
-            AttentionBanner("Couldn’t remove this device", message, "Try again", onForgetDevice)
-            InfoBubble("Tandem still trusts this device until its owner removes it there.")
+            AttentionBanner("Couldn’t unlink this device", message, "Try again", onForgetDevice)
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
-        InfoBubble("Sign out clears all cached budgets from this device. Your budgets on the server stay unchanged.")
-        SecondaryButton(
-            if (mobileSession.isSigningOut) "Signing out" else "Sign out and clear data",
-            enabled = !mobileSession.isSigningOut,
-            onClick = { confirmation = "signout" },
-        )
-        if (device == null) {
-            SecondaryButton("Sign in to this server") { navigation.open(AppRoute.SERVER_ADDRESS) }
-        } else if (mobileSession.deviceRevocationError != null) {
-            SecondaryButton(
-                "Forget on this device only",
-                enabled = !mobileSession.isRevokingDevice,
-                onClick = { confirmation = "local" },
-            )
-        } else {
-            SecondaryButton(
-                if (mobileSession.isRevokingDevice) "Removing this device" else "Remove this device",
-                enabled = !mobileSession.isRevokingDevice,
-                onClick = { confirmation = "server" },
+        SectionCard("Unlink", "Your budgets in Actual are never changed.") {
+            when {
+                device == null ->
+                    ListRow(
+                        "Sign in to this server",
+                        "Link this device to Tandem again",
+                        leading = RowLeading.Icon(Lucide.LogIn),
+                        onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+                    )
+                mobileSession.deviceRevocationError != null ->
+                    ListRow(
+                        "Unlink on this device only",
+                        "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
+                        leading = RowLeading.Icon(Lucide.LogOut),
+                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "local" },
+                    )
+                else ->
+                    ListRow(
+                        if (mobileSession.isRevokingDevice) "Unlinking…" else "Unlink this device",
+                        "Signs out. Budgets and unsynced edits stay on this device for when you link again.",
+                        leading = RowLeading.Icon(Lucide.LogOut),
+                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "server" },
+                    )
+            }
+            DividerLine()
+            ListRow(
+                if (mobileSession.isSigningOut) "Erasing…" else "Unlink and erase data",
+                "Signs out and deletes every saved budget from this device. Edits must be synced first.",
+                leading = RowLeading.Icon(Lucide.Trash2),
+                options = ListRowOptions(muted = mobileSession.isSigningOut, trailingColor = tandemPalette.negative),
+                onClick = { if (!mobileSession.isSigningOut) confirmation = "signout" },
             )
         }
     }
     when (confirmation) {
         "signout" ->
             DestructiveConfirmationDialog(
-                title = "Sign out and clear data?",
+                title = "Unlink and erase data?",
                 message =
-                    "This removes saved access and every cached budget from this device. Your budgets on the server will stay unchanged. Pending changes must be synced or resolved first.",
-                confirmLabel = "Sign out and clear data",
+                    "This signs out and deletes every saved budget from this device. Your budgets in Actual stay unchanged. Edits waiting to sync must be synced or resolved first.",
+                confirmLabel = "Unlink and erase",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isSigningOut,
                 onDismissRequest = { if (!mobileSession.isSigningOut) confirmation = "" },
@@ -156,10 +170,10 @@ internal fun ServerDeviceScreen(
             )
         "server" ->
             DestructiveConfirmationDialog(
-                title = "Remove this device?",
+                title = "Unlink this device?",
                 message =
-                    "This revokes this device’s access on the server and clears its saved sign-in. You’ll need to sign in again to connect. ${pendingDeviceChangeNotice()}",
-                confirmLabel = "Remove device",
+                    "Tandem will stop trusting this device and you’ll need to sign in again to link it. Your saved budgets stay on this device. ${pendingDeviceChangeNotice()}",
+                confirmLabel = "Unlink",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
                 onDismissRequest = { if (!mobileSession.isRevokingDevice) confirmation = "" },
@@ -170,10 +184,10 @@ internal fun ServerDeviceScreen(
             )
         "local" ->
             DestructiveConfirmationDialog(
-                title = "Forget this device here?",
+                title = "Unlink on this device only?",
                 message =
-                    "This clears the sign-in saved on this device. Tandem will still allow it until its owner removes it there. ${pendingDeviceChangeNotice()}",
-                confirmLabel = "Forget here",
+                    "This clears the sign-in saved on this device. The server keeps it linked until you unlink it from another signed-in device. ${pendingDeviceChangeNotice()}",
+                confirmLabel = "Unlink here",
                 dismissLabel = "Cancel",
                 onDismissRequest = { confirmation = "" },
                 onConfirm = {
@@ -193,7 +207,42 @@ internal fun SecurityScreen(
     val canChangeReadOnly = state.readOnlyMode || !hasPendingWrites
     PageColumn {
         SectionCard("App access") {
-            ListRow("Biometric unlock", "Coming later", leading = RowLeading.Icon(Lucide.FingerprintPattern))
+            val authenticator = LocalDeviceAuthenticator.current
+            val biometricAvailable = remember(authenticator) { authenticator?.isAvailable() == true }
+            ToggleRow(
+                title = "Biometric unlock",
+                subtitle =
+                    when {
+                        authenticator == null -> "Not available on this device"
+                        !biometricAvailable -> "Set up a screen lock on this device first"
+                        state.selectedBudgetEncrypted -> "Unlock your encrypted budget with biometrics"
+                        else -> "Fingerprint, face, or screen lock"
+                    },
+                checked = state.biometricLockEnabled,
+                enabled = biometricAvailable || state.biometricLockEnabled,
+                onChange = { enable ->
+                    val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                    val password = state.encryptedPassword
+                    when {
+                        authenticator == null -> if (!enable) state.biometricLockEnabled = false
+                        !enable ->
+                            authenticator.authenticate("Turn off biometric unlock") { success ->
+                                if (success) {
+                                    authenticator.deleteAllSecrets()
+                                    state.biometricLockEnabled = false
+                                }
+                            }
+                        state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
+                            authenticator.storeSecret(secretId, password, "Turn on biometric unlock") { stored ->
+                                if (stored) state.biometricLockEnabled = true
+                            }
+                        else ->
+                            authenticator.authenticate("Turn on biometric unlock") { success ->
+                                if (success) state.biometricLockEnabled = true
+                            }
+                    }
+                },
+            )
             DividerLine()
             ToggleRow(
                 title = "Lock editing",
@@ -207,16 +256,30 @@ internal fun SecurityScreen(
         SectionCard("Privacy") {
             ToggleRow(
                 title = "Hide budget amounts",
-                subtitle = "Tap to reveal for 3 seconds; hover to reveal temporarily",
+                subtitle = "Tap an amount to show it briefly",
                 checked = state.privacyModeEnabled,
                 onChange = { state.privacyModeEnabled = it },
             )
-        }
-        SurfaceCard {
+            DividerLine()
             ListRow(
-                "Budget password",
-                trailing = if (state.selectedBudgetEncrypted) "Available this session" else "Unavailable",
-                leading = RowLeading.Icon(Lucide.LockKeyhole),
+                "Encrypted budget",
+                when {
+                    !state.selectedBudgetEncrypted -> "Not used by this budget"
+                    state.encryptedPassword.isNotBlank() -> "Password forgotten when Tandem closes"
+                    else -> "Enter the password to open it"
+                },
+                when {
+                    !state.selectedBudgetEncrypted -> null
+                    state.encryptedPassword.isNotBlank() -> "Unlocked"
+                    else -> "Locked"
+                },
+                leading = RowLeading.None,
+                options =
+                    ListRowOptions(
+                        showChevron = false,
+                        subtitleMaxLines = 1,
+                        trailingColor = if (state.encryptedPassword.isNotBlank()) tandemPalette.positive else tandemPalette.warning,
+                    ),
             )
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)

@@ -62,6 +62,18 @@ runs:
         cache-provider: enhanced
         cache-encryption-key: ${{ inputs.gradle_cache_encryption_key }}
 
+    # User-level properties override mobile/gradle.properties, so CI sizes the
+    # daemons from the runner's memory instead of the laptop defaults.
+    - name: Size Gradle and Kotlin daemons for the runner
+      shell: bash
+      run: |
+        gradle_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+        mkdir -p "$gradle_home"
+        {
+          echo "org.gradle.jvmargs=-XX:MaxRAMPercentage=45 -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8"
+          echo "kotlin.daemon.jvmargs=-XX:MaxRAMPercentage=35 -XX:MaxMetaspaceSize=2g"
+        } >> "$gradle_home/gradle.properties"
+
     # The configuration cache lives under the project, outside Gradle User Home.
     - name: Cache Gradle configuration
       if: ${{ inputs.gradle_cache_encryption_key != '' }}

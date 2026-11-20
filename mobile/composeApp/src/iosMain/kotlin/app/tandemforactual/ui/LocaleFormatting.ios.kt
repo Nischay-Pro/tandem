@@ -179,6 +179,17 @@ internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Lon
     }) { it.stringFromDate(date) }
 }
 
+internal actual fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Long): String {
+    val locale = NSLocale.currentLocale
+    val date = NSDate(timeIntervalSinceReferenceDate = epochMilliseconds.toDouble() / 1_000.0 - APPLE_REFERENCE_DATE_UNIX_SECONDS)
+    return withDateFormatter("time:$locale:short", {
+        NSDateFormatter().apply {
+            this.locale = locale
+            timeStyle = NSDateFormatterShortStyle
+        }
+    }) { it.stringFromDate(date) }
+}
+
 internal actual fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String {
     val date = NSDate(timeIntervalSinceReferenceDate = epochMilliseconds.toDouble() / 1_000.0 - APPLE_REFERENCE_DATE_UNIX_SECONDS)
     return formatIsoDate(date)

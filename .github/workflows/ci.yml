@@ -162,7 +162,6 @@ jobs:
         working-directory: mobile
         run: |
           ./gradlew \
-            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
             :data:compileAndroidMain \
             :data:compileAndroidDeviceTest \
             :data:compileCommonMainKotlinMetadata \
@@ -239,7 +238,6 @@ jobs:
         working-directory: mobile
         run: |
           ./gradlew \
-            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
             :androidApp:lintRelease
 
   android_app_release:
@@ -263,7 +261,6 @@ jobs:
         working-directory: mobile
         run: |
           ./gradlew \
-            -Dorg.gradle.jvmargs="-Xmx1024m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" \
             :androidApp:assembleRelease
 
   ios_host:

@@ -2,6 +2,9 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
@@ -30,19 +34,25 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.TandemShapes
+import app.tandemforactual.ui.TandemSpacing
+import app.tandemforactual.ui.TandemTypography
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
@@ -51,8 +61,11 @@ import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
+import app.tandemforactual.ui.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
@@ -343,43 +356,60 @@ internal fun AccountDetailScreen(
         if (accountName == null) {
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
-            AmountHero("Available balance", balance, "$accountName · $description")
-            if (liveAccount != null) {
-                TandemActionButton(
-                    "Reconcile",
-                    TandemActionButtonTone.NEUTRAL,
-                    Modifier.fillMaxWidth(),
-                    icon = Lucide.Check,
-                    enabled =
-                        !liveAccount.closed &&
-                            clearedAccountBalanceMinor != null &&
-                            reconciliationCandidates.isNotEmpty() &&
-                            !state.readOnlyMode,
-                ) {
-                    selectedReconciliationIds = emptySet()
-                    statementBalanceText = ""
-                    mobileSession.clearTransactionWriteMessage()
-                    showReconcileDialog = true
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    Text(description, color = tandemPalette.muted, fontSize = TandemTypography.label)
+                }
+                if (liveAccount != null) {
+                    TandemIconButton(
+                        Lucide.Pencil,
+                        "Edit $accountName",
+                        enabled = !state.readOnlyMode,
+                    ) { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
                 }
             }
-            PrimaryButton(
-                "Add transaction",
-                enabled = !offBudget && !state.readOnlyMode,
-            ) {
-                navigation.newTransaction(liveAccount.id)
-            }
-            if (liveAccount != null) {
-                TandemActionButton(
-                    "Import statement",
-                    TandemActionButtonTone.NEUTRAL,
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Lucide.Receipt,
-                    enabled = !liveAccount.closed && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                    onClick = {
+            AmountHero("Available balance", balance, "$accountName · $description")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                AccountQuickAction(
+                    Lucide.Plus,
+                    "Add",
+                    "Add transaction",
+                    enabled = !offBudget && !state.readOnlyMode,
+                    emphasized = true,
+                    modifier = Modifier.weight(1f),
+                ) { navigation.newTransaction(liveAccount?.id) }
+                if (liveAccount != null) {
+                    AccountQuickAction(
+                        Lucide.Check,
+                        "Reconcile",
+                        "Reconcile account",
+                        enabled =
+                            !liveAccount.closed &&
+                                clearedAccountBalanceMinor != null &&
+                                reconciliationCandidates.isNotEmpty() &&
+                                !state.readOnlyMode,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        selectedReconciliationIds = emptySet()
+                        statementBalanceText = ""
+                        mobileSession.clearTransactionWriteMessage()
+                        showReconcileDialog = true
+                    }
+                    AccountQuickAction(
+                        Lucide.Receipt,
+                        "Import",
+                        "Import statement",
+                        enabled = !liveAccount.closed && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                        modifier = Modifier.weight(1f),
+                    ) {
                         mobileSession.clearBudgetActionMessage()
                         pickStatementFile()
-                    },
-                )
+                    }
+                }
             }
             if (!showStatementImportDialog) {
                 budgetActionFeedbackMessage(mobileSession)
@@ -747,5 +777,39 @@ private fun StatementCsvColumnPicker(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AccountQuickAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    accessibilityLabel: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    emphasized: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val content = if (emphasized) palette.accentContent else palette.text
+    Column(
+        modifier
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .clip(RoundedCornerShape(TandemShapes.large))
+            .background(if (emphasized) palette.accent else palette.raised)
+            .then(
+                if (emphasized) {
+                    Modifier
+                } else {
+                    Modifier.border(1.dp, palette.border, RoundedCornerShape(TandemShapes.large))
+                },
+            ).clickable(enabled = enabled, role = Role.Button, onClickLabel = accessibilityLabel, onClick = onClick)
+            .semantics { contentDescription = accessibilityLabel }
+            .padding(vertical = TandemSpacing.medium),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = content)
+        Text(label, color = content, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
     }
 }

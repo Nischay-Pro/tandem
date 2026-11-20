@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -60,6 +61,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
@@ -104,6 +106,7 @@ fun TandemApp(
     /** Whether the app is on screen; periodic sync runs only then. */
     appInForeground: StateFlow<Boolean> = MutableStateFlow(true),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
+    deviceAuthenticator: DeviceAuthenticator? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -415,7 +418,12 @@ fun TandemApp(
                         val returnAnimation = Animatable(0f)
                         returnAnimation.animateTo(
                             targetValue = 1f,
-                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                            animationSpec =
+                                if (reduceMotion) {
+                                    tandemMotionSpec(true, TandemMotion.ROUTE_MILLIS)
+                                } else {
+                                    tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                                },
                         ) {
                             backGestureProgress = value
                         }
@@ -509,7 +517,8 @@ fun TandemApp(
                 transactionSheetClosing = true
             }
         } else {
-            if (currentRoute == AppRoute.FIRST_SYNC || currentRoute == AppRoute.BUDGET_UNLOCK) {
+            val returningToUnlock = backStack.getOrNull(backStack.lastIndex - 1)?.route == AppRoute.BUDGET_UNLOCK
+            if ((currentRoute == AppRoute.FIRST_SYNC && !returningToUnlock) || currentRoute == AppRoute.BUDGET_UNLOCK) {
                 state.restorePendingBudgetSelectionOrigin()
             }
             performBack()
@@ -660,6 +669,17 @@ fun TandemApp(
             }
         }
     }
+    LaunchedEffect(routeEntry) {
+        if (isBackPreviewStale(backPreviewRoute, backGestureOutgoingEntry, routeEntry)) {
+            backGestureCancelJob?.cancel()
+            backGestureCancelJob = null
+            backGestureCommitPending = false
+            backButtonTransitionRunning = false
+            backGestureProgress = 0f
+            backGestureOutgoingEntry = null
+            backPreviewRoute = null
+        }
+    }
     var previousRoute by remember { mutableStateOf(route) }
     val automaticSyncRequest =
         rememberUpdatedState(
@@ -740,7 +760,16 @@ fun TandemApp(
                 budgetId = state.selectedBudgetId,
                 encryptionPassword = state.encryptedPassword.takeIf { it.isNotBlank() },
             )
-            if (mobileSession.syncComplete) state.encryptedPassword = ""
+            val unlockedPassword = state.encryptedPassword
+            if (mobileSession.syncComplete && state.selectedBudgetEncrypted && unlockedPassword.isNotBlank()) {
+                val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                withContext(Dispatchers.Default) { deviceAuthenticator?.rememberPasswordCheck(secretId, unlockedPassword) }
+                if (state.rememberBudgetPasswordWithBiometrics && deviceAuthenticator?.canStoreSecrets() == true) {
+                    deviceAuthenticator.storeSecret(secretId, unlockedPassword, "Use biometrics for ${state.selectedBudget}") {}
+                } else {
+                    deviceAuthenticator?.deleteSecret(secretId)
+                }
+            }
         }
     }
     LaunchedEffect(state.selectedBudgetId, mobileSession) {
@@ -771,6 +800,13 @@ fun TandemApp(
         previousRoute = route
     }
     val isAppInForeground by appInForeground.collectAsState()
+    LaunchedEffect(mobileSession.budgets, state.selectedBudgetId) {
+        mobileSession.budgets.firstOrNull { it.budgetId == state.selectedBudgetId }?.let {
+            if (state.selectedBudgetEncrypted != it.isEncrypted) state.selectedBudgetEncrypted = it.isEncrypted
+        }
+    }
+    val appLockState = remember { AppLockState(nowEpochMillis) }
+    LaunchedEffect(isAppInForeground) { appLockState.onForegroundChanged(isAppInForeground) }
     LaunchedEffect(
         isAppInForeground,
         state.syncOnOpen,
@@ -795,6 +831,7 @@ fun TandemApp(
                 mobileSession.synchronize(
                     state.selectedBudgetId,
                     state.encryptedPassword.takeIf { it.isNotBlank() },
+                    background = true,
                 )
             }
         }
@@ -992,7 +1029,11 @@ fun TandemApp(
             }
         }
     }
-    val openSelectedBudget: (BudgetCatalogItem) -> Unit = { selected ->
+    val openSelectedBudget: (BudgetCatalogItem) -> Unit = openSelectedBudget@{ selected ->
+        if (selected.budgetId.isBlank()) {
+            navigation.reset(AppRoute.BUDGET_CHOOSER)
+            return@openSelectedBudget
+        }
         val previousSelection =
             state.pendingBudgetSelectionOrigin ?: BudgetSelectionSnapshot(
                 budgetId = state.selectedBudgetId,
@@ -1005,8 +1046,11 @@ fun TandemApp(
         state.selectedBudgetEncrypted = selected.isEncrypted
         coroutineScope.launch {
             val isCached =
-                mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
-                    mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+                !selected.isEncrypted &&
+                    (
+                        mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
+                            mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
+                    )
             when {
                 isCached -> {
                     state.pendingBudgetSelectionOrigin = null
@@ -1346,6 +1390,7 @@ fun TandemApp(
                 CompositionLocalProvider(
                     LocalRouteScrollState provides routeScrollState,
                     LocalRouteLazyListState provides routeLazyListState,
+                    LocalDeviceAuthenticator provides deviceAuthenticator,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
@@ -1468,7 +1513,21 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showLandscapeRail) 80.dp else 0.dp),
             ) {
-                if (shouldRenderRouteHeader(route, tabShellRoute != null)) renderHeader(shellHeaderRoute)
+                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
+                    AnimatedContent(
+                        targetState = shellHeaderRoute,
+                        transitionSpec = {
+                            fadeIn(
+                                tween(
+                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                    easing = TandemMotion.emphasizedEasing,
+                                ),
+                            ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                        },
+                        label = "tandem-header-transition",
+                    ) { headerRoute -> renderHeader(headerRoute) }
+                }
                 val transitionInputModifier =
                     Modifier.pointerInput(Unit) {
                         awaitEachGesture {
@@ -1496,7 +1555,12 @@ fun TandemApp(
                             .then(transitionInputModifier)
                             .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
                 ) {
-                    if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
+                    val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
+                    if (!transactionSheetActive &&
+                        backGestureProgress > 0f &&
+                        backPreviewRoute != null &&
+                        backPreviewRoute != routeEntry
+                    ) {
                         val direction = backGestureDirection
                         renderRoute(
                             backPreviewRoute!!,
@@ -1505,12 +1569,15 @@ fun TandemApp(
                                 .clearAndSetSemantics {}
                                 .graphicsLayer {
                                     val progress = backGestureProgress
-                                    translationX = -direction * size.width * (1f - progress)
-                                },
+                                    translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
+                                    alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
+                                }.background(routeBackground),
                             false,
                             !stationaryTabShell,
                         )
                     }
+                    val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                    val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
                     AnimatedContent(
                         targetState = backgroundRouteEntry,
                         modifier = Modifier.fillMaxSize().clipToBounds(),
@@ -1522,28 +1589,39 @@ fun TandemApp(
                                     targetState.route == AppRoute.STARTUP ->
                                     EnterTransition.None togetherWith ExitTransition.None
                                 initialState.route.isTab() && targetState.route.isTab() ->
-                                    fadeIn(
-                                        tween(TandemMotion.TAB_TRANSITION_MILLIS, easing = TandemMotion.movementEasing),
+                                    (
+                                        fadeIn(
+                                            tween(
+                                                TandemMotion.TAB_TRANSITION_MILLIS,
+                                                delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                easing = TandemMotion.emphasizedEasing,
+                                            ),
+                                        ) +
+                                            scaleIn(
+                                                tween(
+                                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                    easing = TandemMotion.emphasizedEasing,
+                                                ),
+                                                initialScale = 0.97f,
+                                            )
                                     ) togetherWith
                                         fadeOut(
-                                            tween(TandemMotion.CROSSFADE_MILLIS, easing = TandemMotion.exitEasing),
+                                            tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
                                         ) using null
                                 routeTransitionDirection > 0f ->
-                                    (
-                                        slideInHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it }
-                                    ) togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { -it } using null
+                                    slideInHorizontally(routeSlideSpec) { it } togetherWith
+                                        (
+                                            slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) using null
                                 routeTransitionDirection < 0f ->
-                                    slideInHorizontally(
-                                        tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                    ) { -it } togetherWith
-                                        slideOutHorizontally(
-                                            tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.movementEasing),
-                                        ) { it } using null
+                                    (
+                                        (
+                                            slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
+                                    ).apply { targetContentZIndex = -1f }
                                 else -> EnterTransition.None togetherWith ExitTransition.None
                             }
                         },
@@ -1551,11 +1629,13 @@ fun TandemApp(
                     ) { visibleEntry ->
                         renderRoute(
                             if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
-                            Modifier.fillMaxSize().graphicsLayer {
-                                if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
-                                    translationX = backGestureProgress * size.width * backGestureDirection
-                                }
-                            },
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
+                                        translationX = backGestureProgress * size.width * backGestureDirection
+                                    }
+                                }.background(routeBackground),
                             true,
                             !stationaryTabShell,
                         )
@@ -1563,7 +1643,7 @@ fun TandemApp(
                 }
                 if (tabShellRoute != null && !imeVisible && !isLandscape) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier.fillMaxWidth().height(88.dp),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         androidx.compose.animation.AnimatedVisibility(
@@ -1645,6 +1725,15 @@ fun TandemApp(
                 },
             )
         }
+        AppLockGate(
+            state = state,
+            mobileSession = mobileSession,
+            route = backStack.lastOrNull()?.route ?: AppRoute.BUDGET,
+            authenticator = deviceAuthenticator,
+            lockState = appLockState,
+            appInForeground = isAppInForeground,
+            onChooseBudget = { navigation.open(AppRoute.BUDGET_CHOOSER) },
+        )
     }
 }
 
@@ -1680,3 +1769,9 @@ internal fun AppRoute.isReportDetail(): Boolean = this == AppRoute.REPORT_DETAIL
 
 /** How often an open budget pulls changes from the server while the app is on screen. */
 internal const val BUDGET_PERIODIC_SYNC_INTERVAL_MS = 60_000L
+
+internal fun <T> isBackPreviewStale(
+    preview: T?,
+    gestureOrigin: T?,
+    current: T,
+): Boolean = preview != null && gestureOrigin != current && preview != current

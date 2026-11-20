@@ -357,12 +357,11 @@ internal fun TransactionFormScreen(
                     TransactionAmountKeypad(
                         onDigit = ::enterDigit,
                         onDelete = {
-                            val current =
-                                if (enterNewOperand) {
-                                    0L
-                                } else {
-                                    transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
-                                }
+                            if (enterNewOperand) {
+                                calculatorAccumulator = null
+                                calculatorOperator = null
+                            }
+                            val current = transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
                             setAmount(removeAmountDigit(current))
                             amountEntryMessage = null
                             enterNewOperand = false
@@ -725,15 +724,15 @@ internal fun TransactionFormScreen(
                 TransactionAmountKeypad(
                     onDigit = ::enterEditDigit,
                     onDelete = {
+                        if (enterNewOperand) {
+                            calculatorAccumulator = null
+                            calculatorOperator = null
+                        }
                         val current =
-                            if (enterNewOperand) {
-                                0L
-                            } else {
-                                transactionAmountInputMagnitude(
-                                    state.parseAmountMinorUnits(state.transactionAmount)
-                                        ?: state.selectedTransactionAmountMinor,
-                                )
-                            }
+                            transactionAmountInputMagnitude(
+                                state.parseAmountMinorUnits(state.transactionAmount)
+                                    ?: state.selectedTransactionAmountMinor,
+                            )
                         setEditAmount(removeAmountDigit(current))
                         amountEntryMessage = null
                         enterNewOperand = false

@@ -151,14 +151,21 @@ internal fun CategoryGroupScreen(
             categoryOrderIds.mapNotNull(categoriesById::get) + categories.filterNot { it.id in categoryOrderIds }
         }
 
-    fun currentCategoryOrder(): List<String> = dragReorder.currentOrder(queuedCategoryOrder)
+    fun currentCategoryOrder(): List<String> =
+        dragReorder.currentOrder(
+            budgetOrderForScreen(
+                serverCategoryOrder,
+                mobileSession.budgetReorderStatus(state.selectedBudgetId, categoryScopeId),
+                mobileSession.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId),
+            ),
+        )
 
     fun enqueueCategoryMove(
         itemId: String,
-        nextIndex: Int,
+        direction: Int,
     ) {
         val oldOrder = currentCategoryOrder()
-        val nextOrder = reorderItemToIndex(oldOrder, itemId, nextIndex)
+        val nextOrder = reorderItemToIndex(oldOrder, itemId, oldOrder.indexOf(itemId) + direction)
         if (oldOrder == nextOrder) return
         mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
         mobileSession.clearBudgetActionMessage()
@@ -204,6 +211,13 @@ internal fun CategoryGroupScreen(
         )
     val hiddenDrag = remember(state.selectedBudgetId, group?.id) { DragReorderState() }
     val hiddenCategoryOrder = hiddenDrag.currentOrder(queuedHiddenCategoryOrder)
+
+    fun latestQueuedHiddenCategoryOrder(): List<String> =
+        budgetOrderForScreen(
+            hiddenCategoryRecords.map { it.recordId },
+            mobileSession.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId),
+            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId),
+        )
     val orderedHiddenCategoryRecords =
         remember(hiddenCategoryRecords, hiddenCategoryOrder) {
             val recordsById = hiddenCategoryRecords.associateBy { it.recordId }
@@ -276,7 +290,7 @@ internal fun CategoryGroupScreen(
                     val canMoveUp = categoryIndex > 0
                     val canMoveDown = categoryIndex >= 0 && categoryIndex < orderedCategories.lastIndex
                     val moveCategory: (Int) -> Unit = { direction ->
-                        enqueueCategoryMove(category.id, categoryIndex + direction)
+                        enqueueCategoryMove(category.id, direction)
                     }
 
                     fun startDrag() {
@@ -434,7 +448,7 @@ internal fun CategoryGroupScreen(
                             val hiddenIndex = orderedHiddenCategoryRecords.indexOfFirst { it.recordId == hidden.recordId }
 
                             fun saveHiddenOrder(nextOrder: List<String>) {
-                                if (nextOrder == queuedHiddenCategoryOrder) return
+                                if (nextOrder == latestQueuedHiddenCategoryOrder()) return
                                 mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
                                 scope.launch {
                                     mobileSession.enqueueBudgetReorder(
@@ -451,7 +465,10 @@ internal fun CategoryGroupScreen(
                             }
 
                             fun moveHiddenCategory(direction: Int) {
-                                saveHiddenOrder(reorderItemToIndex(hiddenCategoryOrder, hidden.recordId, hiddenIndex + direction))
+                                val currentOrder = hiddenDrag.currentOrder(latestQueuedHiddenCategoryOrder())
+                                saveHiddenOrder(
+                                    reorderItemToIndex(currentOrder, hidden.recordId, currentOrder.indexOf(hidden.recordId) + direction),
+                                )
                             }
 
                             val hiddenDragEnabled = isLiveBudget && !state.readOnlyMode && orderedHiddenCategoryRecords.size > 1
@@ -460,7 +477,7 @@ internal fun CategoryGroupScreen(
                                 selectedCategoryOrderId = hidden.recordId
                                 mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
                                 mobileSession.clearBudgetActionMessage()
-                                hiddenDrag.start(hiddenCategoryOrder, hidden.recordId)
+                                hiddenDrag.start(hiddenDrag.currentOrder(latestQueuedHiddenCategoryOrder()), hidden.recordId)
                             }
 
                             fun dragHiddenBy(delta: Float) {
@@ -468,7 +485,7 @@ internal fun CategoryGroupScreen(
                             }
 
                             fun dropHiddenDrag() {
-                                val result = hiddenDrag.finish(queuedHiddenCategoryOrder) ?: return
+                                val result = hiddenDrag.finish(latestQueuedHiddenCategoryOrder()) ?: return
                                 if (result.itemId != hidden.recordId || result.finalOrder == result.startingOrder) return
                                 scope.launch {
                                     val saved =

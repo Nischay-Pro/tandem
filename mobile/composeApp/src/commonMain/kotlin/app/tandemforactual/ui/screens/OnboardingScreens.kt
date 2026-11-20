@@ -627,7 +627,11 @@ internal fun BudgetChooserScreen(
     val selectedBudget = selectableBudgets.firstOrNull { it.budgetId == chooserSelectedBudgetId }
     val cachedBudgetSelected = selectedBudget?.let { budget -> cachedCatalog.any { it.budgetId == budget.budgetId } } == true
     val selectedBudgetIsAvailable = selectedBudget != null
-    val needsEncryptionPassword = budgetPasswordRequired(selectedBudget?.isEncrypted == true, cachedBudgetSelected)
+    val needsEncryptionPassword =
+        budgetPasswordRequired(
+            isEncrypted = selectedBudget?.isEncrypted == true,
+            hasUnlockedPassword = selectedBudget?.budgetId == state.selectedBudgetId && state.encryptedPassword.isNotBlank(),
+        )
 
     fun chooseBudget(budget: BudgetCatalogItem) {
         if (chooserSelectedBudgetId != budget.budgetId) state.encryptedPassword = ""
@@ -740,7 +744,12 @@ internal fun BudgetUnlockScreen(
                 { state.encryptedPassword = it },
                 TextFieldOptions(placeholder = "Password", isSecret = true),
             )
-            InfoBubble("This is not your Actual sign-in password. It is cleared after the first sync.")
+            InfoBubble("This is not your Actual sign-in password. Tandem keeps it only while the app is unlocked.")
+            if (LocalDeviceAuthenticator.current?.canStoreSecrets() == true) {
+                BiometricPasswordCheckbox(state.rememberBudgetPasswordWithBiometrics) {
+                    state.rememberBudgetPasswordWithBiometrics = it
+                }
+            }
         },
         actions = {
             SetupPrimaryButton(
@@ -828,7 +837,10 @@ internal fun FirstSyncScreen(
             }
             if (mobileSession.syncError != null && !mobileSession.isSyncing) {
                 InlineMessage(mobileSession.syncError.orEmpty(), InlineMessageKind.ERROR)
-                if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId && mobileSession.hasCachedSnapshot) {
+                if (mobileSession.cachedSnapshotBudgetId == state.selectedBudgetId &&
+                    mobileSession.hasCachedSnapshot &&
+                    !state.selectedBudgetEncrypted
+                ) {
                     BodyText("Your last saved copy is still available on this device.")
                     SecondaryButton("Open saved copy") {
                         state.pendingBudgetSelectionOrigin = null
@@ -906,8 +918,8 @@ internal fun shouldShowNotificationOnboarding(
 
 internal fun budgetPasswordRequired(
     isEncrypted: Boolean,
-    hasCachedSnapshot: Boolean,
-): Boolean = isEncrypted && !hasCachedSnapshot
+    hasUnlockedPassword: Boolean,
+): Boolean = isEncrypted && !hasUnlockedPassword
 
 internal fun budgetOpenButtonEnabled(
     selectedBudgetAvailable: Boolean,

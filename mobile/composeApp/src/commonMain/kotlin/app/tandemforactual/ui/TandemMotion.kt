@@ -2,6 +2,7 @@ package app.tandemforactual.ui
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -17,7 +18,7 @@ import androidx.compose.animation.slideOutVertically
 
 /** Shared timing for app transitions so navigation and state changes feel like one system. */
 internal object TandemMotion {
-    const val ROUTE_MILLIS = 220
+    const val ROUTE_MILLIS = 340
     const val SHEET_MILLIS = 360
     const val COLOR_MILLIS = 200
     const val CONTROL_MILLIS = 180
@@ -25,12 +26,16 @@ internal object TandemMotion {
     const val REVEAL_MILLIS = 200
     const val STATUS_CHANGE_MILLIS = 160
     const val CROSSFADE_MILLIS = 100
-    const val TAB_TRANSITION_MILLIS = 120
+    const val TAB_TRANSITION_MILLIS = 210
+    const val TAB_EXIT_MILLIS = 90
+    const val ROUTE_PARALLAX = 0.25f
+    const val ROUTE_COVERED_ALPHA = 0.55f
     const val BACK_CANCEL_MILLIS = 200
 
     val enterEasing = LinearOutSlowInEasing
     val exitEasing = FastOutLinearInEasing
     val movementEasing = FastOutSlowInEasing
+    val emphasizedEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 }
 
 internal fun <T> tandemMotionSpec(

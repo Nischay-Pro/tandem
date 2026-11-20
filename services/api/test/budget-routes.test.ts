@@ -7,6 +7,7 @@ import {
 } from "../src/auth/device-auth.js";
 import type { BudgetReadApiPort } from "../src/budget-projection/budget-read-api.js";
 import { BudgetProjectionInputError } from "../src/budget-projection/contracts.js";
+import { BudgetEncryptionPasswordError } from "../src/actual/budget-encryption-errors.js";
 
 const accessToken = "A".repeat(43);
 const generation = "d9d69fa5-45fb-48ee-9a8c-99bf49f873bd";
@@ -400,6 +401,24 @@ describe("budget snapshot and change feed routes", () => {
       errorType: "Error",
     });
     vi.restoreAllMocks();
+    await app.close();
+  });
+
+  it("asks for the budget encryption password instead of a generic failure", async () => {
+    const lockedApi = createBudgetReadApi({
+      getSnapshot: vi.fn(async () => {
+        throw new BudgetEncryptionPasswordError("budget_password_required");
+      }),
+    });
+    const app = await buildApp(lockedApi);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/budgets/budget-1/snapshot",
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error.code).toBe("budget_password_required");
     await app.close();
   });
 

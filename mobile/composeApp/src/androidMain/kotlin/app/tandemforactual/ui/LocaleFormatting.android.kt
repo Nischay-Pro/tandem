@@ -177,6 +177,9 @@ internal actual fun platformFormatDate(
 internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()).format(Date(epochMilliseconds))
 
+internal actual fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Long): String =
+    DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date(epochMilliseconds))
+
 internal actual fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(epochMilliseconds))
 

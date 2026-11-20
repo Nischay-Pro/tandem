@@ -167,6 +167,59 @@ describe("Actual budget snapshot reader", () => {
     expect(tracked.hasUnreadWrites("budget-2")).toBe(false);
   });
 
+  it("adds Actual's account sort order, which its account API omits", async () => {
+    let lastTable: string | undefined;
+    const fake = createApi({
+      q: vi.fn((table: string) => {
+        lastTable = table;
+        return createQueryBuilder();
+      }),
+      aqlQuery: vi.fn(async () =>
+        lastTable === "accounts"
+          ? {
+              data: [
+                { id: "account-1", sort_order: 2048.5 },
+                { id: "unknown-account", sort_order: 1 },
+                { id: "account-x", sort_order: "not-a-number" },
+              ],
+            }
+          : { data: [] },
+      ),
+    } as never);
+
+    const records = await new ActualBudgetSnapshotReader(
+      fake.session,
+      fake.actual,
+    ).read("budget-1");
+
+    const account = records.find((record) => record.type === "account");
+    expect(account?.body).toMatchObject({
+      id: "account-1",
+      sort_order: 2048.5,
+    });
+  });
+
+  it("keeps account records when Actual returns no sort orders", async () => {
+    let lastTable: string | undefined;
+    const fake = createApi({
+      q: vi.fn((table: string) => {
+        lastTable = table;
+        return createQueryBuilder();
+      }),
+      aqlQuery: vi.fn(async () =>
+        lastTable === "accounts" ? null : { data: [] },
+      ),
+    } as never);
+
+    const records = await new ActualBudgetSnapshotReader(
+      fake.session,
+      fake.actual,
+    ).read("budget-1");
+
+    const account = records.find((record) => record.type === "account");
+    expect(account?.body).not.toHaveProperty("sort_order");
+  });
+
   it("passes no encryption options for unencrypted snapshot reads", async () => {
     const fake = createApi();
     const reader = new ActualBudgetSnapshotReader(fake.session, fake.actual);
@@ -326,8 +379,9 @@ describe("Actual budget snapshot reader", () => {
     expect(splitChild?.revision).toBe(
       createTransactionRevision(snapshotActualTransaction(splitChildInput)),
     );
-    expect(fake.queries).toHaveLength(2);
-    for (const [index, query] of fake.queries.entries()) {
+    expect(fake.queries).toHaveLength(3);
+    expect(fake.queries[2]!.select).toHaveBeenCalledWith(["id", "sort_order"]);
+    for (const [index, query] of fake.queries.slice(0, 2).entries()) {
       expect(query.select).toHaveBeenCalledWith("*");
       expect(query.options).toHaveBeenCalledWith({ splits: "grouped" });
       expect(query.orderBy).toHaveBeenCalledWith("id");

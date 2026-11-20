@@ -140,6 +140,8 @@ internal class AppState {
     var categoryIconOverrides by mutableStateOf("")
     var readOnlyMode by mutableStateOf(false)
     var hasDismissedBudgetHint by mutableStateOf(false)
+    var biometricLockEnabled by mutableStateOf(false)
+    var rememberBudgetPasswordWithBiometrics by mutableStateOf(true)
     var hasCompletedNotificationOnboarding by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
@@ -227,6 +229,7 @@ internal class AppState {
             "categoryIconOverrides" to categoryIconOverrides,
             "readOnlyMode" to readOnlyMode.toString(),
             "hasDismissedBudgetHint" to hasDismissedBudgetHint.toString(),
+            "biometricLockEnabled" to biometricLockEnabled.toString(),
             "hasCompletedNotificationOnboarding" to hasCompletedNotificationOnboarding.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
@@ -264,6 +267,7 @@ internal class AppState {
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"]?.toBooleanStrictOrNull() ?: hasDismissedBudgetHint
+        biometricLockEnabled = saved["biometricLockEnabled"]?.toBooleanStrictOrNull() ?: biometricLockEnabled
         hasCompletedNotificationOnboarding =
             saved["hasCompletedNotificationOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedNotificationOnboarding
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
@@ -366,6 +370,7 @@ internal class AppState {
                         "categoryIconOverrides" to state.categoryIconOverrides,
                         "readOnlyMode" to state.readOnlyMode,
                         "hasDismissedBudgetHint" to state.hasDismissedBudgetHint,
+                        "biometricLockEnabled" to state.biometricLockEnabled,
                         "hasCompletedNotificationOnboarding" to state.hasCompletedNotificationOnboarding,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
@@ -446,6 +451,7 @@ internal class AppState {
                         categoryIconOverrides = saved["categoryIconOverrides"] as? String ?: categoryIconOverrides
                         readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
                         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"] as? Boolean ?: hasDismissedBudgetHint
+                        biometricLockEnabled = saved["biometricLockEnabled"] as? Boolean ?: biometricLockEnabled
                         hasCompletedNotificationOnboarding =
                             saved["hasCompletedNotificationOnboarding"] as? Boolean ?: hasCompletedNotificationOnboarding
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId

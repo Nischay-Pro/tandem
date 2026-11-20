@@ -2,16 +2,27 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,7 +50,6 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
-import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
@@ -47,12 +59,18 @@ import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.model.recordName
 import app.tandemforactual.ui.model.stringValue
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.TriangleAlert
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 
 internal fun conflictSnapshot(operation: OutboxOperationEntity?): JsonObject? =
     (operation?.optimisticJson ?: operation?.baseSnapshotJson)
@@ -211,42 +229,185 @@ internal fun ConflictInboxScreen(
                 ConflictInboxItemUi(
                     operation.operationId,
                     conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction",
-                    "${transaction?.dateLabel ?: formatLiveDate(snapshot?.stringValue("date"))} · $categoryName",
+                    listOfNotNull(transactionIdentity(operation, transaction, state, mobileSession), categoryName).joinToString(" · "),
                     transaction?.merchantIcon,
                     transaction?.categoryIcon,
                 )
             }
     PageLazyColumn {
-        item(key = "conflicts-title") {
-            BodyText("Choose between your edit and the latest version in Actual.")
+        item(key = "conflicts-heading") {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                SyncPageHeading(
+                    eyebrow = "Sync",
+                    title = if (conflicts.isEmpty()) "Nothing to review." else "Needs review.",
+                    detail =
+                        when (conflicts.size) {
+                            0 -> "Every change on this device matches Actual."
+                            1 -> "One item changed on this device and in Actual. Choose which version to keep."
+                            else -> "${conflicts.size} items changed on this device and in Actual. Choose which version to keep."
+                        },
+                )
+                if (conflicts.isNotEmpty()) {
+                    SyncCountChip("${conflicts.size} to review", tandemPalette.warning)
+                }
+            }
         }
-        if (conflicts.isEmpty()) {
-            item(key = "conflicts-empty") {
-                AnimatedAttentionContent(showingAttention = false, animateSizeChanges = true) { _ ->
-                    SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                        EmptyState("No changes need review", modifier = Modifier.padding(TandemSpacing.large))
+        items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
+            SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
+                val merchantIcon = conflict.merchantIcon ?: merchantIconMatcher?.iconFor(conflict.title)
+                ListRow(
+                    conflict.title,
+                    conflict.description,
+                    leading =
+                        RowLeading.Merchant(
+                            merchantIcon,
+                            fallback = conflict.categoryIcon ?: Lucide.Receipt,
+                        ),
+                    onClick = {
+                        mobileSession.clearTransactionWriteMessage()
+                        state.selectedConflictOperationId = conflict.id
+                        navigation.open(AppRoute.CONFLICT_REVIEW)
+                    },
+                )
+            }
+        }
+        if (conflicts.isNotEmpty()) {
+            item(key = "conflicts-footer") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+                    ConflictNote(
+                        icon = Lucide.TriangleAlert,
+                        title = "No changes will be discarded",
+                        detail = "until you choose a version.",
+                    )
+                    PrimaryButton("Review first change") {
+                        mobileSession.clearTransactionWriteMessage()
+                        state.selectedConflictOperationId = conflicts.first().id
+                        navigation.open(AppRoute.CONFLICT_REVIEW)
                     }
                 }
             }
-        } else {
-            items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
-                SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
-                    val merchantIcon = conflict.merchantIcon ?: merchantIconMatcher?.iconFor(conflict.title)
-                    ListRow(
-                        conflict.title,
-                        conflict.description,
-                        "Review",
-                        leading =
-                            RowLeading.Merchant(
-                                merchantIcon,
-                                fallback = conflict.categoryIcon ?: Lucide.Receipt,
-                            ),
-                        options = ListRowOptions(trailingColor = tandemPalette.warning),
-                        onClick = {
-                            mobileSession.clearTransactionWriteMessage()
-                            state.selectedConflictOperationId = conflict.id
-                            navigation.open(AppRoute.CONFLICT_REVIEW)
-                        },
+        }
+    }
+}
+
+@Composable
+internal fun ConflictNote(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    detail: String,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(TandemShapes.large))
+            .background(tandemPalette.raised)
+            .padding(TandemSpacing.large),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.warning)
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(title, color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
+        }
+    }
+}
+
+@Composable
+internal fun ConflictVersionCard(
+    label: String,
+    amount: String,
+    detail: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onSelect: () -> Unit,
+) {
+    val palette = tandemPalette
+    val border by animateColorAsState(
+        if (selected) palette.accent else palette.border,
+        tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+        label = "conflict-version-border",
+    )
+    val fill by animateColorAsState(
+        if (selected) palette.accentSurface else palette.surface,
+        tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+        label = "conflict-version-fill",
+    )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
+            .clip(RoundedCornerShape(TandemShapes.large))
+            .background(fill)
+            .border(if (selected) 2.dp else 1.dp, border, RoundedCornerShape(TandemShapes.large))
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            .padding(TandemSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, if (selected) palette.accent else palette.muted, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(palette.accent))
+            }
+            Text(
+                label.uppercase(),
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = TandemTypography.captionLetterSpacing,
+            )
+        }
+        Text(amount, color = palette.text, fontSize = TandemTypography.amount, fontWeight = FontWeight.Bold)
+        Text(detail, color = palette.muted, fontSize = TandemTypography.compactBody)
+    }
+}
+
+@Composable
+internal fun ConflictCompareTable(
+    comparisons: List<ConflictFieldComparison>,
+    actualLabel: String,
+) {
+    val palette = tandemPalette
+    SurfaceCard {
+        Column(Modifier.fillMaxWidth().padding(vertical = TandemSpacing.small)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small)) {
+                listOf("Field", "This device", actualLabel).forEach { header ->
+                    Text(
+                        header.uppercase(),
+                        Modifier.weight(1f),
+                        color = palette.muted,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = TandemTypography.captionLetterSpacing,
+                    )
+                }
+            }
+            comparisons.forEach { comparison ->
+                DividerLine()
+                val differs = comparison.editedValue != comparison.actualValue
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(comparison.label, Modifier.weight(1f), color = palette.muted, fontSize = TandemTypography.compactBody)
+                    Text(
+                        comparison.editedValue,
+                        Modifier.weight(1f),
+                        color = if (differs) palette.accent else palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = if (differs) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(
+                        comparison.actualValue,
+                        Modifier.weight(1f),
+                        color = if (differs) palette.warning else palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = if (differs) FontWeight.SemiBold else FontWeight.Normal,
                     )
                 }
             }
@@ -366,10 +527,10 @@ internal fun ConflictReviewScreen(
             mobileSession.conflictRecordsByRecordId[item.recordId]
                 ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
         }
-    LaunchedEffect(operation?.operationId, serverConfirmed, record?.remoteRevision) {
-        if (reviewedRevision == null) reviewedRevision = record?.remoteRevision
+    LaunchedEffect(operation?.operationId, serverConfirmed, record?.remoteRevision, record?.remoteDeleted) {
+        if (reviewedRevision == null) reviewedRevision = record?.let(::conflictReviewRevision)
     }
-    val latestRevision = record?.remoteRevision
+    val latestRevision = record?.let(::conflictReviewRevision)
     val reviewRevisionChanged = conflictReviewRevisionChanged(reviewedRevision, latestRevision)
     val canResolveReviewedVersion = canResolveReviewedConflict(reviewedRevision, latestRevision)
     val deviceVersion = operation?.optimisticJson?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }
@@ -435,96 +596,208 @@ internal fun ConflictReviewScreen(
             emptyList()
         }
     val detailComparisons = comparisons.filterNot { it.label == "Amount" }
+    val openConflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
+    var keepThisDevice by rememberSaveable(operation?.operationId) { mutableStateOf(true) }
+    var showComparison by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
+    var confirmKeepActual by rememberSaveable(operation?.operationId) { mutableStateOf(false) }
     PageColumn {
         if (operation == null) {
-            EmptyState("No change to review", "This change no longer needs attention.")
-            mobileSession.conflictResolutionFeedback
-                ?.takeIf { it.operationId == state.selectedConflictOperationId }
-                ?.let { feedback -> BodyText(feedback.message) }
+            val nextConflict = openConflicts.firstOrNull()
+            val feedback =
+                mobileSession.conflictResolutionFeedback
+                    ?.takeIf { it.operationId == state.selectedConflictOperationId }
+                    ?.message
+            SyncPageHeading(eyebrow = "Sync", title = "Choice saved.", detail = null)
+            SyncStatusRing(icon = Lucide.Check, color = tandemPalette.positive, active = false, caption = null)
+            BodyText(
+                feedback
+                    ?: if (nextConflict != null) {
+                        "Your choice has been kept. ${if (openConflicts.size == 1) "One more change needs" else "${openConflicts.size} more changes need"} your review."
+                    } else {
+                        "Your choice has been kept."
+                    },
+            )
+            if (nextConflict != null) {
+                val nextTitle = conflictPayeeTitle(nextConflict, liveTransactions, mobileSession) ?: "Transaction"
+                SurfaceCard {
+                    ListRow("Next up", nextTitle, onClick = { state.selectedConflictOperationId = nextConflict.operationId })
+                }
+                PrimaryButton("Review next change") { state.selectedConflictOperationId = nextConflict.operationId }
+            } else {
+                PrimaryButton("Back to Sync Center") { navigation.open(AppRoute.SYNC_CENTER) }
+            }
         } else {
-            Heading("Choose a version")
-            if (redirectedToLatestConflict) BodyText("Actual changed again. Review this latest version before choosing.")
+            val position = openConflicts.indexOfFirst { it.operationId == operation.operationId } + 1
+            SyncPageHeading(
+                eyebrow = if (position > 0 && openConflicts.size > 1) "Change $position of ${openConflicts.size}" else "Needs review",
+                title = "Choose what to keep.",
+                detail =
+                    if (actualDeleted) {
+                        "You edited this transaction on this device, but it was deleted in Actual."
+                    } else {
+                        "This transaction changed on this device and in Actual."
+                    },
+            )
+            TransactionDetailsCard(
+                rows =
+                    transactionDetailRows(
+                        current = deviceVersion,
+                        previous =
+                            operation.baseSnapshotJson?.let {
+                                runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull()
+                            },
+                        editedFields = userEditedFields.orEmpty(),
+                        payeeName = { id -> mobileSession.payeeRecords.firstOrNull { it.recordId == id }?.recordName() },
+                        accountName = { id -> mobileSession.accountRecords.firstOrNull { it.recordId == id }?.recordName() },
+                        categoryName = { id -> mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName() },
+                        formatAmount = state::formatSignedCurrency,
+                    ),
+            )
             when {
                 mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
-                serverConfirmed -> BodyText("Tandem confirmed the latest Actual version.")
+                serverConfirmed -> Unit
                 actualVersion != null ->
-                    BodyText(
-                        "Showing the last synced Actual version. Tandem checks it again before applying your choice.",
-                    )
+                    BodyText("Showing the last synced Actual version. Tandem checks it again before applying your choice.")
                 else -> {
-                    BodyText(
-                        "No Actual version is saved on this device yet. Connect to Tandem to load it before choosing.",
-                    )
-                    SecondaryButton(
-                        "Check again",
-                        enabled = !mobileSession.isSavingTransaction,
-                    ) { serverCheckAttempt += 1 }
+                    BodyText("No Actual version is saved on this device yet. Connect to Tandem to load it before choosing.")
+                    SecondaryButton("Check again", enabled = !mobileSession.isSavingTransaction) { serverCheckAttempt += 1 }
                 }
             }
-            if (reviewRevisionChanged) {
-                SurfaceCard {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        BodyText("Actual changed again. Review the latest version before choosing.")
-                        SecondaryButton("Review latest version", enabled = !latestRevision.isNullOrBlank()) {
-                            mobileSession.clearConflictResolutionFeedback()
-                            reviewedRevision = latestRevision
-                        }
+            if (redirectedToLatestConflict || reviewRevisionChanged) {
+                ConflictNote(
+                    icon = Lucide.TriangleAlert,
+                    title = "Actual changed again",
+                    detail = "Review the latest version before choosing.",
+                )
+                if (reviewRevisionChanged) {
+                    SecondaryButton("Review latest version", enabled = !latestRevision.isNullOrBlank()) {
+                        mobileSession.clearConflictResolutionFeedback()
+                        reviewedRevision = latestRevision
                     }
                 }
             }
-            ListRow(
-                transactionTitle,
-                "$dateLabel · $categoryName",
-                leading =
-                    RowLeading.Merchant(
-                        transaction?.merchantIcon ?: merchantIconMatcher?.iconFor(transactionTitle),
-                        fallback = transaction?.categoryIcon ?: state.categoryIconFor(categoryId.orEmpty(), categoryName),
-                    ),
-                options = ListRowOptions(dense = true),
-            )
-            comparisons.firstOrNull { it.label == "Amount" }?.let { amountComparison ->
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    ConflictValueCard("Your edit", amountComparison.editedValue, Modifier.weight(1f))
-                    ConflictValueCard(
-                        if (serverConfirmed) "Actual" else "Last synced Actual",
-                        amountComparison.actualValue,
+            val amountComparison = comparisons.firstOrNull { it.label == "Amount" }
+            val categoryComparison = comparisons.firstOrNull { it.label == "Category" }
+
+            fun amountOf(version: JsonObject?): String =
+                (version?.get("amount") as? JsonPrimitive)?.longOrNull?.let(state::formatSignedCurrency) ?: "Unavailable"
+            val keepThisDeviceEnabled =
+                canResolveReviewedVersion &&
+                    !state.readOnlyMode &&
+                    !mobileSession.isSavingTransaction &&
+                    (operation.action == "DELETE" || record?.remoteDeleted != true)
+            val keepActualEnabled = canResolveReviewedVersion && !state.readOnlyMode && !mobileSession.isSavingTransaction
+            val thisDeviceKeepable = operation.action == "DELETE" || record?.remoteDeleted != true
+            LaunchedEffect(operation.operationId, thisDeviceKeepable) {
+                if (!thisDeviceKeepable) keepThisDevice = false
+            }
+            val editedFields =
+                userEditedFields
+                    .orEmpty()
+                    .mapNotNull { field ->
+                        when (field) {
+                            "amount" -> "Amount"
+                            "category" -> "Category"
+                            "payee" -> "Payee"
+                            "date" -> "Date"
+                            "notes" -> "Notes"
+                            "account" -> "Account"
+                            "cleared" -> "Cleared"
+                            else -> null
+                        }
+                    }.distinct()
+            val actualLabel = if (serverConfirmed) "Actual" else "Last synced Actual"
+            ConflictVersionCard(
+                label = "This device",
+                amount = if (operation.action == "DELETE") "Delete" else amountComparison?.editedValue ?: amountOf(deviceVersion),
+                detail =
+                    when {
+                        operation.action == "DELETE" -> "Remove this transaction from Actual"
+                        !thisDeviceKeepable -> "Can’t be kept because Actual deleted this transaction"
+                        editedFields.isNotEmpty() && "Category" !in editedFields ->
+                            "${editedFields.joinToString(", ")} edited"
+                        else -> "Category · ${categoryComparison?.editedValue ?: categoryName}"
+                    },
+                selected = keepThisDevice,
+                enabled = keepThisDeviceEnabled,
+            ) { keepThisDevice = true }
+            ConflictVersionCard(
+                label = actualLabel,
+                amount = if (actualDeleted) "Deleted" else amountComparison?.actualValue ?: amountOf(actualVersion),
+                detail =
+                    when {
+                        actualDeleted -> "Already removed in Actual"
+                        actualVersion == null -> "Not loaded yet"
+                        else -> "Category · ${categoryComparison?.actualValue ?: categoryName}"
+                    },
+                selected = !keepThisDevice,
+                enabled = keepActualEnabled,
+            ) { keepThisDevice = false }
+            conflictReason?.let { BodyText(it) }
+            if (comparisons.isNotEmpty()) {
+                val chevronRotation by animateFloatAsState(
+                    if (showComparison) 90f else 0f,
+                    tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                    label = "conflict-compare-chevron",
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(TandemShapes.medium))
+                        .clickable(role = Role.Button) { showComparison = !showComparison }
+                        .padding(vertical = TandemSpacing.small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "What changed?",
                         Modifier.weight(1f),
+                        color = tandemPalette.accent,
+                        fontSize = TandemTypography.body,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Icon(
+                        Lucide.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = chevronRotation },
+                        tint = tandemPalette.accent,
                     )
                 }
-            }
-            conflictReason?.let { BodyText(it) }
-            when {
-                actualDeleted -> if (conflictReason == null) BodyText("Actual no longer has this transaction.")
-                actualVersion == null -> BodyText("Actual’s latest transaction details aren’t available.")
-                comparisons.isEmpty() && operation.action == "DELETE" -> BodyText("The transaction is still in Actual.")
-                comparisons.isEmpty() -> BodyText("Your edit already matches the saved Actual version.")
-                detailComparisons.isEmpty() -> BodyText("Amount is the only differing field.")
-                else -> ConflictComparisonCard(detailComparisons, actualLabel = if (serverConfirmed) "Actual" else "Last synced Actual")
+                AnimatedVisibility(visible = showComparison) {
+                    ConflictCompareTable(comparisons, actualLabel)
+                }
             }
             mobileSession.conflictResolutionFeedback
                 ?.takeIf { it.operationId == operation.operationId }
                 ?.let { feedback -> BodyText(feedback.message) }
-            PrimaryButton(
-                when {
-                    operation.action == "DELETE" && record?.remoteDeleted == true -> "Clear pending deletion"
-                    operation.action == "DELETE" -> "Keep deletion"
-                    else -> "Keep your edit"
-                },
-                enabled =
-                    canResolveReviewedVersion &&
-                        !state.readOnlyMode &&
-                        !mobileSession.isSavingTransaction &&
-                        (operation.action == "DELETE" || record?.remoteDeleted != true),
-            ) { onResolveConflict(operation.operationId, true, reviewedRevision.orEmpty()) }
-            KeepLastSyncedConflictAction(
-                operationId = operation.operationId,
-                reviewedRevision = reviewedRevision.orEmpty(),
-                enabled = canResolveReviewedVersion && !state.readOnlyMode && !mobileSession.isSavingTransaction,
-                onResolveConflict = onResolveConflict,
+            Text(
+                "Only this transaction will be replaced.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
             )
+            PrimaryButton(
+                "Keep this version",
+                enabled = if (keepThisDevice) keepThisDeviceEnabled else keepActualEnabled,
+            ) {
+                if (keepThisDevice) {
+                    onResolveConflict(operation.operationId, true, reviewedRevision.orEmpty())
+                } else {
+                    confirmKeepActual = true
+                }
+            }
+            if (confirmKeepActual) {
+                DestructiveConfirmationDialog(
+                    title = "Discard your edit?",
+                    message = "Tandem will check Actual’s latest version, then remove your edit from this device. Actual won’t be changed.",
+                    confirmLabel = "Discard edit",
+                    dismissLabel = "Keep editing",
+                    enabled = keepActualEnabled,
+                    onDismissRequest = { confirmKeepActual = false },
+                    onConfirm = {
+                        confirmKeepActual = false
+                        onResolveConflict(operation.operationId, false, reviewedRevision.orEmpty())
+                    },
+                )
+            }
         }
     }
 }
@@ -1068,5 +1341,86 @@ internal fun RejectedWriteScreen(
             actionLabel = "Choose budget",
             onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) },
         )
+    }
+}
+
+internal data class TransactionDetailRow(
+    val label: String,
+    val value: String,
+    val previousValue: String?,
+)
+
+internal fun transactionDetailRows(
+    current: JsonObject?,
+    previous: JsonObject?,
+    editedFields: Collection<String>,
+    payeeName: (String) -> String?,
+    accountName: (String) -> String?,
+    categoryName: (String) -> String?,
+    formatAmount: (Long) -> String,
+): List<TransactionDetailRow> {
+    if (current == null) return emptyList()
+
+    fun text(
+        version: JsonObject?,
+        field: String,
+    ): String? {
+        val value = version?.get(field) as? JsonPrimitive ?: return null
+        if (value.contentOrNull == null) return null
+        return when (field) {
+            "payee" -> value.contentOrNull?.let { payeeName(it) ?: "Unknown payee" }
+            "account" -> value.contentOrNull?.let { accountName(it) ?: "Unknown account" }
+            "category" -> value.contentOrNull?.let { categoryName(it) ?: "Uncategorized" }
+            "amount" -> value.longOrNull?.let(formatAmount)
+            "date" -> value.contentOrNull?.let(::formatLiveDate)
+            else -> value.contentOrNull?.takeIf(String::isNotBlank)
+        }
+    }
+    return listOf(
+        "payee" to "Payee",
+        "account" to "Account",
+        "date" to "Date",
+        "amount" to "Amount",
+        "category" to "Category",
+        "notes" to "Notes",
+    ).mapNotNull { (field, label) ->
+        val value = text(current, field)
+        val edited = field in editedFields
+        if (value == null && !edited) return@mapNotNull null
+        TransactionDetailRow(
+            label = label,
+            value = value ?: "None",
+            previousValue = if (edited) text(previous, field) ?: "None" else null,
+        )
+    }
+}
+
+@Composable
+internal fun TransactionDetailsCard(rows: List<TransactionDetailRow>) {
+    if (rows.isEmpty()) return
+    val palette = tandemPalette
+    SurfaceCard {
+        Column(Modifier.fillMaxWidth().padding(vertical = TandemSpacing.extraSmall)) {
+            rows.forEachIndexed { index, row ->
+                if (index > 0) DividerLine()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                ) {
+                    Text(row.label, Modifier.width(88.dp), color = palette.muted, fontSize = TandemTypography.compactBody)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                        Text(
+                            row.value,
+                            color = if (row.previousValue != null) palette.accent else palette.text,
+                            fontSize = TandemTypography.compactBody,
+                            fontWeight = if (row.previousValue != null) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                        row.previousValue?.let {
+                            Text("Edited on this device · was $it", color = palette.muted, fontSize = TandemTypography.caption)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

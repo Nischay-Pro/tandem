@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
@@ -19,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
@@ -28,8 +28,9 @@ import app.tandemforactual.ui.AuthReturnEvents
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
   private var appStartupComplete = false
+  private val deviceAuthenticator by lazy { AndroidDeviceAuthenticator(this) }
   private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
   private val notificationPermissionLauncher =
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity() {
         appResumeEvents = appResumeEvents,
         appInForeground = appInForeground,
         networkRestoredEvents = networkRestoredEvents,
+        deviceAuthenticator = deviceAuthenticator,
       )
     }
   }

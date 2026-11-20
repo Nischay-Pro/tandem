@@ -32,10 +32,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.TandemLayout
 import app.tandemforactual.ui.TandemMotion
@@ -265,23 +268,27 @@ internal fun ListRow(
             trailingContent()
         } else if (trailing != null && !stackTrailing) {
             val effectiveColor = if (options.muted) palette.muted else options.trailingColor ?: palette.muted
-            if (options.animateChanges) {
-                AnimatedStatusText(
-                    trailing,
-                    effectiveColor,
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    fractionDigits = 2,
-                )
-            } else {
-                Text(
-                    amountAnnotatedString(trailing),
-                    color = effectiveColor,
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                )
+            Box(Modifier.trailingWidthCap(), contentAlignment = Alignment.CenterEnd) {
+                if (options.animateChanges) {
+                    AnimatedStatusText(
+                        trailing,
+                        effectiveColor,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        fractionDigits = 2,
+                    )
+                } else {
+                    Text(
+                        amountAnnotatedString(trailing),
+                        color = effectiveColor,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                    )
+                }
             }
         } else if (trailingContent == null && onClick != null && options.showChevron) {
             Icon(
@@ -445,3 +452,10 @@ private fun SectionCardLayout(
         }
     }
 }
+
+private fun Modifier.trailingWidthCap(): Modifier =
+    layout { measurable, constraints ->
+        val cap = (constraints.maxWidth * 0.45f).toInt()
+        val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = minOf(constraints.maxWidth, cap)))
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }

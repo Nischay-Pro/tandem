@@ -222,7 +222,22 @@ class TandemMobileSessionTest {
                     ),
                 )
 
-                val queuedTransaction = repository.readPendingWrites("budget-1").single { it.recordType == "transaction" }
+                assertTrue(
+                    session.createTransaction(
+                        budgetId = "budget-1",
+                        accountId = "account-1",
+                        payeeId = localPayeeId,
+                        categoryId = "category-1",
+                        amountText = "-0.02",
+                        dateText = "2026-11-12",
+                        notes = "Spending",
+                        encryptionPassword = null,
+                    ),
+                    session.transactionWriteMessage,
+                )
+                val transactions = repository.readPendingWrites("budget-1").filter { it.recordType == "transaction" }
+                assertEquals(-2L, transactions.single { it.optimisticAmountMinor != 1250L }.optimisticAmountMinor)
+                val queuedTransaction = transactions.single { it.optimisticAmountMinor == 1250L }
                 assertEquals("queued", queuedTransaction.status)
                 assertEquals(localPayeeId, queuedTransaction.optimisticPayeeId)
                 assertEquals(localPayeeId, repository.findRecord("budget-1", "transaction", queuedTransaction.recordId)?.payeeId)
@@ -233,6 +248,19 @@ class TandemMobileSessionTest {
                         .flatMap { decodeBudgetReorderQueue(it.patchJson).moves }
                         .any { it.kind == BudgetReorderKind.CREATE_PAYEE && it.itemId == localPayeeId },
                 )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun blankBudgetIdsAreNeverCachedInsteadOfCrashing() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
+                assertFalse(session.hasCachedBudgetSnapshot(""))
+                assertFalse(session.hasCachedBudgetSnapshot(" budget-1"))
             } finally {
                 database.close()
             }
@@ -1817,7 +1845,7 @@ class TandemMobileSessionTest {
                 assertFalse(apiClient.isAuthenticated)
                 assertTrue(repository.findCachedBudgetIds().isEmpty())
                 assertTrue(session.cachedBudgets.isEmpty())
-                assertTrue(session.signOutNotice.orEmpty().contains("server still trusts this device"))
+                assertTrue(session.signOutNotice.orEmpty().contains("server still has this device linked"))
                 assertTrue(session.signOutNotice.orEmpty().contains("Sign in again to this server"))
             } finally {
                 database.close()
