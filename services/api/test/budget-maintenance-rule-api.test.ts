@@ -124,7 +124,7 @@ describe("Actual rule maintenance", () => {
   });
 
   it("validates conditions and actions before touching Actual", () => {
-    const invalid: Array<[Partial<BudgetRuleDraft>, string]> = [
+    const invalid: Array<[Record<string, unknown>, string]> = [
       [{ conditions: [] }, "Add at least one condition"],
       [{ actions: [] }, "Add at least one action"],
       [
