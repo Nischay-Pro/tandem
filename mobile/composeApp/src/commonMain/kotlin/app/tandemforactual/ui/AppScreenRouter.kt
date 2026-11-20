@@ -98,6 +98,7 @@ internal fun ScreenContent(
         AppRoute.SIGN_IN -> SignInScreen(state, mobileSession, navigation, onSignIn, onStartOpenIdSignIn)
         AppRoute.BUDGET_CHOOSER ->
             BudgetChooserScreen(state, mobileSession, navigation, onRefreshBudgets, onPrepareBudgetUnlock, onOpenSelectedBudget)
+        AppRoute.LOCAL_SERVER_ADDRESS -> LocalServerAddressScreen(state, mobileSession, navigation)
         AppRoute.SWITCH_BUDGET ->
             SwitchBudgetScreen(state, mobileSession, navigation, onRefreshBudgets, onPrepareBudgetUnlock, onOpenSelectedBudget)
         AppRoute.BUDGET_UNLOCK -> BudgetUnlockScreen(state, navigation, onOpenSelectedBudget)

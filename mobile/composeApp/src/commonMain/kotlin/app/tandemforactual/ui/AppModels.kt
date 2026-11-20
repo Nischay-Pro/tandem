@@ -146,6 +146,7 @@ internal enum class AppRoute(
     SIGN_IN("Sign in"),
     BUDGET_CHOOSER("Budgets"),
     SWITCH_BUDGET("Switch budget"),
+    LOCAL_SERVER_ADDRESS("Local address"),
     BUDGET_UNLOCK("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
     NOTIFICATION_ONBOARDING("Stay in the loop"),

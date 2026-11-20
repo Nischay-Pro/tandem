@@ -14,12 +14,20 @@ import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
+import io.ktor.http.content.TextContent
+import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -157,6 +165,8 @@ class TandemApiClient(
     private var serverUrl: String? = null
     private var authenticatedDevice: AuthenticatedDevice? = null
     private var activeAuthProvider: Auth.BearerAuth? = null
+    private var localServerUrl: String? = null
+    private var verifiedLocalServerUrl: String? = null
     internal val bearerAuth =
         Auth.BearerAuth {
             accessToken?.let(AuthItem::Bearer)
@@ -167,6 +177,67 @@ class TandemApiClient(
 
     val currentServerUrl: String?
         get() = serverUrl
+
+    val activeServerUrl: String?
+        get() = verifiedLocalServerUrl ?: serverUrl
+
+    val isUsingLocalServer: Boolean
+        get() = verifiedLocalServerUrl != null
+
+    suspend fun setLocalServerUrl(value: String?) {
+        val parsed =
+            value?.trim()?.takeIf(String::isNotEmpty)?.let {
+                parseServerUrl(it, allowInsecurePrivateNetwork).toString()
+            }
+        GeneratedApiAccess.mutex.withLock {
+            localServerUrl = parsed
+            if (verifiedLocalServerUrl != parsed) verifiedLocalServerUrl = null
+        }
+    }
+
+    suspend fun refreshLocalServer(timeoutMillis: Long = LOCAL_IDENTITY_TIMEOUT_MILLIS): Boolean {
+        val candidate = localServerUrl
+        val token = accessToken
+        val deviceId = authenticatedDevice?.deviceId
+        if (candidate == null || token == null || deviceId == null) {
+            verifiedLocalServerUrl = null
+            return false
+        }
+        val nonce = createLocalIdentityNonce()
+        val verified =
+            try {
+                withTimeout(timeoutMillis) {
+                    val response =
+                        Api.client.post(endpointUrl(Url(candidate), "/api/v1/local-identity")) {
+                            contentType(ContentType.Application.Json)
+                            setBody(
+                                TextContent(
+                                    buildJsonObject {
+                                        put("deviceId", deviceId)
+                                        put("nonce", nonce)
+                                    }.toString(),
+                                    ContentType.Application.Json,
+                                ),
+                            )
+                        }
+                    if (response.status != HttpStatusCode.OK) return@withTimeout false
+                    val proof = Json.parseToJsonElement(response.bodyAsText()).jsonObject.optionalString("proof")
+                    proof != null && constantTimeEquals(proof, localIdentityProof(token, deviceId, nonce))
+                }
+            } catch (error: CancellationException) {
+                if (error is TimeoutCancellationException) false else throw error
+            } catch (_: Exception) {
+                false
+            }
+        GeneratedApiAccess.mutex.withLock {
+            verifiedLocalServerUrl = if (verified && localServerUrl == candidate) candidate else null
+        }
+        return verifiedLocalServerUrl != null
+    }
+
+    fun useExternalServerAfterLocalFailure() {
+        verifiedLocalServerUrl = null
+    }
 
     suspend fun restoreSession(
         serverUrl: String,
@@ -1310,6 +1381,7 @@ class TandemApiClient(
                 accessToken = null
                 serverUrl = null
                 authenticatedDevice = null
+                verifiedLocalServerUrl = null
             }
         }
     }
@@ -1320,7 +1392,7 @@ class TandemApiClient(
             throw TandemApiException("sign_in_required")
         }
         GeneratedApiAccess.ensureContentEncoding()
-        Api.baseUrl = parseServerUrl(currentServerUrl, allowInsecurePrivateNetwork)
+        Api.baseUrl = parseServerUrl(verifiedLocalServerUrl ?: currentServerUrl, allowInsecurePrivateNetwork)
         setGeneratedAuthProvider(bearerAuth)
     }
 
@@ -1587,3 +1659,5 @@ private fun JsonObject.requiredStringArray(name: String): List<String> {
             ?: throw TandemApiProtocolException("Server response contains an invalid $name entry")
     }
 }
+
+internal const val LOCAL_IDENTITY_TIMEOUT_MILLIS = 2_000L

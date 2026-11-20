@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 
 export const DEVICE_CREDENTIAL_IDLE_TTL_DAYS = 90;
 const SECRET_BYTES = 32;
@@ -24,6 +24,7 @@ export interface DeviceAuthStore {
   authenticate(credentialHash: string): Promise<DeviceRecord | undefined>;
   listDevices(principalId: string): Promise<DeviceRecord[]>;
   revokeDevice(principalId: string, deviceId: string): Promise<boolean>;
+  activeCredentialHash(deviceId: string): Promise<string | undefined>;
 }
 
 export class DeviceAuthInputError extends Error {
@@ -94,6 +95,16 @@ export class DeviceAuthorization {
       return false;
     }
     return this.store.revokeDevice(principalId, targetDeviceId);
+  }
+
+  async localIdentityProof(deviceId: string, nonce: string): Promise<string> {
+    const credentialHash =
+      (UUID_PATTERN.test(deviceId)
+        ? await this.store.activeCredentialHash(deviceId)
+        : undefined) ?? randomBytes(32).toString("hex");
+    return createHmac("sha256", credentialHash)
+      .update(`${LOCAL_IDENTITY_CONTEXT}\n${deviceId}\n${nonce}`, "utf8")
+      .digest("base64url");
   }
 
   static canAccessBudget(device: DeviceRecord, budgetId: string): boolean {
@@ -206,3 +217,7 @@ function hasControlCharacters(value: string): boolean {
 function codePointLength(value: string): number {
   return [...value].length;
 }
+
+export const LOCAL_IDENTITY_CONTEXT = "tandem-local-identity-v1";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
