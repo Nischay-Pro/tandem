@@ -38,9 +38,13 @@ class MainActivity : FragmentActivity() {
   private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
   private var tandemDatabase: TandemDatabase? = null
   private var notificationPermissionEnabled by mutableStateOf(false)
+  private var openSettingsIfBlocked = false
   private val notificationPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
       notificationPermissionEnabled = granted && appNotificationsEnabled()
+      val blocked = !granted && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+      if (blocked && openSettingsIfBlocked) openNotificationSettings()
+      openSettingsIfBlocked = false
     }
   private val appResumeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val appInForeground = MutableStateFlow(false)
@@ -125,47 +129,23 @@ class MainActivity : FragmentActivity() {
     intent.dataString?.let { AuthReturnEvents.publish(it) }
   }
 
-  private fun requestNotificationPermission() {
-    if (!appNotificationsEnabled()) {
-      openNotificationSettings()
+  private fun requestNotificationPermission() = askForNotifications(openSettingsIfBlocked = false)
+
+  private fun updateNotificationPermission(enabled: Boolean) {
+    if (enabled) askForNotifications(openSettingsIfBlocked = true) else openNotificationSettings()
+  }
+
+  private fun askForNotifications(openSettingsIfBlocked: Boolean) {
+    val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasRuntimeNotificationPermission()
+    if (granted) {
+      notificationPermissionEnabled = appNotificationsEnabled()
+      if (!notificationPermissionEnabled && openSettingsIfBlocked) openNotificationSettings()
       return
     }
-    if (hasRuntimeNotificationPermission()) {
-      notificationPermissionEnabled = true
-      return
-    }
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-      notificationPermissionEnabled = true
-      return
-    }
-    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
-    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-      openNotificationSettings()
-      return
-    }
-    notificationPreferences().edit().putBoolean(NOTIFICATION_PERMISSION_PROMPTED, true).apply()
+    this.openSettingsIfBlocked = openSettingsIfBlocked
     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
   }
 
-  private fun updateNotificationPermission(enabled: Boolean) {
-    if (!enabled) {
-      openNotificationSettings()
-      return
-    }
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasNotificationPermission()) {
-      notificationPermissionEnabled = true
-      return
-    }
-    val permissionWasRequested = notificationPreferences().getBoolean(NOTIFICATION_PERMISSION_PROMPTED, false)
-    if (permissionWasRequested && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-      openNotificationSettings()
-    } else {
-      requestNotificationPermission()
-    }
-  }
-
-  private fun notificationPreferences() =
-    getSharedPreferences(NOTIFICATION_PREFERENCES, MODE_PRIVATE)
 
   private fun appNotificationsEnabled(): Boolean =
     getSystemService(NotificationManager::class.java)?.areNotificationsEnabled() != false
@@ -219,5 +199,3 @@ class MainActivity : FragmentActivity() {
 }
 
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
-private const val NOTIFICATION_PREFERENCES = "tandem_notification_permissions"
-private const val NOTIFICATION_PERMISSION_PROMPTED = "prompted_once"
