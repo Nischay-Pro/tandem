@@ -106,6 +106,7 @@ fun TandemApp(
     /** Whether the app is on screen; periodic sync runs only then. */
     appInForeground: StateFlow<Boolean> = MutableStateFlow(true),
     networkRestoredEvents: Flow<Unit> = emptyFlow(),
+    deviceAuthenticator: DeviceAuthenticator? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -789,6 +790,8 @@ fun TandemApp(
         previousRoute = route
     }
     val isAppInForeground by appInForeground.collectAsState()
+    val appLockState = remember { AppLockState(nowEpochMillis) }
+    LaunchedEffect(isAppInForeground) { appLockState.onForegroundChanged(isAppInForeground) }
     LaunchedEffect(
         isAppInForeground,
         state.syncOnOpen,
@@ -1365,6 +1368,7 @@ fun TandemApp(
                 CompositionLocalProvider(
                     LocalRouteScrollState provides routeScrollState,
                     LocalRouteLazyListState provides routeLazyListState,
+                    LocalDeviceAuthenticator provides deviceAuthenticator,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
@@ -1530,7 +1534,11 @@ fun TandemApp(
                             .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
                 ) {
                     val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
-                    if (!transactionSheetActive && backGestureProgress > 0f && backPreviewRoute != null && backPreviewRoute != routeEntry) {
+                    if (!transactionSheetActive &&
+                        backGestureProgress > 0f &&
+                        backPreviewRoute != null &&
+                        backPreviewRoute != routeEntry
+                    ) {
                         val direction = backGestureDirection
                         renderRoute(
                             backPreviewRoute!!,
@@ -1695,6 +1703,7 @@ fun TandemApp(
                 },
             )
         }
+        AppLockGate(state.biometricLockEnabled, deviceAuthenticator, appLockState, isAppInForeground)
     }
 }
 

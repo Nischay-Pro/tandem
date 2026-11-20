@@ -90,6 +90,8 @@ dependencies {
   implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
   implementation(libs.coreSplashScreen)
+  implementation(libs.biometric)
+  implementation(libs.fragment)
   implementation(libs.profileInstaller)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)

@@ -12,6 +12,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -25,10 +26,8 @@ import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
-import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.KeyRound
-import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.LogIn
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
@@ -208,7 +207,24 @@ internal fun SecurityScreen(
     val canChangeReadOnly = state.readOnlyMode || !hasPendingWrites
     PageColumn {
         SectionCard("App access") {
-            ListRow("Biometric unlock", "Coming later", leading = RowLeading.Icon(Lucide.FingerprintPattern))
+            val authenticator = LocalDeviceAuthenticator.current
+            val biometricAvailable = remember(authenticator) { authenticator?.isAvailable() == true }
+            ToggleRow(
+                title = "Biometric unlock",
+                subtitle =
+                    when {
+                        authenticator == null -> "Not available on this device"
+                        !biometricAvailable -> "Set up a screen lock on this device first"
+                        else -> "Fingerprint, face, or screen lock"
+                    },
+                checked = state.biometricLockEnabled,
+                enabled = biometricAvailable || state.biometricLockEnabled,
+                onChange = { enable ->
+                    authenticator?.authenticate(if (enable) "Turn on biometric unlock" else "Turn off biometric unlock") { success ->
+                        if (success) state.biometricLockEnabled = enable
+                    } ?: run { if (!enable) state.biometricLockEnabled = false }
+                },
+            )
             DividerLine()
             ToggleRow(
                 title = "Lock editing",
@@ -222,16 +238,30 @@ internal fun SecurityScreen(
         SectionCard("Privacy") {
             ToggleRow(
                 title = "Hide budget amounts",
-                subtitle = "Tap to reveal for 3 seconds; hover to reveal temporarily",
+                subtitle = "Tap an amount to show it briefly",
                 checked = state.privacyModeEnabled,
                 onChange = { state.privacyModeEnabled = it },
             )
-        }
-        SurfaceCard {
+            DividerLine()
             ListRow(
-                "Budget password",
-                trailing = if (state.selectedBudgetEncrypted) "Available this session" else "Unavailable",
-                leading = RowLeading.Icon(Lucide.LockKeyhole),
+                "Encrypted budget",
+                when {
+                    !state.selectedBudgetEncrypted -> "Not used by this budget"
+                    state.encryptedPassword.isNotBlank() -> "Password forgotten when Tandem closes"
+                    else -> "Enter the password to open it"
+                },
+                when {
+                    !state.selectedBudgetEncrypted -> null
+                    state.encryptedPassword.isNotBlank() -> "Unlocked"
+                    else -> "Locked"
+                },
+                leading = RowLeading.None,
+                options =
+                    ListRowOptions(
+                        showChevron = false,
+                        subtitleMaxLines = 1,
+                        trailingColor = if (state.encryptedPassword.isNotBlank()) tandemPalette.positive else tandemPalette.warning,
+                    ),
             )
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
