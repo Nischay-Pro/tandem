@@ -12,15 +12,18 @@ If the connection drops after you send an edit, it may already have reached
 Actual. Check its status before trying again.
 
 ```mermaid
-flowchart LR
-  A[Save in Tandem] --> B[Saved on this device]
-  B --> C{Can Tandem reach the server?}
-  C -->|Yes| D[Actual checks the change]
-  C -->|No| E[Keep it in Pending Changes]
-  D -->|Confirmed| F[Synced]
-  D -->|Needs a decision| G[Needs review]
-  D -->|Outcome unconfirmed| H[Status unknown]
-  E --> C
+flowchart TD
+  save[Save in Tandem] --> queued["Saved on this device<br/>Pending Changes"]
+  queued --> ready{"Can Tandem send the edit?"}
+  ready -->|Offline| queued
+  ready -->|Server feature missing| waiting[Wait for a Tandem server update]
+  waiting -->|Server supports the feature| queued
+  ready -->|Ready| send[Send the edit to Tandem]
+  send -->|Actual confirms the change| synced[Synced]
+  send -->|Edits conflict| review[Needs review]
+  send -->|Edit refused| rejected[Rejected]
+  send -->|Outcome unconfirmed| unknown[Status unknown]
+  unknown --> check[Check status before trying again]
 ```
 
 Tandem tries again when you sync, return to the app, or the connection returns.

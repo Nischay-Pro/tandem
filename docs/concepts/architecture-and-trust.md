@@ -36,7 +36,7 @@ encrypted sync, use Actuali.
 
 ## Unencrypted and encrypted budgets
 
-The diagrams compare both paths side by side. Each person signs in to Actual
+The diagram compares both paths. Each person signs in to Actual
 from Tandem, and the API keeps that account's session token encrypted on the
 server. An encrypted budget has a second password: the person enters it in
 Tandem, which passes it to Actual's API to unlock that budget.
@@ -46,39 +46,38 @@ flowchart LR
   subgraph plain["UNENCRYPTED BUDGET"]
     direction TB
     plainServer["Actual sync server<br/>Readable budget payload"]
-    plainApi["Tandem API + @actual-app/api<br/>Open local copy; no budget key"]
-    plainDb[("Tandem PostgreSQL<br/>Session credentials and write journal")]
+    plainApi["Tandem API + @actual-app/api<br/>Readable local working copy"]
+    plainDb[("Tandem PostgreSQL<br/>Encrypted session tokens<br/>Write journal may hold readable data")]
     plainMemory["Tandem API memory<br/>Temporary snapshot pages"]
     plainPhone["Phone · Room<br/>Readable offline cache"]
-    plainServer -->|"Actual sync protocol"| plainApi
-    plainApi -->|"Temporary snapshot pages"| plainMemory
-    plainApi -->|"Budget data"| plainPhone
+    plainServer <-->|"Budget sync"| plainApi
+    plainApi <--> plainDb
+    plainApi <--> plainMemory
+    plainApi <-->|"Snapshots and edits"| plainPhone
   end
 
   subgraph encrypted["END-TO-END ENCRYPTED BUDGET"]
     direction TB
     encryptedServer["Actual sync server<br/>Encrypted budget payload"]
-    encryptedApi["Tandem API + @actual-app/api<br/>Decrypt local copy using budget key"]
-    encryptedDb[("Tandem PostgreSQL<br/>Session credentials and write journal")]
+    encryptedApi["Tandem API + @actual-app/api<br/>Decrypts into a readable working copy"]
+    encryptedDb[("Tandem PostgreSQL<br/>Encrypted session tokens<br/>Write journal may hold readable data")]
     encryptedMemory["Tandem API memory<br/>Temporary decrypted snapshot pages"]
     encryptedPhone["Phone · Room<br/>Android: encrypted SQLCipher cache<br/>iOS: standard local cache"]
-    budgetKey["Separate budget password<br/>sent in request header"]
-    encryptedServer -->|"Encrypted sync data"| encryptedApi
-    budgetKey -->|"HTTPS request"| encryptedApi
-    encryptedApi -->|"Temporary snapshot pages"| encryptedMemory
-    encryptedApi -->|"Budget data"| encryptedPhone
+    encryptedServer <-->|"Encrypted budget sync"| encryptedApi
+    encryptedApi <--> encryptedDb
+    encryptedApi <--> encryptedMemory
+    encryptedApi <-->|"Snapshots and edits"| encryptedPhone
+    encryptedPhone -.->|"Budget password header"| encryptedApi
   end
 
   classDef server fill:#EDF1F7,stroke:#627D98,color:#102A43,stroke-width:1.5px;
   classDef plainService fill:#E4F5F2,stroke:#079AA2,color:#102A43,stroke-width:2px;
   classDef encryptedService fill:#F2E8FC,stroke:#8719E0,color:#102A43,stroke-width:2px;
   classDef store fill:#FFFFFF,stroke:#CBD5E1,color:#102A43,stroke-width:1.5px;
-  classDef secret fill:#FFF6E3,stroke:#D39B26,color:#664A12,stroke-width:1.5px;
   class plainServer,encryptedServer server;
   class plainApi plainService;
   class encryptedApi encryptedService;
   class plainDb,plainMemory,plainPhone,encryptedDb,encryptedMemory,encryptedPhone store;
-  class budgetKey secret;
   style plain fill:#F7FBFA,stroke:#A9DAD5,stroke-width:2px;
   style encrypted fill:#FBF8FE,stroke:#D9C0F2,stroke-width:2px;
 ```
