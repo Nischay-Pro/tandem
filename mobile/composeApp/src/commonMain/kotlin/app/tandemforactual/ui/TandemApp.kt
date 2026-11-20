@@ -581,6 +581,7 @@ fun TandemApp(
             reset = { next ->
                 state.pendingScheduleToOpenId = null
                 routeTransitionDirection = 0f
+                savedTabBackStacks = ""
                 backStack.clear()
                 backStack.add(newRouteEntry(next))
             },
@@ -1807,6 +1808,7 @@ fun TandemApp(
                 if (state.pendingSetupAfterUnlock) {
                     state.pendingSetupAfterUnlock = false
                     routeTransitionDirection = 0f
+                    savedTabBackStacks = ""
                     backStack.clear()
                     backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
                     backStack.add(newRouteEntry(nextSetupRoute(state, notificationPermissionEnabled)))
