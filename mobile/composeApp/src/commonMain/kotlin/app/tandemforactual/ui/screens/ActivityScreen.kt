@@ -38,6 +38,7 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.components.SkeletonRows
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
@@ -200,11 +201,7 @@ internal fun ActivityScreen(
                 ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
             }
             if (isLiveBudget && mobileSession.activityTransactionPageBudgetId != state.selectedBudgetId && transactions.isEmpty()) {
-                item(key = "activity-loading") {
-                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = tandemPalette.accent)
-                    }
-                }
+                item(key = "activity-loading") { SkeletonRows() }
             } else if (transactions.isEmpty()) {
                 item(key = "activity-empty") {
                     EmptyState(

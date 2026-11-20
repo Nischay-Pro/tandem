@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.components.SkeletonRows
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
@@ -503,13 +503,9 @@ internal fun ActivitySearchScreen(
                         isBuildingSearchRecords
                 )
             ) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = tandemPalette.accent)
-                }
+                SkeletonRows(modifier = Modifier.weight(1f))
             } else if (isEvaluatingSearch && resultIndices.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = tandemPalette.accent)
-                }
+                SkeletonRows(modifier = Modifier.weight(1f))
             } else if (resultIndices.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     EmptyState(
