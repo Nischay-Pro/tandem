@@ -176,7 +176,15 @@ internal fun AppLockGate(
         if (!lockState.unlocked && state.selectedBudgetEncrypted) state.encryptedPassword = ""
     }
     LaunchedEffect(mobileSession.budgetPasswordRejection) {
-        if (mobileSession.budgetPasswordRejection != null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
+        val rejection = mobileSession.budgetPasswordRejection
+        if (rejection != null && state.selectedBudgetEncrypted) {
+            state.encryptedPassword = ""
+            if (rejection == "budget_password_incorrect") {
+                val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+                authenticator?.deleteSecret(secretId)
+                authenticator?.forgetPasswordCheck(secretId)
+            }
+        }
     }
     val budgetLocked = needsEncryptedBudgetUnlock(state, route)
     val appLocked =
