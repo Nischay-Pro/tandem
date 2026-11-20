@@ -61,6 +61,10 @@ jobs:
       - name: Check local documentation links and toolchain versions
         run: node scripts/check-docs.mjs
 
+      - name: Check documentation wording
+        if: needs.changes.outputs.docs_only == 'true'
+        run: python3 scripts/check-mobile-ui-vocabulary.py
+
       - name: Check Markdown formatting
         if: needs.changes.outputs.docs_only == 'true'
         shell: bash
