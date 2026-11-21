@@ -4,6 +4,7 @@ package app.tandemforactual.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -190,6 +193,20 @@ internal fun TandemIconButton(
     Box(
         modifier =
             modifier
+                .sizeIn(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
+                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClickLabel = onClickLabel,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
                 .size(sizeDp.dp)
                 .clip(shape)
                 .then(
@@ -200,19 +217,16 @@ internal fun TandemIconButton(
                     },
                 ).hoverable(interactionSource)
                 .then(resolvedBorderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
-                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
-                .clickable(
-                    interactionSource = interactionSource,
-                    enabled = enabled,
-                    role = Role.Button,
-                    onClickLabel = onClickLabel,
-                    onClick = onClick,
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
+                .indication(interactionSource, LocalIndication.current),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
+        }
     }
 }
+
+/** Android and Apple both ask for touch targets of at least 48dp / 44pt; the larger one covers both. */
+internal val MIN_TOUCH_TARGET = 48.dp
 
 @Composable
 internal fun TandemNavigationChevronButton(
