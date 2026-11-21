@@ -132,6 +132,7 @@ fun TandemApp(
     windowHinge: StateFlow<WindowHinge?> = MutableStateFlow(null),
     screenshotScript: ScreenshotScript? = null,
     actualBudgetFiles: ActualBudgetFiles? = null,
+    planningKeyStore: DeviceCredentialStore? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -160,7 +161,7 @@ fun TandemApp(
                 nowEpochMillis,
                 deviceCredentialStore,
                 openIdLoginProofState = openIdLoginProofState,
-            )
+            ).apply { planningKeyring = PlanningKeyring(planningKeyStore) }
         }
     LaunchedEffect(mobileSession) {
         if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""

@@ -49,6 +49,7 @@ private fun createTandemViewController(
                     app.tandemforactual.data.database
                         .IosActualBudgetFiles()
                 },
+            planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
             deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
             database = database,
             deviceCredentialStore = remember { IosDeviceCredentialStore() },

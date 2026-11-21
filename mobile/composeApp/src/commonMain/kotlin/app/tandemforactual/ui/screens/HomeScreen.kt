@@ -64,7 +64,11 @@ internal fun HomeScreen(
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
 ) {
-    val data = remember(accounts, month, schedules, transactions) { homeData(accounts, month, schedules, transactions) }
+    val data =
+        remember(accounts, month, schedules, transactions, mobileSession.savingsGoals) {
+            homeData(accounts, month, schedules, transactions).copy(savingsGoalCount = mobileSession.savingsGoals.size)
+        }
+    val editors = rememberPlanningEditors(state, mobileSession, month)
     val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
     val settings = mobileSession.budgetDisplaySettings
     val money: @Composable (Long) -> Unit = { amount ->
@@ -93,7 +97,7 @@ internal fun HomeScreen(
         plan.prominent.forEach { entry ->
             item(
                 key = "home-${entry.module.name}",
-            ) { HomeEntryCard(entry, state, navigation, accounts, month, schedules, transactions, settings, money) }
+            ) { HomeEntryCard(entry, state, mobileSession, editors, navigation, accounts, month, schedules, transactions, settings, money) }
         }
         if (plan.more.isNotEmpty()) {
             item(key = "home-more-title") {
@@ -107,7 +111,21 @@ internal fun HomeScreen(
             plan.more.forEach { entry ->
                 item(
                     key = "home-more-${entry.module.name}",
-                ) { HomeEntryCard(entry, state, navigation, accounts, month, schedules, transactions, settings, money) }
+                ) {
+                    HomeEntryCard(
+                        entry,
+                        state,
+                        mobileSession,
+                        editors,
+                        navigation,
+                        accounts,
+                        month,
+                        schedules,
+                        transactions,
+                        settings,
+                        money,
+                    )
+                }
             }
         }
     }
@@ -117,6 +135,8 @@ internal fun HomeScreen(
 private fun HomeEntryCard(
     entry: HomeEntry,
     state: AppState,
+    mobileSession: TandemMobileSession,
+    editors: PlanningEditors,
     navigation: AppNavigation,
     accounts: List<LiveAccountSummary>,
     month: LiveBudgetMonthSummary?,
@@ -135,7 +155,9 @@ private fun HomeEntryCard(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(stringResource(module.detail()), color = tandemPalette.muted, fontSize = TandemTypography.caption)
-            SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) { navigation.open(module.setupRoute()) }
+            SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) {
+                if (module == HomeModule.SAVINGS_GOALS) editors.editGoal(null) else navigation.selectTab(module.setupRoute())
+            }
         }
         return
     }
@@ -231,10 +253,17 @@ private fun HomeEntryCard(
                     options = ListRowOptions(showChevron = false),
                 )
             }
-        HomeModule.ACCOUNTS, HomeModule.DEBT_OVERVIEW, HomeModule.NET_WORTH -> {
+        HomeModule.DEBT_OVERVIEW ->
+            DebtOverviewCard(
+                open.filter { (it.balanceMinor ?: 0) < 0 },
+                mobileSession.debtTerms,
+                settings,
+                state.privacyModeEnabled,
+                money,
+            ) { editors.debtAccount = it }
+        HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> {
             val shown =
                 when (module) {
-                    HomeModule.DEBT_OVERVIEW -> open.filter { (it.balanceMinor ?: 0) < 0 }
                     HomeModule.NET_WORTH -> emptyList()
                     else -> open.filterNot { it.offBudget }.take(4)
                 }
@@ -274,13 +303,18 @@ private fun HomeEntryCard(
                     }, onClick = { openTransaction(state, navigation, item, isLive = true) })
                 }
             }
-        HomeModule.SAVINGS_GOALS -> Unit
+        HomeModule.SAVINGS_GOALS ->
+            SavingsGoalsCard(
+                mobileSession.savingsGoals,
+                month,
+                accounts,
+                settings,
+                platformTodayIsoDate(),
+                state.privacyModeEnabled,
+                editors::editGoal,
+            )
     }
 }
 
-/** Where a module's skippable setup lives. */
-internal fun HomeModule.setupRoute(): AppRoute =
-    when (this) {
-        HomeModule.DEBT_OVERVIEW -> AppRoute.ACCOUNTS
-        else -> AppRoute.BUDGET
-    }
+/** Where a module's skippable setup lives when it isn't a sheet on Home. */
+internal fun HomeModule.setupRoute(): AppRoute = if (this == HomeModule.DEBT_OVERVIEW) AppRoute.ACCOUNTS else AppRoute.BUDGET

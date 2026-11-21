@@ -22,6 +22,9 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.PlanningStore
+import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -260,6 +263,36 @@ internal class TandemMobileSession(
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
     private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
     private val repository: LocalBudgetRepository? get() = storage?.repository
+    internal var planningKeyring = PlanningKeyring(null)
+    var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
+        private set
+    var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
+        private set
+
+    private fun planningStore(budgetId: String): PlanningStore? =
+        storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, planningKeyring.cipherFor(budgetId), nowEpochMillis) }
+
+    suspend fun saveSavingsGoal(
+        budgetId: String,
+        goal: SavingsGoal,
+    ) {
+        planningStore(budgetId)?.save(goal)
+    }
+
+    suspend fun deleteSavingsGoal(
+        budgetId: String,
+        goalId: String,
+    ) {
+        planningStore(budgetId)?.delete(goalId, SavingsGoal.TYPE)
+    }
+
+    suspend fun saveDebtTerms(
+        budgetId: String,
+        terms: DebtTerms,
+    ) {
+        planningStore(budgetId)?.save(terms)
+    }
+
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
         get() = queuePersistenceOverride ?: storage?.queuePersistence
     private val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
@@ -5420,6 +5453,10 @@ internal class TandemMobileSession(
                 }
             }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
+            planningStore(budgetId)?.let { planning ->
+                launch { planning.savingsGoals().collect { savingsGoals = it } }
+                launch { planning.debtTerms().collect { debtTerms = it } }
+            }
         }
     }
 

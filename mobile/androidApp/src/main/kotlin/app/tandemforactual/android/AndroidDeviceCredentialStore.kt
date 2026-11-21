@@ -12,12 +12,18 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
+/** Keystore-sealed storage for one secret value; [name] keeps separate secrets apart. */
+internal class AndroidDeviceCredentialStore(
+    context: Context,
+    name: String = "device_session",
+) : DeviceCredentialStore {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val credentialKey = name
+    private val keyAlias = if (name == "device_session") "app.tandemforactual.device-session.v1" else "app.tandemforactual.$name.v1"
 
     override fun read(): String? {
-        val encoded = preferences.getString(CREDENTIAL_KEY, null) ?: return null
+        val encoded = preferences.getString(credentialKey, null) ?: return null
         val encrypted = Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         require(encrypted.size > IV_SIZE) { "Stored device credential is invalid" }
         val iv = encrypted.copyOfRange(0, IV_SIZE)
@@ -32,28 +38,28 @@ internal class AndroidDeviceCredentialStore(context: Context) : DeviceCredential
         cipher.init(Cipher.ENCRYPT_MODE, encryptionKey())
         val encrypted = cipher.iv + cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
         val encoded = Base64.encodeToString(encrypted, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-        check(preferences.edit().putString(CREDENTIAL_KEY, encoded).commit()) {
+        check(preferences.edit().putString(credentialKey, encoded).commit()) {
             "Could not save device credential"
         }
     }
 
     override fun clear() {
-        check(preferences.edit().remove(CREDENTIAL_KEY).commit()) {
+        check(preferences.edit().remove(credentialKey).commit()) {
             "Could not clear device credential"
         }
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
+        if (keyStore.containsAlias(keyAlias)) keyStore.deleteEntry(keyAlias)
     }
 
     private fun encryptionKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-        val storedKey = keyStore.getKey(KEY_ALIAS, null)
+        val storedKey = keyStore.getKey(keyAlias, null)
         if (storedKey is SecretKey) return storedKey
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
         generator.init(
             KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
+                keyAlias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
             ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -67,8 +73,6 @@ internal class AndroidDeviceCredentialStore(context: Context) : DeviceCredential
 
     private companion object {
         const val PREFERENCES_NAME = "tandem_secure_session"
-        const val CREDENTIAL_KEY = "device_session"
-        const val KEY_ALIAS = "app.tandemforactual.device-session.v1"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
