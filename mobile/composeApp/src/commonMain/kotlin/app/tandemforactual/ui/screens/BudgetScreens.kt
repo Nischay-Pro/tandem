@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -316,6 +317,15 @@ internal fun BudgetScreen(
         )
     val showTransactionAction = showCreateActions && !isLandscape
     val actionDockVisible = showCreateActions
+    var actionDockScrolledAway by remember { mutableStateOf(false) }
+    LaunchedEffect(routeListState) {
+        val listState = routeListState ?: return@LaunchedEffect
+        var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { current ->
+            actionDockScrolledAway = floatingActionsHidden(actionDockScrolledAway, previous, current)
+            previous = current
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         PageLazyColumn(
@@ -937,10 +947,14 @@ internal fun BudgetScreen(
                 }
             }
         }
-        if (actionDockVisible) {
+        AnimatedVisibility(
+            visible = actionDockVisible && !actionDockScrolledAway,
+            modifier = Modifier.align(Alignment.BottomEnd),
+            enter = tandemRevealEnter(tandemReduceMotion),
+            exit = tandemRevealExit(tandemReduceMotion),
+        ) {
             Row(
                 Modifier
-                    .align(Alignment.BottomEnd)
                     .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
                 horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1756,5 +1770,24 @@ private fun GettingStartedTip(
             Text(title, color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
             Text(detail, color = palette.muted, fontSize = TandemTypography.caption)
         }
+    }
+}
+
+/**
+ * Floating actions slide away while the list moves forward so they don't cover amounts, and return when it moves
+ * back or reaches the top. Small movements keep the current state.
+ */
+internal fun floatingActionsHidden(
+    hidden: Boolean,
+    previous: Pair<Int, Int>,
+    current: Pair<Int, Int>,
+): Boolean {
+    if (current.first == 0 && current.second < 72) return false
+    val forward = current.first > previous.first || (current.first == previous.first && current.second > previous.second + 8)
+    val back = current.first < previous.first || (current.first == previous.first && current.second < previous.second - 8)
+    return when {
+        forward -> true
+        back -> false
+        else -> hidden
     }
 }
