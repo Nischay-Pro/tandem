@@ -189,6 +189,17 @@ class ActualBudgetReader(
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+    /** One transaction as the API's `readTransaction` returns it, by Actual id or Tandem id. */
+    fun transaction(id: String): JsonObject? {
+        val row = db.first("SELECT * FROM v_transactions WHERE id = ? OR imported_id = ?", id, id) ?: return null
+        val children =
+            db
+                .query("SELECT * FROM v_transactions WHERE is_child = 1 AND parent_id = ?", row["id"])
+                .sortedWith(compareByDescending<Row> { (it["sort_order"] as Number?)?.toDouble() ?: 0.0 }.thenBy { it["id"] as String })
+                .map { transaction(it) }
+        return transaction(row, if (truthy(row["is_parent"])) children else emptyList())
+    }
+
     private fun transactions(): List<ActualRecord> {
         val rows = db.query("SELECT * FROM v_transactions")
         val children = rows.filter { truthy(it["is_child"]) }.groupBy { it["parent_id"] as String? }
