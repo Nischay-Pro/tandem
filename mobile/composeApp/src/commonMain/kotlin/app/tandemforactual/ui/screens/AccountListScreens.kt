@@ -70,6 +70,7 @@ import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.liveAccountGroupLabel
 import app.tandemforactual.ui.model.recordName
+import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.FolderKey
@@ -505,6 +506,7 @@ internal fun AccountsScreen(
     merchantIconMatcher: MerchantIconMatcherPack?,
     mobileSession: TandemMobileSession,
     detailInPane: Boolean = false,
+    closedOnly: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var addAccountDialog by rememberSaveable { mutableStateOf(false) }
@@ -643,8 +645,9 @@ internal fun AccountsScreen(
                 )
             }
         }
+    val closedAccountCount = model.groups.filter { it.name == CLOSED_ACCOUNT_GROUP }.sumOf { it.accounts.size }
     val visibleGroups =
-        model.groups.mapNotNull { group ->
+        model.groups.filter { (it.name == CLOSED_ACCOUNT_GROUP) == closedOnly }.mapNotNull { group ->
             val accounts =
                 group.accounts.filter { account ->
                     accountMatchesFilter(account, group.name, selectedAccountFilter, accountSearchQuery)
@@ -667,7 +670,7 @@ internal fun AccountsScreen(
         mobileSession.budgetActionMessage?.let {
             item(key = "account-action-message") { budgetActionFeedbackMessage(mobileSession) }
         }
-        if (state.accountsSearchExpanded) {
+        if (state.accountsSearchExpanded && !closedOnly) {
             item(key = "account-search-field") {
                 AccountSearchField(
                     value = accountSearchQuery,
@@ -676,19 +679,31 @@ internal fun AccountsScreen(
                 )
             }
         }
-        item(key = "account-type-filters") {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                listOf("All", "Bank", "Credit", "Other").forEach { filter ->
-                    AccountFilterChip(filter, selected = selectedAccountFilter == filter) {
-                        selectedAccountFilter = filter
+        if (!closedOnly) {
+            item(key = "account-type-filters") {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    listOf("All", "Bank", "Credit", "Other").forEach { filter ->
+                        AccountFilterChip(filter, selected = selectedAccountFilter == filter) {
+                            selectedAccountFilter = filter
+                        }
                     }
                 }
             }
         }
-        if (model.groups.isEmpty()) {
+        if (closedOnly && visibleGroups.isEmpty()) {
+            item(key = "closed-accounts-empty") {
+                SurfaceCard {
+                    EmptyState(
+                        "No closed accounts",
+                        "Accounts you close in Tandem or Actual appear here.",
+                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                    )
+                }
+            }
+        } else if (model.groups.isEmpty()) {
             item(key = "accounts-empty") {
                 SurfaceCard {
                     EmptyState(
@@ -704,7 +719,7 @@ internal fun AccountsScreen(
                     )
                 }
             }
-        } else if (visibleGroups.isEmpty()) {
+        } else if (visibleGroups.isEmpty() && closedAccountCount == 0) {
             item(key = "accounts-filter-empty") {
                 SurfaceCard {
                     EmptyState(
@@ -716,25 +731,27 @@ internal fun AccountsScreen(
             }
         } else {
             visibleGroups.forEach { group ->
-                item(key = "account-group:${group.name}") {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            group.name,
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.label,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.weight(1f))
-                        PrivacyAmountText(
-                            group.total,
-                            privacyModeEnabled = state.privacyModeEnabled,
-                            fractionDigits = state.currencyFractionDigitsForDisplay,
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
+                if (!closedOnly) {
+                    item(key = "account-group:${group.name}") {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                group.name,
+                                color = tandemPalette.text,
+                                fontSize = TandemTypography.label,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.weight(1f))
+                            PrivacyAmountText(
+                                group.total,
+                                privacyModeEnabled = state.privacyModeEnabled,
+                                fractionDigits = state.currencyFractionDigitsForDisplay,
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.caption,
+                            )
+                        }
                     }
                 }
                 val movableAccountIds = group.accounts.map(AccountListItemUi::id)
@@ -836,7 +853,27 @@ internal fun AccountsScreen(
                 }
             }
         }
-        if (isLiveBudget) {
+        if (!closedOnly && closedAccountCount > 0 && accountSearchQuery.isBlank()) {
+            item(key = "closed-accounts-entry") {
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Text(
+                        CLOSED_ACCOUNT_GROUP,
+                        modifier = Modifier.padding(horizontal = TandemSpacing.small),
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.label,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    SurfaceCard {
+                        ListRow(
+                            if (closedAccountCount == 1) "1 closed account" else "$closedAccountCount closed accounts",
+                            leading = RowLeading.Icon(Lucide.Archive),
+                            onClick = { navigation.open(AppRoute.CLOSED_ACCOUNTS) },
+                        )
+                    }
+                }
+            }
+        }
+        if (isLiveBudget && !closedOnly) {
             item(key = "account-bottom-actions") {
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
@@ -1010,3 +1047,5 @@ internal fun AccountsScreen(
         }
     }
 }
+
+private const val CLOSED_ACCOUNT_GROUP = "Closed"

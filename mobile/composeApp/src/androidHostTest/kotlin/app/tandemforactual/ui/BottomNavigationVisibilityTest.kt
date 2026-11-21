@@ -18,8 +18,8 @@ class BottomNavigationVisibilityTest {
     }
 
     @Test
-    fun routeCountStaysWithinFortyFive() {
-        assertTrue(AppRoute.entries.size <= 45)
+    fun routeCountStaysWithinFortySix() {
+        assertTrue(AppRoute.entries.size <= 46)
     }
 
     @Test
