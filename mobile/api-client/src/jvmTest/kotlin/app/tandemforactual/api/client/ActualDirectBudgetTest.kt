@@ -3,6 +3,8 @@ package app.tandemforactual.api.client
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
+import app.tandemforactual.data.actual.ActualTimestamp
+import app.tandemforactual.data.actual.MerkleTrie
 import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncResponse
@@ -44,6 +46,8 @@ class ActualDirectBudgetTest {
         runBlocking {
             val archive = fixture.resolve("budget.zip").readBytes()
             val serverState = SyncProtocol.decodeResponse(fixture.resolve("sync-response.bin").readBytes())
+            val serverMessages = serverState.messages.associateByTo(linkedMapOf()) { it.timestamp }
+            var serverMerkle = MerkleTrie.fromJson(serverState.merkle)
             val path = File.createTempFile("actual-budget", ".sqlite")
             var reset = false
             var invalidMerkle = false
@@ -70,9 +74,18 @@ class ActualDirectBudgetTest {
                                 failure?.let { throw it }
                                 if (invalidMerkle) return@MockEngine respond(SyncProtocol.encode(SyncResponse(emptyList(), "invalid")))
                                 val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
+                                for (message in sent.messages) {
+                                    if (serverMessages.putIfAbsent(message.timestamp, message) == null) {
+                                        serverMerkle = serverMerkle.insert(checkNotNull(ActualTimestamp.parse(message.timestamp)))
+                                    }
+                                }
+                                val sentTimestamps = sent.messages.map { it.timestamp }.toSet()
                                 respond(
                                     SyncProtocol.encode(
-                                        SyncResponse(serverState.messages.filter { it.timestamp > sent.since }, serverState.merkle),
+                                        SyncResponse(
+                                            serverMessages.values.filter { it.timestamp > sent.since && it.timestamp !in sentTimestamps },
+                                            serverMerkle.prune().toJson().toString(),
+                                        ),
                                     ),
                                 )
                             }
@@ -155,6 +168,8 @@ class ActualDirectBudgetTest {
                         val result = budget.submit("edit", record.id, "update", patch, record.body)
                         assertEquals(OperationStatus.COMMITTED, result.status)
                         assertEquals(patch["notes"], budget.transaction(record.id)?.get("notes"))
+                        val payee = budget.edit(today) { it.createPayee("Edited through the direct budget") }
+                        assertTrue(budget.snapshot(today).records.any { it.type == "payee" && it.id == payee })
                     } finally {
                         budget.close()
                     }
