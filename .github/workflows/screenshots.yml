@@ -8,8 +8,6 @@ on:
         type: choice
         default: both
         options: [both, ios, android]
-  push:
-    branches: [feat/screenshot-mode]
 
 permissions:
   contents: read
@@ -18,7 +16,7 @@ permissions:
 jobs:
   ios:
     name: iPhone and iPad screenshots
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms != 'android' }}
     runs-on: macos-26
     timeout-minutes: 45
     env:
@@ -142,7 +140,7 @@ jobs:
 
   android:
     name: Pixel 11 and Pixel 11 Pro Fold screenshots
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms != 'ios' }}
+    if: ${{ inputs.platforms != 'ios' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
