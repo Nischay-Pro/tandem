@@ -30,6 +30,7 @@ kotlin {
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))
+      implementation(libs.room3Runtime)
       implementation(libs.ktorClientMock)
       implementation(libs.ktorClientJava)
       implementation(libs.sqliteBundled)

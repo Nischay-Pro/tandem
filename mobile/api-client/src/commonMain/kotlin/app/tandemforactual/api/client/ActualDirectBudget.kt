@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
@@ -54,7 +55,6 @@ class ActualDirectBudget private constructor(
     private val reader = ActualBudgetReader(db)
     private val operations = ActualTransactionOperations(ActualWriter(store, clock, now, newId))
 
-
     suspend fun sync() = mutex.withLock { synchronize() }
 
     private suspend fun synchronize(): ActualSyncResult {
@@ -85,6 +85,9 @@ class ActualDirectBudget private constructor(
         mutex.withLock {
             require(gateway.budgetId == groupId) { "Choose the same budget on the Actual server and the gateway." }
             val checkpoint = staging.readSyncCheckpoint(groupId)
+            check(checkpoint == null && staging.budgetWrites(groupId).isEmpty()) {
+                "The migration requires a fresh cache with an empty outbox."
+            }
             val (snapshot, cursor) = receiveProjection(today)
             val parity = snapshot.compareWithGateway(gateway)
             if (parity.matches) {
@@ -141,16 +144,22 @@ class ActualDirectBudget private constructor(
                 BudgetSyncJson.parseJsonObject(operation.patchJson),
                 operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
             )
-        return RemoteOperationResult(
-            result.operationId,
-            groupId,
-            result.transactionId,
-            RemoteOperationStatus.valueOf(result.status.name),
-            result.errorCode,
-            result.conflictType,
-            result.conflictingFields,
-        )
+        return result.toRemoteResult()
     }
+
+    internal suspend fun findOperation(operationId: String): RemoteOperationResult? =
+        mutex.withLock { operations.find(operationId)?.toRemoteResult() }
+
+    private fun OperationOutcome.toRemoteResult() =
+        RemoteOperationResult(
+            operationId,
+            groupId,
+            transactionId,
+            RemoteOperationStatus.valueOf(status.name),
+            errorCode,
+            conflictType,
+            conflictingFields,
+        )
 
     suspend fun close() = mutex.withLock { db.close() }
 

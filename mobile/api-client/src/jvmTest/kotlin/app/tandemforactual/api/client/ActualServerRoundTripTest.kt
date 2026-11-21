@@ -1,12 +1,19 @@
 package app.tandemforactual.api.client
 
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.OperationStatus
-import app.tandemforactual.data.database.OutboxOperationEntity
-import app.tandemforactual.data.store.RemoteOperationStatus
+import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.LocalRecordProjection
+import app.tandemforactual.data.store.LocalWriteAction
+import app.tandemforactual.data.store.LocalWriteRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** Runs only with ACTUAL_TEST_URL set: writes through a real Actual server, then dumps what Tandem reads back. */
 class ActualServerRoundTripTest {
@@ -104,8 +112,7 @@ class ActualServerRoundTripTest {
                 OperationStatus.COMMITTED,
                 initial.submit(UUID.randomUUID().toString(), shop, "update", buildJsonObject { put("amount", -4321); put("cleared", true) }, base(shop)).status,
             )
-            val transferUpdate = outboxUpdate(initial.groupId, transfer, base(transfer))
-            assertEquals(RemoteOperationStatus.COMMITTED, initial.submit(transferUpdate).status)
+            verifyDirectOutbox(initial, transfer, today)
             assertEquals(OperationStatus.COMMITTED, initial.submit(UUID.randomUUID().toString(), toDelete, "delete", JsonObject(emptyMap()), base(toDelete)).status)
             val stale = base(shop)
             initial.submit(UUID.randomUUID().toString(), shop, "update", buildJsonObject { put("notes", "first") }, stale)
@@ -142,37 +149,49 @@ class ActualServerRoundTripTest {
         }
     }
 
-    private fun outboxUpdate(
-        budgetId: String,
-        transactionId: String,
-        base: JsonObject,
-    ): OutboxOperationEntity {
-        val operationId = UUID.randomUUID().toString()
-        val now = System.currentTimeMillis()
-        return OutboxOperationEntity(
-            operationId = operationId,
-            idempotencyKey = operationId,
-            budgetId = budgetId,
-            recordType = "transaction",
-            recordId = transactionId,
-            action = "UPDATE",
-            baseRevision = null,
-            baseSnapshotJson = base.toString(),
-            patchJson = """{"amount":-7000}""",
-            optimisticJson = null,
-            optimisticRecordDate = null,
-            optimisticAccountId = null,
-            optimisticCategoryId = null,
-            optimisticPayeeId = null,
-            optimisticAmountMinor = -7000,
-            optimisticBudgetMonth = null,
-            status = "sending",
-            attemptCount = 1,
-            serverOperationId = null,
-            lastErrorCode = null,
-            createdAtEpochMs = now,
-            updatedAtEpochMs = now,
-        )
+    private suspend fun verifyDirectOutbox(
+        budget: ActualDirectBudget,
+        transferId: String,
+        today: String,
+    ) {
+        val database = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+        try {
+            val repository = LocalBudgetRepository(database, System::currentTimeMillis)
+            val baseline = budget.refreshProjection(today)
+            val coordinator = ActualDirectSyncCoordinator(budget, repository)
+            assertFailsWith<IllegalStateException> { coordinator.synchronize(today, sendQueuedWrites = true) }
+            assertTrue(budget.stageMobileCache(today, baseline, repository).matches)
+            val transfer = baseline.records.single { it.recordType == "transaction" && it.recordId == transferId }
+            val baseBody = BudgetSyncJson.parseJsonObject(transfer.bodyJson)
+            val operationId = UUID.randomUUID().toString()
+            repository.enqueueWrite(
+                LocalWriteRequest(
+                    operationId = operationId,
+                    idempotencyKey = operationId,
+                    budgetId = budget.groupId,
+                    recordType = "transaction",
+                    recordId = transferId,
+                    action = LocalWriteAction.UPDATE,
+                    baseRevision = transfer.revision,
+                    baseSnapshotJson = transfer.bodyJson,
+                    patchJson = """{"amount":-7000}""",
+                    optimisticJson = JsonObject(baseBody + ("amount" to JsonPrimitive(-7000))).toString(),
+                    createdAtEpochMs = System.currentTimeMillis(),
+                    optimisticProjection = LocalRecordProjection(
+                        transfer.recordDate,
+                        transfer.accountId,
+                        transfer.categoryId,
+                        transfer.payeeId,
+                        -7000,
+                        transfer.budgetMonth,
+                    ),
+                ),
+            )
+            assertEquals(1, coordinator.synchronize(today, sendQueuedWrites = true).writesCommitted)
+            assertEquals("committed", repository.findWrite(operationId)?.status)
+        } finally {
+            database.closeDatabase()
+        }
     }
 
     private suspend fun verifyDownload(

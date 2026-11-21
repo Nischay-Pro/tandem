@@ -34,11 +34,13 @@ object BudgetSyncJson {
     ): RemoteBudgetSnapshot =
         RemoteBudgetSnapshot(
             budgetId = groupId,
-            generation = groupId,
+            generation = directGeneration(groupId),
             cursor = cursor,
-            records = snapshot.records.map { it.body.toRemoteRecord(groupId, it.type, it.id, it.revision, groupId) },
+            records = snapshot.records.map { it.body.toRemoteRecord(groupId, it.type, it.id, it.revision, directGeneration(groupId)) },
             displaySettings = snapshot.displaySettings,
         )
+
+    internal fun directGeneration(groupId: String): String = "actual:$groupId"
 
     fun parseSnapshot(
         payload: Map<String, JsonElement>,
