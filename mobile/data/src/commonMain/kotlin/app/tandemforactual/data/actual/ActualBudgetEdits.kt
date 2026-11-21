@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonObject
 /** A budget edit the gateway would have refused; [message] is shown to the user. */
 class ActualEditException(
     message: String,
+    val code: String? = null,
 ) : IllegalArgumentException(message)
 
 private const val SORT_INCREMENT = 16384.0
@@ -26,6 +27,8 @@ class ActualBudgetEdits(
     private val transactions: ActualTransactions = ActualTransactions(writer),
 ) {
     private val db get() = writer.db
+
+    val schedules = ActualScheduleEdits(writer, today)
 
     private fun fail(message: String): Nothing = throw ActualEditException(message)
 
