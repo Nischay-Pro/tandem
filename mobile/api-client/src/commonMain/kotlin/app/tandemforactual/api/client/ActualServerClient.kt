@@ -84,21 +84,34 @@ class ActualServerClient(
                 val method = it.jsonObject
                 ActualLoginMethod(
                     method.text("method") ?: "password",
-                    (method["active"] as? JsonPrimitive)?.let { active -> active.intOrNull?.let { n -> n != 0 } ?: active.content == "true" } ?: false,
+                    (method["active"] as? JsonPrimitive)?.let { active ->
+                        active.intOrNull?.let { n -> n != 0 }
+                            ?: (active.content == "true")
+                    }
+                        ?: false,
                     method.text("displayName"),
                 )
             }
         val bootstrapped = (bootstrap["bootstrapped"] as? JsonPrimitive)?.content == "true"
-        return ActualServerStatus(bootstrapped, methods ?: listOf(ActualLoginMethod(bootstrap.text("loginMethod") ?: "password", true, null)))
+        return ActualServerStatus(
+            bootstrapped,
+            methods ?: listOf(ActualLoginMethod(bootstrap.text("loginMethod") ?: "password", true, null)),
+        )
     }
 
     suspend fun signIn(password: String): String {
         val response =
             http.post("$base/account/login") {
                 contentType(ContentType.Application.Json)
-                setBody(buildJsonObject { put("loginMethod", "password"); put("password", password) }.toString())
+                setBody(
+                    buildJsonObject {
+                        put("loginMethod", "password")
+                        put("password", password)
+                    }.toString(),
+                )
             }
-        val token = json(response)["data"]?.jsonObject?.text("token") ?: throw ActualServerException("invalid-password", response.status.value)
+        val token =
+            json(response)["data"]?.jsonObject?.text("token") ?: throw ActualServerException("invalid-password", response.status.value)
         this.token = token
         return token
     }
@@ -108,9 +121,15 @@ class ActualServerClient(
         val response =
             http.post("$base/account/login") {
                 contentType(ContentType.Application.Json)
-                setBody(buildJsonObject { put("loginMethod", "openid"); put("returnUrl", returnUrl) }.toString())
+                setBody(
+                    buildJsonObject {
+                        put("loginMethod", "openid")
+                        put("returnUrl", returnUrl)
+                    }.toString(),
+                )
             }
-        return json(response)["data"]?.jsonObject?.text("returnUrl") ?: throw ActualServerException("openid-unavailable", response.status.value)
+        return json(response)["data"]?.jsonObject?.text("returnUrl")
+            ?: throw ActualServerException("openid-unavailable", response.status.value)
     }
 
     suspend fun validate(): Boolean {
@@ -131,7 +150,13 @@ class ActualServerClient(
         }
 
     suspend fun fileInfo(fileId: String): ActualFileInfo {
-        val data = json(http.get("$base/sync/get-user-file-info") { auth(); header("x-actual-file-id", fileId) }).getValue("data").jsonObject
+        val data =
+            json(
+                http.get("$base/sync/get-user-file-info") {
+                    auth()
+                    header("x-actual-file-id", fileId)
+                },
+            ).getValue("data").jsonObject
         return ActualFileInfo(
             fileId = data.text("fileId") ?: fileId,
             groupId = data.text("groupId"),
@@ -141,7 +166,11 @@ class ActualServerClient(
     }
 
     suspend fun download(fileId: String): ByteArray {
-        val response = http.get("$base/sync/download-user-file") { auth(); header("x-actual-file-id", fileId) }
+        val response =
+            http.get("$base/sync/download-user-file") {
+                auth()
+                header("x-actual-file-id", fileId)
+            }
         if (!response.status.isSuccess()) throw failure(response)
         return response.bodyAsBytes()
     }
@@ -184,7 +213,9 @@ class ActualServerClient(
 
     private suspend fun failure(response: HttpResponse): ActualServerException {
         val text = runCatching { response.bodyAsText() }.getOrDefault("")
-        val reason = runCatching { (Json.parseToJsonElement(text) as JsonObject).text("reason") }.getOrNull() ?: reasonFor(response.status.value, text)
+        val reason =
+            runCatching { (Json.parseToJsonElement(text) as JsonObject).text("reason") }.getOrNull()
+                ?: reasonFor(response.status.value, text)
         return ActualServerException(reason, response.status.value)
     }
 
@@ -200,5 +231,4 @@ class ActualServerClient(
         }
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
-
 }

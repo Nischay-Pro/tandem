@@ -3,20 +3,20 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
-import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
+import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.FullSnapshotResult
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.RemoteBudgetSnapshot
 import app.tandemforactual.data.store.RemoteOperationResult
 import app.tandemforactual.data.store.RemoteOperationStatus
-import app.tandemforactual.data.store.RemoteBudgetSnapshot
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
@@ -37,7 +37,8 @@ class ActualDirectBudget private constructor(
         if (downloaded) {
             db.transaction {
                 db.execute(
-                    "CREATE TABLE tandem_direct_sync (id INTEGER PRIMARY KEY, file_id TEXT NOT NULL, group_id TEXT NOT NULL, timestamp TEXT)",
+                    "CREATE TABLE tandem_direct_sync " +
+                        "(id INTEGER PRIMARY KEY, file_id TEXT NOT NULL, group_id TEXT NOT NULL, timestamp TEXT)",
                 )
                 db.execute("INSERT INTO tandem_direct_sync (id, file_id, group_id) VALUES (1, ?, ?)", fileId, groupId)
             }

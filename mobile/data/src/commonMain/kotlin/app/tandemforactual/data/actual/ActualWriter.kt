@@ -71,8 +71,26 @@ internal object TransactionSchema {
     private val booleans = setOf("is_parent", "is_child", "starting_balance_flag", "cleared", "reconciled", "tombstone")
     private val fields =
         setOf(
-            "id", "is_parent", "is_child", "parent_id", "account", "category", "amount", "payee", "notes", "date", "imported_id", "error",
-            "imported_payee", "starting_balance_flag", "transfer_id", "sort_order", "cleared", "reconciled", "tombstone", "schedule",
+            "id",
+            "is_parent",
+            "is_child",
+            "parent_id",
+            "account",
+            "category",
+            "amount",
+            "payee",
+            "notes",
+            "date",
+            "imported_id",
+            "error",
+            "imported_payee",
+            "starting_balance_flag",
+            "transfer_id",
+            "sort_order",
+            "cleared",
+            "reconciled",
+            "tombstone",
+            "schedule",
             "raw_synced_data",
         )
 
