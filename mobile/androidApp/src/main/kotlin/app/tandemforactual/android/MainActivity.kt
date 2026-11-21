@@ -10,6 +10,7 @@ import android.net.NetworkCapabilities
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -83,6 +84,8 @@ class MainActivity : FragmentActivity() {
       }
     }
 
+  private val crashReports by lazy { AndroidCrashReports(this) }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     val splashScreen: SplashScreen = installSplashScreen()
     val splashDeadline = SystemClock.uptimeMillis() + MAX_SYSTEM_SPLASH_WAIT_MILLIS
@@ -92,6 +95,7 @@ class MainActivity : FragmentActivity() {
     super.onCreate(savedInstanceState)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
     intent?.dataString?.let { AuthReturnEvents.publish(it) }
+    crashReports.install()
     handleQuickAction(intent)
     publishQuickAddShortcut()
     notificationPermissionEnabled = hasNotificationPermission()
@@ -126,6 +130,8 @@ class MainActivity : FragmentActivity() {
         deviceAuthenticator = deviceAuthenticator,
         encryptedBudgetVault = encryptedBudgetVault,
         currentNetwork = currentNetwork,
+        crashReports = crashReports,
+        onShareText = { text -> shareText(text) },
       )
     }
   }
@@ -135,6 +141,19 @@ class MainActivity : FragmentActivity() {
     setIntent(intent)
     intent.dataString?.let { AuthReturnEvents.publish(it) }
     handleQuickAction(intent)
+  }
+
+  private fun shareText(text: String) {
+    val send =
+      Intent(Intent.ACTION_SEND)
+        .setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT, "Tandem crash report")
+        .putExtra(Intent.EXTRA_TEXT, text)
+    val chooser =
+      Intent
+        .createChooser(send, null)
+        .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(this, MainActivity::class.java)))
+    startActivity(chooser)
   }
 
   private fun handleQuickAction(intent: Intent?) {

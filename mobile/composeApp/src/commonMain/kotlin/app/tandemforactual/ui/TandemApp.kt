@@ -120,6 +120,8 @@ fun TandemApp(
     deviceAuthenticator: DeviceAuthenticator? = null,
     encryptedBudgetVault: EncryptedBudgetVault? = null,
     currentNetwork: StateFlow<NetworkKind?> = MutableStateFlow(null),
+    crashReports: CrashReports? = null,
+    onShareText: ((String) -> Unit)? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -1083,8 +1085,7 @@ fun TandemApp(
     val signIn = {
         if (!mobileSession.isSigningIn) {
             coroutineScope.launch {
-                mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)
-                if (mobileSession.authenticatedDevice != null) {
+                if (mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)) {
                     state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                     state.actualPassword = ""
                     navigation.reset(AppRoute.BUDGET_CHOOSER)
@@ -1113,8 +1114,7 @@ fun TandemApp(
                 AuthReturnEvents.clear(returnUri)
                 val callback = actualOpenIdReturn(returnUri)
                 if (callback != null) {
-                    mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)
-                    if (mobileSession.authenticatedDevice != null) {
+                    if (mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)) {
                         state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                         navigation.reset(AppRoute.BUDGET_CHOOSER)
                     }
@@ -1540,6 +1540,8 @@ fun TandemApp(
                     LocalRouteLazyListState provides routeLazyListState,
                     LocalDeviceAuthenticator provides deviceAuthenticator,
                     LocalEncryptedBudgetVault provides encryptedBudgetVault,
+                    LocalCrashReports provides crashReports,
+                    LocalShareText provides onShareText,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)

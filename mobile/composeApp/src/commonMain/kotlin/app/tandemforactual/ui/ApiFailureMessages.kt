@@ -83,3 +83,32 @@ internal fun BudgetSyncRemoteException.indicatesTandemReachable(): Boolean = err
 
 private fun String.indicatesTandemReachable(httpStatus: Int?): Boolean =
     httpStatus != null && this !in setOf("network-error", "address_unreachable", "actual_only", "http-404")
+
+internal const val IDENTITY_MISMATCH_ERROR_CODE = "identity_mismatch"
+
+internal enum class SyncRecovery(
+    val label: String,
+) {
+    RETRY("Try again"),
+    SIGN_IN("Sign in again"),
+    CHECK_SERVER("Check server address"),
+    CHOOSE_BUDGET("Choose another budget"),
+}
+
+/** The step that fixes a failed sync; anything not listed is worth simply retrying. */
+internal fun syncRecovery(
+    errorCode: String?,
+    httpStatus: Int? = null,
+): SyncRecovery =
+    when (errorCode) {
+        null -> SyncRecovery.RETRY
+        "invalid_device_credential", "sign_in_expired", "sign_in_required", IDENTITY_MISMATCH_ERROR_CODE -> SyncRecovery.SIGN_IN
+        "actual_only", "tandem_route_unavailable" -> SyncRecovery.CHECK_SERVER
+        "not_found" -> SyncRecovery.CHOOSE_BUDGET
+        else ->
+            when (apiFailureHttpStatus(errorCode, httpStatus)) {
+                401 -> SyncRecovery.SIGN_IN
+                404, 405 -> SyncRecovery.CHECK_SERVER
+                else -> SyncRecovery.RETRY
+            }
+    }
