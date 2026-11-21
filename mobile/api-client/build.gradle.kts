@@ -74,11 +74,6 @@ ktlint {
 
 kover {
   reports {
-    filters {
-      excludes {
-        classes("app.tandemforactual.api.client.TandemApiClient\$Companion")
-      }
-    }
     verify {
       rule {
         minBound(100)
