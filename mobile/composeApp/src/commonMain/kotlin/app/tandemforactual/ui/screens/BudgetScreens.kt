@@ -78,6 +78,7 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
@@ -511,6 +512,41 @@ internal fun BudgetScreen(
                                                     mobileSession.clearBudgetActionMessage()
                                                     showNextMonthHoldDialog = true
                                                     holdSheetMounted = true
+                                                },
+                                            )
+                                        }
+                                        val today = remember { platformTodayIsoDate() }
+                                        val left =
+                                            if (isLiveBudget && state.selectedMonthId == today.take(7)) {
+                                                stillToSpend(
+                                                    groups,
+                                                    today.drop(8).take(2).toIntOrNull() ?: 0,
+                                                    daysInMonth(state.selectedMonthId) ?: 0,
+                                                )
+                                            } else {
+                                                null
+                                            }
+                                        if (left != null) {
+                                            DividerLine()
+                                            ListRow(
+                                                "You can still spend",
+                                                if (state.privacyModeEnabled) {
+                                                    null
+                                                } else {
+                                                    "About ${state.formatCurrency(
+                                                        left.perDayMinor,
+                                                    )} a day"
+                                                },
+                                                leading = RowLeading.Icon(Lucide.Gauge),
+                                                trailingContent = {
+                                                    PrivacyAmountText(
+                                                        state.formatCurrency(left.totalMinor),
+                                                        privacyModeEnabled = state.privacyModeEnabled,
+                                                        fractionDigits = state.currencyFractionDigitsForDisplay,
+                                                        color = palette.text,
+                                                        fontSize = TandemTypography.compactBody,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                    )
                                                 },
                                             )
                                         }

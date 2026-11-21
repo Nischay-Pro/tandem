@@ -46,6 +46,7 @@ import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.LabelText
 import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
@@ -997,6 +998,31 @@ private fun CategoryInsightsSection(
                 "Last month",
                 lastMonthSpendingDetail(it, (-category.activityMinor).coerceAtLeast(0), monthId < today.take(7), state::formatCurrency),
                 leading = RowLeading.Icon(Lucide.History),
+            )
+        }
+        if (lastMonth != null &&
+            canQuickAssign(isTrackingBudget, state.readOnlyMode, category.assignedMinor, lastMonth, monthId >= today.take(7))
+        ) {
+            val scope = rememberCoroutineScope()
+            DividerLine()
+            ListRow(
+                "Assign last month’s spending",
+                leading = RowLeading.Icon(Lucide.WalletCards),
+                trailing = state.formatCurrency(lastMonth),
+                options = ListRowOptions(trailingColor = tandemPalette.accent, muted = mobileSession.isPerformingBudgetAction),
+                onClick = {
+                    if (!mobileSession.isPerformingBudgetAction) {
+                        scope.launch {
+                            mobileSession.setBudgetCategoryAmount(
+                                state.selectedBudgetId,
+                                category.id,
+                                monthId,
+                                lastMonth,
+                                state.encryptedPassword.takeIf { it.isNotBlank() },
+                            )
+                        }
+                    }
+                },
             )
         }
     }
