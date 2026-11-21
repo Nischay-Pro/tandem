@@ -4,7 +4,6 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
-import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
@@ -13,11 +12,11 @@ import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncProtocolException
-import app.tandemforactual.data.store.FullSnapshotResult
-import app.tandemforactual.data.store.LocalBudgetRepository
-import app.tandemforactual.data.store.RemoteBudgetSnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 
 /** Owns one local budget connection and serializes edits with CRDT synchronization. */
@@ -57,7 +56,7 @@ class ActualDirectBudget private constructor(
     private val writer = ActualWriter(store, clock, now, newId)
     private val operations = ActualTransactionOperations(writer)
 
-    suspend fun sync() = mutex.withLock { synchronize() }
+    suspend fun sync() = locked { synchronize() }
 
     private suspend fun synchronize(): ActualSyncResult {
         val lastSyncedTimestamp = db.first("SELECT timestamp FROM tandem_direct_sync WHERE id = 1")?.get("timestamp") as String?
@@ -77,76 +76,56 @@ class ActualDirectBudget private constructor(
 
     /** Builds the mobile cache projection at the same checkpoint as the completed CRDT sync. */
     suspend fun refreshProjection(today: String) =
-        mutex.withLock {
+        locked {
             synchronize()
             runSchedules(today)
             val sync = synchronize()
             BudgetSyncJson.projectDirectSnapshot(reader.read(today), groupId, cacheGeneration, sync.lastSyncedTimestamp)
         }
 
-    suspend fun snapshot(today: String) = mutex.withLock { reader.read(today) }
+    suspend fun snapshot(today: String) = locked { reader.read(today) }
 
-    /** Refreshes a staging database for comparison without uploading its history or advancing its write checkpoint. */
-    suspend fun preview(today: String) = mutex.withLock { receiveProjection(today).first }
-
-    /** Initializes a cache for a new direct budget with no previous outbox or gateway data. */
-    internal suspend fun initializeMobileCache(
-        today: String,
-        staging: LocalBudgetRepository,
-    ) = mutex.withLock {
-        staging.requireFreshDirectCache(groupId)
-        val (snapshot, cursor) = receiveProjection(today)
-        saveInitialProjection(snapshot, cursor, staging)
-    }
-
-    /** Seeds an isolated mobile cache only after the staged Actual records match the gateway. */
-    suspend fun stageMobileCache(
-        today: String,
-        gateway: RemoteBudgetSnapshot,
-        staging: LocalBudgetRepository,
-    ): ActualBudgetParity =
-        mutex.withLock {
-            require(gateway.budgetId == groupId) { "Choose the same budget on the Actual server and the gateway." }
-            staging.requireFreshDirectCache(groupId)
-            val (snapshot, cursor) = receiveProjection(today)
-            val parity = snapshot.compareWithGateway(gateway)
-            if (parity.matches) {
-                saveInitialProjection(snapshot, cursor, staging)
-            }
-            parity
+    /** The revisions last served to the mobile cache, so a refresh can send only what changed. */
+    internal suspend fun servedProjection(): Pair<String?, Map<Pair<String, String>, String>> =
+        locked {
+            ensureProjectionTables()
+            val cursor = db.first("SELECT value FROM tandem_prefs WHERE id = 'projectionCursor'")?.get("value") as String?
+            cursor to
+                db.query("SELECT type, id, revision FROM tandem_projection").associate {
+                    (it["type"] as String to it["id"] as String) to
+                        it["revision"] as String
+                }
         }
 
-    private suspend fun saveInitialProjection(
-        snapshot: ActualSnapshot,
+    internal suspend fun saveServedProjection(
         cursor: String,
-        staging: LocalBudgetRepository,
-    ) {
-        val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cacheGeneration, cursor)
-        val result =
-            staging.applyFullSnapshot(
-                groupId,
-                projection.generation,
-                projection.cursor,
-                expectedCheckpoint = null,
-                projection.records,
-                projection.displaySettings,
-            )
-        check(result == FullSnapshotResult.APPLIED) { "The staged cache changed during direct setup." }
+        records: Map<Pair<String, String>, String>,
+    ) = locked {
+        ensureProjectionTables()
+        db.transaction {
+            db.execute("DELETE FROM tandem_projection")
+            records.forEach { (key, revision) ->
+                db.execute("INSERT INTO tandem_projection (type, id, revision) VALUES (?, ?, ?)", key.first, key.second, revision)
+            }
+            db.execute("INSERT OR REPLACE INTO tandem_prefs (id, value) VALUES ('projectionCursor', ?)", cursor)
+        }
     }
 
-    private suspend fun receiveProjection(today: String): Pair<ActualSnapshot, String> {
-        val sync = syncEngine.fullSync(clock, null, receiveOnly = true)
-        return reader.read(today) to sync.lastSyncedTimestamp
+    private fun ensureProjectionTables() {
+        db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS tandem_projection (type TEXT NOT NULL, id TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY (type, id))",
+        )
     }
 
-    suspend fun transaction(id: String) = mutex.withLock { reader.transaction(id) }
+    suspend fun transactionRecord(id: String) = locked { reader.transactionRecord(id) }
 
     /** Applies a budget edit against freshly synced state, then uploads it, as the gateway's maintenance routes did. */
     suspend fun <T> edit(
         today: String,
         block: (ActualBudgetEdits) -> T,
     ): T =
-        mutex.withLock {
+        locked {
             synchronize()
             runSchedules(today)
             val result = block(ActualBudgetEdits(writer, { today }))
@@ -160,7 +139,7 @@ class ActualDirectBudget private constructor(
         action: String,
         patch: JsonObject,
         baseSnapshot: JsonObject?,
-    ) = mutex.withLock { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
+    ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
 
     /**
      * Applies a transaction assigned to this budget's direct outbox. The caller must establish ownership of the
@@ -186,9 +165,9 @@ class ActualDirectBudget private constructor(
         )
     }
 
-    internal suspend fun findOperation(operationId: String): OperationOutcome? = mutex.withLock { operations.find(operationId) }
+    suspend fun close() = locked { db.close() }
 
-    suspend fun close() = mutex.withLock { db.close() }
+    internal fun closeNow() = db.close()
 
     companion object {
         /**
@@ -200,7 +179,7 @@ class ActualDirectBudget private constructor(
             fileId: String,
             now: () -> Long,
             newId: () -> String,
-            expectedGroupId: String? = null,
+            expectedGroupId: String?,
             install: (ByteArray) -> ActualDatabase,
         ): ActualDirectBudget {
             val info = server.fileInfo(fileId)
@@ -211,6 +190,10 @@ class ActualDirectBudget private constructor(
             val data = entries["db.sqlite"] ?: throw ActualServerException("invalid-budget-archive")
             return open(install(data), server, fileId, groupId, now, newId, downloaded = true)
         }
+
+        /** The Actual file id saved with a downloaded budget, or null for a database Tandem didn't download. */
+        fun storedFileId(db: ActualDatabase): String? =
+            runCatching { db.first("SELECT file_id FROM tandem_direct_sync WHERE id = 1")?.get("file_id") as String? }.getOrNull()
 
         /** Uses the saved sync group so a reset is detected by Actual on the next sync. */
         fun reopen(
@@ -238,10 +221,6 @@ class ActualDirectBudget private constructor(
                 throw error
             }
     }
-}
 
-internal suspend fun LocalBudgetRepository.requireFreshDirectCache(budgetId: String) {
-    check(readSyncCheckpoint(budgetId) == null && budgetWrites(budgetId).isEmpty()) {
-        "Direct setup requires a fresh cache with an empty outbox."
-    }
+    private suspend fun <T> locked(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
 }

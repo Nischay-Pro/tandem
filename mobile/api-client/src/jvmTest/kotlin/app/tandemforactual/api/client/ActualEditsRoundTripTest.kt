@@ -25,7 +25,7 @@ class ActualEditsRoundTripTest {
         client: ActualServerClient,
         fileId: String,
         path: File,
-    ) = ActualDirectBudget.download(client, fileId, System::currentTimeMillis, { UUID.randomUUID().toString() }) {
+    ) = ActualDirectBudget.download(client, fileId, System::currentTimeMillis, { UUID.randomUUID().toString() }, null) {
         path.writeBytes(it)
         ActualDatabase(BundledSQLiteDriver().open(path.path))
     }

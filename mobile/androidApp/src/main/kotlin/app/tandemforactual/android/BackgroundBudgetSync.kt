@@ -13,7 +13,7 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import app.tandemforactual.api.client.GeneratedBudgetSyncRemote
+import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.openTandemDatabase
@@ -83,7 +83,7 @@ class BackgroundBudgetSyncWorker(
             if (preferences["backgroundSyncEnabled"] != "true") return Result.success()
             val budgetId = preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() } ?: return Result.success()
             val storedSession = credentialStore.read() ?: return Result.success()
-            val sessionClient = TandemApiClient(allowInsecurePrivateNetwork = true)
+            val sessionClient = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = app.tandemforactual.data.database.AndroidActualBudgetFiles(applicationContext))
             apiClient = sessionClient
             val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)
             if (budgetId !in authenticatedDevice.budgetIds) return Result.success()
@@ -92,7 +92,7 @@ class BackgroundBudgetSyncWorker(
 
             val repository = LocalBudgetRepository(database) { System.currentTimeMillis() }
             val summary = sessionClient.withExclusiveSession {
-                BudgetSyncCoordinator(repository, GeneratedBudgetSyncRemote(sessionClient)).synchronize(budgetId)
+                BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
             if (backgroundAlertEnabled(preferences["conflictReviewAlerts"])) {
                 BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)

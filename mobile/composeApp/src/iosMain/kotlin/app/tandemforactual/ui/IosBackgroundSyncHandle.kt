@@ -1,6 +1,6 @@
 package app.tandemforactual.ui
 
-import app.tandemforactual.api.client.GeneratedBudgetSyncRemote
+import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.openTandemDatabase
@@ -83,7 +83,13 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
             preferences["selectedBudgetId"]?.takeIf(String::isNotBlank)
                 ?: return IosBackgroundSyncAlerts(taskSucceeded = true)
         val storedSession = credentialStore.read() ?: return IosBackgroundSyncAlerts(taskSucceeded = true)
-        val sessionClient = TandemApiClient()
+        val sessionClient =
+            TandemApiClient(
+                budgetFiles =
+                    app.tandemforactual.data.database
+                        .IosActualBudgetFiles(),
+                today = ::platformTodayIsoDate,
+            )
         apiClient = sessionClient
         val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)
         if (budgetId !in authenticatedDevice.budgetIds) return IosBackgroundSyncAlerts(taskSucceeded = true)
@@ -95,7 +101,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         val repository = LocalBudgetRepository(database) { Clock.System.now().toEpochMilliseconds() }
         val summary =
             sessionClient.withExclusiveSession {
-                BudgetSyncCoordinator(repository, GeneratedBudgetSyncRemote(sessionClient)).synchronize(budgetId)
+                BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
         val overspending =
             if (overspendingAlertsEnabled) {

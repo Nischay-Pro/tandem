@@ -44,6 +44,11 @@ private fun createTandemViewController(
             }
         }
         TandemApp(
+            actualBudgetFiles =
+                remember {
+                    app.tandemforactual.data.database
+                        .IosActualBudgetFiles()
+                },
             deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
             database = database,
             deviceCredentialStore = remember { IosDeviceCredentialStore() },

@@ -72,6 +72,7 @@ internal class AppState {
     var selectedBudgetId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
     var pendingBudgetSelectionOrigin by mutableStateOf<BudgetSelectionSnapshot?>(null)
+    var budgetSwitchSplashId by mutableStateOf<String?>(null)
     var cachedBudgetCatalogJson by mutableStateOf("")
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
     var selectedMonth by mutableStateOf(currentMonthLabel())

@@ -189,6 +189,10 @@ class ActualBudgetReader(
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+    /** One transaction record with its revision, by Actual id or Tandem id. */
+    fun transactionRecord(id: String): ActualRecord? =
+        transaction(id)?.let { ActualRecord("transaction", it.str("id"), it, Sha256.hex(stringifyJson(it))) }
+
     /** One transaction as the API's `readTransaction` returns it, by Actual id or Tandem id. */
     fun transaction(id: String): JsonObject? {
         val row = db.first("SELECT * FROM v_transactions WHERE id = ? OR imported_id = ?", id, id) ?: return null
