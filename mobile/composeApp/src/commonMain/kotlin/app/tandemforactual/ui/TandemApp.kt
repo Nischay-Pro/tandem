@@ -1208,6 +1208,7 @@ fun TandemApp(
             if (!state.settingsStorageReady) return@LaunchedEffect
             state.hasCompletedNotificationOnboarding = true
             state.hasCompletedSyncOnboarding = true
+            state.hasDismissedBudgetHint = true
             if (!mobileSession.isAuthenticated) {
                 state.serverUrl = screenshotScript.serverUrl
                 if (!mobileSession.signInWithPassword(screenshotScript.serverUrl, screenshotScript.password, deviceName)) {
@@ -1227,6 +1228,7 @@ fun TandemApp(
             delay(SCREENSHOT_SETTLE_MILLIS)
             val select = screenshotScript.select
             when (screenshotScript.screen) {
+                "budget" -> state.budgetScrollToSummaryRequested = true
                 "activity" -> {
                     navigation.selectTab(AppRoute.ACTIVITY)
                     delay(SCREENSHOT_SETTLE_MILLIS)

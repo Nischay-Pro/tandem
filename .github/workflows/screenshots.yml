@@ -181,7 +181,7 @@ jobs:
           api-level: 36
           target: google_apis
           arch: x86_64
-          profile: pixel_fold
+          profile: pixel_7
           emulator-boot-timeout: 300
           disable-linux-hw-accel: false
           script: bash scripts/screenshots/capture-android.sh mobile/androidApp/build/outputs/apk/debug/androidApp-debug.apk "${{ runner.temp }}/screenshots"

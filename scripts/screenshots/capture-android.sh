@@ -22,13 +22,10 @@ clean_status_bar() {
 
 wait=75
 for layout in open folded; do
-  if [ "$layout" = folded ]; then
-    adb shell wm size 1080x2092
-    adb shell wm density 420
-  else
-    adb shell wm size reset
-    adb shell wm density reset
-  fi
+  # Pixel Fold screens: 2208x1840 unfolded and 1080x2092 folded, both at 420 dpi.
+  if [ "$layout" = folded ]; then adb shell wm size 1080x2092; else adb shell wm size 2208x1840; fi
+  adb shell wm density 420
+  sleep 5
   for mode in light dark; do
     if [ "$mode" = dark ]; then adb shell cmd uimode night yes >/dev/null; else adb shell cmd uimode night no >/dev/null; fi
     for spec in "budget:" "activity:Corner Market" "accounts:Everyday checking" "reports:" "category:Phone"; do
