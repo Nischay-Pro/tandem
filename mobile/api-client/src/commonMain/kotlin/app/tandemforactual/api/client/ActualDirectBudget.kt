@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
@@ -10,8 +11,11 @@ import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.FullSnapshotResult
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteOperationResult
 import app.tandemforactual.data.store.RemoteOperationStatus
+import app.tandemforactual.data.store.RemoteBudgetSnapshot
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
@@ -70,11 +74,39 @@ class ActualDirectBudget private constructor(
     suspend fun snapshot(today: String) = mutex.withLock { reader.read(today) }
 
     /** Refreshes a staging database for comparison without uploading its history or advancing its write checkpoint. */
-    suspend fun preview(today: String) =
+    suspend fun preview(today: String) = mutex.withLock { receiveProjection(today).first }
+
+    /** Seeds an isolated mobile cache only after the staged Actual records match the gateway. */
+    suspend fun stageMobileCache(
+        today: String,
+        gateway: RemoteBudgetSnapshot,
+        staging: LocalBudgetRepository,
+    ): ActualBudgetParity =
         mutex.withLock {
-            syncEngine.fullSync(clock, null, receiveOnly = true)
-            reader.read(today)
+            require(gateway.budgetId == groupId) { "Choose the same budget on the Actual server and the gateway." }
+            val checkpoint = staging.readSyncCheckpoint(groupId)
+            val (snapshot, cursor) = receiveProjection(today)
+            val parity = snapshot.compareWithGateway(gateway)
+            if (parity.matches) {
+                val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cursor)
+                val result =
+                    staging.applyFullSnapshot(
+                        groupId,
+                        projection.generation,
+                        projection.cursor,
+                        checkpoint,
+                        projection.records,
+                        projection.displaySettings,
+                    )
+                check(result == FullSnapshotResult.APPLIED) { "The staged cache changed during the comparison." }
+            }
+            parity
         }
+
+    private suspend fun receiveProjection(today: String): Pair<ActualSnapshot, String> {
+        val sync = syncEngine.fullSync(clock, null, receiveOnly = true)
+        return reader.read(today) to sync.lastSyncedTimestamp
+    }
 
     suspend fun transaction(id: String) = mutex.withLock { reader.transaction(id) }
 
