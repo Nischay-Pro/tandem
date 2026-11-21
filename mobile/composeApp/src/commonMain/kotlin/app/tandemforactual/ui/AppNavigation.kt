@@ -542,6 +542,10 @@ internal fun AppHeader(
                     )
                 }
                 else -> {
+                    if (route == AppRoute.HOME) {
+                        AdvancedModeSwitch(state)
+                        Spacer(Modifier.width(TandemSpacing.small))
+                    }
                     if (route.isTab()) MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
                     if (route.isTransactionForm()) TandemModalCloseButton(onClick = onBack)
                 }

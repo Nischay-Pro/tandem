@@ -3445,9 +3445,25 @@ internal class TandemMobileSession(
                 ),
             )
             return null
+        } catch (error: TandemApiException) {
+            isServerReachable = error.errorCode != "address_unreachable"
+            budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
+            present(
+                syncPresentation.failed(
+                    apiFailureMessage(
+                        error.errorCode,
+                        error.httpStatus,
+                        ApiFailureContext.SYNC,
+                        "Tandem couldn’t sync this budget. Try again shortly.",
+                    ),
+                    error.errorCode,
+                    error.httpStatus,
+                ),
+            )
+            return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            present(syncPresentation.failed("Tandem couldn’t read this budget. Check the Tandem API address and try again."))
+            present(syncPresentation.failed("Tandem couldn’t read this budget. Try syncing again."))
             return null
         } catch (error: Exception) {
             isServerReachable = false

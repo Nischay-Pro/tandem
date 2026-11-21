@@ -75,14 +75,16 @@ internal fun SavingsGoal.saved(
     month: LiveBudgetMonthSummary?,
     accounts: List<LiveAccountSummary>,
 ): Long? =
-    categoryId?.let { id ->
-        month
-            ?.groups
-            ?.flatMap { it.categories }
-            ?.firstOrNull { it.id == id }
-            ?.balanceMinor
-    }
-        ?: accountId?.let { id -> accounts.firstOrNull { it.id == id }?.balanceMinor }
+    (
+        categoryId?.let { id ->
+            month
+                ?.groups
+                ?.flatMap { it.categories }
+                ?.firstOrNull { it.id == id }
+                ?.balanceMinor
+        }
+            ?: accountId?.let { id -> accounts.firstOrNull { it.id == id }?.balanceMinor }
+    )?.coerceAtLeast(0)
 
 @Composable
 internal fun SavingsGoalsCard(

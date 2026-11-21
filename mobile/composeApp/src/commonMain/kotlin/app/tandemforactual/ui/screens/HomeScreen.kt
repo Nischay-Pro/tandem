@@ -3,12 +3,13 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.components.DividerLine
@@ -79,14 +80,9 @@ internal fun HomeScreen(
         isRefreshing = mobileSession.isSyncing,
         onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
     ) {
-        item(key = "home-header") {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AdvancedModeSwitch(state)
-                if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
+        if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
+            item(key = "home-header") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TandemIconButton(Lucide.Settings, stringResource(Res.string.nav_settings)) { navigation.selectTab(AppRoute.SETTINGS) }
                 }
             }
@@ -151,16 +147,18 @@ private fun HomeEntryCard(
 ) {
     val module = entry.module
     if (entry is HomeEntry.Setup) {
-        SurfaceCard {
-            Text(
-                stringResource(module.title()),
-                color = tandemPalette.text,
-                fontSize = TandemTypography.body,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(stringResource(module.detail()), color = tandemPalette.muted, fontSize = TandemTypography.caption)
-            SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) {
-                if (module == HomeModule.SAVINGS_GOALS) editors.editGoal(null) else navigation.selectTab(module.setupRoute())
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Text(
+                    stringResource(module.title()),
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.body,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(stringResource(module.detail()), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) {
+                    if (module == HomeModule.SAVINGS_GOALS) editors.editGoal(null) else navigation.selectTab(module.setupRoute())
+                }
             }
         }
         return
@@ -211,10 +209,16 @@ private fun HomeEntryCard(
                     if (index > 0) DividerLine()
                     ListRow(
                         category.name,
-                        "Left ${formatCurrency(
-                            category.balanceMinor,
-                            settings,
-                        )}".takeUnless { state.privacyModeEnabled },
+                        if (category.balanceMinor <
+                            0
+                        ) {
+                            "Over by ${formatCurrency(-category.balanceMinor, settings)}"
+                        } else {
+                            "Left ${formatCurrency(
+                                category.balanceMinor,
+                                settings,
+                            )}".takeUnless { state.privacyModeEnabled }
+                        },
                         trailingContent = {
                             money(-category.activityMinor)
                         },
