@@ -1085,8 +1085,7 @@ fun TandemApp(
     val signIn = {
         if (!mobileSession.isSigningIn) {
             coroutineScope.launch {
-                mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)
-                if (mobileSession.authenticatedDevice != null) {
+                if (mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)) {
                     state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                     state.actualPassword = ""
                     navigation.reset(AppRoute.BUDGET_CHOOSER)
@@ -1115,8 +1114,7 @@ fun TandemApp(
                 AuthReturnEvents.clear(returnUri)
                 val callback = actualOpenIdReturn(returnUri)
                 if (callback != null) {
-                    mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)
-                    if (mobileSession.authenticatedDevice != null) {
+                    if (mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)) {
                         state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
                         navigation.reset(AppRoute.BUDGET_CHOOSER)
                     }

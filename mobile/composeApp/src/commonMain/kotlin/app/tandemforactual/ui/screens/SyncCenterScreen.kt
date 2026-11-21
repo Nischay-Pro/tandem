@@ -187,6 +187,15 @@ internal fun SyncCenterScreen(
                 isSyncing = mobileSession.isSyncing,
                 isServerReachable = mobileSession.isServerReachable,
                 syncError = mobileSession.syncError,
+                syncRecovery = mobileSession.syncRecovery,
+                onRecover = {
+                    when (mobileSession.syncRecovery) {
+                        SyncRecovery.SIGN_IN -> navigation.open(AppRoute.SIGN_IN)
+                        SyncRecovery.CHECK_SERVER -> navigation.open(AppRoute.SERVER_ADDRESS)
+                        SyncRecovery.CHOOSE_BUDGET -> navigation.open(AppRoute.SWITCH_BUDGET)
+                        SyncRecovery.RETRY -> onSyncNow()
+                    }
+                },
                 lastSyncedAtEpochMs = mobileSession.localSyncState?.lastSyncedAtEpochMs,
                 nowEpochMilliseconds = mobileSession.nowEpochMillis(),
                 onSyncNow = onSyncNow.takeIf { !mobileSession.isSyncing },
@@ -583,6 +592,8 @@ private fun SyncOverviewCard(
     isSyncing: Boolean,
     isServerReachable: Boolean,
     syncError: String?,
+    syncRecovery: SyncRecovery,
+    onRecover: () -> Unit,
     lastSyncedAtEpochMs: Long?,
     nowEpochMilliseconds: Long,
     onSyncNow: (() -> Unit)?,
@@ -736,17 +747,19 @@ private fun SyncOverviewCard(
                 onClick = onReviewClick.takeIf { attentionCount > 0 },
             )
         }
+        val recovers = syncError != null && !isSyncing && syncRecovery != SyncRecovery.RETRY
         PrimaryButton(
             when {
                 isSyncing -> "Syncing…"
+                recovers -> syncRecovery.label
                 !isServerReachable -> "Try connecting again"
                 syncError != null -> "Try again"
                 waitingCount > 0 -> "Sync $waitingCount ${if (waitingCount == 1) "change" else "changes"}"
                 else -> "Sync now"
             },
-            enabled = onSyncNow != null,
+            enabled = recovers || onSyncNow != null,
             loading = isSyncing,
-            onClick = { onSyncNow?.invoke() },
+            onClick = { if (recovers) onRecover() else onSyncNow?.invoke() },
         )
     }
 }
