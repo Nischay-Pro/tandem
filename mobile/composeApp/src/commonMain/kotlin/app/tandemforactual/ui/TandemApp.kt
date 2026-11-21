@@ -1221,7 +1221,9 @@ fun TandemApp(
             state.selectedBudgetId = budget.budgetId
             state.selectedBudgetEncrypted = budget.isEncrypted
             mobileSession.synchronize(budget.budgetId, null)
-            navigation.reset(AppRoute.BUDGET)
+            delay(TandemMotion.ROUTE_MILLIS * 2L)
+            snapshotFlow { routeTransitionInputBlocked }.first { !it }
+            if (backStack.lastOrNull()?.route != AppRoute.BUDGET) navigation.reset(AppRoute.BUDGET)
             delay(SCREENSHOT_SETTLE_MILLIS)
             val select = screenshotScript.select
             when (screenshotScript.screen) {
