@@ -752,6 +752,16 @@ class LocalBudgetRepository(
         return database.budgetRecordDao().findLatestCategoryForPayee(budgetId, payeeId)
     }
 
+    /** Payees of the most recent transactions, newest first, for putting likely choices at the top of a picker. */
+    suspend fun recentPayeeIds(
+        budgetId: String,
+        limit: Int,
+    ): List<String> {
+        requireIdentifier(budgetId, "budgetId")
+        require(limit in 1..50) { "limit must be between 1 and 50" }
+        return database.budgetRecordDao().findRecentPayeeIds(budgetId, limit)
+    }
+
     suspend fun findTransactionPage(
         budgetId: String,
         cursorDate: String? = null,

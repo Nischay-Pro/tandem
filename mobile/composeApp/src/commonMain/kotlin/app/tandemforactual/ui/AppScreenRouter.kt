@@ -287,12 +287,16 @@ internal fun ScreenContent(
                                 .distinctBy { it.id }
                     }
                 }
+            var recentPayeeIds by remember(state.selectedBudgetId) { mutableStateOf(emptyList<String>()) }
+            LaunchedEffect(state.selectedBudgetId, isLiveBudget) {
+                if (isLiveBudget) recentPayeeIds = mobileSession.recentPayeeIds(state.selectedBudgetId)
+            }
             val payeeGroups =
-                remember(selectingTransferDestination, values) {
-                    if (!selectingTransferDestination || values.isEmpty()) {
-                        emptyList()
-                    } else {
-                        listOf(SelectorGroup("To account", values))
+                remember(selectingTransferDestination, values, recentPayeeIds) {
+                    when {
+                        selectingTransferDestination && values.isNotEmpty() -> listOf(SelectorGroup("To account", values))
+                        selectingTransferDestination -> emptyList()
+                        else -> recentPayeeGroup(values, recentPayeeIds)
                     }
                 }
             SelectorScreen(
@@ -621,4 +625,14 @@ internal fun ScreenContent(
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
     }
+}
+
+/** The payees used most recently, in that order, shown above the full list. */
+internal fun recentPayeeGroup(
+    values: List<SelectorItem>,
+    recentPayeeIds: List<String>,
+): List<SelectorGroup> {
+    val byId = values.associateBy { it.id }
+    val recent = recentPayeeIds.mapNotNull { byId[it] }
+    return if (recent.isEmpty() || values.size <= 8) emptyList() else listOf(SelectorGroup("Recent", recent))
 }
