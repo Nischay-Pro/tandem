@@ -101,3 +101,28 @@ internal fun lastMonthSpendingDetail(
         else -> "$spent · the same this month"
     }
 }
+
+internal data class StillToSpend(
+    val totalMinor: Long,
+    val perDayMinor: Long,
+)
+
+/** What's left in expense categories this month, ignoring overspent ones, spread over the remaining days including today. */
+internal fun stillToSpend(
+    groups: List<app.tandemforactual.ui.model.LiveCategoryGroupSummary>,
+    dayOfMonth: Int,
+    daysInMonth: Int,
+): StillToSpend? {
+    if (daysInMonth <= 0 || dayOfMonth !in 1..daysInMonth) return null
+    val total = groups.filterNot { it.isIncome }.flatMap { it.categories }.sumOf { it.balanceMinor.coerceAtLeast(0) }
+    return StillToSpend(total, total / (daysInMonth - dayOfMonth + 1))
+}
+
+/** Offer to assign last month's spending to a category that has nothing assigned yet this month or later. */
+internal fun canQuickAssign(
+    isTrackingBudget: Boolean,
+    readOnly: Boolean,
+    assignedMinor: Long,
+    lastMonthSpentMinor: Long,
+    monthIsCurrentOrLater: Boolean,
+): Boolean = !isTrackingBudget && !readOnly && assignedMinor == 0L && lastMonthSpentMinor > 0 && monthIsCurrentOrLater
