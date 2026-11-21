@@ -19,6 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +52,8 @@ import app.tandemforactual.ui.generated.resources.settings_budget_rules
 import app.tandemforactual.ui.generated.resources.settings_budget_rules_detail
 import app.tandemforactual.ui.generated.resources.settings_getting_started
 import app.tandemforactual.ui.generated.resources.settings_getting_started_detail
+import app.tandemforactual.ui.generated.resources.settings_language
+import app.tandemforactual.ui.generated.resources.settings_language_device
 import app.tandemforactual.ui.generated.resources.settings_local_data
 import app.tandemforactual.ui.generated.resources.settings_local_data_detail
 import app.tandemforactual.ui.generated.resources.settings_manage_payees
@@ -70,6 +76,7 @@ import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Languages
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Palette
@@ -111,6 +118,18 @@ internal fun SettingsScreen(
                 leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
             )
+            LocalAppLanguage.current?.let { language ->
+                var choosingLanguage by remember { mutableStateOf(false) }
+                DividerLine()
+                ListRow(
+                    stringResource(Res.string.settings_language),
+                    APP_LANGUAGES.firstOrNull { it.tag == language.current }?.nativeName
+                        ?: stringResource(Res.string.settings_language_device),
+                    leading = RowLeading.Icon(Lucide.Languages),
+                    onClick = { choosingLanguage = true },
+                )
+                LanguagePickerSheet(choosingLanguage, language) { choosingLanguage = false }
+            }
         }
         SectionCard(stringResource(Res.string.settings_section_budget)) {
             ListRow(
