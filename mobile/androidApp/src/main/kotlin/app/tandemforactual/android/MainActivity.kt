@@ -1,5 +1,13 @@
 package app.tandemforactual.android
 
+import kotlinx.coroutines.launch
+import app.tandemforactual.ui.WindowHinge
+import androidx.window.layout.WindowLayoutInfo
+import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.FoldingFeature
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import app.tandemforactual.ui.QuickActionEvents
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -85,6 +93,7 @@ class MainActivity : FragmentActivity() {
     }
 
   private val crashReports by lazy { AndroidCrashReports(this) }
+  private val windowHinge = MutableStateFlow<WindowHinge?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     val splashScreen: SplashScreen = installSplashScreen()
@@ -96,6 +105,13 @@ class MainActivity : FragmentActivity() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
     intent?.dataString?.let { AuthReturnEvents.publish(it) }
     crashReports.install()
+    lifecycleScope.launch {
+      repeatOnLifecycle(Lifecycle.State.STARTED) {
+        WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info ->
+          windowHinge.value = info.separatingVerticalHinge()
+        }
+      }
+    }
     handleQuickAction(intent)
     publishQuickAddShortcut()
     notificationPermissionEnabled = hasNotificationPermission()
@@ -132,6 +148,7 @@ class MainActivity : FragmentActivity() {
         currentNetwork = currentNetwork,
         crashReports = crashReports,
         onShareText = { text -> shareText(text) },
+        windowHinge = windowHinge,
       )
     }
   }
@@ -248,3 +265,10 @@ class MainActivity : FragmentActivity() {
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
 
 internal const val ACTION_ADD_TRANSACTION = "app.tandemforactual.action.ADD_TRANSACTION"
+
+private fun WindowLayoutInfo.separatingVerticalHinge(): WindowHinge? =
+  displayFeatures
+    .filterIsInstance<FoldingFeature>()
+    .firstOrNull { it.isSeparating && it.orientation == FoldingFeature.Orientation.VERTICAL }
+    ?.bounds
+    ?.let { WindowHinge(it.left.toFloat(), it.right.toFloat()) }
