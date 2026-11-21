@@ -72,6 +72,111 @@ import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.settings_section_budget
+import app.tandemforactual.ui.generated.resources.setup_about_every_six_hours_even
+import app.tandemforactual.ui.generated.resources.setup_access_your_actual_budget_anywhere
+import app.tandemforactual.ui.generated.resources.setup_actual_password
+import app.tandemforactual.ui.generated.resources.setup_add_your_actual_budget_server
+import app.tandemforactual.ui.generated.resources.setup_allow_notifications
+import app.tandemforactual.ui.generated.resources.setup_ask_the_budget_owner_to
+import app.tandemforactual.ui.generated.resources.setup_available_budgets
+import app.tandemforactual.ui.generated.resources.setup_available_on_this_server
+import app.tandemforactual.ui.generated.resources.setup_back
+import app.tandemforactual.ui.generated.resources.setup_back_to_previous_setup_step
+import app.tandemforactual.ui.generated.resources.setup_budget_encryption_password
+import app.tandemforactual.ui.generated.resources.setup_budget_is_encrypted
+import app.tandemforactual.ui.generated.resources.setup_budget_is_ready
+import app.tandemforactual.ui.generated.resources.setup_budgets
+import app.tandemforactual.ui.generated.resources.setup_cancel
+import app.tandemforactual.ui.generated.resources.setup_change
+import app.tandemforactual.ui.generated.resources.setup_change_server_address
+import app.tandemforactual.ui.generated.resources.setup_checking_sign_in_options
+import app.tandemforactual.ui.generated.resources.setup_choose_a_budget
+import app.tandemforactual.ui.generated.resources.setup_choose_a_saved_budget
+import app.tandemforactual.ui.generated.resources.setup_choose_a_server_budget_or
+import app.tandemforactual.ui.generated.resources.setup_choose_how_tandem_syncs_with
+import app.tandemforactual.ui.generated.resources.setup_complete_offline_copy_saved
+import app.tandemforactual.ui.generated.resources.setup_connect_this_device_to_your
+import app.tandemforactual.ui.generated.resources.setup_connect_to_your_server
+import app.tandemforactual.ui.generated.resources.setup_connection_verified
+import app.tandemforactual.ui.generated.resources.setup_continue
+import app.tandemforactual.ui.generated.resources.setup_continue_with_openid
+import app.tandemforactual.ui.generated.resources.setup_couldn_t_save_a_complete
+import app.tandemforactual.ui.generated.resources.setup_create_a_budget_in_actual
+import app.tandemforactual.ui.generated.resources.setup_done
+import app.tandemforactual.ui.generated.resources.setup_downloading_a_local_copy_so
+import app.tandemforactual.ui.generated.resources.setup_encrypted
+import app.tandemforactual.ui.generated.resources.setup_encrypted_actual_budget
+import app.tandemforactual.ui.generated.resources.setup_encrypted_budget_saved_on_this
+import app.tandemforactual.ui.generated.resources.setup_encrypted_budgets_sync_only_while
+import app.tandemforactual.ui.generated.resources.setup_encrypted_saved_on_this_device
+import app.tandemforactual.ui.generated.resources.setup_enter_the_address_you_use
+import app.tandemforactual.ui.generated.resources.setup_first_sync
+import app.tandemforactual.ui.generated.resources.setup_first_sync_complete
+import app.tandemforactual.ui.generated.resources.setup_first_sync_needs_attention
+import app.tandemforactual.ui.generated.resources.setup_for_actual_budget
+import app.tandemforactual.ui.generated.resources.setup_get_helpful_alerts_when_your
+import app.tandemforactual.ui.generated.resources.setup_get_started
+import app.tandemforactual.ui.generated.resources.setup_keep_it_up_to_date
+import app.tandemforactual.ui.generated.resources.setup_keep_tandem_open_for_the
+import app.tandemforactual.ui.generated.resources.setup_know_when_your_actual_server
+import app.tandemforactual.ui.generated.resources.setup_loading_budgets
+import app.tandemforactual.ui.generated.resources.setup_making_it_yours
+import app.tandemforactual.ui.generated.resources.setup_need_help_setting_up_the
+import app.tandemforactual.ui.generated.resources.setup_needs_review
+import app.tandemforactual.ui.generated.resources.setup_no_budgets_available
+import app.tandemforactual.ui.generated.resources.setup_not_now
+import app.tandemforactual.ui.generated.resources.setup_not_secure
+import app.tandemforactual.ui.generated.resources.setup_not_set
+import app.tandemforactual.ui.generated.resources.setup_on_this_server
+import app.tandemforactual.ui.generated.resources.setup_open
+import app.tandemforactual.ui.generated.resources.setup_open_api_gateway_setup_guide
+import app.tandemforactual.ui.generated.resources.setup_open_budget
+import app.tandemforactual.ui.generated.resources.setup_open_saved_copy
+import app.tandemforactual.ui.generated.resources.setup_opening_sign_in
+import app.tandemforactual.ui.generated.resources.setup_opening_your_budget
+import app.tandemforactual.ui.generated.resources.setup_optional
+import app.tandemforactual.ui.generated.resources.setup_password
+import app.tandemforactual.ui.generated.resources.setup_preparing_your_offline_copy
+import app.tandemforactual.ui.generated.resources.setup_progress_step
+import app.tandemforactual.ui.generated.resources.setup_saved_on_this_device
+import app.tandemforactual.ui.generated.resources.setup_saving_your_budget_for_offline
+import app.tandemforactual.ui.generated.resources.setup_secure_connection
+import app.tandemforactual.ui.generated.resources.setup_select_the_actual_budget_to
+import app.tandemforactual.ui.generated.resources.setup_select_the_budget_saved_on
+import app.tandemforactual.ui.generated.resources.setup_server
+import app.tandemforactual.ui.generated.resources.setup_server_2
+import app.tandemforactual.ui.generated.resources.setup_server_is_reachable
+import app.tandemforactual.ui.generated.resources.setup_server_url
+import app.tandemforactual.ui.generated.resources.setup_set_server_address
+import app.tandemforactual.ui.generated.resources.setup_sign_in
+import app.tandemforactual.ui.generated.resources.setup_sign_in_first
+import app.tandemforactual.ui.generated.resources.setup_sign_in_to_this_server
+import app.tandemforactual.ui.generated.resources.setup_sign_in_with_your_existing
+import app.tandemforactual.ui.generated.resources.setup_signing_in
+import app.tandemforactual.ui.generated.resources.setup_stay_in_the_loop
+import app.tandemforactual.ui.generated.resources.setup_sync_again_whenever_you_need
+import app.tandemforactual.ui.generated.resources.setup_sync_in_the_background
+import app.tandemforactual.ui.generated.resources.setup_sync_issues
+import app.tandemforactual.ui.generated.resources.setup_sync_over
+import app.tandemforactual.ui.generated.resources.setup_tandem
+import app.tandemforactual.ui.generated.resources.setup_tandem_can_t_use_this
+import app.tandemforactual.ui.generated.resources.setup_tandem_checks_for_the_actual
+import app.tandemforactual.ui.generated.resources.setup_these_changes_need_your_decision
+import app.tandemforactual.ui.generated.resources.setup_this_is_not_your_actual
+import app.tandemforactual.ui.generated.resources.setup_transactions_saved
+import app.tandemforactual.ui.generated.resources.setup_try_again
+import app.tandemforactual.ui.generated.resources.setup_unlock_budget
+import app.tandemforactual.ui.generated.resources.setup_unlock_your_budget
+import app.tandemforactual.ui.generated.resources.setup_use_https_to_protect_budget
+import app.tandemforactual.ui.generated.resources.setup_welcome_back
+import app.tandemforactual.ui.generated.resources.setup_you_can_manage_syncing_in
+import app.tandemforactual.ui.generated.resources.setup_you_re_all_set
+import app.tandemforactual.ui.generated.resources.setup_your_budget
+import app.tandemforactual.ui.generated.resources.setup_your_budget_everywhere
+import app.tandemforactual.ui.generated.resources.setup_your_last_saved_copy_is
+import app.tandemforactual.ui.generated.resources.setup_your_password_is_only_used
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
@@ -84,6 +189,8 @@ import com.composables.icons.lucide.LockOpen
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun StartupScreen() {
@@ -108,7 +215,7 @@ internal fun StartupScreen() {
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Opening your budget", color = palette.muted, fontSize = TandemTypography.body)
+                Text(stringResource(Res.string.setup_opening_your_budget), color = palette.muted, fontSize = TandemTypography.body)
             }
         }
     }
@@ -133,24 +240,27 @@ internal fun WelcomeScreen(
                 Spacer(Modifier.height(TandemSpacing.large))
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     SetupHeadline(
-                        "Your budget.\nEverywhere.",
-                        "Access your Actual Budget anywhere. Make changes offline. Sync when ready.",
+                        stringResource(Res.string.setup_your_budget_everywhere),
+                        stringResource(Res.string.setup_access_your_actual_budget_anywhere),
                     )
                     signOutNotice?.let { InfoBubble(it) }
                 }
             }
         },
         actions = {
-            SetupPrimaryButton("Get started", modifier = Modifier.fillMaxWidth()) {
+            SetupPrimaryButton(stringResource(Res.string.setup_get_started), modifier = Modifier.fillMaxWidth()) {
                 navigation.open(AppRoute.SERVER_ADDRESS)
             }
             Text(
-                "Need help setting up the API Gateway?",
+                stringResource(Res.string.setup_need_help_setting_up_the),
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable(role = Role.Button, onClickLabel = "Open API Gateway setup guide", onClick = onOpenSetupGuide)
-                        .padding(vertical = TandemSpacing.extraSmall),
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = stringResource(Res.string.setup_open_api_gateway_setup_guide),
+                            onClick = onOpenSetupGuide,
+                        ).padding(vertical = TandemSpacing.extraSmall),
                 color = tandemPalette.accent,
                 fontSize = TandemTypography.caption,
                 fontWeight = FontWeight.Medium,
@@ -188,7 +298,7 @@ private fun WelcomeBrand(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(TandemSpacing.small))
         Text(
-            "Tandem",
+            stringResource(Res.string.setup_tandem),
             color = palette.text,
             fontSize = TandemTypography.welcomeWordmark,
             lineHeight = TandemTypography.welcomeWordmarkLineHeight,
@@ -197,7 +307,7 @@ private fun WelcomeBrand(modifier: Modifier = Modifier) {
             textAlign = TextAlign.Center,
         )
         Text(
-            "FOR ACTUAL BUDGET",
+            stringResource(Res.string.setup_for_actual_budget),
             color = palette.muted,
             fontSize = TandemTypography.caption,
             fontWeight = FontWeight.SemiBold,
@@ -228,13 +338,20 @@ private fun SetupStepHeader(
 ) {
     val palette = tandemPalette
     val activeStep = step.coerceIn(1, 4)
-    val stepName = listOf("Server", "Sign in", "Budget", "First sync")[activeStep - 1]
+    val stepNames =
+        listOf(
+            stringResource(Res.string.setup_server),
+            stringResource(Res.string.setup_sign_in),
+            stringResource(Res.string.settings_section_budget),
+            stringResource(Res.string.setup_first_sync),
+        )
+    val progressDescription = stringResource(Res.string.setup_progress_step, activeStep, stepNames[activeStep - 1])
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TandemIconButton(
                 Lucide.ChevronLeft,
-                contentDescription = "Back",
-                onClickLabel = "Back to previous setup step",
+                contentDescription = stringResource(Res.string.setup_back),
+                onClickLabel = stringResource(Res.string.setup_back_to_previous_setup_step),
                 sizeDp = 44,
                 iconSizeDp = 24,
                 onClick = onBack ?: navigation.back,
@@ -242,7 +359,7 @@ private fun SetupStepHeader(
             Spacer(Modifier.weight(1f))
             LanguageButton()
             Text(
-                if (optional) "OPTIONAL" else "${activeStep.toString().padStart(2, '0')} / 04",
+                if (optional) stringResource(Res.string.setup_optional) else "${activeStep.toString().padStart(2, '0')} / 04",
                 color = palette.muted,
                 fontSize = TandemTypography.label,
                 fontWeight = FontWeight.Medium,
@@ -253,7 +370,7 @@ private fun SetupStepHeader(
                 Modifier
                     .padding(start = 12.dp)
                     .clearAndSetSemantics {
-                        contentDescription = "Setup progress. Step $activeStep of 4: $stepName."
+                        contentDescription = progressDescription
                     },
                 horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
             ) {
@@ -338,9 +455,12 @@ internal fun ServerAddressScreen(
     OnboardingLayout(
         content = {
             SetupStepHeader(step = 1, navigation = navigation)
-            SetupHeadline("Connect to your server.", "Enter the address you use to access your Actual Budget server.")
+            SetupHeadline(
+                stringResource(Res.string.setup_connect_to_your_server),
+                stringResource(Res.string.setup_enter_the_address_you_use),
+            )
             TextFieldCard(
-                "Server URL",
+                stringResource(Res.string.setup_server_url),
                 state.serverUrl,
                 { state.serverUrl = it },
                 TextFieldOptions(
@@ -355,7 +475,14 @@ internal fun ServerAddressScreen(
                     keyboardActions = KeyboardActions(onGo = { continueToSignIn() }),
                     leadingIcon = if (canContinue) (if (secureAddress) Lucide.Lock else Lucide.LockOpen) else null,
                     leadingIconTint = if (secureAddress) tandemPalette.positive else tandemPalette.negative,
-                    leadingIconDescription = if (secureAddress) "Secure connection" else "Not secure",
+                    leadingIconDescription =
+                        if (secureAddress) {
+                            stringResource(
+                                Res.string.setup_secure_connection,
+                            )
+                        } else {
+                            stringResource(Res.string.setup_not_secure)
+                        },
                 ),
             )
             AnimatedReveal(visible = suggestions.isNotEmpty()) {
@@ -372,7 +499,7 @@ internal fun ServerAddressScreen(
                     }
                 }
             }
-            InfoBubble("Tandem checks for the Actual API Gateway at /api/v1/.")
+            InfoBubble(stringResource(Res.string.setup_tandem_checks_for_the_actual))
             if (serverAddressMayBeInsecure(completedAddress)) {
                 val palette = tandemPalette
                 Row(
@@ -387,7 +514,7 @@ internal fun ServerAddressScreen(
                 ) {
                     Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
                     Text(
-                        "Use HTTPS to protect budget data on public networks.",
+                        stringResource(Res.string.setup_use_https_to_protect_budget),
                         color = palette.text,
                         fontSize = TandemTypography.compactBody,
                         lineHeight = TandemTypography.bodyLineHeight,
@@ -396,7 +523,9 @@ internal fun ServerAddressScreen(
             }
         },
         actions = {
-            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth(), enabled = canContinue) { continueToSignIn() }
+            SetupPrimaryButton(stringResource(Res.string.setup_continue), modifier = Modifier.fillMaxWidth(), enabled = canContinue) {
+                continueToSignIn()
+            }
         },
     )
 }
@@ -563,16 +692,16 @@ internal fun SignInScreen(
         content = {
             val palette = tandemPalette
             SetupStepHeader(step = 2, navigation = navigation)
-            SetupHeadline("Welcome back.", "Sign in with your existing Actual Budget account.")
+            SetupHeadline(stringResource(Res.string.setup_welcome_back), stringResource(Res.string.setup_sign_in_with_your_existing))
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                    LabelText("SERVER")
+                    LabelText(stringResource(Res.string.setup_server_2))
                     Text(
-                        state.serverUrl.takeIf { serverAddressIsValid(it) } ?: "Not set",
+                        state.serverUrl.takeIf { serverAddressIsValid(it) } ?: stringResource(Res.string.setup_not_set),
                         color = palette.text,
                         fontSize = TandemTypography.compactBody,
                         maxLines = 1,
@@ -581,11 +710,11 @@ internal fun SignInScreen(
                 }
                 if (serverAddressIsValid(state.serverUrl)) {
                     Text(
-                        "Change",
+                        stringResource(Res.string.setup_change),
                         modifier =
                             Modifier
                                 .clip(RoundedCornerShape(TandemShapes.small))
-                                .clickable(role = Role.Button, onClickLabel = "Change server address") {
+                                .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.setup_change_server_address)) {
                                     navigation.open(AppRoute.SERVER_ADDRESS)
                                 }.padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
                         color = palette.accent,
@@ -603,18 +732,22 @@ internal fun SignInScreen(
                     Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.positive)
                     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                         Text(
-                            "Server is reachable",
+                            stringResource(Res.string.setup_server_is_reachable),
                             color = palette.text,
                             fontSize = TandemTypography.compactBody,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text("Connection verified", color = palette.muted, fontSize = TandemTypography.caption)
+                        Text(
+                            stringResource(Res.string.setup_connection_verified),
+                            color = palette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
                     }
                 }
             }
             when {
                 !serverAddressIsValid(state.serverUrl) -> {
-                    InlineMessage("Add your Actual Budget server address to continue.", InlineMessageKind.INFO)
+                    InlineMessage(stringResource(Res.string.setup_add_your_actual_budget_server), InlineMessageKind.INFO)
                 }
                 mobileSession.isLoadingLoginMethods || (mobileSession.actualLoginMethods == null && mobileSession.signInError == null) -> {
                     Row(
@@ -622,22 +755,26 @@ internal fun SignInScreen(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         TandemLoadingIndicator(Modifier.size(18.dp), color = palette.accent, strokeWidth = 2.dp)
-                        Text("Checking sign-in options…", color = palette.muted, fontSize = TandemTypography.caption)
+                        Text(
+                            stringResource(Res.string.setup_checking_sign_in_options),
+                            color = palette.muted,
+                            fontSize = TandemTypography.caption,
+                        )
                     }
                 }
                 mobileSession.actualLoginMethods?.bootstrapped == false -> {
-                    InlineMessage("Create a budget in Actual, then return here to sign in.", InlineMessageKind.INFO)
+                    InlineMessage(stringResource(Res.string.setup_create_a_budget_in_actual), InlineMessageKind.INFO)
                 }
                 mobileSession.actualLoginMethods != null -> {
                     if (passwordActive) {
                         TextFieldCard(
-                            "Actual password",
+                            stringResource(Res.string.setup_actual_password),
                             state.actualPassword,
                             { state.actualPassword = it },
-                            TextFieldOptions(placeholder = "Password", isSecret = true),
+                            TextFieldOptions(placeholder = stringResource(Res.string.setup_password), isSecret = true),
                         )
                         Text(
-                            "Your password is only used to sign in and isn’t saved on this device.",
+                            stringResource(Res.string.setup_your_password_is_only_used),
                             color = palette.muted,
                             fontSize = TandemTypography.caption,
                         )
@@ -646,7 +783,7 @@ internal fun SignInScreen(
                     mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
                     if (!passwordActive && !openIdActive) {
                         InlineMessage(
-                            "Tandem can’t use this sign-in method. Change Actual to password or OpenID.",
+                            stringResource(Res.string.setup_tandem_can_t_use_this),
                             InlineMessageKind.INFO,
                         )
                     }
@@ -655,20 +792,26 @@ internal fun SignInScreen(
                     InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
                 else ->
                     InlineMessage(
-                        "Tandem can’t use this sign-in method. Change Actual to password or OpenID.",
+                        stringResource(Res.string.setup_tandem_can_t_use_this),
                         InlineMessageKind.INFO,
                     )
             }
         },
         actions = {
             if (!serverAddressIsValid(state.serverUrl)) {
-                SetupPrimaryButton("Set server address", modifier = Modifier.fillMaxWidth()) {
+                SetupPrimaryButton(stringResource(Res.string.setup_set_server_address), modifier = Modifier.fillMaxWidth()) {
                     navigation.open(AppRoute.SERVER_ADDRESS)
                 }
             }
             if (serverAddressIsValid(state.serverUrl) && passwordActive) {
                 SetupPrimaryButton(
-                    if (mobileSession.isSigningIn) "Signing in" else "Sign in",
+                    if (mobileSession.isSigningIn) {
+                        stringResource(
+                            Res.string.setup_signing_in,
+                        )
+                    } else {
+                        stringResource(Res.string.setup_sign_in)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
                     loading = mobileSession.isSigningIn,
@@ -681,14 +824,26 @@ internal fun SignInScreen(
             if (serverAddressIsValid(state.serverUrl) && openIdActive) {
                 if (passwordActive) {
                     SecondaryButton(
-                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                        if (mobileSession.isSigningIn) {
+                            stringResource(
+                                Res.string.setup_opening_sign_in,
+                            )
+                        } else {
+                            stringResource(Res.string.setup_continue_with_openid)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !mobileSession.isSigningIn,
                         onClick = onStartOpenIdSignIn,
                     )
                 } else {
                     SetupPrimaryButton(
-                        if (mobileSession.isSigningIn) "Opening sign-in" else "Continue with OpenID",
+                        if (mobileSession.isSigningIn) {
+                            stringResource(
+                                Res.string.setup_opening_sign_in,
+                            )
+                        } else {
+                            stringResource(Res.string.setup_continue_with_openid)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !mobileSession.isSigningIn,
                         loading = mobileSession.isSigningIn,
@@ -748,25 +903,31 @@ internal fun BudgetChooserScreen(
             SetupStepHeader(step = 3, navigation = navigation)
             SetupHeadline(
                 if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
-                    "Choose a saved budget."
+                    stringResource(Res.string.setup_choose_a_saved_budget)
                 } else {
-                    "Choose a budget."
+                    stringResource(Res.string.setup_choose_a_budget)
                 },
                 if (usingCachedCatalog) {
-                    "Select the budget saved on this device."
+                    stringResource(Res.string.setup_select_the_budget_saved_on)
                 } else if (hasCachedOnlyBudgets) {
-                    "Choose a server budget or a saved copy."
+                    stringResource(Res.string.setup_choose_a_server_budget_or)
                 } else {
-                    "Select the Actual budget to use on this device."
+                    stringResource(Res.string.setup_select_the_actual_budget_to)
                 },
             )
-            LabelText("AVAILABLE BUDGETS")
+            LabelText(stringResource(Res.string.setup_available_budgets))
             when {
                 usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
                     selectableBudgets.forEach { budget ->
                         ChoiceRow(
                             budget.name,
-                            if (budget.isEncrypted) "Encrypted budget · saved on this device" else "Saved on this device",
+                            if (budget.isEncrypted) {
+                                stringResource(
+                                    Res.string.setup_encrypted_budget_saved_on_this,
+                                )
+                            } else {
+                                stringResource(Res.string.setup_saved_on_this_device)
+                            },
                             selected = chooserSelectedBudgetId == budget.budgetId,
                         ) { chooseBudget(budget) }
                     }
@@ -776,20 +937,24 @@ internal fun BudgetChooserScreen(
                         val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
                         val detail =
                             when {
-                                !isOnServer && budget.isEncrypted -> "Encrypted budget · saved on this device"
-                                !isOnServer -> "Saved on this device"
-                                budget.isEncrypted -> "Encrypted Actual budget"
-                                else -> "Available on this server"
+                                !isOnServer && budget.isEncrypted -> stringResource(Res.string.setup_encrypted_budget_saved_on_this)
+                                !isOnServer -> stringResource(Res.string.setup_saved_on_this_device)
+                                budget.isEncrypted -> stringResource(Res.string.setup_encrypted_actual_budget)
+                                else -> stringResource(Res.string.setup_available_on_this_server)
                             }
                         ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { chooseBudget(budget) }
                     }
                 }
-                mobileSession.isLoadingBudgets -> BodyText("Loading budgets")
+                mobileSession.isLoadingBudgets -> BodyText(stringResource(Res.string.setup_loading_budgets))
                 mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
                     mobileSession.budgetError?.let { error ->
                         InlineMessage(error, InlineMessageKind.ERROR)
-                    } ?: EmptyState("No budgets available", "Ask the budget owner to grant access.")
-                    SecondaryButton("Try again", onClick = onRefreshBudgets)
+                    }
+                        ?: EmptyState(
+                            stringResource(Res.string.setup_no_budgets_available),
+                            stringResource(Res.string.setup_ask_the_budget_owner_to),
+                        )
+                    SecondaryButton(stringResource(Res.string.setup_try_again), onClick = onRefreshBudgets)
                 }
                 mobileSession.budgets.isEmpty() -> {
                     SurfaceCard {
@@ -797,11 +962,11 @@ internal fun BudgetChooserScreen(
                             Modifier.padding(TandemSpacing.large),
                             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                         ) {
-                            LabelText("Sign in first")
-                            BodyText("Connect this device to your Tandem server to choose a budget.")
+                            LabelText(stringResource(Res.string.setup_sign_in_first))
+                            BodyText(stringResource(Res.string.setup_connect_this_device_to_your))
                         }
                     }
-                    SecondaryButton("Sign in") { navigation.open(AppRoute.SIGN_IN) }
+                    SecondaryButton(stringResource(Res.string.setup_sign_in)) { navigation.open(AppRoute.SIGN_IN) }
                 }
             }
             mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
@@ -810,7 +975,7 @@ internal fun BudgetChooserScreen(
         },
         actions = {
             SetupPrimaryButton(
-                "Continue",
+                stringResource(Res.string.setup_continue),
                 modifier = Modifier.fillMaxWidth(),
                 enabled = selectedBudgetIsAvailable && (!mobileSession.isLoadingBudgets || cachedBudgetSelected),
                 onClick = {
@@ -840,16 +1005,16 @@ internal fun BudgetUnlockScreen(
                 },
             )
             SetupHeadline(
-                "Unlock your budget.",
-                "${state.selectedBudget} is encrypted. Enter the separate password you use to open it in Actual.",
+                stringResource(Res.string.setup_unlock_your_budget),
+                stringResource(Res.string.setup_budget_is_encrypted, state.selectedBudget),
             )
             TextFieldCard(
-                "Budget encryption password",
+                stringResource(Res.string.setup_budget_encryption_password),
                 state.encryptedPassword,
                 { state.encryptedPassword = it },
-                TextFieldOptions(placeholder = "Password", isSecret = true),
+                TextFieldOptions(placeholder = stringResource(Res.string.setup_password), isSecret = true),
             )
-            InfoBubble("This is not your Actual sign-in password. Tandem keeps it only while the app is unlocked.")
+            InfoBubble(stringResource(Res.string.setup_this_is_not_your_actual))
             if (LocalDeviceAuthenticator.current?.canStoreSecrets() == true) {
                 BiometricPasswordCheckbox(state.rememberBudgetPasswordWithBiometrics) {
                     state.rememberBudgetPasswordWithBiometrics = it
@@ -858,7 +1023,7 @@ internal fun BudgetUnlockScreen(
         },
         actions = {
             SetupPrimaryButton(
-                "Unlock budget",
+                stringResource(Res.string.setup_unlock_budget),
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.encryptedPassword.isNotBlank(),
                 onClick = {
@@ -887,7 +1052,7 @@ internal fun FirstSyncScreen(
     OnboardingLayout(
         content = {
             SetupStepHeader(step = 4, navigation = navigation)
-            SetupHeadline("Making it yours.", "Downloading a local copy so your budget is ready when you’re offline.")
+            SetupHeadline(stringResource(Res.string.setup_making_it_yours), stringResource(Res.string.setup_downloading_a_local_copy_so))
             Box(
                 Modifier
                     .align(Alignment.CenterHorizontally)
@@ -901,14 +1066,14 @@ internal fun FirstSyncScreen(
                     mobileSession.syncComplete ->
                         Icon(
                             Lucide.Check,
-                            contentDescription = "First sync complete",
+                            contentDescription = stringResource(Res.string.setup_first_sync_complete),
                             modifier = Modifier.size(42.dp),
                             tint = palette.positive,
                         )
                     mobileSession.syncError != null && !mobileSession.isSyncing ->
                         Icon(
                             Lucide.CircleAlert,
-                            contentDescription = "First sync needs attention",
+                            contentDescription = stringResource(Res.string.setup_first_sync_needs_attention),
                             modifier = Modifier.size(42.dp),
                             tint = palette.warning,
                         )
@@ -917,10 +1082,10 @@ internal fun FirstSyncScreen(
             }
             val syncMessage =
                 when {
-                    mobileSession.isSyncing -> "Saving your budget for offline use."
-                    mobileSession.syncComplete -> "Complete offline copy saved"
-                    mobileSession.syncError != null -> "Couldn’t save a complete offline copy."
-                    else -> "Preparing your offline copy."
+                    mobileSession.isSyncing -> stringResource(Res.string.setup_saving_your_budget_for_offline)
+                    mobileSession.syncComplete -> stringResource(Res.string.setup_complete_offline_copy_saved)
+                    mobileSession.syncError != null -> stringResource(Res.string.setup_couldn_t_save_a_complete)
+                    else -> stringResource(Res.string.setup_preparing_your_offline_copy)
                 }
             val syncMessageColor by
                 animateColorAsState(
@@ -937,7 +1102,11 @@ internal fun FirstSyncScreen(
             )
             if (mobileSession.syncComplete) {
                 BodyText(
-                    "${mobileSession.syncedTransactionCount} transactions saved. Your budget is now available on this device.",
+                    pluralStringResource(
+                        Res.plurals.setup_transactions_saved,
+                        mobileSession.syncedTransactionCount,
+                        mobileSession.syncedTransactionCount,
+                    ),
                 )
             }
             if (mobileSession.syncError != null && !mobileSession.isSyncing) {
@@ -946,8 +1115,8 @@ internal fun FirstSyncScreen(
                     mobileSession.hasCachedSnapshot &&
                     !state.selectedBudgetEncrypted
                 ) {
-                    BodyText("Your last saved copy is still available on this device.")
-                    SecondaryButton("Open saved copy") {
+                    BodyText(stringResource(Res.string.setup_your_last_saved_copy_is))
+                    SecondaryButton(stringResource(Res.string.setup_open_saved_copy)) {
                         state.pendingBudgetSelectionOrigin = null
                         selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                         navigation.selectTab(AppRoute.BUDGET)
@@ -969,9 +1138,9 @@ internal fun FirstSyncScreen(
                                     notificationPermissionEnabled,
                                 )
                             ) {
-                                "Continue"
+                                stringResource(Res.string.setup_continue)
                             } else {
-                                "Open budget"
+                                stringResource(Res.string.setup_open_budget)
                             },
                         onComplete = {
                             selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
@@ -979,12 +1148,16 @@ internal fun FirstSyncScreen(
                     )
                 mobileSession.syncError != null && !mobileSession.isSyncing ->
                     Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        SecondaryButton("Cancel", modifier = Modifier.weight(1f), onClick = navigation.back)
-                        SetupPrimaryButton("Try again", modifier = Modifier.weight(1f), onClick = onRetrySync)
+                        SecondaryButton(stringResource(Res.string.setup_cancel), modifier = Modifier.weight(1f), onClick = navigation.back)
+                        SetupPrimaryButton(
+                            stringResource(Res.string.setup_try_again),
+                            modifier = Modifier.weight(1f),
+                            onClick = onRetrySync,
+                        )
                     }
                 else ->
                     Text(
-                        "Keep Tandem open for the first download.",
+                        stringResource(Res.string.setup_keep_tandem_open_for_the),
                         modifier = Modifier.fillMaxWidth(),
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
@@ -1001,7 +1174,7 @@ internal fun FirstSyncCompletionAction(
     navigation: AppNavigation,
     syncComplete: Boolean,
     notificationPermissionEnabled: Boolean?,
-    actionLabel: String = "Done",
+    actionLabel: String = stringResource(Res.string.setup_done),
     onComplete: () -> Unit,
 ) {
     SetupPrimaryButton(actionLabel, modifier = Modifier.fillMaxWidth(), enabled = syncComplete) {
@@ -1062,7 +1235,7 @@ internal fun NotificationOnboardingScreen(
         verticalSpacing = TandemSpacing.medium,
         content = {
             SetupStepHeader(step = 4, navigation = navigation, optional = true)
-            SetupHeadline("Stay in the loop.", "Get helpful alerts when your budget needs attention. You can change this later.")
+            SetupHeadline(stringResource(Res.string.setup_stay_in_the_loop), stringResource(Res.string.setup_get_helpful_alerts_when_your))
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -1070,8 +1243,8 @@ internal fun NotificationOnboardingScreen(
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
             ) {
                 listOf(
-                    "Sync issues" to "Know when your Actual server needs attention.",
-                    "Needs review" to "These changes need your decision.",
+                    stringResource(Res.string.setup_sync_issues) to stringResource(Res.string.setup_know_when_your_actual_server),
+                    stringResource(Res.string.setup_needs_review) to stringResource(Res.string.setup_these_changes_need_your_decision),
                 ).forEach { (title, detail) ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
@@ -1097,10 +1270,10 @@ internal fun NotificationOnboardingScreen(
             }
         },
         actions = {
-            SetupPrimaryButton("Allow notifications", modifier = Modifier.fillMaxWidth()) {
+            SetupPrimaryButton(stringResource(Res.string.setup_allow_notifications), modifier = Modifier.fillMaxWidth()) {
                 finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
             }
-            SecondaryButton("Not now", modifier = Modifier.fillMaxWidth()) {
+            SecondaryButton(stringResource(Res.string.setup_not_now), modifier = Modifier.fillMaxWidth()) {
                 finishNotificationOnboarding(state, navigation, onRequestPermission = null)
             }
         },
@@ -1127,24 +1300,27 @@ internal fun SyncOnboardingScreen(
         verticalSpacing = TandemSpacing.medium,
         content = {
             SetupStepHeader(step = 4, navigation = navigation, optional = true)
-            SetupHeadline("Keep it up to date.", "Choose how Tandem syncs with Actual. You can change this later in Settings.")
+            SetupHeadline(
+                stringResource(Res.string.setup_keep_it_up_to_date),
+                stringResource(Res.string.setup_choose_how_tandem_syncs_with),
+            )
             SurfaceCard {
                 ToggleRow(
-                    "Sync in the background",
+                    stringResource(Res.string.setup_sync_in_the_background),
                     if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets sync only while unlocked."
+                        stringResource(Res.string.setup_encrypted_budgets_sync_only_while)
                     } else {
-                        "About every six hours, even when Tandem is closed"
+                        stringResource(Res.string.setup_about_every_six_hours_even)
                     },
                     state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
                     enabled = !state.selectedBudgetEncrypted,
                 ) { state.backgroundSyncEnabled = it }
             }
-            LabelText("SYNC OVER")
+            LabelText(stringResource(Res.string.setup_sync_over))
             SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
         },
         actions = {
-            SetupPrimaryButton("Continue", modifier = Modifier.fillMaxWidth()) {
+            SetupPrimaryButton(stringResource(Res.string.setup_continue), modifier = Modifier.fillMaxWidth()) {
                 state.hasCompletedSyncOnboarding = true
                 navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
             }
@@ -1171,18 +1347,25 @@ internal fun SwitchBudgetScreen(
     PageColumn {
         if (budgets.isEmpty()) {
             if (mobileSession.isLoadingBudgets) {
-                BodyText("Loading budgets")
+                BodyText(stringResource(Res.string.setup_loading_budgets))
             } else {
                 EmptyState(
-                    "No budgets available",
-                    mobileSession.budgetError ?: "Sign in to this server to choose a budget.",
-                    actionLabel = if (mobileSession.isAuthenticated) "Try again" else "Sign in",
+                    stringResource(Res.string.setup_no_budgets_available),
+                    mobileSession.budgetError ?: stringResource(Res.string.setup_sign_in_to_this_server),
+                    actionLabel =
+                        if (mobileSession.isAuthenticated) {
+                            stringResource(
+                                Res.string.setup_try_again,
+                            )
+                        } else {
+                            stringResource(Res.string.setup_sign_in)
+                        },
                     onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
                 )
             }
             return@PageColumn
         }
-        SectionCard("Budgets") {
+        SectionCard(stringResource(Res.string.setup_budgets)) {
             budgets.forEachIndexed { index, budget ->
                 if (index > 0) DividerLine()
                 val current = budget.budgetId == state.selectedBudgetId
@@ -1190,12 +1373,12 @@ internal fun SwitchBudgetScreen(
                 ListRow(
                     budget.name,
                     when {
-                        budget.isEncrypted && !onServer -> "Encrypted · saved on this device"
-                        budget.isEncrypted -> "Encrypted"
-                        !onServer -> "Saved on this device"
-                        else -> "On this server"
+                        budget.isEncrypted && !onServer -> stringResource(Res.string.setup_encrypted_saved_on_this_device)
+                        budget.isEncrypted -> stringResource(Res.string.setup_encrypted)
+                        !onServer -> stringResource(Res.string.setup_saved_on_this_device)
+                        else -> stringResource(Res.string.setup_on_this_server)
                     },
-                    if (current) "Open" else null,
+                    if (current) stringResource(Res.string.setup_open) else null,
                     leading = RowLeading.Icon(if (budget.isEncrypted) Lucide.LockKeyhole else Lucide.WalletCards),
                     options = ListRowOptions(trailingColor = tandemPalette.accent),
                     onClick = {
@@ -1215,9 +1398,9 @@ internal fun SwitchBudgetScreen(
                 InlineMessageKind.ERROR,
                 actionLabel =
                     when {
-                        !mobileSession.isAuthenticated -> "Sign in"
+                        !mobileSession.isAuthenticated -> stringResource(Res.string.setup_sign_in)
                         mobileSession.isLoadingBudgets -> null
-                        else -> "Try again"
+                        else -> stringResource(Res.string.setup_try_again)
                     },
                 onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
             )
@@ -1245,22 +1428,25 @@ internal fun SetupCompleteScreen(
                 Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(38.dp), tint = palette.positive)
             }
             SetupHeadline(
-                "You’re all set.",
-                "${state.selectedBudget.ifBlank { "Your budget" }} is ready. Your first offline copy is saved on this device.",
+                stringResource(Res.string.setup_you_re_all_set),
+                stringResource(
+                    Res.string.setup_budget_is_ready,
+                    state.selectedBudget.ifBlank { stringResource(Res.string.setup_your_budget) },
+                ),
             )
             Text(
-                "Sync again whenever you need.",
+                stringResource(Res.string.setup_sync_again_whenever_you_need),
                 color = palette.muted,
                 fontSize = TandemTypography.body,
             )
         },
         actions = {
-            SetupPrimaryButton("Open budget", modifier = Modifier.fillMaxWidth()) {
+            SetupPrimaryButton(stringResource(Res.string.setup_open_budget), modifier = Modifier.fillMaxWidth()) {
                 state.pendingBudgetSelectionOrigin = null
                 navigation.selectTab(AppRoute.BUDGET)
             }
             Text(
-                "You can manage syncing in Settings.",
+                stringResource(Res.string.setup_you_can_manage_syncing_in),
                 modifier = Modifier.fillMaxWidth(),
                 color = palette.muted,
                 fontSize = TandemTypography.caption,
