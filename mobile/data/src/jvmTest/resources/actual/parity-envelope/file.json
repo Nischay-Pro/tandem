@@ -1,0 +1,16 @@
+{
+  "deleted": 0,
+  "fileId": "857391b2-1bdc-4e26-99e1-8b9a5d1977c1",
+  "groupId": "f83da12c-1b11-4f8a-a8b7-20ebc0072ac0",
+  "name": "Parity envelope",
+  "encryptKeyId": null,
+  "owner": "6ade1129-af29-410e-916c-e32c44d4ce29",
+  "usersWithAccess": [
+    {
+      "userId": "6ade1129-af29-410e-916c-e32c44d4ce29",
+      "displayName": "",
+      "userName": "",
+      "owner": true
+    }
+  ]
+}
