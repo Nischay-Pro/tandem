@@ -1357,6 +1357,7 @@ fun TandemApp(
         state.accent,
         reduceMotion,
         animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
+        language = AppLanguageController(state.appLanguage) { state.appLanguage = it },
     ) {
         val palette = tandemPalette
         val windowSize = LocalWindowInfo.current.containerSize

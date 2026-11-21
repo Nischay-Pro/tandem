@@ -128,7 +128,7 @@ internal fun WelcomeScreen(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
             ) {
-                Spacer(Modifier.height(TandemSpacing.extraLarge))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { LanguageButton() }
                 WelcomeBrand(Modifier.align(Alignment.CenterHorizontally))
                 Spacer(Modifier.height(TandemSpacing.large))
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
@@ -240,6 +240,7 @@ private fun SetupStepHeader(
                 onClick = onBack ?: navigation.back,
             )
             Spacer(Modifier.weight(1f))
+            LanguageButton()
             Text(
                 if (optional) "OPTIONAL" else "${activeStep.toString().padStart(2, '0')} / 04",
                 color = palette.muted,

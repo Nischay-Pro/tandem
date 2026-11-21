@@ -8,6 +8,8 @@
     <string name="settings_section_personalization">Personalization</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_appearance_detail">Theme, accent color, and motion</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_device">Device language</string>
     <string name="settings_section_budget">Budget</string>
     <string name="settings_budget_preferences">Budget preferences</string>
     <string name="settings_budget_preferences_detail">Number format and planning</string>
