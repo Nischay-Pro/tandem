@@ -119,24 +119,21 @@ class ActualTransactionOperations(
             }
         }
         validateCreate(input)?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
-        transactions.batchUpdate(
-            added =
-                listOf(
-                    linkedMapOf(
-                        "account" to input["account"],
-                        "date" to input["date"],
-                        "amount" to input["amount"],
-                        "payee" to input["payee"],
-                        "category" to input["category"],
-                        "notes" to input["notes"],
-                        "cleared" to input["cleared"],
-                        "imported_id" to transactionId,
-                    ),
-                ),
-            runTransfers =
-                input["payee"]?.let { payee -> db.first("SELECT transfer_acct FROM payees WHERE id = ?", payee)?.get("transfer_acct") } !=
-                    null,
-        )
+        val transaction =
+            linkedMapOf(
+                "date" to input["date"],
+                "amount" to input["amount"],
+                "payee" to input["payee"],
+            )
+        if (input["category"] != null) transaction["category"] = input["category"]
+        transaction["notes"] = input["notes"]
+        transaction["cleared"] = input["cleared"]
+        transaction["imported_id"] = transactionId
+        val transfer =
+            input["payee"]?.let { payee ->
+                db.first("SELECT transfer_acct FROM payees WHERE id = ?", payee)?.get("transfer_acct")
+            }
+        transactions.addTransactions(input["account"] as String, listOf(transaction), runTransfers = transfer != null)
         return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
     }
 

@@ -182,6 +182,13 @@ internal object ActualRecurrence {
             else -> day
         }
 
+    /** `occursBetween`, both ends included, before any weekend adjustment. */
+    fun occursBetween(
+        config: RecurConfig,
+        from: Day,
+        to: Day,
+    ): Boolean = rules(config).any { rule -> occurrences(rule).firstOrNull { it >= from }?.let { it <= to } == true }
+
     /** `getNextDate`: the first occurrence on or after [from], or the final occurrence of a finished schedule. */
     fun nextDate(
         config: RecurConfig,

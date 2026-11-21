@@ -16,6 +16,7 @@ private const val SCHEDULE_CHANGED = "This schedule changed in Actual. Refresh i
 class ActualScheduleEdits(
     private val writer: ActualWriter,
     private val today: () -> String,
+    private val transactions: ActualTransactions = ActualTransactions(writer),
 ) {
     private val db get() = writer.db
 
@@ -137,7 +138,7 @@ class ActualScheduleEdits(
                 date != null ||
                 valueOf(old, "account") != valueOf(conditions, "account") ||
                 valueOf(old, "date") != valueOf(conditions, "date")
-        if (reset) setNextDate(id, conditions, advance = false)
+        if (reset) setNextDate(id, conditions, NextDate.RESET)
         writer.update(
             "schedules",
             id,
@@ -173,8 +174,29 @@ class ActualScheduleEdits(
                     db.query("SELECT * FROM rules WHERE id = ? AND tombstone = 0", schedule.value("rule")),
                     emptyMap(),
                 ).single()
-        setNextDate(id, rule.getValue("conditions").jsonArray.map { it.jsonObject }, advance = true)
+        setNextDate(id, rule.getValue("conditions").jsonArray.map { it.jsonObject }, NextDate.ADVANCE)
     }
+
+    /** `schedule/post-transaction`: adds the scheduled transaction on its next date, running the budget's rules. */
+    fun post(
+        id: String,
+        expectedNextDate: String,
+    ): String =
+        writer.batch {
+            val schedule = active(id) ?: changed()
+            if (schedule.value("next_date") != expectedNextDate) changed()
+            val account = schedule.value("account") as String? ?: fail("Choose an account before posting this schedule")
+            val transaction =
+                linkedMapOf(
+                    "payee" to schedule.value("payee"),
+                    "account" to account,
+                    "amount" to scheduledAmount(schedule["amount"]),
+                    "date" to expectedNextDate,
+                    "schedule" to id,
+                    "cleared" to false,
+                )
+            transactions.addTransactions(account, listOf(transaction), runTransfers = true).first()
+        }
 
     fun delete(id: String) =
         writer.batch {
@@ -183,17 +205,19 @@ class ActualScheduleEdits(
             writer.delete("schedules", id)
         }
 
-    /** `setNextDate`: recomputes the base date after an edit, or the local date when an occurrence is skipped. */
+    private enum class NextDate { RESET, ADVANCE, REFRESH }
+
+    /** `setNextDate`: RESET recomputes the base date after an edit, ADVANCE skips an occurrence, REFRESH follows today. */
     private fun setNextDate(
         id: String,
         conditions: List<JsonObject>,
-        advance: Boolean,
+        mode: NextDate,
     ) {
         val dateCondition = conditions.firstOrNull { it.value("field") == "date" && it.value("op") in setOf("is", "isapprox") } ?: return
         val current = db.first("SELECT next_date FROM v_schedules WHERE id = ?", id)?.get("next_date") as Number?
         val currentDay = current?.let { Day.parse(ActualMonths.dateString(it.toLong())) }
         val next =
-            if (advance) {
+            if (mode == NextDate.ADVANCE) {
                 ActualRecurrence.nextDateAfter(dateCondition["value"], currentDay ?: Day.parse(today()))
             } else {
                 ActualRecurrence.nextDateFrom(dateCondition["value"], Day.parse(today()))
@@ -201,16 +225,7 @@ class ActualScheduleEdits(
         if (next == currentDay) return
         val row = db.first("SELECT id, base_next_date_ts FROM schedules_next_date WHERE schedule_id = ?", id) ?: return
         val repr = ActualMonths.dateInt(next.toString())
-        if (advance) {
-            writer.update(
-                "schedules_next_date",
-                row["id"] as String,
-                linkedMapOf(
-                    "local_next_date" to repr,
-                    "local_next_date_ts" to row["base_next_date_ts"],
-                ),
-            )
-        } else {
+        if (mode == NextDate.RESET) {
             writer.update(
                 "schedules_next_date",
                 row["id"] as String,
@@ -219,8 +234,94 @@ class ActualScheduleEdits(
                     "base_next_date_ts" to writer.nowMillis(),
                 ),
             )
+        } else {
+            writer.update(
+                "schedules_next_date",
+                row["id"] as String,
+                linkedMapOf(
+                    "local_next_date" to repr,
+                    "local_next_date_ts" to row["base_next_date_ts"],
+                ),
+            )
         }
     }
+
+    private fun conditionsOf(schedule: JsonObject): List<JsonObject> =
+        ActualRules
+            .load(db.query("SELECT * FROM rules WHERE id = ? AND tombstone = 0", schedule.value("rule")), emptyMap())
+            .firstOrNull()
+            ?.getValue("conditions")
+            ?.jsonArray
+            ?.map { it.jsonObject }
+            .orEmpty()
+
+    private fun isRecurring(schedule: JsonObject) = (schedule["date"] as? JsonObject)?.get("frequency") != null
+
+    private fun hasTransaction(schedule: JsonObject): Boolean {
+        val next = schedule.value("next_date") as String? ?: return false
+        val exactDate = conditionsOf(schedule).firstOrNull { it.value("field") == "date" }?.value("op") == "is"
+        val from = if (exactDate || schedule.value("posts_transaction") == true) next else Day.parse(next).plus(-2).toString()
+        return db.first(
+            "SELECT 1 AS found FROM v_transactions_internal_alive WHERE schedule = ? AND date >= ?",
+            schedule.value("id"),
+            ActualMonths.dateInt(from),
+        ) !=
+            null
+    }
+
+    private fun status(schedule: JsonObject): String {
+        val next = schedule.value("next_date") as String?
+        val day = today()
+        return when {
+            schedule.value("completed") == true -> "completed"
+            hasTransaction(schedule) -> "paid"
+            next == day -> "due"
+            next != null && next < day -> "missed"
+            else -> "scheduled"
+        }
+    }
+
+    /**
+     * `advanceSchedulesService`, which every Actual client runs after a sync: moves paid recurring schedules on,
+     * completes paid one-time schedules, and posts due transactions for schedules set to post automatically.
+     */
+    fun runService(syncSuccess: Boolean) =
+        writer.batch {
+            val open =
+                schedules().filter { schedule ->
+                    val account = schedule.value("account") as String?
+                    schedule.value("completed") != true &&
+                        account != null &&
+                        db.first("SELECT closed FROM accounts WHERE id = ?", account)?.let { !truthy(it["closed"]) } == true
+                }
+            for (start in open) {
+                var schedule = start
+                var current = status(schedule)
+                val posts = schedule.value("posts_transaction") == true
+                if (posts && (current != "paid" || isRecurring(schedule)) && current in setOf("paid", "due", "missed")) {
+                    while (current in setOf("paid", "due", "missed")) {
+                        if (current != "paid") {
+                            if (!syncSuccess) break
+                            post(schedule.value("id") as String, schedule.value("next_date") as String)
+                            if (current == "due" || !isRecurring(schedule)) break
+                        } else if (schedule.value("next_date") == today()) {
+                            break
+                        }
+                        val previous = schedule.value("next_date")
+                        setNextDate(schedule.value("id") as String, conditionsOf(schedule), NextDate.ADVANCE)
+                        schedule = schedules().firstOrNull { it.value("id") == schedule.value("id") } ?: break
+                        if (schedule.value("next_date") == previous) break
+                        current = status(schedule)
+                    }
+                } else if (current == "paid") {
+                    if (isRecurring(schedule)) {
+                        setNextDate(schedule.value("id") as String, conditionsOf(schedule), NextDate.REFRESH)
+                    } else if (((schedule["date"] as? JsonPrimitive)?.contentOrNull ?: "9999") < today()) {
+                        writer.update("schedules", schedule.value("id") as String, mapOf("completed" to 1L))
+                    }
+                }
+            }
+        }
 
     /** `updateActions`: keeps a rule's fixed "set amount" actions equal to the amount the schedule posts. */
     private fun syncAmountActions(

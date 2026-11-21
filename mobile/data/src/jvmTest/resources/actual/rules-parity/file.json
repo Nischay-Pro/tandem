@@ -1,0 +1,16 @@
+{
+  "deleted": 0,
+  "fileId": "144709cf-64b0-40cd-8694-2fca31c499d9",
+  "groupId": "63de8621-bf8d-48ed-b8be-70b24fb35d6c",
+  "name": "Rules engine parity",
+  "encryptKeyId": null,
+  "owner": "6ade1129-af29-410e-916c-e32c44d4ce29",
+  "usersWithAccess": [
+    {
+      "userId": "6ade1129-af29-410e-916c-e32c44d4ce29",
+      "displayName": "",
+      "userName": "",
+      "owner": true
+    }
+  ]
+}
