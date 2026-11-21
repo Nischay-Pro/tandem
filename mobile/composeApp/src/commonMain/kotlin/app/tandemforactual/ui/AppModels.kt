@@ -1001,4 +1001,11 @@ internal val appRouteStackSaver =
         },
     )
 
+/** The name to show when reopening a saved budget: keep the known name rather than the generic "Saved budget" placeholder. */
+internal fun cachedBudgetName(
+    selectedBudgetId: String,
+    selectedBudgetName: String,
+    cached: BudgetCatalogItem,
+): String = if (cached.budgetId == selectedBudgetId && selectedBudgetName.isNotBlank()) selectedBudgetName else cached.name
+
 /** Shared preview-first Tandem UI used by the Android app and iOS host. */
