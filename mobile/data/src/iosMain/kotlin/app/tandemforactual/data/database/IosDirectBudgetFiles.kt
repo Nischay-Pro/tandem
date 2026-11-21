@@ -7,11 +7,16 @@ import app.tandemforactual.data.actual.ActualDatabase
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
-import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSLock
 import platform.Foundation.NSURL
-import platform.Foundation.create
+import platform.posix.fclose
+import platform.posix.fflush
+import platform.posix.fileno
+import platform.posix.fopen
+import platform.posix.fsync
+import platform.posix.fwrite
+import platform.posix.rename
 import kotlin.uuid.Uuid
 
 /** Holds one iOS direct budget in Application Support with iOS file protection and backup exclusion. */
@@ -30,11 +35,30 @@ class IosDirectBudgetFiles private constructor(
         installLock.lock()
         try {
             check(!NSFileManager.defaultManager.fileExistsAtPath(actualPath)) { "This installation already has an Actual database." }
-            val data = bytes.usePinned { NSData.create(bytes = it.addressOf(0), length = bytes.size.toULong()) }
-            check(data.writeToFile(actualPath, true)) { "Could not save the downloaded Actual database." }
+            writeActualFile(bytes)
             return openActual()
         } finally {
             installLock.unlock()
+        }
+    }
+
+    private fun writeActualFile(bytes: ByteArray) {
+        val staging = "$actualPath.new"
+        try {
+            val output = checkNotNull(fopen(staging, "wb")) { "Could not create the downloaded Actual database." }
+            try {
+                val length = bytes.size.toULong()
+                val written = bytes.usePinned { fwrite(it.addressOf(0), 1uL, length, output) }
+                check(written == length && fflush(output) == 0 && fsync(fileno(output)) == 0) {
+                    "Could not save the downloaded Actual database."
+                }
+            } finally {
+                fclose(output)
+            }
+            check(rename(staging, actualPath) == 0) { "Could not install the downloaded Actual database." }
+        } finally {
+            val files = NSFileManager.defaultManager
+            if (files.fileExistsAtPath(staging)) files.removeItemAtPath(staging, error = null)
         }
     }
 
