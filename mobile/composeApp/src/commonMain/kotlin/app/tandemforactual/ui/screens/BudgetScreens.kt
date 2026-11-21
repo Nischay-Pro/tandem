@@ -41,6 +41,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
@@ -329,11 +330,15 @@ internal fun BudgetScreen(
         }
     }
     var actionDockScrolledAway by remember { mutableStateOf(false) }
-    LaunchedEffect(routeListState) {
+    val dockThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    LaunchedEffect(routeListState, dockThresholdPx) {
         val listState = routeListState ?: return@LaunchedEffect
         var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        var travel = 0f
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { current ->
-            actionDockScrolledAway = floatingActionsHidden(actionDockScrolledAway, previous, current)
+            val step = scrollStep(previous, current, dockThresholdPx)
+            travel = if (step == 0f || (step > 0) == (travel > 0)) travel + step else step
+            actionDockScrolledAway = floatingActionsHidden(actionDockScrolledAway, travel, current, dockThresholdPx)
             previous = current
         }
     }
@@ -961,8 +966,8 @@ internal fun BudgetScreen(
         AnimatedVisibility(
             visible = actionDockVisible && !actionDockScrolledAway,
             modifier = Modifier.align(Alignment.BottomEnd),
-            enter = tandemRevealEnter(tandemReduceMotion),
-            exit = tandemRevealExit(tandemReduceMotion),
+            enter = tandemFloatingEnter(tandemReduceMotion),
+            exit = tandemFloatingExit(tandemReduceMotion),
         ) {
             Row(
                 Modifier
@@ -1784,21 +1789,31 @@ private fun GettingStartedTip(
     }
 }
 
+/** Scroll movement between two list positions in pixels; a change of item counts as a full threshold in that direction. */
+internal fun scrollStep(
+    previous: Pair<Int, Int>,
+    current: Pair<Int, Int>,
+    thresholdPx: Float,
+): Float =
+    when {
+        current.first > previous.first -> thresholdPx
+        current.first < previous.first -> -thresholdPx
+        else -> (current.second - previous.second).toFloat()
+    }
+
 /**
- * Floating actions slide away while the list moves forward so they don't cover amounts, and return when it moves
- * back or reaches the top. Small movements keep the current state.
+ * Floating actions slide away after a deliberate scroll forward so they don't cover amounts, and return after a
+ * deliberate scroll back or at the top. Smaller movements keep the current state so the buttons don't flicker.
  */
 internal fun floatingActionsHidden(
     hidden: Boolean,
-    previous: Pair<Int, Int>,
+    travel: Float,
     current: Pair<Int, Int>,
-): Boolean {
-    if (current.first == 0 && current.second < 72) return false
-    val forward = current.first > previous.first || (current.first == previous.first && current.second > previous.second + 8)
-    val back = current.first < previous.first || (current.first == previous.first && current.second < previous.second - 8)
-    return when {
-        forward -> true
-        back -> false
+    thresholdPx: Float,
+): Boolean =
+    when {
+        current.first == 0 && current.second < thresholdPx -> false
+        travel >= thresholdPx -> true
+        travel <= -thresholdPx -> false
         else -> hidden
     }
-}
