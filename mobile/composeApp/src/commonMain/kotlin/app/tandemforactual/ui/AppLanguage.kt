@@ -25,9 +25,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemIconButton
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.language_change
+import app.tandemforactual.ui.generated.resources.language_close
+import app.tandemforactual.ui.generated.resources.language_device_detail
+import app.tandemforactual.ui.generated.resources.settings_language
+import app.tandemforactual.ui.generated.resources.settings_language_device
 import com.composables.icons.lucide.Languages
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import org.jetbrains.compose.resources.stringResource
 
 internal data class AppLanguage(
     val tag: String,
@@ -40,7 +47,6 @@ internal val APP_LANGUAGES =
     listOf(
         AppLanguage("en", "English", "English"),
         AppLanguage("te", "తెలుగు", "Telugu"),
-        AppLanguage("hi", "हिन्दी", "Hindi"),
     )
 
 /** A saved choice that's no longer offered falls back to the device language. */
@@ -76,7 +82,12 @@ internal fun AppLocaleEnvironment(
 internal fun LanguageButton() {
     val controller = LocalAppLanguage.current ?: return
     var open by remember { mutableStateOf(false) }
-    TandemIconButton(Lucide.Languages, "Language", onClickLabel = "Change language", iconSizeDp = 22) { open = true }
+    TandemIconButton(
+        Lucide.Languages,
+        stringResource(Res.string.settings_language),
+        onClickLabel = stringResource(Res.string.language_change),
+        iconSizeDp = 22,
+    ) { open = true }
     LanguagePickerSheet(open, controller) { open = false }
 }
 
@@ -107,16 +118,20 @@ private fun LanguagePickerContent(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 Icon(Lucide.Languages, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accent)
                 Text(
-                    "Language",
+                    stringResource(Res.string.settings_language),
                     modifier = Modifier.weight(1f),
                     color = palette.text,
                     fontSize = TandemTypography.sectionTitle,
                     fontFamily = tandemAlloFamily(),
                     fontWeight = FontWeight.Bold,
                 )
-                TandemIconButton(Lucide.X, "Close", sizeDp = 40, onClick = onDismiss)
+                TandemIconButton(Lucide.X, stringResource(Res.string.language_close), sizeDp = 40, modalClose = true, onClick = onDismiss)
             }
-            ChoiceRow("Device language", "Follows the language set on this device", selected = controller.current.isBlank()) {
+            ChoiceRow(
+                stringResource(Res.string.settings_language_device),
+                stringResource(Res.string.language_device_detail),
+                selected = controller.current.isBlank(),
+            ) {
                 controller.choose("")
                 onDismiss()
             }

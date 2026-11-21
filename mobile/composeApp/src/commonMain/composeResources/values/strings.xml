@@ -141,4 +141,7 @@ Everywhere.</string>
         <item quantity="one">%1$d transaction saved. Your budget is now available on this device.</item>
         <item quantity="other">%1$d transactions saved. Your budget is now available on this device.</item>
     </plurals>
+    <string name="language_change">Change language</string>
+    <string name="language_close">Close</string>
+    <string name="language_device_detail">Follows the language set on this device</string>
 </resources>
