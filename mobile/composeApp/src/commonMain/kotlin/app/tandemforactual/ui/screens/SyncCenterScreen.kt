@@ -184,6 +184,17 @@ internal fun SyncCenterScreen(
                 )
             }
         }
+        planningSyncDetail(mobileSession.planningSyncStatus)?.let { (title, detail) ->
+            item(key = "sync-center-planning") {
+                SyncNoticeCard(
+                    if (mobileSession.planningSyncStatus == PlanningSyncStatus.SYNCED) Lucide.CloudCheck else Lucide.CloudAlert,
+                    if (mobileSession.planningSyncStatus == PlanningSyncStatus.SYNCED) tandemPalette.positive else tandemPalette.warning,
+                    title,
+                    detail,
+                    onClick = null,
+                )
+            }
+        }
         item(key = "sync-center-overview") {
             SyncOverviewCard(
                 budgetName = budgetDisplayNameForHeader(state.selectedBudget),

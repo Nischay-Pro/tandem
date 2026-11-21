@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Dao
 import androidx.room3.Entity
 import androidx.room3.Query
@@ -22,6 +23,7 @@ data class PlanningRecordEntity(
     val iv: ByteArray,
     val ciphertext: ByteArray,
     val pendingUpload: Boolean,
+    @ColumnInfo(defaultValue = "0") val syncedRevision: Long = 0,
 ) {
     override fun equals(other: Any?): Boolean =
         other is PlanningRecordEntity &&
@@ -50,6 +52,9 @@ interface PlanningRecordDao {
 
     @Query("SELECT * FROM planning_records WHERE budgetId = :budgetId AND pendingUpload = 1 ORDER BY updatedAtEpochMs")
     suspend fun pending(budgetId: String): List<PlanningRecordEntity>
+
+    @Query("SELECT * FROM planning_records WHERE budgetId = :budgetId")
+    suspend fun all(budgetId: String): List<PlanningRecordEntity>
 
     @Upsert
     suspend fun upsert(record: PlanningRecordEntity)

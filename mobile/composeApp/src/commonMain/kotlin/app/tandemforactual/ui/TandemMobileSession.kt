@@ -23,7 +23,10 @@ import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.PlanningCipher
+import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningStore
+import app.tandemforactual.data.planning.PlanningSync
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -271,6 +274,53 @@ internal class TandemMobileSession(
 
     private fun planningStore(budgetId: String): PlanningStore? =
         storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, planningKeyring.cipherFor(budgetId), nowEpochMillis) }
+
+    var planningSyncStatus by mutableStateOf(PlanningSyncStatus.OFF)
+        private set
+
+    /**
+     * Shares planning records through extension sync when the server runs it. It never blocks budget sync: any failure
+     * leaves the records on this device to try again next time.
+     */
+    suspend fun syncPlanning(budgetId: String) {
+        val dao = storage?.database?.planningRecordDao() ?: return
+        val transport = apiClient.planningTransport(budgetId)
+        if (transport == null) {
+            planningSyncStatus = PlanningSyncStatus.OFF
+            return
+        }
+        planningSyncStatus =
+            try {
+                withContext(Dispatchers.Default) {
+                    val keyring = planningKeyring
+                    val sync = PlanningSync(dao, budgetId, transport)
+                    val local = keyring.key(budgetId)
+                    val shared = sync.agreeOnKey(local, apiClient.budgetSecret(budgetId) ?: keyring.recoveryKey(budgetId))
+                    if (!shared.contentEquals(local)) {
+                        sync.rekey(PlanningCipher(local), PlanningCipher(shared))
+                        keyring.replaceKey(budgetId, shared)
+                    }
+                    val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId))
+                    keyring.setCursor(budgetId, result.cursor)
+                }
+                PlanningSyncStatus.SYNCED
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: PlanningKeyMismatchException) {
+                PlanningSyncStatus.NEEDS_RECOVERY_KEY
+            } catch (_: Exception) {
+                PlanningSyncStatus.WAITING
+            }
+    }
+
+    /** Uses the recovery key from another device, then tries planning sync again. */
+    suspend fun useRecoveryKey(
+        budgetId: String,
+        key: ByteArray,
+    ) {
+        planningKeyring.setRecoveryKey(budgetId, key)
+        syncPlanning(budgetId)
+    }
 
     suspend fun saveSavingsGoal(
         budgetId: String,
@@ -3375,6 +3425,7 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
                 if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
             }
+            syncPlanning(budgetId)
             return summary
         } catch (error: CancellationException) {
             throw error

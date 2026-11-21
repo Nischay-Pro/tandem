@@ -9,6 +9,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/** Where Tandem-only planning records stand with extension sync. */
+enum class PlanningSyncStatus { OFF, SYNCED, WAITING, NEEDS_RECOVERY_KEY }
+
 internal enum class FinancialGoal { ORGANIZE, SPENDING, DEBT, SAVINGS, ANALYSIS }
 
 internal enum class InterfaceMode { MINIMAL, ADVANCED }

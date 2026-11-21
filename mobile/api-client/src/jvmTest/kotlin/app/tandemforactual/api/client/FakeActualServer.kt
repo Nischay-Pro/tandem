@@ -30,6 +30,7 @@ internal class FakeActualServer {
     var password = "test"
     var syncFailure: String? = null
     var syncCalls = 0
+    var extension = false
     val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
     private val sealedArchive = budgetKey.encrypt(archive)
     private val lockedMessages = linkedMapOf<String, MessageEnvelope>()
@@ -51,6 +52,14 @@ internal class FakeActualServer {
         HttpClient(
             MockEngine { request ->
                 when (request.url.encodedPath) {
+                    "/extension/v1/capabilities" ->
+                        if (extension) {
+                            respond(
+                                """{"apiVersion":1,"features":["planning-records"]}""",
+                            )
+                        } else {
+                            respond("", HttpStatusCode.NotFound)
+                        }
                     "/account/needs-bootstrap" -> respond("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""")
                     "/account/login-methods" ->
                         respond(

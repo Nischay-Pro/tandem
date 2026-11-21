@@ -63,6 +63,7 @@ internal fun HomeScreen(
     month: LiveBudgetMonthSummary?,
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
+    onSyncNow: () -> Unit = {},
 ) {
     val data =
         remember(accounts, month, schedules, transactions, mobileSession.savingsGoals) {
@@ -74,7 +75,10 @@ internal fun HomeScreen(
     val money: @Composable (Long) -> Unit = { amount ->
         PrivacyAmountText(formatCurrency(amount, settings), state.privacyModeEnabled, color = tandemPalette.muted)
     }
-    PageLazyColumn {
+    PageLazyColumn(
+        isRefreshing = mobileSession.isSyncing,
+        onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
+    ) {
         item(key = "home-header") {
             Row(
                 Modifier.fillMaxWidth(),

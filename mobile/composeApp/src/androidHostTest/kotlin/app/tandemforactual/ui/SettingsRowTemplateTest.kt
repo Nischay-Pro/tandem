@@ -53,7 +53,16 @@ class SettingsRowTemplateTest {
             )
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SettingsScreen(AppState(), navigation)
+                SettingsScreen(
+                    AppState(),
+                    navigation,
+                    TandemMobileSession(
+                        app.tandemforactual.api.client
+                            .TandemApiClient(),
+                        null,
+                        { 0L },
+                    ),
+                )
             }
         }
 

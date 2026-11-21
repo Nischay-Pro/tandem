@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,7 @@ import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Languages
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
@@ -92,6 +94,7 @@ import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 private data class AppearancePalettePreset(
@@ -111,6 +114,7 @@ private val appearancePalettePresets =
 internal fun SettingsScreen(
     state: AppState,
     navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
 ) {
     PageColumn {
         AnimatedReveal(visible = state.settingsStorageError != null) {
@@ -206,6 +210,28 @@ internal fun SettingsScreen(
             )
         }
         SectionCard(stringResource(Res.string.settings_section_privacy)) {
+            if (!state.selectedBudgetEncrypted && mobileSession.planningSyncStatus != PlanningSyncStatus.OFF) {
+                var showingRecoveryKey by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+                ListRow(
+                    "Planning recovery key",
+                    "Add another device to your synced planning details",
+                    leading = RowLeading.Icon(Lucide.KeyRound),
+                    onClick = { showingRecoveryKey = true },
+                )
+                RecoveryKeySheet(
+                    showingRecoveryKey,
+                    remember(state.selectedBudgetId, showingRecoveryKey) {
+                        formatRecoveryKey(mobileSession.planningKeyring.recoveryKey(state.selectedBudgetId))
+                    },
+                    onUseKey = { key ->
+                        scope.launch { mobileSession.useRecoveryKey(state.selectedBudgetId, key) }
+                        showingRecoveryKey = false
+                    },
+                    onDismiss = { showingRecoveryKey = false },
+                )
+                DividerLine()
+            }
             ListRow(
                 stringResource(Res.string.settings_security),
                 stringResource(Res.string.settings_security_detail),

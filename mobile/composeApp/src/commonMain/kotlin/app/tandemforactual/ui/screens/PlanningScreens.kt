@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningMath
@@ -367,3 +368,57 @@ internal class PlanningEditors {
         goalVisible = true
     }
 }
+
+/** Shows this device's planning recovery key, or takes the one from a device that already shares planning records. */
+@Composable
+internal fun RecoveryKeySheet(
+    visible: Boolean,
+    recoveryKey: String,
+    onUseKey: (ByteArray) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = tandemPalette
+    var entered by remember(visible) { mutableStateOf("") }
+    var error by remember(visible) { mutableStateOf<String?>(null) }
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                TandemModalHeader("Planning recovery key", onClose = onDismiss)
+                Text(
+                    "Planning details like savings goals are encrypted before they sync. To add a device, enter this key there. Keep it somewhere safe.",
+                    color = palette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
+                Text(recoveryKey, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
+                TextFieldCard(
+                    "Key from another device",
+                    entered,
+                    { entered = it.take(80) },
+                    TextFieldOptions(placeholder = "8 groups of 8 characters"),
+                )
+                error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+                TandemActionButton(
+                    "Use this key",
+                    TandemActionButtonTone.PRIMARY,
+                    Modifier.fillMaxWidth(),
+                    enabled = entered.isNotBlank(),
+                ) {
+                    val key = parseRecoveryKey(entered)
+                    if (key == null) error = "Enter all 64 characters of the key." else onUseKey(key)
+                }
+            }
+        }
+    }
+}
+
+internal fun planningSyncDetail(status: PlanningSyncStatus): Pair<String, String>? =
+    when (status) {
+        PlanningSyncStatus.OFF -> null
+        PlanningSyncStatus.SYNCED -> "Planning details synced" to "Savings goals and debt details match your other devices."
+        PlanningSyncStatus.WAITING ->
+            "Planning details saved on this device" to
+                "They’ll sync when Tandem’s extension service is reachable. Your budget syncs as usual."
+        PlanningSyncStatus.NEEDS_RECOVERY_KEY ->
+            "Enter your planning recovery key" to
+                "Another device already shares planning details for this budget. Enter its recovery key in Settings."
+    }

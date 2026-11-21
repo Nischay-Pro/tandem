@@ -32,6 +32,7 @@ class ActualDirectBudget private constructor(
     key: ActualBudgetKey?,
 ) {
     private val mutex = Mutex()
+    internal val keySecret: ByteArray? = key?.secret
 
     init {
         if (downloaded) {

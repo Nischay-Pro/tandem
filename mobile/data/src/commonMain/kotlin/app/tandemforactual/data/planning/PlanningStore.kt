@@ -47,7 +47,8 @@ class PlanningStore(
         body: JsonObject,
         deleted: Boolean,
     ) {
-        val revision = (dao.find(budgetId, recordId)?.revision ?: 0) + 1
+        val existing = dao.find(budgetId, recordId)
+        val revision = (existing?.revision ?: 0) + 1
         val (iv, sealed) =
             cipher.seal(
                 body.toString().encodeToByteArray(),

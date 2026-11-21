@@ -32,6 +32,9 @@ class ActualBudgetKey private constructor(
 
     val base64: String get() = Base64.encode(raw)
 
+    /** The key material, for deriving keys bound to this budget; callers never store it. */
+    val secret: ByteArray get() = raw.copyOf()
+
     override fun encrypt(plaintext: ByteArray): EncryptedData {
         val iv = CryptographyRandom.nextBytes(IV_BYTES)
         val sealed = cipher.encryptWithIvBlocking(iv, plaintext)

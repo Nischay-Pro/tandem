@@ -127,6 +127,7 @@ class TandemApiClient(
     private var serverUrl: String? = null
     private var device: AuthenticatedDevice? = null
     private val budgetPasswords = mutableMapOf<String, String>()
+    private var extensionAvailable: Boolean? = null
     private val openBudgets = mutableMapOf<String, ActualDirectBudget>()
 
     val isAuthenticated: Boolean get() = server?.token != null
@@ -246,6 +247,7 @@ class TandemApiClient(
             serverUrl = null
             device = null
             budgetPasswords.clear()
+            extensionAvailable = null
         }
     }
 
@@ -313,6 +315,16 @@ class TandemApiClient(
             budgetFiles?.remove(budgetId)
         }
     }
+
+    /** Planning sync for a budget when this server runs Tandem's extension service, otherwise null. */
+    suspend fun planningTransport(budgetId: String): ExtensionSyncClient? {
+        val url = serverUrl ?: return null
+        if (extensionAvailable == null) extensionAvailable = ExtensionSyncClient.available(http, url)
+        return if (extensionAvailable == true) ExtensionSyncClient(http, url, budgetId) { server?.token } else null
+    }
+
+    /** The Actual key of an open encrypted budget, used to wrap its planning key. */
+    fun budgetSecret(budgetId: String): ByteArray? = openBudgets[budgetId]?.keySecret
 
     /** Sets the device's copy aside as a dated backup, for when Actual reset the budget's sync history. */
     suspend fun retireBudget(budgetId: String) {

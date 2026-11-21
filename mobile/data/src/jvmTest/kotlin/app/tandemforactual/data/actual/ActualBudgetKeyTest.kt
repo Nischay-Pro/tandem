@@ -20,6 +20,12 @@ class ActualBudgetKeyTest {
     fun matchesNodeCrypto() {
         assertEquals("BYzuaAtJ+gCvEI2r8MSP5oDKG0MCicdzp3u7noaAnoo=", key.base64)
         assertEquals("key-1", key.keyId)
+        assertEquals(
+            "BYzuaAtJ+gCvEI2r8MSP5oDKG0MCicdzp3u7noaAnoo=",
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(key.secret),
+        )
         val sealed = EncryptedData(b64("AAECAwQFBgcICQoL"), b64("enrpLX31X8XrJ/bPJQxKkA=="), b64("kqk5F9rPn/XdOTg4p9mtIq2eDg=="))
         assertEquals("tandem test message", key.decrypt(sealed).decodeToString())
         val meta =
