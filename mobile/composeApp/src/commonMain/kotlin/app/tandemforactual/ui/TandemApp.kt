@@ -126,6 +126,7 @@ fun TandemApp(
     currentNetwork: StateFlow<NetworkKind?> = MutableStateFlow(null),
     crashReports: CrashReports? = null,
     onShareText: ((String) -> Unit)? = null,
+    windowHinge: StateFlow<WindowHinge?> = MutableStateFlow(null),
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -1538,6 +1539,7 @@ fun TandemApp(
                     }
                 }
             }
+            val currentWindowHinge by windowHinge.collectAsState()
             val routeContent: @Composable () -> Unit = {
                 CompositionLocalProvider(
                     LocalRouteScrollState provides routeScrollState,
@@ -1546,6 +1548,7 @@ fun TandemApp(
                     LocalEncryptedBudgetVault provides encryptedBudgetVault,
                     LocalCrashReports provides crashReports,
                     LocalShareText provides onShareText,
+                    LocalWindowHinge provides currentWindowHinge,
                 ) {
                     Column(modifier = pageModifier.fillMaxSize()) {
                         if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
