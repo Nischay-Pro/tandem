@@ -150,6 +150,7 @@ internal class AppState {
     var systemReduceMotionEnabled by mutableStateOf(false)
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
     var syncOnOpen by mutableStateOf(true)
+    var appLanguage by mutableStateOf("")
     var backgroundSyncEnabled by mutableStateOf(false)
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
@@ -257,6 +258,7 @@ internal class AppState {
             "statementCsvMappingsJson" to statementCsvMappingsJson,
             "reduceMotionMode" to (reduceMotionOverride?.let { if (it) "on" else "off" } ?: "system"),
             "syncOnOpen" to syncOnOpen.toString(),
+            "appLanguage" to appLanguage,
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
             "syncNetwork" to syncNetwork.name,
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
@@ -312,6 +314,7 @@ internal class AppState {
                 else -> saved["reduceMotion"]?.toBooleanStrictOrNull() ?: reduceMotionOverride
             }
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
+        appLanguage = saved["appLanguage"] ?: appLanguage
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
@@ -397,6 +400,7 @@ internal class AppState {
                         "hasCompletedNotificationOnboarding" to state.hasCompletedNotificationOnboarding,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
+                        "appLanguage" to state.appLanguage,
                         "backgroundSyncEnabled" to state.backgroundSyncEnabled,
                         "syncNetwork" to state.syncNetwork.name,
                         "hasCompletedSyncOnboarding" to state.hasCompletedSyncOnboarding,
@@ -482,6 +486,7 @@ internal class AppState {
                         reduceMotionOverride =
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)
                         syncOnOpen = saved["syncOnOpen"] as? Boolean ?: syncOnOpen
+                        appLanguage = saved["appLanguage"] as? String ?: appLanguage
                         backgroundSyncEnabled = saved["backgroundSyncEnabled"] as? Boolean ?: backgroundSyncEnabled
                         syncNetwork = SyncNetwork.restore(saved["syncNetwork"] as? String, saved["syncOnWifi"] as? Boolean) ?: syncNetwork
                         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"] as? Boolean ?: hasCompletedSyncOnboarding

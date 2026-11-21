@@ -1353,6 +1353,10 @@ fun TandemApp(
         reduceMotion,
         animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
     ) {
+        AppLocaleEnvironment(appLanguageTag(state.appLanguage)) {
+            CompositionLocalProvider(
+                LocalAppLanguage provides AppLanguageController(state.appLanguage) { state.appLanguage = it },
+            ) {
         val palette = tandemPalette
         val windowSize = LocalWindowInfo.current.containerSize
         val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
@@ -1941,6 +1945,8 @@ fun TandemApp(
                 }
             },
         )
+            }
+        }
     }
 }
 
