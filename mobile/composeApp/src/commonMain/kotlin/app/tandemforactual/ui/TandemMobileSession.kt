@@ -273,7 +273,7 @@ internal class TandemMobileSession(
         private set
 
     private fun planningStore(budgetId: String): PlanningStore? =
-        storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, planningKeyring.cipherFor(budgetId), nowEpochMillis) }
+        storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, { planningKeyring.cipherFor(budgetId) }, nowEpochMillis) }
 
     var planningSyncStatus by mutableStateOf(PlanningSyncStatus.OFF)
         private set
@@ -297,8 +297,8 @@ internal class TandemMobileSession(
                     val local = keyring.key(budgetId)
                     val shared = sync.agreeOnKey(local, apiClient.budgetSecret(budgetId) ?: keyring.recoveryKey(budgetId))
                     if (!shared.contentEquals(local)) {
-                        sync.rekey(PlanningCipher(local), PlanningCipher(shared))
                         keyring.replaceKey(budgetId, shared)
+                        sync.rekey(PlanningCipher(local), PlanningCipher(shared))
                     }
                     val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId))
                     keyring.setCursor(budgetId, result.cursor)

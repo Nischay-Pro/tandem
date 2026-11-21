@@ -10,9 +10,14 @@ import kotlinx.serialization.json.jsonObject
 class PlanningStore(
     private val dao: PlanningRecordDao,
     private val budgetId: String,
-    private val cipher: PlanningCipher,
+    private val currentCipher: () -> PlanningCipher,
     private val now: () -> Long,
 ) {
+    constructor(dao: PlanningRecordDao, budgetId: String, cipher: PlanningCipher, now: () -> Long) : this(dao, budgetId, { cipher }, now)
+
+    /** Read on every use, so records stay readable after this device adopts a key shared by another device. */
+    private val cipher: PlanningCipher get() = currentCipher()
+
     private fun open(record: PlanningRecordEntity): JsonObject =
         Json
             .parseToJsonElement(
