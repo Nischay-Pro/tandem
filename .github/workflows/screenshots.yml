@@ -13,13 +13,14 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   ios:
     name: iPhone and iPad screenshots
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms != 'android' }}
     runs-on: macos-26
-    timeout-minutes: 90
+    timeout-minutes: 45
     env:
       ACTUAL_URL: http://localhost:5006
       TANDEM_URL: http://localhost:19753
@@ -30,12 +31,30 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up mobile build tools
-        uses: ./.github/actions/setup-mobile-build
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-          cache_kotlin_native: "true"
-          setup_node: "true"
+          node-version-file: .node-version
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.16.1
+          run_install: false
+          cache: true
+
+      - name: Install the API's dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the simulator app from the latest green main build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "$run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ios-simulator-app --dir "$RUNNER_TEMP"
+          (cd "$RUNNER_TEMP" && unzip -q TandemForActual-simulator.zip)
+          test -d "$RUNNER_TEMP/TandemForActual.app"
 
       - name: Start Postgres
         run: |
@@ -68,23 +87,9 @@ jobs:
             nohup node node_modules/tsx/dist/cli.mjs src/entrypoint.ts > "$RUNNER_TEMP/api.log" 2>&1 &
           for _ in $(seq 1 120); do curl -s -o /dev/null "$TANDEM_URL/api/v1/" && break; sleep 1; done
 
-      - name: Build the iOS app for the simulator
-        working-directory: mobile
-        run: |
-          xcodebuild \
-            -project iosApp/TandemForActual.xcodeproj \
-            -scheme TandemForActual \
-            -configuration Debug \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath "$RUNNER_TEMP/derived" \
-            ARCHS=arm64 \
-            ONLY_ACTIVE_ARCH=YES \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-
       - name: Capture screenshots
         run: |
-          app="$RUNNER_TEMP/derived/Build/Products/Debug-iphonesimulator/TandemForActual.app"
+          app="$RUNNER_TEMP/TandemForActual.app"
           out="$RUNNER_TEMP/screenshots"
           mkdir -p "$out"
           runtime="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="iOS" and x["isAvailable"]]; print(r[-1]["identifier"])')"
