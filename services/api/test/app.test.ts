@@ -35,6 +35,28 @@ async function app(
 const auth = { "x-actual-token": "token" };
 
 describe("extension sync", () => {
+  it("limits each session's request rate", async () => {
+    const server = await buildApp({
+      store: new InMemoryExtensionStore(),
+      access: allow(),
+      actualServerUrl: "https://actual.example",
+      requestsPerMinute: 2,
+    });
+    const get = (headers: Record<string, string> = {}) =>
+      server.inject({
+        method: "GET",
+        url: "/extension/v1/budgets/b1/changes",
+        headers,
+      });
+    expect((await get(auth)).statusCode).toBe(200);
+    expect((await get(auth)).statusCode).toBe(200);
+    const limited = await get(auth);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error.code).toBe("rate_limited");
+    expect((await get({ "x-actual-token": "other" })).statusCode).toBe(200);
+    expect((await get()).statusCode).toBe(401);
+  });
+
   it("reports health and capabilities", async () => {
     const server = await app();
     expect(

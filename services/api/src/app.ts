@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import type { BudgetAccess } from "./actual-access.js";
 import type { ExtensionStore, RecordWrite, WrappedKey } from "./store.js";
@@ -69,6 +70,8 @@ export interface AppOptions {
   access: BudgetAccess;
   /** Identifies the Actual server, so budgets on different self-hosted servers never share a scope. */
   actualServerUrl: string;
+  /** Requests each signed-in session may make per minute. */
+  requestsPerMinute?: number;
 }
 
 /**
@@ -91,6 +94,20 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
         },
       },
     },
+  });
+  await app.register(rateLimit, {
+    max: options.requestsPerMinute ?? 600,
+    timeWindow: 60_000,
+    keyGenerator: (request) => {
+      const token = request.headers["x-actual-token"];
+      return typeof token === "string" && token
+        ? `t:${token}`
+        : `ip:${request.ip}`;
+    },
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: context.statusCode,
+      ...error("rate_limited", "Too many requests. Try again in a minute."),
+    }),
   });
   const scope = (budgetId: string) => `${options.actualServerUrl}|${budgetId}`;
 
