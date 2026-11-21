@@ -19,6 +19,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -58,8 +59,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -1352,602 +1356,611 @@ fun TandemApp(
         state.accent,
         reduceMotion,
         animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
+        language = AppLanguageController(state.appLanguage) { state.appLanguage = it },
     ) {
-        AppLocaleEnvironment(appLanguageTag(state.appLanguage)) {
-            CompositionLocalProvider(
-                LocalAppLanguage provides AppLanguageController(state.appLanguage) { state.appLanguage = it },
-            ) {
-                val palette = tandemPalette
-                val windowSize = LocalWindowInfo.current.containerSize
-                val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
-                val useRail = usesRailNavigation(with(LocalDensity.current) { windowSize.width.toDp().value }, isLandscape)
-                val isDark =
-                    state.theme == ThemeMode.DARK ||
-                        state.theme == ThemeMode.PURE_BLACK ||
-                        (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
-                SideEffect {
-                    onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
+        val palette = tandemPalette
+        val windowSize = LocalWindowInfo.current.containerSize
+        val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
+        val useRail = usesRailNavigation(with(LocalDensity.current) { windowSize.width.toDp().value }, isLandscape)
+        val isDark =
+            state.theme == ThemeMode.DARK ||
+                state.theme == ThemeMode.PURE_BLACK ||
+                (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
+        SideEffect {
+            onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
+        }
+        TandemSystemBars(isDark, palette.background)
+        val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
+            backGestureDirection = direction
+            if (progress > 0f) {
+                backGestureCommitPending = progress >= 1f
+                backGestureCancelJob?.cancel()
+                backGestureCancelJob = null
+                backButtonTransitionRunning = false
+                backGestureProgress = progress
+                if (backGestureOutgoingEntry == null) {
+                    backGestureOutgoingEntry = backStack.lastOrNull()
                 }
-                TandemSystemBars(isDark, palette.background)
-                val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
-                    backGestureDirection = direction
-                    if (progress > 0f) {
-                        backGestureCommitPending = progress >= 1f
-                        backGestureCancelJob?.cancel()
-                        backGestureCancelJob = null
-                        backButtonTransitionRunning = false
-                        backGestureProgress = progress
-                        if (backGestureOutgoingEntry == null) {
-                            backGestureOutgoingEntry = backStack.lastOrNull()
+                if (backPreviewRoute == null) {
+                    backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
+                }
+            } else if (backGestureProgress > 0f) {
+                backGestureCommitPending = false
+                backButtonTransitionRunning = false
+                backGestureCancelJob?.cancel()
+                backGestureCancelJob =
+                    coroutineScope.launch {
+                        val returnAnimation = Animatable(backGestureProgress)
+                        returnAnimation.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.BACK_CANCEL_MILLIS),
+                        ) {
+                            backGestureProgress = value
                         }
-                        if (backPreviewRoute == null) {
-                            backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
-                        }
-                    } else if (backGestureProgress > 0f) {
-                        backGestureCommitPending = false
-                        backButtonTransitionRunning = false
-                        backGestureCancelJob?.cancel()
-                        backGestureCancelJob =
-                            coroutineScope.launch {
-                                val returnAnimation = Animatable(backGestureProgress)
-                                returnAnimation.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.BACK_CANCEL_MILLIS),
-                                ) {
-                                    backGestureProgress = value
-                                }
-                                backGestureOutgoingEntry = null
-                                backPreviewRoute = null
-                                backGestureCancelJob = null
-                            }
-                    } else {
-                        backGestureCommitPending = false
-                        backGestureProgress = 0f
                         backGestureOutgoingEntry = null
                         backPreviewRoute = null
+                        backGestureCancelJob = null
                     }
-                }
-                TandemBackHandler(
-                    enabled = backStack.size > 1 && !transactionSheetActive,
-                    onBack = handleCurrentRouteBack,
-                    onBackProgress = updateBackGesture,
-                )
-                var headerClockMs by remember { mutableStateOf(nowEpochMillis()) }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        delay(30_000)
-                        headerClockMs = nowEpochMillis()
-                    }
-                }
-                LaunchedEffect(mobileSession.localSyncState?.lastSyncedAtEpochMs) { headerClockMs = nowEpochMillis() }
-                val mainCloudStatus =
-                    resolveMainCloudStatus(
-                        syncEnabled =
-                            state.selectedBudgetId.isNotBlank() &&
-                                (mobileSession.isAuthenticated || mobileSession.isRestoringStoredSession),
-                        isSyncing = mobileSession.isSyncing,
-                        hasSyncError = mobileSession.syncError != null,
-                        persistedSyncStatus = mobileSession.localSyncState?.status,
-                        pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
-                        hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
-                        hasPendingBudgetChanges = mobileSession.pendingBudgetMutationCount(state.selectedBudgetId) > 0,
-                        budgetChangesWaitingForConnection = mobileSession.budgetMutationsWaitingForConnection(state.selectedBudgetId),
-                    )
-                val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
-                    if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
-                        val conflictOperation =
-                            if (headerRoute == AppRoute.CONFLICT_REVIEW) {
-                                mobileSession.pendingWrites
-                                    .firstOrNull { it.operationId == state.selectedConflictOperationId && it.status == "conflict" }
-                            } else {
-                                null
-                            }
-                        val conflictTitle = conflictPayeeTitle(conflictOperation, liveTransactions, mobileSession)
-                        AppHeader(
-                            route = headerRoute,
-                            state = state,
-                            showBack = !headerRoute.isTab(),
-                            onBack = handleCurrentRouteBack,
-                            onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-                            syncStatus = mainCloudStatus,
-                            pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
-                            onBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
-                            onOpenRoute = navigation.open,
-                            actualConnected = mobileSession.isServerReachable,
-                            liveAccounts = liveAccounts,
-                            liveBudgetMonth = liveBudgetMonth,
-                            activitySelectionTotalMinor = activitySelectionTotalMinor,
-                            conflictTitle = conflictTitle,
-                            compactLandscape = isLandscape,
-                            onAddTransaction =
-                                if (isLandscape &&
-                                    !transactionSheetActive &&
-                                    headerRoute == AppRoute.BUDGET &&
-                                    shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
-                                ) {
-                                    { navigation.newTransaction(null) }
-                                } else {
-                                    null
-                                },
-                            addTransactionEnabled = !state.readOnlyMode,
-                            syncCaption =
-                                headerSyncCaption(
-                                    mainCloudStatus,
-                                    mobileSession.pendingWrites.map { it.status },
-                                    mobileSession.localSyncState?.lastSyncedAtEpochMs,
-                                    headerClockMs,
-                                ),
-                            onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
-                            refreshingBudgets = mobileSession.isLoadingBudgets,
-                        )
-                    }
-                }
-                val renderRoute: @Composable (
-                    AppRouteEntry,
-                    Modifier,
-                    Boolean,
-                    Boolean,
-                ) -> Unit = renderRoute@{ visibleEntry, pageModifier, saveRouteState, includeChrome ->
-                    val visibleRoute = visibleEntry.route
-                    if (needsEncryptedBudgetUnlock(state, visibleRoute)) {
-                        Box(pageModifier.fillMaxSize().background(palette.background))
-                        return@renderRoute
-                    }
-                    val contentStateKey = routeContentStateKey(visibleEntry, state.selectedBudgetId)
-                    val routeScrollState =
-                        remember(contentStateKey) {
-                            routeScrollStates.getOrPut(contentStateKey) {
-                                ScrollState(state.scrollPositions[contentStateKey] ?: 0)
-                            }
-                        }
-                    val routeLazyListState =
-                        remember(contentStateKey) {
-                            routeLazyListStates.getOrPut(contentStateKey) {
-                                val (index, offset) = state.lazyScrollPositions[contentStateKey] ?: (0 to 0)
-                                LazyListState(index, offset)
-                            }
-                        }
-                    LaunchedEffect(contentStateKey, routeScrollState) {
-                        snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[contentStateKey] = it }
-                    }
-                    LaunchedEffect(contentStateKey, routeLazyListState) {
-                        snapshotFlow {
-                            routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
-                        }.collect { state.lazyScrollPositions[contentStateKey] = it }
-                    }
-                    if (saveRouteState) {
-                        DisposableEffect(contentStateKey, routeScrollState, routeLazyListState) {
-                            onDispose {
-                                state.scrollPositions[contentStateKey] = routeScrollState.value
-                                state.lazyScrollPositions[contentStateKey] =
-                                    routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
-                                val tabStackContainsRoute =
-                                    decodeAppTabBackStacks(savedTabBackStacks)
-                                        .values
-                                        .flatten()
-                                        .any { it.stateKey == visibleEntry.stateKey }
-                                if (!visibleRoute.isTab() &&
-                                    backStack.none { it.stateKey == visibleEntry.stateKey } &&
-                                    !tabStackContainsRoute
-                                ) {
-                                    state.scrollPositions.remove(contentStateKey)
-                                    state.lazyScrollPositions.remove(contentStateKey)
-                                    routeLazyListStates.remove(contentStateKey)
-                                }
-                                routeScrollStates.remove(contentStateKey)
-                            }
-                        }
-                    }
-                    val routeContent: @Composable () -> Unit = {
-                        CompositionLocalProvider(
-                            LocalRouteScrollState provides routeScrollState,
-                            LocalRouteLazyListState provides routeLazyListState,
-                            LocalDeviceAuthenticator provides deviceAuthenticator,
-                            LocalEncryptedBudgetVault provides encryptedBudgetVault,
-                            LocalCrashReports provides crashReports,
-                            LocalShareText provides onShareText,
-                        ) {
-                            Column(modifier = pageModifier.fillMaxSize()) {
-                                if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
-                                Box(Modifier.weight(1f).fillMaxWidth()) {
-                                    ScreenContent(
-                                        route = visibleRoute,
-                                        isForegroundRoute = visibleEntry == routeEntry,
-                                        state = state,
-                                        deviceName = deviceName,
-                                        navigation = navigation,
-                                        mobileSession = mobileSession,
-                                        reportsDataCache = reportsDataCache,
-                                        onSignIn = signIn,
-                                        onStartOpenIdSignIn = startOpenIdSignIn,
-                                        onRefreshBudgets = refreshBudgets,
-                                        onPrepareBudgetUnlock = prepareBudgetUnlock,
-                                        onOpenSelectedBudget = openSelectedBudget,
-                                        onRetrySync = { syncRetryCounter += 1 },
-                                        backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
-                                        merchantIconMatcher = merchantIconMatcher,
-                                        merchantIconMatcherLoadError = merchantIconMatcherLoadError,
-                                        merchantIconCatalog = merchantIconCatalog,
-                                        merchantIconCatalogLoadError = merchantIconCatalogLoadError,
-                                        liveTransactions = liveTransactions,
-                                        liveActivityTransactions = liveActivityTransactions,
-                                        onActivitySelectionTotalChanged = { activitySelectionTotalMinor = it },
-                                        activitySortCache = activitySortCache,
-                                        liveAccounts = liveAccounts,
-                                        liveSchedules = liveSchedules,
-                                        liveBudgetMonth = liveBudgetMonth,
-                                        onSyncNow = syncNow,
-                                        onBudgetGroupReorderModeChange = { budgetGroupReorderActive = it },
-                                        onSaveTransaction = saveTransaction,
-                                        onDeleteTransaction = deleteTransaction,
-                                        onCreateTransaction = createTransaction,
-                                        onResolveConflict = resolveConflict,
-                                        onDiscardWrite = discardWrite,
-                                        onRetryUncertainWrite = retryUncertainWrite,
-                                        onCheckUncertainWriteStatus = checkUncertainWriteStatus,
-                                        onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
-                                        onForgetDeviceLocally = { coroutineScope.launch { mobileSession.forgetDeviceLocally() } },
-                                        onRequestNotificationPermission = onRequestNotificationPermission,
-                                        onOpenNotificationSettings = onOpenNotificationSettings,
-                                        notificationPermissionEnabled = notificationPermissionEnabled,
-                                        onToggleNotificationPermission = onToggleNotificationPermission,
-                                    )
-                                    val pendingSyncOperation =
-                                        mobileSession.pendingWrites.firstOrNull {
-                                            it.operationId == state.selectedConflictOperationId &&
-                                                (it.status == "queued" || (it.status == "sending" && mobileSession.isSyncing))
-                                        }
-                                    val showSyncAction =
-                                        visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null
-                                    if (showSyncAction) {
-                                        val syncActionCompact by
-                                            remember(routeScrollState) {
-                                                derivedStateOf { routeScrollState.value > 72 }
-                                            }
-                                        val syncActionEnabled =
-                                            !mobileSession.isSyncing && mobileSession.isAuthenticated
-                                        FloatingSyncAction(
-                                            compact = syncActionCompact,
-                                            syncing = mobileSession.isSyncing,
-                                            enabled = syncActionEnabled,
-                                            onClick = syncNow,
-                                            modifier =
-                                                Modifier
-                                                    .align(Alignment.BottomEnd)
-                                                    .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
-                                        )
-                                    }
-                                }
-                                if (includeChrome && visibleRoute.isTab() && !useRail) {
-                                    BottomNavigation(visibleRoute, navigation.selectTab)
-                                }
-                            }
-                        }
-                    }
-                    if (saveRouteState) {
-                        saveableStateHolder.SaveableStateProvider(contentStateKey) { routeContent() }
+            } else {
+                backGestureCommitPending = false
+                backGestureProgress = 0f
+                backGestureOutgoingEntry = null
+                backPreviewRoute = null
+            }
+        }
+        TandemBackHandler(
+            enabled = backStack.size > 1 && !transactionSheetActive,
+            onBack = handleCurrentRouteBack,
+            onBackProgress = updateBackGesture,
+        )
+        var headerClockMs by remember { mutableStateOf(nowEpochMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(30_000)
+                headerClockMs = nowEpochMillis()
+            }
+        }
+        LaunchedEffect(mobileSession.localSyncState?.lastSyncedAtEpochMs) { headerClockMs = nowEpochMillis() }
+        val mainCloudStatus =
+            resolveMainCloudStatus(
+                syncEnabled =
+                    state.selectedBudgetId.isNotBlank() &&
+                        (mobileSession.isAuthenticated || mobileSession.isRestoringStoredSession),
+                isSyncing = mobileSession.isSyncing,
+                hasSyncError = mobileSession.syncError != null,
+                persistedSyncStatus = mobileSession.localSyncState?.status,
+                pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
+                hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
+                hasPendingBudgetChanges = mobileSession.pendingBudgetMutationCount(state.selectedBudgetId) > 0,
+                budgetChangesWaitingForConnection = mobileSession.budgetMutationsWaitingForConnection(state.selectedBudgetId),
+            )
+        val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
+            if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
+                val conflictOperation =
+                    if (headerRoute == AppRoute.CONFLICT_REVIEW) {
+                        mobileSession.pendingWrites
+                            .firstOrNull { it.operationId == state.selectedConflictOperationId && it.status == "conflict" }
                     } else {
-                        routeContent()
+                        null
+                    }
+                val conflictTitle = conflictPayeeTitle(conflictOperation, liveTransactions, mobileSession)
+                AppHeader(
+                    route = headerRoute,
+                    state = state,
+                    showBack = !headerRoute.isTab(),
+                    onBack = handleCurrentRouteBack,
+                    onSync = { navigation.open(AppRoute.SYNC_CENTER) },
+                    syncStatus = mainCloudStatus,
+                    pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
+                    onBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
+                    onOpenRoute = navigation.open,
+                    actualConnected = mobileSession.isServerReachable,
+                    liveAccounts = liveAccounts,
+                    liveBudgetMonth = liveBudgetMonth,
+                    activitySelectionTotalMinor = activitySelectionTotalMinor,
+                    conflictTitle = conflictTitle,
+                    compactLandscape = isLandscape,
+                    onAddTransaction =
+                        if (isLandscape &&
+                            !transactionSheetActive &&
+                            headerRoute == AppRoute.BUDGET &&
+                            shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), budgetGroupReorderActive)
+                        ) {
+                            { navigation.newTransaction(null) }
+                        } else {
+                            null
+                        },
+                    addTransactionEnabled = !state.readOnlyMode,
+                    syncCaption =
+                        headerSyncCaption(
+                            mainCloudStatus,
+                            mobileSession.pendingWrites.map { it.status },
+                            mobileSession.localSyncState?.lastSyncedAtEpochMs,
+                            headerClockMs,
+                        ),
+                    onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
+                    refreshingBudgets = mobileSession.isLoadingBudgets,
+                )
+            }
+        }
+        val renderRoute: @Composable (
+            AppRouteEntry,
+            Modifier,
+            Boolean,
+            Boolean,
+        ) -> Unit = renderRoute@{ visibleEntry, pageModifier, saveRouteState, includeChrome ->
+            val visibleRoute = visibleEntry.route
+            if (needsEncryptedBudgetUnlock(state, visibleRoute)) {
+                Box(pageModifier.fillMaxSize().background(palette.background))
+                return@renderRoute
+            }
+            val contentStateKey = routeContentStateKey(visibleEntry, state.selectedBudgetId)
+            val routeScrollState =
+                remember(contentStateKey) {
+                    routeScrollStates.getOrPut(contentStateKey) {
+                        ScrollState(state.scrollPositions[contentStateKey] ?: 0)
                     }
                 }
-                val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-                val backTargetTab = backPreviewRoute?.route?.takeIf { it.isTab() }
-                val tabShellRoute =
-                    route.takeIf { it.isTab() }
-                        ?: backTargetTab
-                        ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
-                val stationaryTabShell = tabShellRoute != null
-                val shellHeaderRoute =
-                    when {
-                        backTargetTab != null -> backTargetTab
-                        transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
-                        else -> route
+            val routeLazyListState =
+                remember(contentStateKey) {
+                    routeLazyListStates.getOrPut(contentStateKey) {
+                        val (index, offset) = state.lazyScrollPositions[contentStateKey] ?: (0 to 0)
+                        LazyListState(index, offset)
                     }
-                val showRail =
-                    useRail &&
-                        tabShellRoute != null &&
-                        route.showsBottomNavigation() &&
-                        !imeVisible &&
-                        !transactionSheetActive
+                }
+            LaunchedEffect(contentStateKey, routeScrollState) {
+                snapshotFlow { routeScrollState.value }.collect { state.scrollPositions[contentStateKey] = it }
+            }
+            LaunchedEffect(contentStateKey, routeLazyListState) {
+                snapshotFlow {
+                    routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
+                }.collect { state.lazyScrollPositions[contentStateKey] = it }
+            }
+            if (saveRouteState) {
+                DisposableEffect(contentStateKey, routeScrollState, routeLazyListState) {
+                    onDispose {
+                        state.scrollPositions[contentStateKey] = routeScrollState.value
+                        state.lazyScrollPositions[contentStateKey] =
+                            routeLazyListState.firstVisibleItemIndex to routeLazyListState.firstVisibleItemScrollOffset
+                        val tabStackContainsRoute =
+                            decodeAppTabBackStacks(savedTabBackStacks)
+                                .values
+                                .flatten()
+                                .any { it.stateKey == visibleEntry.stateKey }
+                        if (!visibleRoute.isTab() &&
+                            backStack.none { it.stateKey == visibleEntry.stateKey } &&
+                            !tabStackContainsRoute
+                        ) {
+                            state.scrollPositions.remove(contentStateKey)
+                            state.lazyScrollPositions.remove(contentStateKey)
+                            routeLazyListStates.remove(contentStateKey)
+                        }
+                        routeScrollStates.remove(contentStateKey)
+                    }
+                }
+            }
+            val routeContent: @Composable () -> Unit = {
+                CompositionLocalProvider(
+                    LocalRouteScrollState provides routeScrollState,
+                    LocalRouteLazyListState provides routeLazyListState,
+                    LocalDeviceAuthenticator provides deviceAuthenticator,
+                    LocalEncryptedBudgetVault provides encryptedBudgetVault,
+                    LocalCrashReports provides crashReports,
+                    LocalShareText provides onShareText,
+                ) {
+                    Column(modifier = pageModifier.fillMaxSize()) {
+                        if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) renderHeader(visibleRoute)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            ScreenContent(
+                                route = visibleRoute,
+                                isForegroundRoute = visibleEntry == routeEntry,
+                                state = state,
+                                deviceName = deviceName,
+                                navigation = navigation,
+                                mobileSession = mobileSession,
+                                reportsDataCache = reportsDataCache,
+                                onSignIn = signIn,
+                                onStartOpenIdSignIn = startOpenIdSignIn,
+                                onRefreshBudgets = refreshBudgets,
+                                onPrepareBudgetUnlock = prepareBudgetUnlock,
+                                onOpenSelectedBudget = openSelectedBudget,
+                                onRetrySync = { syncRetryCounter += 1 },
+                                backgroundSyncSupported = onBackgroundSyncSettingsChanged != null,
+                                merchantIconMatcher = merchantIconMatcher,
+                                merchantIconMatcherLoadError = merchantIconMatcherLoadError,
+                                merchantIconCatalog = merchantIconCatalog,
+                                merchantIconCatalogLoadError = merchantIconCatalogLoadError,
+                                liveTransactions = liveTransactions,
+                                liveActivityTransactions = liveActivityTransactions,
+                                onActivitySelectionTotalChanged = { activitySelectionTotalMinor = it },
+                                activitySortCache = activitySortCache,
+                                liveAccounts = liveAccounts,
+                                liveSchedules = liveSchedules,
+                                liveBudgetMonth = liveBudgetMonth,
+                                onSyncNow = syncNow,
+                                onBudgetGroupReorderModeChange = { budgetGroupReorderActive = it },
+                                onSaveTransaction = saveTransaction,
+                                onDeleteTransaction = deleteTransaction,
+                                onCreateTransaction = createTransaction,
+                                onResolveConflict = resolveConflict,
+                                onDiscardWrite = discardWrite,
+                                onRetryUncertainWrite = retryUncertainWrite,
+                                onCheckUncertainWriteStatus = checkUncertainWriteStatus,
+                                onForgetDevice = { coroutineScope.launch { mobileSession.forgetDevice() } },
+                                onForgetDeviceLocally = { coroutineScope.launch { mobileSession.forgetDeviceLocally() } },
+                                onRequestNotificationPermission = onRequestNotificationPermission,
+                                onOpenNotificationSettings = onOpenNotificationSettings,
+                                notificationPermissionEnabled = notificationPermissionEnabled,
+                                onToggleNotificationPermission = onToggleNotificationPermission,
+                            )
+                            val pendingSyncOperation =
+                                mobileSession.pendingWrites.firstOrNull {
+                                    it.operationId == state.selectedConflictOperationId &&
+                                        (it.status == "queued" || (it.status == "sending" && mobileSession.isSyncing))
+                                }
+                            val showSyncAction =
+                                visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null
+                            if (showSyncAction) {
+                                val syncActionCompact by
+                                    remember(routeScrollState) {
+                                        derivedStateOf { routeScrollState.value > 72 }
+                                    }
+                                val syncActionEnabled =
+                                    !mobileSession.isSyncing && mobileSession.isAuthenticated
+                                FloatingSyncAction(
+                                    compact = syncActionCompact,
+                                    syncing = mobileSession.isSyncing,
+                                    enabled = syncActionEnabled,
+                                    onClick = syncNow,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
+                                )
+                            }
+                        }
+                        if (includeChrome && visibleRoute.isTab() && !useRail) {
+                            BottomNavigation(visibleRoute, navigation.selectTab)
+                        }
+                    }
+                }
+            }
+            if (saveRouteState) {
+                saveableStateHolder.SaveableStateProvider(contentStateKey) { routeContent() }
+            } else {
+                routeContent()
+            }
+        }
+        val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val backTargetTab = backPreviewRoute?.route?.takeIf { it.isTab() }
+        val tabShellRoute =
+            route.takeIf { it.isTab() }
+                ?: backTargetTab
+                ?: backStack.dropLast(1).lastOrNull { it.route.isTab() }?.route
+        val stationaryTabShell = tabShellRoute != null
+        val shellHeaderRoute =
+            when {
+                backTargetTab != null -> backTargetTab
+                transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
+                else -> route
+            }
+        val showRail =
+            useRail &&
+                tabShellRoute != null &&
+                route.showsBottomNavigation() &&
+                !imeVisible &&
+                !transactionSheetActive
+        val shortcutsEnabled = tabShellRoute != null && state.selectedBudgetId.isNotBlank()
+        val rootFocus = remember { FocusRequester() }
+        LaunchedEffect(shortcutsEnabled) { if (shortcutsEnabled) runCatching { rootFocus.requestFocus() } }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .onPreviewKeyEvent { event ->
+                        val shortcut = event.keyboardShortcut()?.takeIf { shortcutsEnabled } ?: return@onPreviewKeyEvent false
+                        when (shortcut) {
+                            KeyboardShortcut.NewTransaction -> QuickActionEvents.requestAddTransaction()
+                            KeyboardShortcut.Search -> navigation.open(AppRoute.ACTIVITY_SEARCH)
+                            KeyboardShortcut.Sync -> syncNow()
+                            KeyboardShortcut.Back -> navigation.back()
+                            is KeyboardShortcut.Tab -> navigation.selectTab(shortcut.route)
+                        }
+                        true
+                    }.focusRequester(rootFocus)
+                    .focusable()
+                    .background(appBackgroundBrush(state.backgroundStyle, palette))
+                    .safeDrawingPadding(),
+        ) {
+            if (showRail) {
+                SideNavigationRail(
+                    selected = requireNotNull(tabShellRoute),
+                    selectTab = navigation.selectTab,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
+            }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = if (showRail) 80.dp else 0.dp),
+            ) {
+                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
+                    AnimatedContent(
+                        targetState = shellHeaderRoute,
+                        transitionSpec = {
+                            fadeIn(
+                                tween(
+                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                    easing = TandemMotion.emphasizedEasing,
+                                ),
+                            ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
+                        },
+                        label = "tandem-header-transition",
+                    ) { headerRoute -> if (!needsEncryptedBudgetUnlock(state, headerRoute)) renderHeader(headerRoute) }
+                }
+                val transitionInputModifier =
+                    Modifier.pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down =
+                                awaitFirstDown(
+                                    requireUnconsumed = false,
+                                    pass = PointerEventPass.Initial,
+                                )
+                            state.pointerInputSequence += 1
+                            if (routeTransitionInputBlockedState.value) down.consume()
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (routeTransitionInputBlockedState.value) {
+                                    event.changes.forEach { it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
                 Box(
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .background(appBackgroundBrush(state.backgroundStyle, palette))
-                            .safeDrawingPadding(),
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .clipToBounds()
+                            .then(transitionInputModifier)
+                            .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
                 ) {
-                    if (showRail) {
-                        SideNavigationRail(
-                            selected = requireNotNull(tabShellRoute),
-                            selectTab = navigation.selectTab,
-                            modifier = Modifier.align(Alignment.CenterStart),
+                    val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
+                    if (!transactionSheetActive &&
+                        backGestureProgress > 0f &&
+                        backPreviewRoute != null &&
+                        backPreviewRoute != routeEntry
+                    ) {
+                        val direction = backGestureDirection
+                        renderRoute(
+                            backPreviewRoute!!,
+                            Modifier
+                                .fillMaxSize()
+                                .clearAndSetSemantics {}
+                                .graphicsLayer {
+                                    val progress = backGestureProgress
+                                    translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
+                                    alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
+                                }.background(routeBackground),
+                            false,
+                            !stationaryTabShell,
                         )
                     }
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(start = if (showRail) 80.dp else 0.dp),
-                    ) {
-                        if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
-                            AnimatedContent(
-                                targetState = shellHeaderRoute,
-                                transitionSpec = {
-                                    fadeIn(
-                                        tween(
-                                            TandemMotion.TAB_TRANSITION_MILLIS,
-                                            delayMillis = TandemMotion.TAB_EXIT_MILLIS,
-                                            easing = TandemMotion.emphasizedEasing,
-                                        ),
-                                    ) togetherWith fadeOut(tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing))
-                                },
-                                label = "tandem-header-transition",
-                            ) { headerRoute -> if (!needsEncryptedBudgetUnlock(state, headerRoute)) renderHeader(headerRoute) }
-                        }
-                        val transitionInputModifier =
-                            Modifier.pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down =
-                                        awaitFirstDown(
-                                            requireUnconsumed = false,
-                                            pass = PointerEventPass.Initial,
-                                        )
-                                    state.pointerInputSequence += 1
-                                    if (routeTransitionInputBlockedState.value) down.consume()
-                                    do {
-                                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                                        if (routeTransitionInputBlockedState.value) {
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                    } while (event.changes.any { it.pressed })
-                                }
+                    val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                    val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                    AnimatedContent(
+                        targetState = backgroundRouteEntry,
+                        modifier = Modifier.fillMaxSize().clipToBounds(),
+                        transitionSpec = {
+                            when {
+                                reduceMotion ||
+                                    skipNextRouteTransition ||
+                                    initialState.route == AppRoute.STARTUP ||
+                                    targetState.route == AppRoute.STARTUP ->
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                initialState.route.isTab() && targetState.route.isTab() ->
+                                    (
+                                        fadeIn(
+                                            tween(
+                                                TandemMotion.TAB_TRANSITION_MILLIS,
+                                                delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                easing = TandemMotion.emphasizedEasing,
+                                            ),
+                                        ) +
+                                            scaleIn(
+                                                tween(
+                                                    TandemMotion.TAB_TRANSITION_MILLIS,
+                                                    delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                    easing = TandemMotion.emphasizedEasing,
+                                                ),
+                                                initialScale = 0.97f,
+                                            )
+                                    ) togetherWith
+                                        fadeOut(
+                                            tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
+                                        ) using null
+                                routeTransitionDirection > 0f ->
+                                    slideInHorizontally(routeSlideSpec) { it } togetherWith
+                                        (
+                                            slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) using null
+                                routeTransitionDirection < 0f ->
+                                    (
+                                        (
+                                            slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                        ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
+                                    ).apply { targetContentZIndex = -1f }
+                                else -> EnterTransition.None togetherWith ExitTransition.None
                             }
-                        Box(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                                    .clipToBounds()
-                                    .then(transitionInputModifier)
-                                    .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
-                        ) {
-                            val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
-                            if (!transactionSheetActive &&
-                                backGestureProgress > 0f &&
-                                backPreviewRoute != null &&
-                                backPreviewRoute != routeEntry
-                            ) {
-                                val direction = backGestureDirection
-                                renderRoute(
-                                    backPreviewRoute!!,
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clearAndSetSemantics {}
-                                        .graphicsLayer {
-                                            val progress = backGestureProgress
-                                            translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
-                                            alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
-                                        }.background(routeBackground),
-                                    false,
-                                    !stationaryTabShell,
-                                )
-                            }
-                            val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
-                            val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
-                            AnimatedContent(
-                                targetState = backgroundRouteEntry,
-                                modifier = Modifier.fillMaxSize().clipToBounds(),
-                                transitionSpec = {
-                                    when {
-                                        reduceMotion ||
-                                            skipNextRouteTransition ||
-                                            initialState.route == AppRoute.STARTUP ||
-                                            targetState.route == AppRoute.STARTUP ->
-                                            EnterTransition.None togetherWith ExitTransition.None
-                                        initialState.route.isTab() && targetState.route.isTab() ->
-                                            (
-                                                fadeIn(
-                                                    tween(
-                                                        TandemMotion.TAB_TRANSITION_MILLIS,
-                                                        delayMillis = TandemMotion.TAB_EXIT_MILLIS,
-                                                        easing = TandemMotion.emphasizedEasing,
-                                                    ),
-                                                ) +
-                                                    scaleIn(
-                                                        tween(
-                                                            TandemMotion.TAB_TRANSITION_MILLIS,
-                                                            delayMillis = TandemMotion.TAB_EXIT_MILLIS,
-                                                            easing = TandemMotion.emphasizedEasing,
-                                                        ),
-                                                        initialScale = 0.97f,
-                                                    )
-                                            ) togetherWith
-                                                fadeOut(
-                                                    tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
-                                                ) using null
-                                        routeTransitionDirection > 0f ->
-                                            slideInHorizontally(routeSlideSpec) { it } togetherWith
-                                                (
-                                                    slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
-                                                        fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
-                                                ) using null
-                                        routeTransitionDirection < 0f ->
-                                            (
-                                                (
-                                                    slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
-                                                        fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
-                                                ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
-                                            ).apply { targetContentZIndex = -1f }
-                                        else -> EnterTransition.None togetherWith ExitTransition.None
+                        },
+                        label = "tandem-screen-transition",
+                    ) { visibleEntry ->
+                        renderRoute(
+                            if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
+                                        translationX = backGestureProgress * size.width * backGestureDirection
                                     }
-                                },
-                                label = "tandem-screen-transition",
-                            ) { visibleEntry ->
-                                renderRoute(
-                                    if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
-                                    Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
-                                                translationX = backGestureProgress * size.width * backGestureDirection
-                                            }
-                                        }.background(routeBackground),
-                                    true,
-                                    !stationaryTabShell,
-                                )
-                            }
-                        }
-                        if (tabShellRoute != null && !useRail) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
-                                modifier = Modifier.fillMaxWidth(),
-                                enter =
-                                    expandVertically(
-                                        tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
-                                    ) + tandemBottomBarEnter(reduceMotion),
-                                exit =
-                                    shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) +
-                                        tandemBottomBarExit(reduceMotion),
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().height(88.dp),
-                                    contentAlignment = Alignment.BottomCenter,
-                                ) {
-                                    BottomNavigation(
-                                        tabShellRoute,
-                                        navigation.selectTab,
-                                    )
-                                }
-                            }
-                        }
-                        if (transactionSheetActive) {
-                            TandemTaskSheet(
-                                visible = !transactionSheetClosing,
-                                onDismissRequest = handleCurrentRouteBack,
-                                fullScreen = true,
-                                dismissOnBackPress = true,
-                                onDismissed = {
-                                    routeTransitionDirection = 0f
-                                    repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
-                                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                                    }
-                                    transactionSheetClosing = false
-                                    transactionSheetPopCount = 1
-                                },
-                            ) {
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clipToBounds()
-                                        .then(transitionInputModifier)
-                                        .tandemEdgeBackGesture(
-                                            enabled = transactionSheetActive && backStack.size > 1,
-                                            onBack = handleCurrentRouteBack,
-                                            onBackProgress = updateBackGesture,
-                                        ),
-                                ) {
-                                    AnimatedContent(
-                                        targetState = routeEntry,
-                                        modifier = Modifier.fillMaxSize(),
-                                        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                                        label = "tandem-task-sheet-content",
-                                    ) { sheetEntry ->
-                                        renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
-                                    }
-                                }
-                            }
-                        }
+                                }.background(routeBackground),
+                            true,
+                            !stationaryTabShell,
+                        )
                     }
                 }
-                val undoNotice = mobileSession.undoNotice
-                val undoAboveTabBar =
-                    !usesRailNavigation(
-                        with(LocalDensity.current) {
-                            LocalWindowInfo.current.containerSize.width
-                                .toDp()
-                                .value
-                        },
-                        isLandscapeViewport(LocalWindowInfo.current.containerSize.width, LocalWindowInfo.current.containerSize.height),
-                    )
-                LaunchedEffect(undoNotice?.id) {
-                    val shown = undoNotice ?: return@LaunchedEffect
-                    delay(UNDO_NOTICE_MILLIS)
-                    mobileSession.dismissUndoNotice(shown.id)
-                }
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding()
-                        .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = if (undoAboveTabBar) 104.dp else 24.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    AnimatedVisibility(
-                        visible = undoNotice != null,
-                        enter = fadeIn() + slideInVertically { it / 2 },
-                        exit = fadeOut() + slideOutVertically { it / 2 },
+                if (tabShellRoute != null && !useRail) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = backgroundRouteEntry.route.showsBottomNavigation() && !imeVisible,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter =
+                            expandVertically(
+                                tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS),
+                            ) + tandemBottomBarEnter(reduceMotion),
+                        exit =
+                            shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) + tandemBottomBarExit(reduceMotion),
                     ) {
-                        val notice = undoNotice ?: return@AnimatedVisibility
-                        SurfaceCard(Modifier.widthIn(max = 560.dp)) {
-                            InlineMessage(
-                                notice.message,
-                                InlineMessageKind.INFO,
-                                actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
-                                onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
-                                onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(88.dp),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            BottomNavigation(
+                                tabShellRoute,
+                                navigation.selectTab,
                             )
                         }
                     }
                 }
-                if (showDiscardTransactionDialog) {
-                    val formRoute = backStack.lastOrNull()?.route
-                    val isNewTransaction = formRoute == AppRoute.NEW_TRANSACTION
-                    val payee = state.transactionPayee.trim().takeIf { it.isNotBlank() }
-                    val amount =
-                        state.parseAmountMinorUnits(state.transactionAmount)?.let { state.formatCurrency(kotlin.math.abs(it)) }
-                            ?: "the current amount"
-                    val transactionSummary = payee?.let { "$amount at $it" } ?: amount
-                    DestructiveConfirmationDialog(
-                        title = if (isNewTransaction) "Discard this transaction?" else "Discard changes?",
-                        message =
-                            if (isNewTransaction) {
-                                "Discard $transactionSummary? The transaction and its notes will be lost."
-                            } else {
-                                "Discard your changes to ${payee ?: "this transaction"} ($amount)? The current transaction will stay as it is."
-                            },
-                        confirmLabel = "Discard",
-                        dismissLabel = "Keep editing",
-                        onDismissRequest = { showDiscardTransactionDialog = false },
-                        onConfirm = {
-                            restoreTransactionFormBaseline(state, formRoute)
-                            showDiscardTransactionDialog = false
-                            transactionSheetPopCount = 1
-                            transactionSheetClosing = true
-                        },
-                    )
-                }
-                AppLockGate(
-                    state = state,
-                    mobileSession = mobileSession,
-                    route = backStack.lastOrNull()?.route ?: AppRoute.BUDGET,
-                    authenticator = deviceAuthenticator,
-                    lockState = appLockState,
-                    appInForeground = isAppInForeground,
-                    onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
-                    vault = encryptedBudgetVault,
-                    backTargetRoute = backPreviewRoute?.route,
-                    backProgress = backGestureProgress,
-                    onUnlocked = {
-                        if (state.pendingSetupAfterUnlock) {
-                            state.pendingSetupAfterUnlock = false
+                if (transactionSheetActive) {
+                    TandemTaskSheet(
+                        visible = !transactionSheetClosing,
+                        onDismissRequest = handleCurrentRouteBack,
+                        fullScreen = true,
+                        dismissOnBackPress = true,
+                        onDismissed = {
                             routeTransitionDirection = 0f
-                            savedTabBackStacks = ""
-                            backStack.clear()
-                            backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
-                            backStack.add(newRouteEntry(nextSetupRoute(state, notificationPermissionEnabled)))
+                            repeat(transactionSheetPopCount.coerceAtMost(backStack.size - 1)) {
+                                if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                            }
+                            transactionSheetClosing = false
+                            transactionSheetPopCount = 1
+                        },
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .then(transitionInputModifier)
+                                .tandemEdgeBackGesture(
+                                    enabled = transactionSheetActive && backStack.size > 1,
+                                    onBack = handleCurrentRouteBack,
+                                    onBackProgress = updateBackGesture,
+                                ),
+                        ) {
+                            AnimatedContent(
+                                targetState = routeEntry,
+                                modifier = Modifier.fillMaxSize(),
+                                transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                                label = "tandem-task-sheet-content",
+                            ) { sheetEntry ->
+                                renderRoute(sheetEntry, Modifier.fillMaxSize(), true, true)
+                            }
                         }
-                    },
-                )
+                    }
+                }
             }
         }
+        val undoNotice = mobileSession.undoNotice
+        val undoAboveTabBar =
+            !usesRailNavigation(
+                with(LocalDensity.current) {
+                    LocalWindowInfo.current.containerSize.width
+                        .toDp()
+                        .value
+                },
+                isLandscapeViewport(LocalWindowInfo.current.containerSize.width, LocalWindowInfo.current.containerSize.height),
+            )
+        LaunchedEffect(undoNotice?.id) {
+            val shown = undoNotice ?: return@LaunchedEffect
+            delay(UNDO_NOTICE_MILLIS)
+            mobileSession.dismissUndoNotice(shown.id)
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = if (undoAboveTabBar) 104.dp else 24.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AnimatedVisibility(
+                visible = undoNotice != null,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+            ) {
+                val notice = undoNotice ?: return@AnimatedVisibility
+                SurfaceCard(Modifier.widthIn(max = 560.dp)) {
+                    InlineMessage(
+                        notice.message,
+                        InlineMessageKind.INFO,
+                        actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
+                        onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
+                        onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
+                    )
+                }
+            }
+        }
+        if (showDiscardTransactionDialog) {
+            val formRoute = backStack.lastOrNull()?.route
+            val isNewTransaction = formRoute == AppRoute.NEW_TRANSACTION
+            val payee = state.transactionPayee.trim().takeIf { it.isNotBlank() }
+            val amount =
+                state.parseAmountMinorUnits(state.transactionAmount)?.let { state.formatCurrency(kotlin.math.abs(it)) }
+                    ?: "the current amount"
+            val transactionSummary = payee?.let { "$amount at $it" } ?: amount
+            DestructiveConfirmationDialog(
+                title = if (isNewTransaction) "Discard this transaction?" else "Discard changes?",
+                message =
+                    if (isNewTransaction) {
+                        "Discard $transactionSummary? The transaction and its notes will be lost."
+                    } else {
+                        "Discard your changes to ${payee ?: "this transaction"} ($amount)? The current transaction will stay as it is."
+                    },
+                confirmLabel = "Discard",
+                dismissLabel = "Keep editing",
+                onDismissRequest = { showDiscardTransactionDialog = false },
+                onConfirm = {
+                    restoreTransactionFormBaseline(state, formRoute)
+                    showDiscardTransactionDialog = false
+                    transactionSheetPopCount = 1
+                    transactionSheetClosing = true
+                },
+            )
+        }
+        AppLockGate(
+            state = state,
+            mobileSession = mobileSession,
+            route = backStack.lastOrNull()?.route ?: AppRoute.BUDGET,
+            authenticator = deviceAuthenticator,
+            lockState = appLockState,
+            appInForeground = isAppInForeground,
+            onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
+            vault = encryptedBudgetVault,
+            backTargetRoute = backPreviewRoute?.route,
+            backProgress = backGestureProgress,
+            onUnlocked = {
+                if (state.pendingSetupAfterUnlock) {
+                    state.pendingSetupAfterUnlock = false
+                    routeTransitionDirection = 0f
+                    savedTabBackStacks = ""
+                    backStack.clear()
+                    backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
+                    backStack.add(newRouteEntry(nextSetupRoute(state, notificationPermissionEnabled)))
+                }
+            },
+        )
     }
 }
 

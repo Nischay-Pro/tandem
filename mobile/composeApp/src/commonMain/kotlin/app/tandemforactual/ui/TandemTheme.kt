@@ -296,6 +296,7 @@ internal fun TandemTheme(
     accent: AccentChoice,
     reduceMotion: Boolean = false,
     animateThemeChanges: Boolean = true,
+    language: AppLanguageController? = null,
     content: @Composable () -> Unit,
 ) {
     val systemIsDark = isSystemInDarkTheme()
@@ -362,7 +363,15 @@ internal fun TandemTheme(
                     onError = Color.White,
                 )
             }
-        MaterialTheme(colors = materialColors, typography = materialTypography, content = content)
+        if (language == null) {
+            MaterialTheme(colors = materialColors, typography = materialTypography, content = content)
+        } else {
+            AppLocaleEnvironment(appLanguageTag(language.current)) {
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    MaterialTheme(colors = materialColors, typography = materialTypography, content = content)
+                }
+            }
+        }
     }
 }
 

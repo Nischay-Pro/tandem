@@ -15,6 +15,11 @@
 		A10000000000000000000006 /* IosBudgetNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* IosBudgetNotifications.swift */; };
 		A10000000000000000000007 /* IosBackgroundSyncSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* IosBackgroundSyncSchedulerTests.swift */; };
 		A10000000000000000000008 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* XCTest.framework */; };
+		A10000000000000000000009 /* SharedTextInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* SharedTextInbox.swift */; };
+		A10000000000000000000010 /* SharedTextInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* SharedTextInbox.swift */; };
+		A10000000000000000000011 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* ShareViewController.swift */; };
+		A10000000000000000000012 /* TandemShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* TandemShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000013 /* SharedTextInboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* SharedTextInboxTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +34,13 @@
 		A20000000000000000000009 /* IosBackgroundSyncSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosBackgroundSyncSchedulerTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		A20000000000000000000011 /* TandemForActualTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemForActualTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000012 /* SharedTextInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTextInbox.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000015 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000016 /* TandemShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TandemShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000017 /* TandemForActual.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TandemForActual.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000018 /* SharedTextInboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTextInboxTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,7 +60,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A30000000000000000000007 /* TandemShare Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A30000000000000000000010 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000012 /* TandemShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {
@@ -58,6 +91,9 @@
 				A20000000000000000000002 /* IosBackgroundSyncScheduler.swift */,
 				A20000000000000000000008 /* IosBudgetNotifications.swift */,
 				A20000000000000000000003 /* Info.plist */,
+				A20000000000000000000012 /* SharedTextInbox.swift */,
+				A20000000000000000000017 /* TandemForActual.entitlements */,
+				A40000000000000000000005 /* ShareExtension */,
 				A20000000000000000000004 /* Assets.xcassets */,
 				A20000000000000000000005 /* LaunchScreen.storyboard */,
 				A40000000000000000000004 /* TandemForActualTests */,
@@ -80,6 +116,7 @@
 			children = (
 				A20000000000000000000007 /* TandemForActual.app */,
 				A20000000000000000000011 /* TandemForActualTests.xctest */,
+				A20000000000000000000016 /* TandemShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -88,8 +125,19 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000009 /* IosBackgroundSyncSchedulerTests.swift */,
+				A20000000000000000000018 /* SharedTextInboxTests.swift */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000005 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000013 /* ShareViewController.swift */,
+				A20000000000000000000014 /* Info.plist */,
+				A20000000000000000000015 /* ShareExtension.entitlements */,
+			);
+			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -103,10 +151,12 @@
 				A30000000000000000000002 /* Sources */,
 				A30000000000000000000001 /* Frameworks */,
 				A30000000000000000000003 /* Resources */,
+				A30000000000000000000010 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A50000000000000000000008 /* PBXTargetDependency */,
 			);
 			name = TandemForActual;
 			productName = TandemForActual;
@@ -131,6 +181,23 @@
 			productReference = A20000000000000000000011 /* TandemForActualTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A50000000000000000000006 /* TandemShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000004 /* Build configuration list for PBXNativeTarget "TandemShare" */;
+			buildPhases = (
+				A30000000000000000000008 /* TandemShare Sources */,
+				A30000000000000000000007 /* TandemShare Frameworks */,
+				A30000000000000000000009 /* TandemShare Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TandemShare;
+			productName = TandemShare;
+			productReference = A20000000000000000000016 /* TandemShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -147,6 +214,9 @@
 					A50000000000000000000003 = {
 						CreatedOnToolsVersion = 16.0;
 						TestTargetID = A50000000000000000000001;
+					};
+					A50000000000000000000006 = {
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
@@ -165,6 +235,7 @@
 			targets = (
 				A50000000000000000000001 /* TandemForActual */,
 				A50000000000000000000003 /* TandemForActualTests */,
+				A50000000000000000000006 /* TandemShare */,
 			);
 		};
 /* End PBXProject section */
@@ -186,6 +257,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A30000000000000000000009 /* TandemShare Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -196,6 +274,7 @@
 				A10000000000000000000001 /* TandemApp.swift in Sources */,
 				A10000000000000000000002 /* IosBackgroundSyncScheduler.swift in Sources */,
 				A10000000000000000000006 /* IosBudgetNotifications.swift in Sources */,
+				A10000000000000000000009 /* SharedTextInbox.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -204,6 +283,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000007 /* IosBackgroundSyncSchedulerTests.swift in Sources */,
+				A10000000000000000000013 /* SharedTextInboxTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A30000000000000000000008 /* TandemShare Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000011 /* ShareViewController.swift in Sources */,
+				A10000000000000000000010 /* SharedTextInbox.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,6 +306,13 @@
 			remoteGlobalIDString = A50000000000000000000001;
 			remoteInfo = TandemForActual;
 		};
+		A50000000000000000000007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A50000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000006;
+			remoteInfo = TandemShare;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
@@ -224,6 +320,11 @@
 			isa = PBXTargetDependency;
 			target = A50000000000000000000001 /* TandemForActual */;
 			targetProxy = A50000000000000000000004 /* PBXContainerItemProxy */;
+		};
+		A50000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000006 /* TandemShare */;
+			targetProxy = A50000000000000000000007 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -277,6 +378,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TandemForActual.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_TESTABILITY = YES;
@@ -299,6 +401,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TandemForActual.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -352,6 +455,48 @@
 			};
 			name = Release;
 		};
+		A70000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.tandemforactual.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A70000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.tandemforactual.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -378,6 +523,15 @@
 			buildConfigurations = (
 				A70000000000000000000005 /* Debug */,
 				A70000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000004 /* Build configuration list for PBXNativeTarget "TandemShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A70000000000000000000007 /* Debug */,
+				A70000000000000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
