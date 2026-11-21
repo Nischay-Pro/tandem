@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_budget">Budget</string>
+    <string name="nav_accounts">Accounts</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_reports">Reports</string>
+    <string name="nav_settings">Settings</string>
+    <string name="settings_section_personalization">Personalization</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_appearance_detail">Theme, accent color, and motion</string>
+    <string name="settings_section_budget">Budget</string>
+    <string name="settings_budget_preferences">Budget preferences</string>
+    <string name="settings_budget_preferences_detail">Number format and planning</string>
+    <string name="settings_manage_payees">Manage payees</string>
+    <string name="settings_manage_payees_detail">Rename, merge, and set default categories</string>
+    <string name="settings_budget_rules">Budget rules</string>
+    <string name="settings_budget_rules_detail">Rules that categorize transactions</string>
+    <string name="settings_section_connection">Connection</string>
+    <string name="settings_sync_preferences">Sync preferences</string>
+    <string name="settings_sync_preferences_detail">When and over which network to sync</string>
+    <string name="settings_server_device">Server and device</string>
+    <string name="settings_server_device_detail">Server address, local address, and this device</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_detail">Sync problems and changes to review</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_security">Security and privacy</string>
+    <string name="settings_security_detail">Biometric unlock, encrypted budget, and hidden amounts</string>
+    <string name="settings_local_data">Local data and storage</string>
+    <string name="settings_local_data_detail">Cached records and pending edits</string>
+    <string name="settings_section_support">Support</string>
+    <string name="settings_getting_started">Getting started</string>
+    <string name="settings_getting_started_detail">Tips for using Tandem</string>
+    <string name="settings_about">About, help, and licenses</string>
+    <string name="settings_about_detail">Version and open-source licenses</string>
+</resources>

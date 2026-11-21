@@ -74,6 +74,12 @@ import app.tandemforactual.ui.components.TandemBackButton
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.components.TandemModalCloseButton
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.nav_accounts
+import app.tandemforactual.ui.generated.resources.nav_activity
+import app.tandemforactual.ui.generated.resources.nav_budget
+import app.tandemforactual.ui.generated.resources.nav_reports
+import app.tandemforactual.ui.generated.resources.nav_settings
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.reports.reportMonthLabel
@@ -100,6 +106,7 @@ import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.X
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun FloatingAction(
@@ -706,13 +713,7 @@ internal fun BottomNavigation(
     val density = LocalDensity.current
     val labelDensity = navigationLabelDensity(density)
     val items =
-        listOf(
-            AppRoute.BUDGET to "Budget",
-            AppRoute.ACCOUNTS to "Accounts",
-            AppRoute.ACTIVITY to "Activity",
-            AppRoute.REPORTS to "Reports",
-            AppRoute.SETTINGS to "Settings",
-        )
+        navigationTabs()
     val gap = TandemSpacing.xxSmall
     val tabShape = RoundedCornerShape(TandemShapes.capsule - TandemSpacing.extraSmall)
     val selectedIndex = items.indexOfFirst { it.first == selected }
@@ -829,13 +830,7 @@ internal fun SideNavigationRail(
 ) {
     val palette = tandemPalette
     val items =
-        listOf(
-            AppRoute.BUDGET to "Budget",
-            AppRoute.ACCOUNTS to "Accounts",
-            AppRoute.ACTIVITY to "Activity",
-            AppRoute.REPORTS to "Reports",
-            AppRoute.SETTINGS to "Settings",
-        )
+        navigationTabs()
     Column(
         modifier =
             modifier
@@ -1023,3 +1018,13 @@ internal fun NavigationGlyph(
 
 /** Navigation labels grow with the system font size up to 130%, so they still fit the tab bar and rail. */
 internal fun navigationLabelDensity(density: Density): Density = Density(density.density, density.fontScale.coerceAtMost(1.3f))
+
+@Composable
+internal fun navigationTabs(): List<Pair<AppRoute, String>> =
+    listOf(
+        AppRoute.BUDGET to stringResource(Res.string.nav_budget),
+        AppRoute.ACCOUNTS to stringResource(Res.string.nav_accounts),
+        AppRoute.ACTIVITY to stringResource(Res.string.nav_activity),
+        AppRoute.REPORTS to stringResource(Res.string.nav_reports),
+        AppRoute.SETTINGS to stringResource(Res.string.nav_settings),
+    )
