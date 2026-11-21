@@ -1,6 +1,10 @@
 name: Set up mobile build tools
 description: Configure the shared tools and caches used by mobile CI jobs.
 inputs:
+  gradle_cache_key:
+    description: Share the Gradle cache with other jobs that build the same targets.
+    required: false
+    default: ""
   setup_node:
     description: Install Node.js, pnpm, and the locked JavaScript build tools.
     required: false
@@ -55,6 +59,11 @@ runs:
         echo "JAVA_HOME=$TANDEM_JAVA_HOME" >> "$GITHUB_ENV"
         echo "$TANDEM_JAVA_HOME/bin" >> "$GITHUB_PATH"
         "$TANDEM_JAVA_HOME/bin/java" -version
+
+    - name: Use a shared Gradle cache key
+      if: ${{ inputs.gradle_cache_key != '' }}
+      shell: bash
+      run: echo "GRADLE_BUILD_ACTION_CACHE_KEY_JOB=${{ inputs.gradle_cache_key }}" >> "$GITHUB_ENV"
 
     - name: Set up Gradle caching
       uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
