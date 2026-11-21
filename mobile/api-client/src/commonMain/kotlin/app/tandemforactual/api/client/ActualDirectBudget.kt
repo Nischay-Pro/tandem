@@ -52,6 +52,7 @@ class ActualDirectBudget private constructor(
 
     private val store = ActualMessageStore(db)
     private val clock = store.loadClock().also { if (downloaded) store.resetNode(it) }
+    internal val cacheGeneration = "actual:${clock.clock.timestamp.node}"
     private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, now = now)
     private val reader = ActualBudgetReader(db)
     private val operations = ActualTransactionOperations(ActualWriter(store, clock, now, newId))
@@ -69,7 +70,7 @@ class ActualDirectBudget private constructor(
     suspend fun refreshProjection(today: String) =
         mutex.withLock {
             val sync = synchronize()
-            BudgetSyncJson.projectDirectSnapshot(reader.read(today), groupId, sync.lastSyncedTimestamp)
+            BudgetSyncJson.projectDirectSnapshot(reader.read(today), groupId, cacheGeneration, sync.lastSyncedTimestamp)
         }
 
     suspend fun snapshot(today: String) = mutex.withLock { reader.read(today) }
@@ -92,7 +93,7 @@ class ActualDirectBudget private constructor(
             val (snapshot, cursor) = receiveProjection(today)
             val parity = snapshot.compareWithGateway(gateway)
             if (parity.matches) {
-                val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cursor)
+                val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cacheGeneration, cursor)
                 val result =
                     staging.applyFullSnapshot(
                         groupId,

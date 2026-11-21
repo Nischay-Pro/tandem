@@ -26,8 +26,8 @@ class ActualDirectSyncCoordinator(
         directSyncMutex.withLock {
             val budgetId = budget.groupId
             val checkpoint = repository.readSyncCheckpoint(budgetId)
-            check(checkpoint?.generation == BudgetSyncJson.directGeneration(budgetId)) {
-                "The cache has not been staged for direct Actual sync."
+            check(checkpoint?.generation == budget.cacheGeneration) {
+                "The cache belongs to a different local Actual database or has not been staged."
             }
             repository.markSyncStarted(budgetId)
             try {

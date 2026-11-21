@@ -132,7 +132,12 @@ class ActualServerRoundTripTest {
                             base(shop),
                         ).status,
                 )
-                verifyDirectOutbox(initial, transfer, today)
+                val replacement = download(client, fileId, directory.resolve("replacement.sqlite"))
+                try {
+                    verifyDirectOutbox(initial, replacement, transfer, today)
+                } finally {
+                    replacement.close()
+                }
                 assertEquals(
                     OperationStatus.COMMITTED,
                     initial.submit(UUID.randomUUID().toString(), toDelete, "delete", JsonObject(emptyMap()), base(toDelete)).status,
@@ -177,6 +182,7 @@ class ActualServerRoundTripTest {
                         .toString(),
                 )
             assertEquals(reopened.groupId, projection.budgetId)
+            assertEquals(initial.cacheGeneration, projection.generation)
             assertEquals(-7000L, projection.records.single { it.recordType == "transaction" && it.recordId == transfer }.amountMinor)
         } finally {
             reopened.close()
@@ -197,6 +203,7 @@ class ActualServerRoundTripTest {
 
     private suspend fun verifyDirectOutbox(
         budget: ActualDirectBudget,
+        replacement: ActualDirectBudget,
         transferId: String,
         today: String,
     ) {
@@ -207,6 +214,9 @@ class ActualServerRoundTripTest {
             val coordinator = ActualDirectSyncCoordinator(budget, repository)
             assertFailsWith<IllegalStateException> { coordinator.synchronize(today, sendQueuedWrites = true) }
             assertTrue(budget.stageMobileCache(today, baseline, repository).matches)
+            assertFailsWith<IllegalStateException> {
+                ActualDirectSyncCoordinator(replacement, repository).synchronize(today, sendQueuedWrites = true)
+            }
             val transfer = baseline.records.single { it.recordType == "transaction" && it.recordId == transferId }
             val baseBody = BudgetSyncJson.parseJsonObject(transfer.bodyJson)
             val operationId = UUID.randomUUID().toString()

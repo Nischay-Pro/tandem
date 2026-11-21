@@ -30,17 +30,16 @@ object BudgetSyncJson {
     internal fun projectDirectSnapshot(
         snapshot: ActualSnapshot,
         groupId: String,
+        generation: String,
         cursor: String,
     ): RemoteBudgetSnapshot =
         RemoteBudgetSnapshot(
             budgetId = groupId,
-            generation = directGeneration(groupId),
+            generation = generation,
             cursor = cursor,
-            records = snapshot.records.map { it.body.toRemoteRecord(groupId, it.type, it.id, it.revision, directGeneration(groupId)) },
+            records = snapshot.records.map { it.body.toRemoteRecord(groupId, it.type, it.id, it.revision, generation) },
             displaySettings = snapshot.displaySettings,
         )
-
-    internal fun directGeneration(groupId: String): String = "actual:$groupId"
 
     fun parseSnapshot(
         payload: Map<String, JsonElement>,
