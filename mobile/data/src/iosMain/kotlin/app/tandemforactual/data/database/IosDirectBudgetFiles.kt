@@ -17,15 +17,15 @@ import kotlin.uuid.Uuid
 /** Holds one iOS direct budget in Application Support with iOS file protection and backup exclusion. */
 @OptIn(ExperimentalForeignApi::class)
 class IosDirectBudgetFiles private constructor(
-    val installationId: String,
+    override val installationId: String,
     directory: String,
     private val driver: SQLiteDriver,
-) {
+) : DirectBudgetFiles {
     private val actualPath = "$directory/actual.sqlite"
     private val cachePath = "$directory/mobile.db"
     private val installLock = NSLock()
 
-    fun installActual(bytes: ByteArray): ActualDatabase {
+    override fun installActual(bytes: ByteArray): ActualDatabase {
         require(bytes.isNotEmpty()) { "The downloaded Actual database is empty." }
         installLock.lock()
         try {
@@ -38,12 +38,12 @@ class IosDirectBudgetFiles private constructor(
         }
     }
 
-    fun openActual(): ActualDatabase {
+    override fun openActual(): ActualDatabase {
         check(NSFileManager.defaultManager.fileExistsAtPath(actualPath)) { "The local Actual database is missing." }
         return ActualDatabase(driver.open(actualPath))
     }
 
-    fun openMobileCache(): TandemDatabase = openTandemDatabase(Room.databaseBuilder<TandemDatabase>(name = cachePath), driver)
+    override fun openMobileCache(): TandemDatabase = openTandemDatabase(Room.databaseBuilder<TandemDatabase>(name = cachePath), driver)
 
     companion object {
         fun create(driver: SQLiteDriver = BundledSQLiteDriver()): IosDirectBudgetFiles {

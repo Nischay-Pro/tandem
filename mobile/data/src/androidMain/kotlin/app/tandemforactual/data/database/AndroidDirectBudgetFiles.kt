@@ -12,14 +12,14 @@ import java.util.UUID
 /** Holds the two private, backup-excluded files for one direct Actual installation. */
 class AndroidDirectBudgetFiles private constructor(
     private val context: Context,
-    val installationId: String,
+    override val installationId: String,
     directory: File,
     private val driver: SQLiteDriver,
-) {
+) : DirectBudgetFiles {
     private val actualFile = directory.resolve("actual.sqlite")
     private val cacheFile = directory.resolve("mobile.db")
 
-    fun installActual(bytes: ByteArray): ActualDatabase = installActual { it.write(bytes) }
+    override fun installActual(bytes: ByteArray): ActualDatabase = installActual { it.write(bytes) }
 
     @Synchronized
     internal fun installActual(write: (OutputStream) -> Unit): ActualDatabase {
@@ -36,12 +36,12 @@ class AndroidDirectBudgetFiles private constructor(
         return openActual()
     }
 
-    fun openActual(): ActualDatabase {
+    override fun openActual(): ActualDatabase {
         check(actualFile.isFile) { "The local Actual database is missing." }
         return ActualDatabase(driver.open(actualFile.absolutePath))
     }
 
-    fun openMobileCache(): TandemDatabase = openTandemDatabase(tandemDatabaseBuilder(context, cacheFile), driver)
+    override fun openMobileCache(): TandemDatabase = openTandemDatabase(tandemDatabaseBuilder(context, cacheFile), driver)
 
     companion object {
         fun create(

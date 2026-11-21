@@ -6,6 +6,7 @@ import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.database.DirectBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.database.openTandemDatabase
@@ -26,6 +27,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import java.util.zip.ZipOutputStream
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -78,6 +80,7 @@ class ActualDirectBudgetTest {
                         }
                     },
                 ).use { http ->
+                    verifyWorkspaceLifecycle(http)
                     verifyFirstTimeSetup(http, ::connect) { data ->
                         path.writeBytes(data)
                         connect()
@@ -183,6 +186,55 @@ class ActualDirectBudgetTest {
                 }
             }
         }
+
+    private suspend fun verifyWorkspaceLifecycle(http: HttpClient) {
+        val directory = createTempDirectory("direct-workspace").toFile()
+        val files =
+            object : DirectBudgetFiles {
+                override val installationId = "fixture-installation"
+                private val actualPath = directory.resolve("actual.sqlite")
+
+                override fun installActual(bytes: ByteArray): ActualDatabase {
+                    check(!actualPath.exists())
+                    actualPath.writeBytes(bytes)
+                    return openActual()
+                }
+
+                override fun openActual(): ActualDatabase = ActualDatabase(BundledSQLiteDriver().open(actualPath.path))
+
+                override fun openMobileCache(): TandemDatabase =
+                    openTandemDatabase(
+                        Room
+                            .databaseBuilder<TandemDatabase>(name = directory.resolve("mobile.db").path)
+                            .setQueryCoroutineContext(Dispatchers.IO),
+                    )
+            }
+        try {
+            val session = ActualDirectSession.signInWithPassword(http, "https://budget.example", "test")
+            val workspace = ActualDirectWorkspace.create(session, files, "group", "2026-11-21", now, newId)
+            val checkpoint =
+                try {
+                    assertEquals("fixture-installation", workspace.installationId)
+                    assertEquals("group", workspace.budgetId)
+                    assertTrue(workspace.synchronize("2026-11-21", false).fullSnapshotApplied)
+                    checkNotNull(workspace.repository.readSyncCheckpoint("group"))
+                } finally {
+                    workspace.close()
+                }
+            workspace.close()
+            assertFailsWith<IllegalStateException> { workspace.synchronize("2026-11-21", false) }
+            assertFailsWith<IllegalStateException> { ActualDirectWorkspace.create(session, files, "group", "2026-11-21", now, newId) }
+            val reopened = ActualDirectWorkspace.reopen(session, files, "group", now, newId)
+            try {
+                assertEquals(checkpoint, reopened.repository.readSyncCheckpoint("group"))
+                assertTrue(reopened.synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                reopened.close()
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
 
     private suspend fun verifyFirstTimeSetup(
         http: HttpClient,
