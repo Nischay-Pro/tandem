@@ -78,6 +78,16 @@ class ActualDirectBudget private constructor(
     /** Refreshes a staging database for comparison without uploading its history or advancing its write checkpoint. */
     suspend fun preview(today: String) = mutex.withLock { receiveProjection(today).first }
 
+    /** Initializes a cache for a new direct budget with no previous outbox or gateway data. */
+    internal suspend fun initializeMobileCache(
+        today: String,
+        staging: LocalBudgetRepository,
+    ) = mutex.withLock {
+        staging.requireFreshDirectCache(groupId)
+        val (snapshot, cursor) = receiveProjection(today)
+        saveInitialProjection(snapshot, cursor, staging)
+    }
+
     /** Seeds an isolated mobile cache only after the staged Actual records match the gateway. */
     suspend fun stageMobileCache(
         today: String,
@@ -86,27 +96,32 @@ class ActualDirectBudget private constructor(
     ): ActualBudgetParity =
         mutex.withLock {
             require(gateway.budgetId == groupId) { "Choose the same budget on the Actual server and the gateway." }
-            val checkpoint = staging.readSyncCheckpoint(groupId)
-            check(checkpoint == null && staging.budgetWrites(groupId).isEmpty()) {
-                "The migration requires a fresh cache with an empty outbox."
-            }
+            staging.requireFreshDirectCache(groupId)
             val (snapshot, cursor) = receiveProjection(today)
             val parity = snapshot.compareWithGateway(gateway)
             if (parity.matches) {
-                val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cacheGeneration, cursor)
-                val result =
-                    staging.applyFullSnapshot(
-                        groupId,
-                        projection.generation,
-                        projection.cursor,
-                        checkpoint,
-                        projection.records,
-                        projection.displaySettings,
-                    )
-                check(result == FullSnapshotResult.APPLIED) { "The staged cache changed during the comparison." }
+                saveInitialProjection(snapshot, cursor, staging)
             }
             parity
         }
+
+    private suspend fun saveInitialProjection(
+        snapshot: ActualSnapshot,
+        cursor: String,
+        staging: LocalBudgetRepository,
+    ) {
+        val projection = BudgetSyncJson.projectDirectSnapshot(snapshot, groupId, cacheGeneration, cursor)
+        val result =
+            staging.applyFullSnapshot(
+                groupId,
+                projection.generation,
+                projection.cursor,
+                expectedCheckpoint = null,
+                projection.records,
+                projection.displaySettings,
+            )
+        check(result == FullSnapshotResult.APPLIED) { "The staged cache changed during direct setup." }
+    }
 
     private suspend fun receiveProjection(today: String): Pair<ActualSnapshot, String> {
         val sync = syncEngine.fullSync(clock, null, receiveOnly = true)
@@ -175,10 +190,12 @@ class ActualDirectBudget private constructor(
             fileId: String,
             now: () -> Long,
             newId: () -> String,
+            expectedGroupId: String? = null,
             install: (ByteArray) -> ActualDatabase,
         ): ActualDirectBudget {
             val info = server.fileInfo(fileId)
             val groupId = info.groupId ?: throw ActualServerException("missing-group-id")
+            if (expectedGroupId != null && groupId != expectedGroupId) throw ActualServerException("file-has-reset")
             if (info.encryptMeta != null) throw ActualServerException("encrypted-budget")
             val entries = ZipArchive.read(server.download(fileId))
             val data = entries["db.sqlite"] ?: throw ActualServerException("invalid-budget-archive")
@@ -210,5 +227,11 @@ class ActualDirectBudget private constructor(
                 runCatching { db.close() }
                 throw error
             }
+    }
+}
+
+internal suspend fun LocalBudgetRepository.requireFreshDirectCache(budgetId: String) {
+    check(readSyncCheckpoint(budgetId) == null && budgetWrites(budgetId).isEmpty()) {
+        "Direct setup requires a fresh cache with an empty outbox."
     }
 }

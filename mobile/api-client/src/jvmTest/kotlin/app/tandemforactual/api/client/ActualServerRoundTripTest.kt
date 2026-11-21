@@ -54,6 +54,10 @@ class ActualServerRoundTripTest {
             val directory = createTempDirectory("actual-roundtrip").toFile()
             try {
                 HttpClient(Java).use { client ->
+                    val password = System.getenv("ACTUAL_TEST_PASSWORD") ?: "demo-password"
+                    val session = ActualDirectSession.signInWithPassword(client, url, password, allowInsecurePrivateNetwork = true)
+                    val groupId = session.listBudgets().single { it.name == budget }.budgetId
+                    verifyFirstRun(session, groupId, directory.resolve("first-run.sqlite"))
                     verifyRoundTrip(ActualServerClient(client, url), directory)
                 }
             } finally {
@@ -198,6 +202,34 @@ class ActualServerRoundTripTest {
             verifyDownload(fresh, shop, transfer, toDelete)
         } finally {
             fresh.close()
+        }
+    }
+
+    private suspend fun verifyFirstRun(
+        session: ActualDirectSession,
+        groupId: String,
+        path: File,
+    ) {
+        val database = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+        try {
+            val repository = LocalBudgetRepository(database, System::currentTimeMillis)
+            val today =
+                java.time.LocalDate
+                    .now()
+                    .toString()
+            val budget =
+                session.openNewBudget(groupId, today, repository, System::currentTimeMillis, { UUID.randomUUID().toString() }) {
+                    path.writeBytes(it)
+                    openDatabase(path)
+                }
+            try {
+                assertTrue(repository.countVisibleRecords(groupId, "transaction") > 0)
+                assertEquals(budget.cacheGeneration, repository.readSyncCheckpoint(groupId)?.generation)
+            } finally {
+                budget.close()
+            }
+        } finally {
+            database.closeDatabase()
         }
     }
 

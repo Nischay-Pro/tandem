@@ -49,6 +49,15 @@ class ActualDirectBudgetTest {
                 HttpClient(
                     MockEngine { request ->
                         when (request.url.encodedPath) {
+                            "/account/login" -> respond("""{"data":{"token":"session"}}""")
+                            "/sync/list-user-files" ->
+                                respond(
+                                    """
+                                    {"data":[{"fileId":"file","groupId":"group","name":"Direct"},
+                                             {"fileId":"encrypted","groupId":"locked","encryptKeyId":"key","name":"Locked"},
+                                             {"fileId":"deleted","groupId":"old","deleted":1},{"fileId":"local"}]}
+                                    """.trimIndent(),
+                                )
                             "/sync/get-user-file-info" -> respond("""{"data":{"groupId":"group"}}""")
                             "/sync/download-user-file" -> respond(archive)
                             "/sync/sync" -> {
@@ -64,6 +73,10 @@ class ActualDirectBudgetTest {
                         }
                     },
                 ).use { http ->
+                    verifyFirstTimeSetup(http, ::connect) { data ->
+                        path.writeBytes(data)
+                        connect()
+                    }
                     val client = ActualServerClient(http, "https://budget.example").apply { token = "session" }
                     val budget =
                         ActualDirectBudget.download(client, "file", now, newId) { data ->
@@ -142,6 +155,59 @@ class ActualDirectBudgetTest {
         }
 
     @Test
+    fun rejectsUnsafeDirectSignInAddresses() =
+        runBlocking {
+            HttpClient(MockEngine { error("The URL should be rejected before any request") }).use { http ->
+                for (url in listOf("http://budget.example", "https://budget.example/?x=1", "https://budget.example/#fragment")) {
+                    assertFailsWith<TandemApiException> { ActualDirectSession.signInWithPassword(http, url, "test") }
+                }
+            }
+        }
+
+    private suspend fun verifyFirstTimeSetup(
+        http: HttpClient,
+        connect: () -> ActualDatabase,
+        install: (ByteArray) -> ActualDatabase,
+    ) {
+        val session = ActualDirectSession.signInWithPassword(http, "https://budget.example", "test")
+        assertEquals(
+            listOf(BudgetCatalogItem("group", "Direct", false), BudgetCatalogItem("locked", "Locked", true)),
+            session.listBudgets(),
+        )
+        val cache = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+        try {
+            val repository = LocalBudgetRepository(cache, now)
+            val budget = session.openNewBudget("group", "2026-11-21", repository, now, newId, install)
+            try {
+                assertEquals(budget.cacheGeneration, repository.readSyncCheckpoint("group")?.generation)
+                assertTrue(repository.countVisibleRecords("group", "transaction") > 0)
+                assertTrue(ActualDirectSyncCoordinator(budget, repository).synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                budget.close()
+            }
+            val reopened = session.reopenBudget("group", repository, now, newId, connect)
+            try {
+                assertEquals(budget.cacheGeneration, reopened.cacheGeneration)
+                assertTrue(ActualDirectSyncCoordinator(reopened, repository).synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                reopened.close()
+            }
+            assertFailsWith<IllegalStateException> {
+                session.openNewBudget("group", "2026-11-21", repository, now, newId) { error("Unexpected install") }
+            }
+            for ((id, reason) in listOf("locked" to "encrypted-budget", "old" to "budget-unavailable")) {
+                val error =
+                    assertFailsWith<ActualServerException> {
+                        session.openNewBudget(id, "2026-11-21", repository, now, newId) { error("Unexpected install") }
+                    }
+                assertEquals(reason, error.reason)
+            }
+        } finally {
+            cache.closeDatabase()
+        }
+    }
+
+    @Test
     fun rejectsUnavailableBudgetArchives() =
         runBlocking {
             var info = """{"data":{}}"""
@@ -166,6 +232,14 @@ class ActualDirectBudgetTest {
                     }.reason,
                 )
                 info = """{"data":{"groupId":"group"}}"""
+                assertEquals(
+                    "file-has-reset",
+                    assertFailsWith<ActualServerException> {
+                        ActualDirectBudget.download(client, "file", now, newId, expectedGroupId = "previous-group") {
+                            error("Unexpected install")
+                        }
+                    }.reason,
+                )
                 assertEquals(
                     "invalid-budget-archive",
                     assertFailsWith<ActualServerException> {
