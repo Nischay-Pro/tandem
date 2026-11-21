@@ -189,7 +189,7 @@ class ActualServerRoundTripTest {
                 )
                 val replacement = download(client, fileId, directory.resolve("replacement.sqlite"))
                 try {
-                    verifyDirectOutbox(initial, replacement, transfer, today)
+                    verifyDirectOutbox(initial, replacement, transfer, shop, today)
                 } finally {
                     replacement.close()
                 }
@@ -288,6 +288,7 @@ class ActualServerRoundTripTest {
         budget: ActualDirectBudget,
         replacement: ActualDirectBudget,
         transferId: String,
+        shopId: String,
         today: String,
     ) {
         val database = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
@@ -332,12 +333,7 @@ class ActualServerRoundTripTest {
             assertEquals(1, coordinator.synchronize(today, sendQueuedWrites = true).writesRejected)
             assertEquals("rejected", repository.findWrite(rejected)?.status)
 
-            val other =
-                current.records.first {
-                    it.recordType == "transaction" &&
-                        it.recordId.startsWith("tandem:") &&
-                        it.recordId != transferId
-                }
+            val other = current.records.single { it.recordType == "transaction" && it.recordId == shopId }
             val stale = buildJsonObject { put("notes", "queued before the other change") }
             val conflicting = queueUpdate(repository, other, stale)
             val otherBase = BudgetSyncJson.parseJsonObject(other.bodyJson)
