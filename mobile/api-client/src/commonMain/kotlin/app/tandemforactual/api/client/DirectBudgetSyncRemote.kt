@@ -26,8 +26,11 @@ class DirectBudgetSyncRemote(
     private val pages = Mutex()
     private var staged: RemoteBudgetSnapshot? = null
 
-    private suspend fun snapshot(budgetId: String): RemoteBudgetSnapshot {
-        val budget = client.budget(budgetId)
+    private suspend fun snapshot(
+        budgetId: String,
+        password: String?,
+    ): RemoteBudgetSnapshot {
+        val budget = client.budget(budgetId, password)
         val projection = client.call { budget.refreshProjection(client.today()) }
         val synced = ActualTimestamp.parse(projection.cursor)
         val cursor = synced?.let { (it.millis * 65_536 + it.counter).toString() } ?: "0"
@@ -45,7 +48,7 @@ class DirectBudgetSyncRemote(
     override suspend fun readSnapshot(
         budgetId: String,
         encryptionPassword: String?,
-    ): RemoteBudgetSnapshot = snapshot(budgetId)
+    ): RemoteBudgetSnapshot = snapshot(budgetId, encryptionPassword)
 
     override suspend fun readSnapshotPage(
         budgetId: String,
@@ -59,9 +62,9 @@ class DirectBudgetSyncRemote(
         pages.withLock {
             val current =
                 staged?.takeIf { afterType != null && it.budgetId == budgetId && it.generation == generation && it.cursor == cursor }
-                    ?: snapshot(budgetId).also {
+                    ?: snapshot(budgetId, encryptionPassword).also {
                         staged = it
-                        client.budget(budgetId).saveServedProjection(
+                        client.budget(budgetId, encryptionPassword).saveServedProjection(
                             it.cursor,
                             it.records.associate { record ->
                                 (
@@ -103,9 +106,9 @@ class DirectBudgetSyncRemote(
         throughCursor: String?,
         encryptionPassword: String?,
     ): RemoteBudgetChangePage {
-        val budget = client.budget(budgetId)
+        val budget = client.budget(budgetId, encryptionPassword)
         val (servedCursor, served) = budget.servedProjection()
-        val fresh = snapshot(budgetId)
+        val fresh = snapshot(budgetId, encryptionPassword)
         if (fresh.generation != generation || servedCursor != cursor || fresh.cursor.toLong() < (cursor.toLongOrNull() ?: Long.MAX_VALUE)) {
             return RemoteBudgetChangePage(
                 budgetId,
@@ -142,7 +145,7 @@ class DirectBudgetSyncRemote(
         operation: OutboxOperationEntity,
         encryptionPassword: String?,
     ): RemoteOperationResult {
-        val budget = client.budget(operation.budgetId)
+        val budget = client.budget(operation.budgetId, encryptionPassword)
         val outcome = client.call { budget.submit(operation) }
         runCatching { budget.sync() }
         return result(operation.budgetId, outcome)
@@ -155,7 +158,8 @@ class DirectBudgetSyncRemote(
         budgetId: String,
         transactionId: String,
         encryptionPassword: String?,
-    ): RemoteTransactionRecord? = client.budget(budgetId).transactionRecord(transactionId)?.let(BudgetSyncJson::directTransaction)
+    ): RemoteTransactionRecord? =
+        client.budget(budgetId, encryptionPassword).transactionRecord(transactionId)?.let(BudgetSyncJson::directTransaction)
 
     private fun result(
         budgetId: String,

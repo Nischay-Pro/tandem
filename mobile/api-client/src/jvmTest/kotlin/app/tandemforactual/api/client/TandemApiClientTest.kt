@@ -92,7 +92,23 @@ class TandemApiClientTest {
             val files = TempBudgetFiles()
             val client = client(server, files)
             client.signInWithPassword(url, "test", "Phone")
-            assertEquals("encrypted_budget", assertFailsWith<TandemApiException> { client.budget("locked") }.errorCode)
+            assertEquals("budget_password_required", assertFailsWith<TandemApiException> { client.budget("locked") }.errorCode)
+            assertEquals("budget_password_incorrect", assertFailsWith<TandemApiException> { client.budget("locked", "nope") }.errorCode)
+            val locked = client.budget("locked", "secret")
+            locked.sync()
+            client.createBudgetPayee("locked", "Sealed", "secret")
+            assertTrue(locked.snapshot("2026-11-21").records.any { it.type == "payee" && it.body["name"] == JsonPrimitive("Sealed") })
+            locked.closeNow()
+            val unlocking = client(server, files)
+            unlocking.signInWithPassword(url, "test", "Phone")
+            assertEquals("budget_password_incorrect", assertFailsWith<TandemApiException> { unlocking.budget("locked", "nope") }.errorCode)
+            assertTrue(
+                unlocking
+                    .budget("locked", "secret")
+                    .snapshot("2026-11-21")
+                    .records
+                    .any { it.body["name"] == JsonPrimitive("Sealed") },
+            )
             assertEquals("budget_unavailable", assertFailsWith<TandemApiException> { client.budget("missing") }.errorCode)
             val budget = client.budget("group")
             assertEquals(budget, client.budget("group"))

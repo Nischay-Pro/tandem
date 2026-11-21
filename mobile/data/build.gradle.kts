@@ -58,6 +58,8 @@ kotlin {
       implementation(libs.sqliteBundled)
       implementation(libs.coroutinesCore)
       implementation(libs.serializationJson)
+      implementation(libs.cryptographyCore)
+      implementation(libs.cryptographyOptimal)
     }
     commonTest.dependencies {
       implementation(kotlin("test"))

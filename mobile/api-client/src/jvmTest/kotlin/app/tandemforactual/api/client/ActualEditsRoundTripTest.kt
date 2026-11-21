@@ -25,7 +25,9 @@ class ActualEditsRoundTripTest {
         client: ActualServerClient,
         fileId: String,
         path: File,
-    ) = ActualDirectBudget.download(client, fileId, System::currentTimeMillis, { UUID.randomUUID().toString() }, null) {
+    ) = ActualDirectBudget.download(client, fileId, System::currentTimeMillis, {
+        UUID.randomUUID().toString()
+    }, null, { error("Not encrypted") }) {
         path.writeBytes(it)
         ActualDatabase(BundledSQLiteDriver().open(path.path))
     }
