@@ -1653,7 +1653,12 @@ internal class TandemMobileSession(
                 )
             }
         if (queued) {
-            setBudgetActionMessage("Saved on this device. It will sync when Tandem is available.", InlineMessageKind.INFO)
+            if (!isServerReachable) {
+                setBudgetActionMessage(
+                    "Saved on this device. It will sync when Actual is reachable.",
+                    InlineMessageKind.INFO,
+                )
+            }
             retryQueuedBudgetReorders(budgetId, encryptionPassword)
         }
         return queued
@@ -3890,7 +3895,13 @@ internal class TandemMobileSession(
             }
         if (!queued) return null
         payeeRecords = payeeRecordsWithPendingCreates(budgetId, payeeRecords)
-        setBudgetActionMessage("Saved on this device. It will sync when Tandem is available.", InlineMessageKind.INFO, messageOwner)
+        if (!isServerReachable) {
+            setBudgetActionMessage(
+                "Saved on this device. It will sync when Actual is reachable.",
+                InlineMessageKind.INFO,
+                messageOwner,
+            )
+        }
         retryQueuedBudgetReorders()
         return localPayeeId
     }

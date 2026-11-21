@@ -4,6 +4,7 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
+import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
@@ -357,7 +358,16 @@ class TandemApiClient(
         transactions: List<StatementImportItem>,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): StatementImportSummary = throw TandemApiException("not_supported")
+    ): StatementImportSummary {
+        val result =
+            edit(budgetId, encryptionPassword) { edits ->
+                edits.importTransactions(
+                    accountId,
+                    transactions.map { ImportRow(it.date, it.amountMinor, it.payeeName, it.notes, it.importedId) },
+                )
+            }
+        return StatementImportSummary(result.added.size, result.updated.size, 0)
+    }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun previewBudgetAccountStatementImport(
@@ -365,7 +375,7 @@ class TandemApiClient(
         accountId: String,
         importedIds: List<String>,
         encryptionPassword: String?,
-    ): StatementImportPreview = throw TandemApiException("not_supported")
+    ): StatementImportPreview = StatementImportPreview(call { budget(budgetId, encryptionPassword).importedIds(accountId, importedIds) })
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetAccount(

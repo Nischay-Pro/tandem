@@ -28,6 +28,12 @@ class ActualBudgetEdits(
 ) {
     private val db get() = writer.db
 
+    /** `transactions-import`: reconciles statement rows into an account the way Actual does. */
+    fun importTransactions(
+        accountId: String,
+        rows: List<ImportRow>,
+    ): ImportResult = ActualImport(writer).reconcile(accountId, rows)
+
     val schedules = ActualScheduleEdits(writer, today)
 
     private fun fail(message: String): Nothing = throw ActualEditException(message)

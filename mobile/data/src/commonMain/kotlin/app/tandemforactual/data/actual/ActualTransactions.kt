@@ -11,7 +11,7 @@ class ActualTransactions(
 
     private val rules = ActualRuleEngine(writer.db, ::insertPayee)
 
-    private fun runRules(transaction: Map<String, Any?>) = rules.run(transaction, writer::uuid)
+    internal fun runRules(transaction: Map<String, Any?>) = rules.run(transaction, writer::uuid)
 
     /** `db.insertPayee`: a payee and the mapping row that points it at itself. */
     fun insertPayee(

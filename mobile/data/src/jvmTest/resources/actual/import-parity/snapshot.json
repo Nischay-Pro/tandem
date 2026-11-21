@@ -1,0 +1,899 @@
+{
+  "today": "2026-11-21",
+  "displaySettings": {
+    "budgetType": "envelope",
+    "currencyCode": "USD",
+    "currencySymbol": "$",
+    "currencyFractionDigits": 2,
+    "numberFormat": null,
+    "hideFraction": false,
+    "currencySymbolPosition": "before",
+    "currencySpaceBetweenAmountAndSymbol": false
+  },
+  "records": [
+    {
+      "type": "account",
+      "id": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+      "body": {
+        "id": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "name": "Checking",
+        "offbudget": false,
+        "closed": false,
+        "balance_current": 493300,
+        "account_group_id": null,
+        "sort_order": 16384
+      },
+      "revision": "bd2e376edad244abb7bebb6a480aed6ca382c43d751db69557e0124c6216f12b"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-08",
+      "body": {
+        "month": "2026-08",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "066ce45184fe79f7965dea4e3faa5ed2f4749d4c7a8f43c13f383a4e3e75c0e8"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-09",
+      "body": {
+        "month": "2026-09",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "8be8c588bc544b2c104409a60121a87bb017b28182ec054b4db81b99fd1d3a18"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-10",
+      "body": {
+        "month": "2026-10",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "4de0a3d16424d15e1b126ff35ce140f04b993d0ad21bbfe7d00738cd0511440d"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-11",
+      "body": {
+        "month": "2026-11",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 0,
+        "totalIncome": 500000,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 500000
+              }
+            ],
+            "received": 500000
+          }
+        ]
+      },
+      "revision": "00fd2eff966250b6a36e53d9146433e02b77e6642f20d6cce28d36caa45da354"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-12",
+      "body": {
+        "month": "2026-12",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "fdcc5c14766ad1c39b225802e00658207d7e9ec6f4edfead6e85dda0d427646a"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-01",
+      "body": {
+        "month": "2027-01",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "2f823849eb95a4a75bec991d6af7b8223e9c7500ce6796d54cec7a990f680f14"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-02",
+      "body": {
+        "month": "2027-02",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "6e8ebd539c14bea74fd5dbf67fbb081c2b98157bed430791beed9f91bdabc18c"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-03",
+      "body": {
+        "month": "2027-03",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "73878282f33ad443712268a3ee6e4a573619203c136eec557249d01216cd74cc"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-04",
+      "body": {
+        "month": "2027-04",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "87ec6f5e6e1016ce64b7801a19d90d13280f1d4d7f5fa3ebf97ddcbd5977c546"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-05",
+      "body": {
+        "month": "2027-05",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "724ab6c80b096475511849aa17c321d2328d88bb7085650834feb35665817598"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-06",
+      "body": {
+        "month": "2027-06",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "74888568e3e68c2a4e723e00a9983087b0dba26e0ff7247463b0c6d21b9f25bf"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-07",
+      "body": {
+        "month": "2027-07",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "537e1cc1ab00bd6bfdcf389d0843e277566162e3e77824dcf2a26087a2f83971"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-08",
+      "body": {
+        "month": "2027-08",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "145e3104b192457d388b46914f830c9d9c8329270d87bb698d9331707935f2da"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-09",
+      "body": {
+        "month": "2027-09",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "a0e2534d7e77ff9cfe523925c193ab3f79604fb39db050a70da78cd9536d823f"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-10",
+      "body": {
+        "month": "2027-10",
+        "incomeAvailable": 500000,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 500000,
+        "fromLastMonth": 500000,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "1c8aaf6941761b694ade7a2a1e664d57c26255b344808d17f6f82d28582edce1"
+    },
+    {
+      "type": "category",
+      "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+      "body": {
+        "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "037f62c15a1ac8de03f485270ab205098f0c193d053ef494cdfcc9bad410166f"
+    },
+    {
+      "type": "category",
+      "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+      "body": {
+        "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "name": "Starting Balances",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "eb14437142d256e97e1c21efeef65f6ebff94392bf614b13aad1bf68fc52e7fc"
+    },
+    {
+      "type": "category-group",
+      "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+      "body": {
+        "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false
+      },
+      "revision": "1e710d3b732d58221349b33f5c874add4057a304a3ff1ee5b3c3311eb21e1e49"
+    },
+    {
+      "type": "payee",
+      "id": "26e1cbd4-45cb-45cd-84ce-e2bef5e8078b",
+      "body": {
+        "id": "26e1cbd4-45cb-45cd-84ce-e2bef5e8078b",
+        "name": "Corner Market",
+        "transfer_acct": null
+      },
+      "revision": "b7355f0ff21a3d3a93a031f78097b5195e699bb558996415bd64fbbc62a5b7aa"
+    },
+    {
+      "type": "payee",
+      "id": "decc960d-9937-4426-9edc-a0910a7bbb33",
+      "body": {
+        "id": "decc960d-9937-4426-9edc-a0910a7bbb33",
+        "name": "Starting Balance",
+        "transfer_acct": null
+      },
+      "revision": "bbbf38b2ebb0c8d653c015f5182f5aa666eefb11d2387b0bbd3dcddbcdee09ed"
+    },
+    {
+      "type": "payee",
+      "id": "ec0b5a42-76c0-40ea-b196-22c3b10f053d",
+      "body": {
+        "id": "ec0b5a42-76c0-40ea-b196-22c3b10f053d",
+        "name": "Checking",
+        "transfer_acct": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25"
+      },
+      "revision": "3c5c4516987f124a6e3bf7a4fbb6f6ad042e36ef65016861a1030950d51173fe"
+    },
+    {
+      "type": "payee",
+      "id": "fac49ad4-79ce-41d8-abd1-04b7b3521f4e",
+      "body": {
+        "id": "fac49ad4-79ce-41d8-abd1-04b7b3521f4e",
+        "name": "Cafe",
+        "transfer_acct": null
+      },
+      "revision": "5d65b90974567016c45f4e84b0e43b01387ad1e345bbabdcbd5481cf9f920829"
+    },
+    {
+      "type": "payee",
+      "id": "fdf003d1-d84a-4f48-b36c-d4e3728789de",
+      "body": {
+        "id": "fdf003d1-d84a-4f48-b36c-d4e3728789de",
+        "name": "Other",
+        "transfer_acct": null
+      },
+      "revision": "15a89b978aa80e7b2ba89ec0825d12da92612f0d25145a24af7a0e8a1e8aaf2b"
+    },
+    {
+      "type": "transaction",
+      "id": "72dea461-c8e9-40b6-bbdc-804fae8495a0",
+      "body": {
+        "id": "72dea461-c8e9-40b6-bbdc-804fae8495a0",
+        "account": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "amount": 500000,
+        "date": "2026-11-21",
+        "payee": "decc960d-9937-4426-9edc-a0910a7bbb33",
+        "category": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "3a30b55a989261d11ca5a47d601dcbf7d71e98e126422e24b83f46a4a67230fe"
+    },
+    {
+      "type": "transaction",
+      "id": "76385baa-c557-41bf-b750-b30dc917337c",
+      "body": {
+        "id": "76385baa-c557-41bf-b750-b30dc917337c",
+        "account": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "amount": -2500,
+        "date": "2026-11-09",
+        "payee": "fdf003d1-d84a-4f48-b36c-d4e3728789de",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "93e12098e0f35f7b0245c4c6a4f561e48d9d70437e0964d021ca470c08cf0fa2"
+    },
+    {
+      "type": "transaction",
+      "id": "76b3d1c3-a51e-4944-8916-cd961733118e",
+      "body": {
+        "id": "76b3d1c3-a51e-4944-8916-cd961733118e",
+        "account": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "amount": -2500,
+        "date": "2026-11-05",
+        "payee": "fac49ad4-79ce-41d8-abd1-04b7b3521f4e",
+        "category": null,
+        "notes": "latte",
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "99df84156f2c2b89ba880567da385962df3fbd3adaee8f84ed916acecc700104"
+    },
+    {
+      "type": "transaction",
+      "id": "9a6bd4e4-241f-4055-bb37-d8f497eb875b",
+      "body": {
+        "id": "9a6bd4e4-241f-4055-bb37-d8f497eb875b",
+        "account": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "amount": -1000,
+        "date": "2026-11-02",
+        "payee": "26e1cbd4-45cb-45cd-84ce-e2bef5e8078b",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": "bank-1",
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "8a177cba0a44eb9ab0a8efd6687686c34f10a54cfa0be68717669033015cf653"
+    },
+    {
+      "type": "transaction",
+      "id": "e109bbdd-fdce-49f8-84d0-94b888bace53",
+      "body": {
+        "id": "e109bbdd-fdce-49f8-84d0-94b888bace53",
+        "account": "4aa625bc-b4b8-46a5-b993-a5cb21fbae25",
+        "amount": -700,
+        "date": "2026-11-04",
+        "payee": "fdf003d1-d84a-4f48-b36c-d4e3728789de",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": true,
+        "importedId": "bank-r",
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "05b378c8780adedad5f04f95e14cf66fee04959f08fb9a332e3c2d6c54d9066d"
+    }
+  ]
+}

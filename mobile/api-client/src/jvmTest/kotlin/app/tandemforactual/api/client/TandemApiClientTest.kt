@@ -274,8 +274,14 @@ class TandemApiClientTest {
             assertFailsWith<TandemApiException> { client.manageBudgetSchedule("group", schedule.id, "explode", null, null) }
             client.manageBudgetSchedule("group", schedule.id, "delete", null, null)
             client.runBudgetBankSync("group", null)
-            assertFailsWith<TandemApiException> { client.importBudgetAccountTransactions("group", checking, emptyList(), null) }
-            assertFailsWith<TandemApiException> { client.previewBudgetAccountStatementImport("group", checking, emptyList(), null) }
+            val statement = listOf(StatementImportItem("2026-11-20", -1_234, "corner shop", "first", "stmt-1"))
+            assertEquals(0, client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1"), null).existingImportedIds.size)
+            assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
+            assertEquals(
+                setOf("stmt-1"),
+                client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1", "stmt-2"), null).existingImportedIds,
+            )
+            assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(server.messages.size > 300)
 

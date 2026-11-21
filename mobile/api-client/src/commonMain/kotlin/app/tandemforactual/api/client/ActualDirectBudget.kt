@@ -123,6 +123,22 @@ class ActualDirectBudget private constructor(
 
     suspend fun transactionRecord(id: String) = locked { reader.transactionRecord(id) }
 
+    /** Which of these statement ids the account already holds, so an import can say how many rows are new. */
+    suspend fun importedIds(
+        accountId: String,
+        ids: List<String>,
+    ): Set<String> =
+        locked {
+            ids.chunked(500).flatMapTo(HashSet()) { chunk ->
+                db
+                    .query(
+                        "SELECT imported_id FROM v_transactions WHERE account = ? AND imported_id IN (${chunk.joinToString { "?" }})",
+                        accountId,
+                        *chunk.toTypedArray(),
+                    ).map { it["imported_id"] as String }
+            }
+        }
+
     /** Applies a budget edit against freshly synced state, then uploads it, as the gateway's maintenance routes did. */
     suspend fun <T> edit(
         today: String,
