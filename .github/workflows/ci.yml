@@ -304,6 +304,7 @@ jobs:
         uses: ./.github/actions/setup-mobile-build
         with:
           gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          gradle_cache_key: android-release
           setup_node: "true"
           setup_android: "true"
 
@@ -441,6 +442,7 @@ jobs:
         uses: ./.github/actions/setup-mobile-build
         with:
           gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          gradle_cache_key: ios-arm64
           cache_kotlin_native: "true"
 
       - name: Download merchant icon resources
