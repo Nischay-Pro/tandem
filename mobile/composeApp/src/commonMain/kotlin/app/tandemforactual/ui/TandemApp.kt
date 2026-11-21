@@ -127,6 +127,7 @@ fun TandemApp(
     crashReports: CrashReports? = null,
     onShareText: ((String) -> Unit)? = null,
     windowHinge: StateFlow<WindowHinge?> = MutableStateFlow(null),
+    screenshotScript: ScreenshotScript? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -1202,6 +1203,50 @@ fun TandemApp(
             }
         }
     }
+    if (screenshotScript != null) {
+        LaunchedEffect(screenshotScript, state.settingsStorageReady) {
+            if (!state.settingsStorageReady) return@LaunchedEffect
+            state.hasCompletedNotificationOnboarding = true
+            state.hasCompletedSyncOnboarding = true
+            if (!mobileSession.isAuthenticated) {
+                state.serverUrl = screenshotScript.serverUrl
+                if (!mobileSession.signInWithPassword(screenshotScript.serverUrl, screenshotScript.password, deviceName)) {
+                    return@LaunchedEffect
+                }
+            } else if (mobileSession.budgets.isEmpty()) {
+                mobileSession.loadBudgets()
+            }
+            val budget = mobileSession.budgets.firstOrNull { it.name == screenshotScript.budgetName } ?: return@LaunchedEffect
+            state.selectedBudget = budget.name
+            state.selectedBudgetId = budget.budgetId
+            state.selectedBudgetEncrypted = budget.isEncrypted
+            mobileSession.synchronize(budget.budgetId, null)
+            navigation.reset(AppRoute.BUDGET)
+            delay(SCREENSHOT_SETTLE_MILLIS)
+            val select = screenshotScript.select
+            when (screenshotScript.screen) {
+                "activity" -> {
+                    navigation.selectTab(AppRoute.ACTIVITY)
+                    delay(SCREENSHOT_SETTLE_MILLIS)
+                    liveActivityTransactions.firstOrNull { it.payee == select }?.let {
+                        openTransaction(state, navigation, it, isLive = true, navigate = false)
+                    }
+                }
+                "accounts" -> {
+                    liveAccounts.firstOrNull { it.name == select }?.let { state.selectedAccountId = it.id }
+                    navigation.selectTab(AppRoute.ACCOUNTS)
+                }
+                "reports" -> navigation.selectTab(AppRoute.REPORTS)
+                "category" -> {
+                    mobileSession.categoryRecords.firstOrNull { it.recordName() == select }?.let {
+                        state.selectedCategoryId = it.recordId
+                        navigation.open(AppRoute.CATEGORY_DETAIL)
+                    }
+                }
+                "add" -> navigation.newTransaction(null)
+            }
+        }
+    }
     val prepareBudgetUnlock: (BudgetCatalogItem) -> Unit = { selected ->
         state.pendingBudgetSelectionOrigin =
             BudgetSelectionSnapshot(
@@ -2016,3 +2061,5 @@ internal fun <T> isBackPreviewStale(
     gestureOrigin: T?,
     current: T,
 ): Boolean = preview != null && gestureOrigin != current && preview != current
+
+private const val SCREENSHOT_SETTLE_MILLIS = 1_500L

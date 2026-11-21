@@ -1,0 +1,129 @@
+name: App screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/screenshot-mode]
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: iPhone and iPad screenshots
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      ACTUAL_URL: http://localhost:5006
+      TANDEM_URL: http://localhost:19753
+      DEMO_PASSWORD: demo-password
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mobile build tools
+        uses: ./.github/actions/setup-mobile-build
+        with:
+          gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache_kotlin_native: "true"
+          setup_node: "true"
+
+      - name: Start Postgres
+        run: |
+          brew install postgresql@17
+          brew services start postgresql@17
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          export PATH="$pg_bin:$PATH"
+          for _ in $(seq 1 30); do pg_isready -h localhost && break; sleep 1; done
+          psql -h localhost -d postgres -c "CREATE ROLE tandem LOGIN PASSWORD 'demo-only'"
+          psql -h localhost -d postgres -c "CREATE DATABASE tandem OWNER tandem"
+
+      - name: Start Actual
+        run: |
+          mkdir -p "$RUNNER_TEMP/actual"
+          ACTUAL_PORT=5006 ACTUAL_DATA_DIR="$RUNNER_TEMP/actual" \
+            nohup npx --yes @actual-app/sync-server@26.11.0 > "$RUNNER_TEMP/actual.log" 2>&1 &
+          for _ in $(seq 1 120); do curl -fs "$ACTUAL_URL/account/needs-bootstrap" >/dev/null && break; sleep 1; done
+          curl -fs "$ACTUAL_URL/account/needs-bootstrap"
+
+      - name: Seed the demo budget
+        run: node scripts/screenshots/seed-demo.mjs
+
+      - name: Start the Tandem API
+        working-directory: services/api
+        run: |
+          mkdir -p "$RUNNER_TEMP/api"
+          DATABASE_URL=postgresql://tandem:demo-only@localhost:5432/tandem \
+          AUTH_TOKEN_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+          HOST=127.0.0.1 PORT=19753 ACTUAL_SERVER_URL="$ACTUAL_URL" ACTUAL_API_DATA_DIR="$RUNNER_TEMP/api" \
+            nohup node node_modules/tsx/dist/cli.mjs src/entrypoint.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 120); do curl -s -o /dev/null "$TANDEM_URL/api/v1/" && break; sleep 1; done
+
+      - name: Build the iOS app for the simulator
+        working-directory: mobile
+        run: |
+          xcodebuild \
+            -project iosApp/TandemForActual.xcodeproj \
+            -scheme TandemForActual \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Capture screenshots
+        run: |
+          app="$RUNNER_TEMP/derived/Build/Products/Debug-iphonesimulator/TandemForActual.app"
+          out="$RUNNER_TEMP/screenshots"
+          mkdir -p "$out"
+          runtime="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="iOS" and x["isAvailable"]]; print(r[-1]["identifier"])')"
+          pick() {
+            xcrun simctl list devicetypes -j | python3 -c 'import json,re,sys; t=[d for d in json.load(sys.stdin)["devicetypes"] if re.search(sys.argv[1], d["name"])]; print(t[-1]["identifier"] if t else "")' "$1"
+          }
+          shoot() {
+            local name="$1" type="$2" udid
+            [ -n "$type" ] || { echo "No simulator for $name"; return; }
+            udid="$(xcrun simctl create "$name" "$type" "$runtime")"
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl status_bar "$udid" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+              --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+            xcrun simctl install "$udid" "$app"
+            local wait=60
+            for mode in light dark; do
+              xcrun simctl ui "$udid" appearance "$mode"
+              for spec in budget: activity:Corner\ Market accounts:Everyday\ checking reports: category:Phone; do
+                local screen="${spec%%:*}" select="${spec#*:}"
+                xcrun simctl terminate "$udid" app.tandemforactual.ios >/dev/null 2>&1 || true
+                SIMCTL_CHILD_TANDEM_SCREENSHOT_SERVER="$TANDEM_URL" \
+                SIMCTL_CHILD_TANDEM_SCREENSHOT_PASSWORD="$DEMO_PASSWORD" \
+                SIMCTL_CHILD_TANDEM_SCREENSHOT_BUDGET="Demo household" \
+                SIMCTL_CHILD_TANDEM_SCREENSHOT_SCREEN="$screen" \
+                SIMCTL_CHILD_TANDEM_SCREENSHOT_SELECT="$select" \
+                  xcrun simctl launch "$udid" app.tandemforactual.ios
+                sleep "$wait"
+                wait=20
+                xcrun simctl io "$udid" screenshot "$out/$name-$mode-$screen.png"
+              done
+            done
+            xcrun simctl shutdown "$udid"
+          }
+          shoot iphone-17 "$(pick '^iPhone 17$')"
+          shoot iphone-duo "$(pick 'iPhone Duo')"
+          shoot ipad "$(pick 'iPad Pro 13')"
+          ls -la "$out"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-screenshots
+          path: |
+            ${{ runner.temp }}/screenshots
+            ${{ runner.temp }}/*.log
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,5 +1,7 @@
 package app.tandemforactual.android
 
+import app.tandemforactual.ui.ScreenshotScript
+import android.content.pm.ApplicationInfo
 import kotlinx.coroutines.launch
 import app.tandemforactual.ui.WindowHinge
 import androidx.window.layout.WindowLayoutInfo
@@ -149,6 +151,7 @@ class MainActivity : FragmentActivity() {
         crashReports = crashReports,
         onShareText = { text -> shareText(text) },
         windowHinge = windowHinge,
+        screenshotScript = screenshotScript(),
       )
     }
   }
@@ -158,6 +161,12 @@ class MainActivity : FragmentActivity() {
     setIntent(intent)
     intent.dataString?.let { AuthReturnEvents.publish(it) }
     handleQuickAction(intent)
+  }
+
+  private fun screenshotScript(): ScreenshotScript? {
+    if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return null
+    val extras = intent?.extras ?: return null
+    return ScreenshotScript.from(extras.keySet().associateWith { extras.getString(it) })
   }
 
   private fun shareText(text: String) {
