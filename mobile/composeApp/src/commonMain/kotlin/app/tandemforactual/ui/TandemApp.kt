@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
@@ -102,6 +103,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.TimeSource
 
 @Composable
 fun TandemApp(
@@ -128,6 +131,7 @@ fun TandemApp(
     onShareText: ((String) -> Unit)? = null,
     windowHinge: StateFlow<WindowHinge?> = MutableStateFlow(null),
     screenshotScript: ScreenshotScript? = null,
+    actualBudgetFiles: ActualBudgetFiles? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -140,7 +144,10 @@ fun TandemApp(
     val activitySortCache = remember { ActivityTransactionSortCache() }
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
-    val apiClient = remember(allowInsecurePrivateNetwork) { TandemApiClient(allowInsecurePrivateNetwork) }
+    val apiClient =
+        remember(allowInsecurePrivateNetwork, actualBudgetFiles) {
+            TandemApiClient(allowInsecurePrivateNetwork, budgetFiles = actualBudgetFiles, today = ::platformTodayIsoDate)
+        }
     val openIdLoginProofState =
         rememberSaveable(saver = OpenIdLoginProofState.saver(nowEpochMillis)) {
             OpenIdLoginProofState(nowEpochMillis)
@@ -926,6 +933,14 @@ fun TandemApp(
             if (state.selectedBudgetEncrypted != it.isEncrypted) state.selectedBudgetEncrypted = it.isEncrypted
         }
     }
+    LaunchedEffect(state.budgetSwitchSplashId) {
+        val budgetId = state.budgetSwitchSplashId ?: return@LaunchedEffect
+        val shown = TimeSource.Monotonic.markNow()
+        withTimeoutOrNull(BUDGET_SWITCH_SPLASH_MAX_MS) { snapshotFlow { mobileSession.hasLoadedBudget(budgetId) }.first { it } }
+        delay(BUDGET_SWITCH_SETTLE_MS)
+        delay((BUDGET_SWITCH_SPLASH_MIN_MS - shown.elapsedNow().inWholeMilliseconds).coerceAtLeast(0))
+        if (state.budgetSwitchSplashId == budgetId) state.budgetSwitchSplashId = null
+    }
     val appLockState = remember { AppLockState(nowEpochMillis) }
     LaunchedEffect(isAppInForeground) { appLockState.onForegroundChanged(isAppInForeground) }
     LaunchedEffect(
@@ -1161,7 +1176,8 @@ fun TandemApp(
                 name = state.selectedBudget,
                 isEncrypted = state.selectedBudgetEncrypted,
             )
-        if (state.selectedBudgetId != selected.budgetId) state.budgetDisplaySettings = null
+        val switchingBudget = state.selectedBudgetId != selected.budgetId
+        if (switchingBudget) state.budgetDisplaySettings = null
         state.selectedBudget = selected.name
         state.selectedBudgetId = selected.budgetId
         state.selectedBudgetEncrypted = selected.isEncrypted
@@ -1188,6 +1204,7 @@ fun TandemApp(
                     )
             when {
                 isCached -> {
+                    if (switchingBudget) state.budgetSwitchSplashId = selected.budgetId
                     state.pendingBudgetSelectionOrigin = null
                     val previousRoute = backStack.getOrNull(backStack.lastIndex - 1)?.route
                     if (previousRoute?.isTab() == true) {
@@ -1998,6 +2015,7 @@ fun TandemApp(
                 },
             )
         }
+        BudgetSwitchSplash(state.selectedBudget.takeIf { state.budgetSwitchSplashId != null })
         AppLockGate(
             state = state,
             mobileSession = mobileSession,
@@ -2067,3 +2085,6 @@ internal fun <T> isBackPreviewStale(
 ): Boolean = preview != null && gestureOrigin != current && preview != current
 
 private const val SCREENSHOT_SETTLE_MILLIS = 1_500L
+private const val BUDGET_SWITCH_SPLASH_MIN_MS = 700L
+private const val BUDGET_SWITCH_SPLASH_MAX_MS = 5_000L
+private const val BUDGET_SWITCH_SETTLE_MS = 250L

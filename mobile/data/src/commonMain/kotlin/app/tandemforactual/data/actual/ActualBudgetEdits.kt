@@ -241,6 +241,141 @@ class ActualBudgetEdits(
                 )?.get("balance") as Number?
         )?.toLong() ?: 0L
 
+    /** Actual's `account-move` with no checks, as the order merge sends it. */
+    private fun rawMoveAccount(
+        id: String,
+        targetId: String?,
+    ) {
+        val account = db.first("SELECT * FROM accounts WHERE id = ?", id)!!
+        val peers =
+            if (truthy(account["closed"])) {
+                db.query("SELECT id, sort_order FROM accounts WHERE closed = 1 ORDER BY sort_order, name")
+            } else {
+                db.query(
+                    "SELECT id, sort_order FROM accounts WHERE tombstone = 0 AND offbudget = ? ORDER BY sort_order, name",
+                    if (truthy(account["offbudget"])) 1L else 0L,
+                )
+            }
+        val (updates, order) = shove(orders(peers), targetId)
+        updates.forEach { writer.update("accounts", it.id, mapOf("sort_order" to it.sortOrder)) }
+        writer.update("accounts", id, mapOf("sort_order" to order))
+    }
+
+    /**
+     * The gateway's `setOrders`: each list carries the order the device started from and the order the user chose;
+     * only the user's moves are replayed onto the live order, and the result is read back to confirm it.
+     */
+    fun setOrders(batch: JsonObject): JsonObject =
+        writer.batch {
+            fun ids(element: JsonElement?) =
+                (element as? JsonArray)?.map { (it as JsonPrimitive).content }
+                    ?: fail("The order must contain the same items as the base order")
+
+            fun confirm(
+                actual: List<String>,
+                expected: List<String>,
+            ) = check(actual == expected) { "Actual did not save the requested order" }
+            val result = LinkedHashMap<String, JsonElement>()
+
+            fun groups() = db.query("SELECT id, is_income FROM category_groups WHERE tombstone = 0 ORDER BY sort_order, id")
+            (batch["categoryGroups"] as? JsonObject)?.let { change ->
+                val targets = mutableListOf<String>()
+                for (income in listOf(false, true)) {
+                    val section = groups().filter { truthy(it["is_income"]) == income }.map { it["id"] as String }
+                    val isIncome = groups().associate { it["id"] as String to truthy(it["is_income"]) }
+
+                    fun inSection(id: String) = isIncome[id] == income
+                    val target =
+                        BudgetOrderMerge.rebase(
+                            ids(change["baseOrder"]).filter(::inSection),
+                            ids(change["order"]).filter(::inSection),
+                            section,
+                        )
+                    BudgetOrderMerge.plan(section, target).forEach { move ->
+                        val peers = db.query("SELECT id, sort_order FROM category_groups WHERE tombstone = 0 ORDER BY sort_order, id")
+                        val (updates, order) = shove(orders(peers), move.beforeId)
+                        updates.forEach { writer.update("category_groups", it.id, mapOf("sort_order" to it.sortOrder)) }
+                        writer.update("category_groups", move.id, mapOf("sort_order" to order))
+                    }
+                    confirm(groups().filter { truthy(it["is_income"]) == income }.map { it["id"] as String }, target)
+                    targets += target
+                }
+                result["categoryGroups"] = JsonArray(targets.map(::JsonPrimitive))
+            }
+            (batch["categories"] as? JsonArray)?.takeIf { it.isNotEmpty() }?.let { changes ->
+                val groupIds = groups().map { it["id"] as String }.toSet()
+                result["categories"] =
+                    JsonArray(
+                        changes.map { element ->
+                            val change = element as JsonObject
+                            val groupId = (change["groupId"] as JsonPrimitive).content
+                            if (groupId !in groupIds) fail("Category group does not exist in this budget")
+
+                            fun live() =
+                                db
+                                    .query(
+                                        "SELECT id FROM categories WHERE cat_group = ? AND tombstone = 0 ORDER BY sort_order, id",
+                                        groupId,
+                                    ).map {
+                                        it["id"] as String
+                                    }
+                            val target = BudgetOrderMerge.rebase(ids(change["baseOrder"]), ids(change["order"]), live())
+                            BudgetOrderMerge.plan(live(), target).forEach { moveCategory(it.id, groupId, it.beforeId) }
+                            confirm(live(), target)
+                            JsonObject(mapOf("groupId" to JsonPrimitive(groupId), "order" to JsonArray(target.map(::JsonPrimitive))))
+                        },
+                    )
+            }
+            (batch["accounts"] as? JsonObject)?.let { change ->
+                val all = accounts()
+                val byId = all.associateBy { it["id"] as String }
+
+                fun section(row: Row) =
+                    if (truthy(row["closed"])) {
+                        "closed"
+                    } else if (truthy(row["offbudget"])) {
+                        "off-budget"
+                    } else {
+                        "on-budget"
+                    }
+                val saved = mutableListOf<String>()
+                for (name in listOf("on-budget", "off-budget", "closed")) {
+                    fun inSection(id: String) = byId[id]?.let { section(it) == name } == true
+                    val order = ids(change["order"]).filter(::inSection)
+                    if (order.isEmpty()) continue
+                    val scope =
+                        all
+                            .filter {
+                                if (name ==
+                                    "closed"
+                                ) {
+                                    truthy(it["closed"])
+                                } else {
+                                    truthy(it["offbudget"]) == (name == "off-budget")
+                                }
+                            }.map { it["id"] as String }
+                    val live = scope.filter(::inSection)
+                    val sectionTarget = BudgetOrderMerge.rebase(ids(change["baseOrder"]).filter(::inSection), order, live)
+                    val remaining = ArrayDeque(sectionTarget)
+                    val scopeTarget = scope.map { if (inSection(it)) remaining.removeFirst() else it }
+                    BudgetOrderMerge
+                        .plan(
+                            scope,
+                            scopeTarget,
+                            scope.filter { !inSection(it) }.toSet(),
+                        ).forEach { rawMoveAccount(it.id, it.beforeId) }
+                    saved += sectionTarget
+                }
+                val after = accounts().map { it["id"] as String }
+                for (name in listOf("on-budget", "off-budget", "closed")) {
+                    val expected = saved.filter { section(byId.getValue(it)) == name }
+                    if (expected.isNotEmpty()) confirm(after.filter { id -> byId[id]?.let { section(it) == name } == true }, expected)
+                }
+                result["accounts"] = JsonArray(saved.map(::JsonPrimitive))
+            }
+            JsonObject(result)
+        }
+
     // Payees
 
     private fun insertPayee(payee: Map<String, Any?>): String {

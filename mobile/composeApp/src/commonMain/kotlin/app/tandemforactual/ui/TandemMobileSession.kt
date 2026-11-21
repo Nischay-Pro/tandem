@@ -7,18 +7,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
-import app.tandemforactual.api.client.ActualBudgetParity
-import app.tandemforactual.api.client.ActualDirectBudget
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
-import app.tandemforactual.api.client.GeneratedBudgetSyncRemote
+import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.ServerCapabilities
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
-import app.tandemforactual.api.client.compareWithGateway
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -332,33 +329,9 @@ internal class TandemMobileSession(
         val coordinator =
             BudgetSyncCoordinator(
                 repository,
-                GeneratedBudgetSyncRemote(apiClient),
+                DirectBudgetSyncRemote(apiClient),
             )
     }
-
-    /** Checks a separately downloaded copy against the gateway before any writes are routed to it. */
-    internal suspend fun previewDirectBudget(
-        budgetId: String,
-        direct: ActualDirectBudget,
-        encryptionPassword: String?,
-        staging: LocalBudgetRepository? = null,
-    ): ActualBudgetParity =
-        synchronizationMutex.withLock {
-            check(apiClient.isAuthenticated && isCurrentIdentityCacheOwner()) { "Sign in to the server and account that own this budget." }
-            require(direct.groupId == budgetId) { "Choose the same budget on the Actual server and the gateway." }
-            val gateway =
-                apiClient.withExclusiveSession {
-                    GeneratedBudgetSyncRemote(apiClient).readSnapshot(budgetId, encryptionPassword)
-                }
-            withContext(Dispatchers.Default) {
-                val today = currentDateIso()
-                if (staging == null) {
-                    direct.preview(today).compareWithGateway(gateway)
-                } else {
-                    direct.stageMobileCache(today, gateway, staging)
-                }
-            }
-        }
 
     internal suspend fun bindEncryptedBudgetDatabase(
         budgetId: String,
@@ -409,6 +382,7 @@ internal class TandemMobileSession(
         if (unsynced) return "Sync or resolve this budget’s changes before removing it from this device."
         if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
         mainStorage?.repository?.removeBudget(budgetId)
+        apiClient.removeBudget(budgetId)
         vault?.delete(budgetId)
         cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
         loadLocalRecords(budgetId)
@@ -2661,6 +2635,16 @@ internal class TandemMobileSession(
 
     var localSyncState by mutableStateOf<BudgetSyncStateEntity?>(null)
         private set
+
+    /** Whether the observed records all belong to this budget, so its screens can show without filling in piece by piece. */
+    fun hasLoadedBudget(budgetId: String): Boolean =
+        localSyncState?.budgetId == budgetId &&
+            listOf(accountRecords, categoryRecords, transactionRecords, scheduleRecords).all { records ->
+                records.all {
+                    it.budgetId ==
+                        budgetId
+                }
+            }
 
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
         private set

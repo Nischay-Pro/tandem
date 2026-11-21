@@ -127,6 +127,7 @@ class MainActivity : FragmentActivity() {
         }
       }
       TandemApp(
+        actualBudgetFiles = remember { app.tandemforactual.data.database.AndroidActualBudgetFiles(applicationContext) },
         deviceName =
           Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",

@@ -241,7 +241,7 @@ class SignOutCacheClearFailureTest {
             .build()
 
     private fun storedSession(): String =
-        """{"serverUrl":"https://actual.example.test","accessToken":"saved-token","device":{"deviceId":"device-1","principalId":"principal-1","budgetIds":["$BUDGET_ID"]}}"""
+        """{"serverUrl":"https://actual.example.test","token":"saved-token","deviceId":"device-1","principalId":"principal-1","budgetIds":["$BUDGET_ID"]}"""
 
     private companion object {
         const val DATABASE_NAME = "sign-out-cache-clear-failure.db"

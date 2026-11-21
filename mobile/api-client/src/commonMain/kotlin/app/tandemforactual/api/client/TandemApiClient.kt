@@ -1,47 +1,28 @@
 package app.tandemforactual.api.client
 
-import app.tandemforactual.api.generated.Api
-import app.tandemforactual.api.generated.Auth
-import app.tandemforactual.api.generated.api.AuthenticationApi
-import app.tandemforactual.api.generated.api.BudgetsApi
-import app.tandemforactual.api.generated.api.TransactionsApi
-import app.tandemforactual.api.generated.models.ApiV1BudgetsBudgetIdPayeesRequest
-import arrow.core.Either
-import com.kroegerama.openapi.kmp.gen.companion.AuthItem
-import com.kroegerama.openapi.kmp.gen.companion.CallException
-import com.kroegerama.openapi.kmp.gen.companion.HttpCallException
-import com.kroegerama.openapi.kmp.gen.companion.HttpCallResponse
-import io.ktor.client.plugins.compression.ContentEncoding
-import io.ktor.client.plugins.pluginOrNull
-import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.URLBuilder
-import io.ktor.http.Url
-import io.ktor.http.content.TextContent
-import io.ktor.http.contentType
+import app.tandemforactual.data.actual.ActualBudgetEdits
+import app.tandemforactual.data.actual.ActualEditException
+import app.tandemforactual.data.actual.ActualSyncException
+import app.tandemforactual.data.actual.InvalidTransactionRequestException
+import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.database.ActualBudgetFiles
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import kotlinx.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 data class AuthenticatedDevice(
@@ -89,50 +70,24 @@ data class StatementImportPreview(
     fun newRowCount(totalRows: Int): Int = (totalRows - existingImportedIds.size).coerceAtLeast(0)
 }
 
-private val specificApiErrorMessages =
+private val errorMessages =
     mapOf(
-        "actual_only" to "We found your Actual Budget service. Make sure the Tandem API Gateway is running at /api/v1/.",
-        "address_unreachable" to "Tandem isn’t responding at this address. Check the server address.",
-        "actual_unavailable" to "Tandem can’t connect to Actual. Check that the Actual server is running.",
-        "tandem_not_ready" to "Tandem is starting up. Try again in a moment.",
-        "tandem_route_unavailable" to "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/.",
-        "invalid_budget_password" to "That password didn’t unlock this encrypted budget. Check the budget password.",
+        "address_unreachable" to "Tandem can’t reach an Actual server at this address. Check the server address.",
         "sign_in_required" to "Sign in to open your budgets.",
         "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
         "invalid_credentials" to "That password doesn’t match this Actual server. Check the password.",
-        "invalid_device_credential" to "Your sign-in is no longer active. Sign in again.",
-        "bank_sync_failed" to "Actual couldn’t sync bank transactions. Check the bank connection.",
-        "bank_sync_busy" to "Bank sync is already running. Wait a moment.",
-        "duplicate_imported_id" to "Statement rows share a reference. Map a column with unique values.",
-        "statement_preview_failed" to "Tandem couldn’t check which statement rows are already in Actual. Check your connection.",
-        "actual_operation_failed" to "Actual couldn’t save this change. Refresh the budget before trying again.",
-        "operation_uncertain" to "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again.",
-        "operation_in_progress" to "Tandem is still processing this change. Wait for it to finish.",
-        "operation_rejected" to "Actual rejected this change earlier. Refresh the budget before trying again.",
-        "idempotency_key_reused" to "This change is linked to a different request. Refresh the budget before trying again.",
-        "operation_result_unavailable" to
-            "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device.",
+        "openid_unsupported" to "Sign in with your Actual password. OpenID sign-in isn’t available in Tandem yet.",
+        "budget_unavailable" to "This budget isn’t on the Actual server any more.",
+        "encrypted_budget" to "Tandem can’t open encrypted budgets yet.",
+        "file_has_reset" to "This budget’s sync history was reset in Actual. Remove it from this device and open it again.",
+        "file_has_new_key" to "This budget’s encryption key changed in Actual. Remove it from this device and open it again.",
+        "out_of_sync" to "Tandem and Actual couldn’t agree on this budget’s changes. Try syncing again.",
+        "clock_drift" to "This device’s clock is too far from the server’s. Check the date and time.",
+        "not_supported" to "Use Actual for this until Tandem supports it.",
+        "rule_unsupported" to "A rule uses a formula or template that Tandem can’t run yet. Make this change in Actual.",
         "invalid_request" to "Tandem couldn’t use those details. Check the form.",
+        "invalid-server-url" to "Enter a server address that starts with https://.",
     )
-
-internal fun parseStatementImportPreview(
-    payload: JsonObject,
-    importedIds: List<String>,
-): StatementImportPreview {
-    val status = (payload["status"] as? JsonPrimitive)?.contentOrNull
-    if (status != "ok") throw TandemApiProtocolException("Statement preview response has an invalid status")
-    val existingImportedIds =
-        (payload["existingImportedIds"] as? JsonArray)
-            ?.map {
-                (it as? JsonPrimitive)?.contentOrNull
-                    ?: throw TandemApiProtocolException("Statement preview response has an invalid reference")
-            }
-            ?: throw TandemApiProtocolException("Statement preview response is missing its references")
-    if (existingImportedIds.distinct().size != existingImportedIds.size || existingImportedIds.any { it !in importedIds }) {
-        throw TandemApiProtocolException("Statement preview response has unexpected references")
-    }
-    return StatementImportPreview(existingImportedIds.toSet())
-}
 
 class TandemApiException(
     val errorCode: String,
@@ -140,14 +95,7 @@ class TandemApiException(
     cause: Throwable? = null,
     safeMessageOverride: String? = null,
 ) : Exception(
-        safeMessageOverride ?: specificApiErrorMessages[errorCode] ?: when {
-            httpStatus == 400 -> "Tandem couldn’t accept this request. Check the details."
-            httpStatus == 404 -> "The Tandem API Gateway isn’t available at this address. Check that it’s running at /api/v1/."
-            httpStatus == 401 -> "Tandem can’t verify this device. Sign in again."
-            httpStatus == 403 -> "This device doesn’t have access to this budget. Ask the budget owner to grant access."
-            httpStatus in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
-            else -> "Tandem isn’t responding at this address. Check the server address."
-        },
+        safeMessageOverride ?: errorMessages[errorCode] ?: "Tandem couldn’t reach Actual. Check your connection and try again.",
         cause,
     )
 
@@ -155,472 +103,219 @@ class TandemApiProtocolException(
     message: String,
 ) : IllegalStateException(message)
 
-/** Owns the generated API client's server address and in-memory device credential. */
+/**
+ * Talks to the user's Actual server directly. Budgets are downloaded into [budgetFiles], synced with Actual's own
+ * protocol, and edited on the device with Actual's rules.
+ */
 class TandemApiClient(
     private val allowInsecurePrivateNetwork: Boolean = false,
+    private val http: HttpClient = HttpClient(),
+    var budgetFiles: ActualBudgetFiles? = null,
+    var today: () -> String = {
+        Clock.System
+            .now()
+            .toString()
+            .take(10)
+    },
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val newId: () -> String = { Uuid.random().toString() },
 ) {
     private val sessionMutex = Mutex()
-    private val maintenanceKeyMutex = Mutex()
-    private val pendingMaintenanceKeys = mutableMapOf<String, String>()
-    private var accessToken: String? = null
+    private val budgetMutex = Mutex()
+    private var server: ActualServerClient? = null
     private var serverUrl: String? = null
-    private var authenticatedDevice: AuthenticatedDevice? = null
-    private var activeAuthProvider: Auth.BearerAuth? = null
-    private var localServerUrl: String? = null
-    private var verifiedLocalServerUrl: String? = null
-    internal val bearerAuth =
-        Auth.BearerAuth {
-            accessToken?.let(AuthItem::Bearer)
-        }
+    private var device: AuthenticatedDevice? = null
+    private val openBudgets = mutableMapOf<String, ActualDirectBudget>()
 
-    val isAuthenticated: Boolean
-        get() = accessToken != null
+    val isAuthenticated: Boolean get() = server?.token != null
 
-    val currentServerUrl: String?
-        get() = serverUrl
+    val currentServerUrl: String? get() = serverUrl
 
-    val activeServerUrl: String?
-        get() = verifiedLocalServerUrl ?: serverUrl
+    val activeServerUrl: String? get() = serverUrl
 
-    val isUsingLocalServer: Boolean
-        get() = verifiedLocalServerUrl != null
+    val isUsingLocalServer: Boolean get() = false
 
-    suspend fun setLocalServerUrl(value: String?) {
-        val parsed =
-            value?.trim()?.takeIf(String::isNotEmpty)?.let {
-                parseServerUrl(it, allowInsecurePrivateNetwork).toString()
-            }
-        GeneratedApiAccess.mutex.withLock {
-            localServerUrl = parsed
-            if (verifiedLocalServerUrl != parsed) verifiedLocalServerUrl = null
-        }
-    }
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setLocalServerUrl(value: String?) = Unit
 
-    suspend fun refreshLocalServer(timeoutMillis: Long = LOCAL_IDENTITY_TIMEOUT_MILLIS): Boolean {
-        val candidate = localServerUrl
-        val token = accessToken
-        val deviceId = authenticatedDevice?.deviceId
-        if (candidate == null || token == null || deviceId == null) {
-            verifiedLocalServerUrl = null
-            return false
-        }
-        val nonce = createLocalIdentityNonce()
-        val verified =
-            try {
-                withTimeout(timeoutMillis) {
-                    val response =
-                        Api.client.post(endpointUrl(Url(candidate), "/api/v1/local-identity")) {
-                            contentType(ContentType.Application.Json)
-                            setBody(
-                                TextContent(
-                                    buildJsonObject {
-                                        put("deviceId", deviceId)
-                                        put("nonce", nonce)
-                                    }.toString(),
-                                    ContentType.Application.Json,
-                                ),
-                            )
-                        }
-                    if (response.status != HttpStatusCode.OK) return@withTimeout false
-                    val proof = Json.parseToJsonElement(response.bodyAsText()).jsonObject.optionalString("proof")
-                    proof != null && constantTimeEquals(proof, localIdentityProof(token, deviceId, nonce))
-                }
-            } catch (error: CancellationException) {
-                if (error is TimeoutCancellationException) false else throw error
-            } catch (_: Exception) {
-                false
-            }
-        GeneratedApiAccess.mutex.withLock {
-            verifiedLocalServerUrl = if (verified && localServerUrl == candidate) candidate else null
-        }
-        return verifiedLocalServerUrl != null
-    }
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun refreshLocalServer(timeoutMillis: Long = 0): Boolean = false
 
-    suspend fun readServerCapabilities(): ServerCapabilities? {
-        val base = activeServerUrl ?: return null
-        return try {
-            val response = Api.client.get(endpointUrl(Url(base), "/api/v1/capabilities"))
-            when (response.status) {
-                HttpStatusCode.OK -> {
-                    val payload = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-                    ServerCapabilities(
-                        apiVersion = payload.requiredInt("apiVersion"),
-                        minimumClientApiVersion = payload.requiredInt("minimumClientApiVersion"),
-                        features = payload.requiredStringArray("features").toSet(),
-                        actualVersion = payload.optionalString("actualVersion"),
-                    )
-                }
-                HttpStatusCode.NotFound -> ServerCapabilities.LEGACY
-                else -> null
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-    }
+    fun useExternalServerAfterLocalFailure() = Unit
 
-    fun useExternalServerAfterLocalFailure() {
-        verifiedLocalServerUrl = null
-    }
+    fun readServerCapabilities(): ServerCapabilities? =
+        if (isAuthenticated) ServerCapabilities(CLIENT_API_VERSION, CLIENT_API_VERSION, DIRECT_FEATURES, actualVersion = null) else null
 
-    suspend fun restoreSession(
-        serverUrl: String,
-        token: String,
-    ) {
-        sessionMutex.withLock {
-            restoreSessionLocked(serverUrl, token)
-        }
-    }
+    suspend fun <T> withExclusiveSession(block: suspend () -> T): T = sessionMutex.withLock { block() }
 
     fun exportStoredSession(): String? {
-        val token = accessToken ?: return null
-        val server = serverUrl ?: return null
-        val device = authenticatedDevice ?: return null
+        val url = serverUrl ?: return null
+        val token = server?.token ?: return null
+        val current = device ?: return null
         return buildJsonObject {
-            put("serverUrl", server)
-            put("accessToken", token)
-            put(
-                "device",
-                buildJsonObject {
-                    put("deviceId", device.deviceId)
-                    put("principalId", device.principalId)
-                    put("budgetIds", JsonArray(device.budgetIds.map(::JsonPrimitive)))
-                },
-            )
+            put("serverUrl", url)
+            put("token", token)
+            put("deviceId", current.deviceId)
+            put("principalId", current.principalId)
+            put("budgetIds", JsonArray(current.budgetIds.map(::JsonPrimitive)))
         }.toString()
     }
 
     suspend fun restoreStoredSession(value: String): AuthenticatedDevice {
         val root =
-            try {
-                Json.parseToJsonElement(value).jsonObject
-            } catch (_: Exception) {
-                throw TandemApiProtocolException("Stored device session is invalid")
-            }
-        val server = root.requiredString("serverUrl")
-        val token = root.requiredString("accessToken")
-        val deviceJson =
-            root["device"] as? JsonObject
-                ?: throw TandemApiProtocolException("Stored device session has no device")
-        val device =
+            runCatching { Json.parseToJsonElement(value).jsonObject }.getOrNull()
+                ?: throw TandemApiProtocolException("Stored session is invalid")
+
+        fun text(key: String) =
+            (root[key] as? JsonPrimitive)?.contentOrNull ?: throw TandemApiProtocolException("Stored session is invalid")
+        val restored =
             AuthenticatedDevice(
-                deviceId = deviceJson.requiredString("deviceId"),
-                principalId = deviceJson.requiredString("principalId"),
-                budgetIds = deviceJson.requiredStringArray("budgetIds"),
+                text("deviceId"),
+                text("principalId"),
+                (root["budgetIds"] as? JsonArray)?.map { (it as JsonPrimitive).content }
+                    ?: throw TandemApiProtocolException("Stored session is invalid"),
             )
         return sessionMutex.withLock {
-            restoreSessionLocked(server, token)
-            authenticatedDevice = device
-            device
+            connect(text("serverUrl")).token = text("token")
+            device = restored
+            restored
         }
     }
 
-    suspend fun readActualLoginMethods(serverUrl: String): ActualLoginMethods =
-        sessionMutex.withLock {
-            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
-            GeneratedApiAccess.mutex.withLock {
-                GeneratedApiAccess.ensureContentEncoding()
-                clearGeneratedAuthProvider()
-                Api.baseUrl = parsedUrl
-                val payload =
-                    try {
-                        unwrap(AuthenticationApi.getActualLoginMethods())
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: TandemApiException) {
-                        throw diagnoseLoginMethodsFailure(parsedUrl, error)
-                    }
-                ActualLoginMethods(
-                    bootstrapped = payload.requiredBoolean("bootstrapped"),
-                    loginMethod = payload.optionalString("loginMethod"),
-                    availableLoginMethods =
-                        (payload["availableLoginMethods"] as? JsonArray)?.mapNotNull { item ->
-                            val option = item as? JsonObject ?: return@mapNotNull null
-                            ActualLoginMethodOption(
-                                method = option.requiredString("method"),
-                                displayName = option.requiredString("displayName"),
-                                active = option.requiredBoolean("active"),
-                            )
-                        } ?: emptyList(),
-                )
-            }
-        }
-
-    private suspend fun diagnoseLoginMethodsFailure(
-        baseUrl: Url,
-        original: TandemApiException,
-    ): TandemApiException {
-        if (original.errorCode == "actual_unavailable") return original
-
-        val readiness = probeEndpoint(baseUrl, "/api/v1/health/ready")
-        if (readiness?.isTandemResponse() == true) {
-            if (readiness.isTandemNotReady()) {
-                return TandemApiException("tandem_not_ready", readiness.status, original)
-            }
-            return if (original.httpStatus == 404) {
-                TandemApiException("tandem_route_unavailable", 404, original)
-            } else {
-                original
-            }
-        }
-
-        val actualResponse = probeEndpoint(baseUrl, "/account/needs-bootstrap")
-        return if (actualResponse?.isActualLoginEndpoint() == true) {
-            TandemApiException("actual_only", original.httpStatus, original)
-        } else {
-            TandemApiException("address_unreachable", original.httpStatus, original)
-        }
+    suspend fun readActualLoginMethods(serverUrl: String): ActualLoginMethods {
+        val status = call { ActualServerClient(http, parse(serverUrl).toString()).status() }
+        return ActualLoginMethods(
+            bootstrapped = status.bootstrapped,
+            loginMethod = status.loginMethods.firstOrNull { it.active }?.method,
+            availableLoginMethods = status.loginMethods.map { ActualLoginMethodOption(it.method, it.displayName ?: it.method, it.active) },
+        )
     }
 
-    private suspend fun probeEndpoint(
-        baseUrl: Url,
-        path: String,
-    ): EndpointProbe? =
-        try {
-            val endpoint = endpointUrl(baseUrl, path)
-            val response = Api.client.get(endpoint)
-            EndpointProbe(response.status.value, response.bodyAsText())
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-
-    private fun endpointUrl(
-        baseUrl: Url,
-        path: String,
-    ): String =
-        URLBuilder(baseUrl)
-            .apply {
-                // Generated API routes are rooted at `/api/v1`, even when the configured URL has a path.
-                encodedPathSegments = path.trim('/').split('/')
-                parameters.clear()
-                fragment = ""
-            }.build()
-            .toString()
-
+    @Suppress("UNUSED_PARAMETER")
     suspend fun signInWithPassword(
         serverUrl: String,
         password: String,
         deviceName: String,
     ): AuthenticatedDevice =
         sessionMutex.withLock {
-            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
-            this.serverUrl = parsedUrl.toString()
-            accessToken = null
-            authenticatedDevice = null
-
-            val body =
-                buildJsonObject {
-                    put("password", password)
-                    put("deviceName", normalizeDeviceName(deviceName))
-                }.toMap()
-            GeneratedApiAccess.mutex.withLock {
-                GeneratedApiAccess.ensureContentEncoding()
-                clearGeneratedAuthProvider()
-                Api.baseUrl = parsedUrl
-                setGeneratedAuthProvider(bearerAuth)
-                val payload =
-                    try {
-                        unwrap(AuthenticationApi.signInWithActualPassword(body))
-                    } catch (error: TandemApiException) {
-                        if (error.httpStatus == 400 && error.errorCode == "invalid_request") {
-                            throw TandemApiException(
-                                error.errorCode,
-                                error.httpStatus,
-                                error,
-                                "Tandem couldn’t start sign-in. Check the server address and try again.",
-                            )
-                        }
-                        throw error
-                    }
-                val deviceId = payload.requiredString("deviceId")
-                val principalId = payload.requiredString("principalId")
-                val budgetIds = payload.requiredStringArray("budgetIds")
-                val token = payload.requiredString("accessToken")
-                accessToken = token
-                AuthenticatedDevice(deviceId, principalId, budgetIds).also { authenticatedDevice = it }
-            }
+            closeBudgets()
+            val client = connect(serverUrl)
+            call { client.signIn(password) }
+            val files = call { client.listFiles() }
+            val signedIn =
+                AuthenticatedDevice(
+                    deviceId = newId(),
+                    principalId = "actual:${parse(serverUrl).host}",
+                    budgetIds = files.filter { !it.deleted }.mapNotNull { it.groupId },
+                )
+            device = signedIn
+            signedIn
         }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun startActualOpenIdSignIn(
         serverUrl: String,
         deviceName: String,
         codeChallenge: String,
         callbackState: String,
-    ): String =
-        sessionMutex.withLock {
-            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
-            GeneratedApiAccess.mutex.withLock {
-                GeneratedApiAccess.ensureContentEncoding()
-                clearGeneratedAuthProvider()
-                Api.baseUrl = parsedUrl
-                val payload =
-                    unwrap(
-                        AuthenticationApi.startActualOpenIdSignIn(
-                            buildJsonObject {
-                                put("deviceName", normalizeDeviceName(deviceName))
-                                put("codeChallenge", codeChallenge)
-                                put("callbackState", callbackState)
-                            }.toMap(),
-                        ),
-                    )
-                payload.requiredString("redirectUrl")
-            }
-        }
+    ): String = throw TandemApiException("openid_unsupported")
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun completeActualOpenIdSignIn(
         serverUrl: String,
         code: String,
         codeVerifier: String,
-    ): AuthenticatedDevice =
-        sessionMutex.withLock {
-            val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
-            this.serverUrl = parsedUrl.toString()
-            accessToken = null
-            authenticatedDevice = null
-            GeneratedApiAccess.mutex.withLock {
-                GeneratedApiAccess.ensureContentEncoding()
-                clearGeneratedAuthProvider()
-                Api.baseUrl = parsedUrl
-                val payload =
-                    unwrap(
-                        AuthenticationApi.completeActualOpenIdSignIn(
-                            buildJsonObject {
-                                put("code", code)
-                                put("codeVerifier", codeVerifier)
-                            }.toMap(),
-                        ),
-                    )
-                val deviceId = payload.requiredString("deviceId")
-                val principalId = payload.requiredString("principalId")
-                val budgetIds = payload.requiredStringArray("budgetIds")
-                val token = payload.requiredString("accessToken")
-                accessToken = token
-                AuthenticatedDevice(deviceId, principalId, budgetIds).also { authenticatedDevice = it }
-            }
-        }
+    ): AuthenticatedDevice = throw TandemApiException("openid_unsupported")
 
     suspend fun listBudgets(): List<BudgetCatalogItem> =
         sessionMutex.withLock {
-            withGeneratedApi { parseBudgetCatalog(BudgetsApi.listBudgets()) }
+            val client = requireServer()
+            call { client.listFiles() }.filter { !it.deleted && !it.groupId.isNullOrBlank() }.map {
+                BudgetCatalogItem(it.groupId!!, it.name, it.encryptKeyId != null)
+            }
         }
 
-    suspend fun runBudgetBankSync(
-        budgetId: String,
-        encryptionPassword: String?,
-    ) {
-        withMaintenanceOperation(maintenanceSignature("bank-sync", budgetId)) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.runBudgetBankSync(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                    ),
-                )
-            }
+    suspend fun revokeCurrentDevice() = forgetSession()
+
+    suspend fun forgetSession() {
+        sessionMutex.withLock {
+            closeBudgets()
+            server = null
+            serverUrl = null
+            device = null
         }
     }
 
+    /** Opens the device's copy of a budget, downloading it from Actual the first time. */
+    internal suspend fun budget(budgetId: String): ActualDirectBudget = withContext(Dispatchers.IO) { openBudget(budgetId) }
+
+    private suspend fun openBudget(budgetId: String): ActualDirectBudget =
+        budgetMutex.withLock {
+            openBudgets[budgetId]?.let { return@withLock it }
+            val client = requireServer()
+            val files = budgetFiles ?: throw TandemApiException("not_supported")
+            val existing = files.open(budgetId)
+            val budget =
+                if (existing != null) {
+                    val fileId = ActualDirectBudget.storedFileId(existing) ?: call { fileFor(client, budgetId).fileId }
+                    ActualDirectBudget.reopen(existing, client, fileId, budgetId, now, newId)
+                } else {
+                    val file = call { fileFor(client, budgetId) }
+                    if (file.encryptKeyId != null) throw TandemApiException("encrypted_budget")
+                    call {
+                        ActualDirectBudget.download(
+                            client,
+                            file.fileId,
+                            now,
+                            newId,
+                            expectedGroupId = budgetId,
+                        ) { files.install(budgetId, it) }
+                    }
+                }
+            openBudgets[budgetId] = budget
+            budget
+        }
+
+    /** Closes and deletes the device's copy of a budget. */
+    suspend fun removeBudget(budgetId: String) {
+        budgetMutex.withLock {
+            openBudgets.remove(budgetId)?.close()
+            budgetFiles?.remove(budgetId)
+        }
+    }
+
+    internal suspend fun <T> edit(
+        budgetId: String,
+        block: (ActualBudgetEdits) -> T,
+    ): T {
+        val budget = budget(budgetId)
+        return call { budget.edit(today(), block) }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun runBudgetBankSync(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): Unit = call { budget(budgetId).sync() }
+
+    @Suppress("UNUSED_PARAMETER")
     suspend fun importBudgetAccountTransactions(
         budgetId: String,
         accountId: String,
         transactions: List<StatementImportItem>,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): StatementImportSummary {
-        require(transactions.isNotEmpty() && transactions.size <= 1_000)
-        val requestBody =
-            buildJsonObject {
-                put(
-                    "transactions",
-                    JsonArray(
-                        transactions.map { transaction ->
-                            buildJsonObject {
-                                put("date", transaction.date)
-                                put("amountMinor", transaction.amountMinor)
-                                put("payeeName", transaction.payeeName)
-                                transaction.notes?.let { put("notes", it) }
-                                put("importedId", transaction.importedId)
-                            }
-                        },
-                    ),
-                )
-            }.toMap()
-        val signature =
-            maintenanceSignature(
-                "statement-import",
-                budgetId,
-                accountId,
-                JsonArray(
-                    transactions.map { transaction ->
-                        buildJsonObject {
-                            put("date", transaction.date)
-                            put("amountMinor", transaction.amountMinor)
-                            put("payeeName", transaction.payeeName)
-                            transaction.notes?.let { put("notes", it) }
-                            put("importedId", transaction.importedId)
-                        }
-                    },
-                ).toString(),
-            )
-        return withMaintenanceOperation(signature, idempotencyKeyOverride) { idempotencyKey ->
-            withGeneratedApi {
-                val payload =
-                    unwrap(
-                        TransactionsApi.importBudgetAccountTransactions(
-                            xBudgetEncryptionPassword = encryptionPassword,
-                            idempotencyKey = idempotencyKey,
-                            budgetId = budgetId,
-                            accountId = accountId,
-                            body = requestBody,
-                        ),
-                    )
-                val status = (payload["status"] as? JsonPrimitive)?.contentOrNull
-                if (status != "ok") throw TandemApiProtocolException("Statement import response has an invalid status")
-                StatementImportSummary(
-                    added =
-                        (payload["added"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
-                            ?: throw TandemApiProtocolException("Statement import response has an invalid added count"),
-                    updated =
-                        (payload["updated"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
-                            ?: throw TandemApiProtocolException("Statement import response has an invalid updated count"),
-                    errorCount =
-                        (payload["errorCount"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
-                            ?: throw TandemApiProtocolException("Statement import response has an invalid error count"),
-                )
-            }
-        }
-    }
+    ): StatementImportSummary = throw TandemApiException("not_supported")
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun previewBudgetAccountStatementImport(
         budgetId: String,
         accountId: String,
         importedIds: List<String>,
         encryptionPassword: String?,
-    ): StatementImportPreview {
-        require(importedIds.isNotEmpty() && importedIds.size <= 1_000)
-        require(importedIds.all { it.isNotBlank() && it.length <= 200 } && importedIds.distinct().size == importedIds.size)
-        val requestBody =
-            buildJsonObject {
-                put("importedIds", JsonArray(importedIds.map(::JsonPrimitive)))
-            }.toMap()
-        return withGeneratedApi {
-            val payload =
-                unwrap(
-                    TransactionsApi.previewBudgetAccountStatementImport(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        budgetId = budgetId,
-                        accountId = accountId,
-                        body = requestBody,
-                    ),
-                )
-            parseStatementImportPreview(payload, importedIds)
-        }
-    }
+    ): StatementImportPreview = throw TandemApiException("not_supported")
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetAccount(
         budgetId: String,
         name: String,
@@ -628,33 +323,9 @@ class TandemApiClient(
         accountGroupId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): String =
-        withMaintenanceOperation(
-            maintenanceSignature("account-create", budgetId, name, offbudget.toString(), accountGroupId.orEmpty()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                val payload =
-                    unwrap(
-                        BudgetsApi.createBudgetAccount(
-                            xBudgetEncryptionPassword = encryptionPassword,
-                            idempotencyKey = idempotencyKey,
-                            budgetId = budgetId,
-                            body =
-                                buildJsonObject {
-                                    put("name", name)
-                                    put("offbudget", offbudget)
-                                    if (accountGroupId == null) put("accountGroupId", JsonNull) else put("accountGroupId", accountGroupId)
-                                }.toMap(),
-                        ),
-                    )
-                if (payload["status"]?.jsonPrimitive?.contentOrNull != "ok") {
-                    throw TandemApiProtocolException("Account creation response has an invalid status")
-                }
-                payload.requiredString("accountId")
-            }
-        }
+    ): String = edit(budgetId) { it.createAccount(name, offbudget, accountGroupId) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun closeBudgetAccount(
         budgetId: String,
         accountId: String,
@@ -662,196 +333,62 @@ class TandemApiClient(
         transferCategoryId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("account-close", budgetId, accountId, transferAccountId, transferCategoryId),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.closeBudgetAccount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        accountId = accountId,
-                        body =
-                            buildJsonObject {
-                                put("transferAccountId", transferAccountId?.let(::JsonPrimitive) ?: JsonNull)
-                                put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.closeAccount(accountId, transferAccountId, transferCategoryId) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun renameBudgetAccount(
         budgetId: String,
         accountId: String,
         name: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("account-rename", budgetId, accountId, name),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.renameBudgetAccount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        accountId = accountId,
-                        body = buildJsonObject { put("name", name) }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.renameAccount(accountId, name) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun reopenBudgetAccount(
         budgetId: String,
         accountId: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(maintenanceSignature("account-reopen", budgetId, accountId), idempotencyKeyOverride) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.reopenBudgetAccount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        accountId = accountId,
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.reopenAccount(accountId) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun moveBudgetAccount(
         budgetId: String,
         accountId: String,
         targetAccountId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("account-move", budgetId, accountId, targetAccountId),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.moveBudgetAccount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        accountId = accountId,
-                        body =
-                            buildJsonObject {
-                                put("targetAccountId", targetAccountId?.let(::JsonPrimitive) ?: JsonNull)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.moveAccount(accountId, targetAccountId) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun renameBudgetCategory(
         budgetId: String,
         categoryId: String,
         name: String,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-rename", budgetId, categoryId, name),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.renameBudgetCategory(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        categoryId = categoryId,
-                        body = ApiV1BudgetsBudgetIdPayeesRequest(name),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.renameCategory(categoryId, name) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategory(
         budgetId: String,
         categoryGroupId: String,
         name: String,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ): String =
-        withMaintenanceOperation(
-            maintenanceSignature("category-create", budgetId, categoryGroupId, name),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                BudgetsApi
-                    .createBudgetCategory(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        body =
-                            buildJsonObject {
-                                put("name", name)
-                                put("categoryGroupId", categoryGroupId)
-                            }.toMap(),
-                    ).fold(
-                        { error -> throw error.toTandemApiException() },
-                        { response ->
-                            val categoryId = (response.data["categoryId"] as? JsonPrimitive)?.contentOrNull
-                            verifyApiStatus(
-                                isSuccessful = response.isSuccessful,
-                                hasExpectedStatus = categoryId?.isNotBlank() == true,
-                            )
-                            categoryId ?: throw TandemApiProtocolException("Actual did not return the created category ID")
-                        },
-                    )
-            }
-        }
+    ): String = edit(budgetId) { it.createCategory(categoryGroupId, name) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategoryGroup(
         budgetId: String,
         name: String,
         isIncome: Boolean,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ): String =
-        withMaintenanceOperation(
-            maintenanceSignature("category-group-create", budgetId, name, isIncome.toString()),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                BudgetsApi
-                    .createBudgetCategoryGroup(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        body =
-                            buildJsonObject {
-                                put("name", name)
-                                put("isIncome", isIncome)
-                            }.toMap(),
-                    ).fold(
-                        { error -> throw error.toTandemApiException() },
-                        { response ->
-                            val groupId = (response.data["categoryGroupId"] as? JsonPrimitive)?.contentOrNull
-                            verifyApiStatus(isSuccessful = response.isSuccessful, hasExpectedStatus = groupId?.isNotBlank() == true)
-                            groupId ?: throw TandemApiProtocolException("Actual did not return the created category group ID")
-                        },
-                    )
-            }
-        }
+    ): String = edit(budgetId) { it.createCategoryGroup(name, isIncome) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetCategoryGroup(
         budgetId: String,
         groupId: String,
@@ -860,30 +397,9 @@ class TandemApiClient(
         targetId: String?,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-group-$action", budgetId, groupId, name, targetId),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetCategoryGroup(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        groupId = groupId,
-                        body =
-                            buildJsonObject {
-                                put("action", action)
-                                if (name != null) put("name", name)
-                                if (action == "move") put("targetId", targetId?.let(::JsonPrimitive) ?: JsonNull)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.manageCategoryGroup(groupId, action, name, targetId) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetCategory(
         budgetId: String,
         categoryId: String,
@@ -892,86 +408,28 @@ class TandemApiClient(
         encryptionPassword: String?,
         targetGroupId: String? = null,
         idempotencyKey: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-$action", budgetId, categoryId, targetId, targetGroupId),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetCategory(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        categoryId = categoryId,
-                        body =
-                            buildJsonObject {
-                                put("action", action)
-                                if (action == "move") put("targetId", targetId?.let(::JsonPrimitive) ?: JsonNull)
-                                if (action == "move" && targetGroupId != null) put("targetGroupId", JsonPrimitive(targetGroupId))
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.manageCategory(categoryId, action, targetId, targetGroupId) }
 
-    /**
-     * Saves reordered category groups, categories, and accounts in one request.
-     * [order] holds the optional `categoryGroups`, `categories`, and `accounts` lists,
-     * each with the `baseOrder` the device started from and the `order` the user chose.
-     */
+    /** [order] holds optional `categoryGroups`, `categories` and `accounts` lists, each with `baseOrder` and `order`. */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun setBudgetOrder(
         budgetId: String,
         order: JsonObject,
         encryptionPassword: String?,
         idempotencyKey: String,
     ) {
-        withMaintenanceOperation(
-            maintenanceSignature("order", budgetId, order.toString()),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.setBudgetOrder(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        body = order.toMap(),
-                    ),
-                )
-            }
-        }
+        edit(budgetId) { it.setOrders(order) }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetPayee(
         budgetId: String,
         name: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): String =
-        withMaintenanceOperation(maintenanceSignature("payee-create", budgetId, name), idempotencyKeyOverride) { idempotencyKey ->
-            withGeneratedApi {
-                BudgetsApi
-                    .createBudgetPayee(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        body = ApiV1BudgetsBudgetIdPayeesRequest(name),
-                    ).fold(
-                        { error -> throw error.toTandemApiException() },
-                        { response ->
-                            val payeeId = (response.data["payeeId"] as? JsonPrimitive)?.contentOrNull
-                            verifyApiStatus(
-                                isSuccessful = response.isSuccessful,
-                                hasExpectedStatus = payeeId?.isNotBlank() == true,
-                            )
-                            payeeId ?: throw TandemApiProtocolException("Actual did not return the created payee ID")
-                        },
-                    )
-            }
-        }
+    ): String = edit(budgetId) { it.createPayee(name) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun setBudgetCategoryAmount(
         budgetId: String,
         categoryId: String,
@@ -979,29 +437,9 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-budget-amount", budgetId, categoryId, month, amountMinor.toString()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.setBudgetCategoryAmount(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        categoryId = categoryId,
-                        body =
-                            buildJsonObject {
-                                put("month", month)
-                                put("amountMinor", amountMinor)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.setBudgetAmount(categoryId, month, amountMinor) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun setBudgetCategoryCarryover(
         budgetId: String,
         categoryId: String,
@@ -1009,159 +447,43 @@ class TandemApiClient(
         enabled: Boolean,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-carryover", budgetId, categoryId, month, enabled.toString()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.setBudgetCategoryCarryover(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        categoryId = categoryId,
-                        body =
-                            buildJsonObject {
-                                put("month", month)
-                                put("enabled", enabled)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.setBudgetCarryover(categoryId, month, enabled) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun copyBudgetMonth(
         budgetId: String,
         month: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("budget-month-copy-last", budgetId, month),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetMonth(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        month = month,
-                        body = buildJsonObject { put("action", "copy-last-month") }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.copyBudgetMonth(month) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun applyBudgetTemplate(
         budgetId: String,
         month: String,
         assignments: List<Pair<String, Long>>,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        require(assignments.isNotEmpty() && assignments.size <= 500)
-        withMaintenanceOperation(
-            maintenanceSignature(
-                "budget-month-template",
-                budgetId,
-                month,
-                kotlinx.serialization.json
-                    .JsonArray(
-                        assignments.map { (categoryId, amountMinor) ->
-                            buildJsonObject {
-                                put("categoryId", categoryId)
-                                put("amountMinor", amountMinor)
-                            }
-                        },
-                    ).toString(),
-            ),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetMonth(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        month = month,
-                        body =
-                            buildJsonObject {
-                                put("action", "apply-template")
-                                put(
-                                    "assignments",
-                                    kotlinx.serialization.json.JsonArray(
-                                        assignments.map { (categoryId, amountMinor) ->
-                                            buildJsonObject {
-                                                put("categoryId", categoryId)
-                                                put("amountMinor", amountMinor)
-                                            }
-                                        },
-                                    ),
-                                )
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.applyBudgetTemplate(month, assignments) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun holdBudgetForNextMonth(
         budgetId: String,
         month: String,
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("budget-month-hold-next", budgetId, month, amountMinor.toString()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetMonth(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        month = month,
-                        body =
-                            buildJsonObject {
-                                put("action", "hold-next-month")
-                                put("amountMinor", amountMinor)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.holdBudgetForNextMonth(month, amountMinor) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun resetBudgetHold(
         budgetId: String,
         month: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("budget-month-reset-hold", budgetId, month),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetMonth(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        month = month,
-                        body = buildJsonObject { put("action", "reset-hold") }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.resetBudgetHold(month) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun moveMoneyBetweenCategories(
         budgetId: String,
         month: String,
@@ -1170,65 +492,19 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature(
-                "category-move-money",
-                budgetId,
-                month,
-                fromCategoryId,
-                toCategoryId,
-                amountMinor.toString(),
-            ),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.moveMoneyBetweenCategories(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        body =
-                            buildJsonObject {
-                                put("month", month)
-                                put("fromCategoryId", fromCategoryId)
-                                put("toCategoryId", toCategoryId)
-                                put("amountMinor", amountMinor)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.moveMoney(month, fromCategoryId, toCategoryId, amountMinor) }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun deleteBudgetCategory(
         budgetId: String,
         categoryId: String,
         transferCategoryId: String?,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) {
-        withMaintenanceOperation(
-            maintenanceSignature("category-delete", budgetId, categoryId, transferCategoryId),
-            idempotencyKey,
-        ) { operationKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.deleteBudgetCategory(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = operationKey,
-                        budgetId = budgetId,
-                        categoryId = categoryId,
-                        body =
-                            buildJsonObject {
-                                put("transferCategoryId", transferCategoryId?.let(::JsonPrimitive) ?: JsonNull)
-                            }.toMap(),
-                    ),
-                )
-            }
-        }
-    }
+    ) = edit(budgetId) { it.deleteCategory(categoryId, transferCategoryId) }
 
+    /** [action] is rename, edit, skip, post or delete; [fields] carries an edit's changes. */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetSchedule(
         budgetId: String,
         scheduleId: String,
@@ -1242,53 +518,35 @@ class TandemApiClient(
         require(action !in setOf("post", "skip") || !expectedNextDate.isNullOrBlank()) {
             "Posting or skipping a schedule requires its displayed next date"
         }
-        withMaintenanceOperation(
-            maintenanceSignature("schedule-$action", budgetId, scheduleId, name, expectedNextDate),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetSchedule(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        scheduleId = scheduleId,
-                        body =
-                            buildJsonObject {
-                                put("action", action)
-                                name?.let { put("name", it) }
-                                fields?.forEach { (key, value) -> put(key, value) }
-                                expectedNextDate?.let { put("expectedNextDate", it) }
-                            }.toMap(),
-                    ),
-                )
+        edit(budgetId) { edits ->
+            when (action) {
+                "rename" -> edits.schedules.rename(scheduleId, name.orEmpty())
+                "edit" ->
+                    edits.schedules.edit(
+                        scheduleId,
+                        JsonObject(
+                            fields.orEmpty() + (name?.let { mapOf("name" to JsonPrimitive(it)) } ?: emptyMap()),
+                        ),
+                    )
+                "skip" -> edits.schedules.skip(scheduleId, expectedNextDate!!)
+                "post" -> edits.schedules.post(scheduleId, expectedNextDate!!)
+                "delete" -> edits.schedules.delete(scheduleId)
+                else -> throw ActualEditException("Choose a schedule action")
             }
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetRule(
         budgetId: String,
         rule: JsonObject,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(
-            maintenanceSignature("rule-create", budgetId, rule.toString()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.createBudgetRule(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        body = rule.toMap(),
-                    ),
-                )
-            }
-        }
+        edit(budgetId) { it.createRule(rule) }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetRule(
         budgetId: String,
         ruleId: String,
@@ -1297,29 +555,23 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) {
-        require((action == "delete") == (rule == null)) { "Only edits send a rule" }
-        withMaintenanceOperation(
-            maintenanceSignature("rule-$action", budgetId, ruleId, rule?.toString()),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetRule(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        ruleId = ruleId,
-                        body =
-                            buildJsonObject {
-                                put("action", action)
-                                rule?.let { put("rule", it) }
-                            }.toMap(),
-                    ),
-                )
+        edit(budgetId) { edits ->
+            when (action) {
+                "edit" -> edits.updateRule(ruleId, rule ?: throw ActualEditException("A rule needs conditions"))
+                "delete" ->
+                    if (!edits.deleteRule(
+                            ruleId,
+                        )
+                    ) {
+                        throw ActualEditException("This rule belongs to a schedule. Delete the schedule instead.")
+                    }
+                else -> throw ActualEditException("Choose a rule action")
             }
         }
     }
 
+    /** [action] is rename, merge, delete or default-category, as the gateway accepted. */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetPayee(
         budgetId: String,
         payeeId: String,
@@ -1330,416 +582,78 @@ class TandemApiClient(
         categoryId: String? = null,
         idempotencyKeyOverride: String? = null,
     ) {
-        withMaintenanceOperation(
-            maintenanceSignature("payee-$action", budgetId, payeeId, name, targetPayeeId, categoryId),
-            idempotencyKeyOverride,
-        ) { idempotencyKey ->
-            withGeneratedApi {
-                requireOk(
-                    BudgetsApi.manageBudgetPayee(
-                        xBudgetEncryptionPassword = encryptionPassword,
-                        idempotencyKey = idempotencyKey,
-                        budgetId = budgetId,
-                        payeeId = payeeId,
-                        body =
-                            buildJsonObject {
-                                put("action", action)
-                                name?.let { put("name", it) }
-                                targetPayeeId?.let { put("targetPayeeId", it) }
-                                if (action == "default-category") {
-                                    put("categoryId", categoryId?.let(::JsonPrimitive) ?: JsonNull)
-                                }
-                            }.toMap(),
-                    ),
-                )
+        edit(budgetId) { edits ->
+            when (action) {
+                "rename" -> edits.renamePayee(payeeId, name.orEmpty())
+                "merge" -> edits.mergePayee(payeeId, targetPayeeId ?: throw ActualEditException("Choose a payee to merge into"))
+                "delete" -> edits.deletePayee(payeeId)
+                "default-category" -> edits.setPayeeDefaultCategory(payeeId, categoryId)
+                else -> throw ActualEditException("Choose a payee action")
             }
         }
     }
 
-    /** Revokes this device on the server while its credential is still active. */
-    suspend fun revokeCurrentDevice() {
-        sessionMutex.withLock {
-            val deviceId = authenticatedDevice?.deviceId ?: throw TandemApiException("sign_in_required")
-            val parsedDeviceId =
-                try {
-                    Uuid.parse(deviceId)
-                } catch (_: IllegalArgumentException) {
-                    throw TandemApiProtocolException("Stored device ID is invalid")
-                }
-            GeneratedApiAccess.mutex.withLock {
-                configureGeneratedApi()
-                val response =
-                    AuthenticationApi.revokeDevice(parsedDeviceId).fold(
-                        { error -> throw error.toTandemApiException() },
-                        { it },
-                    )
-                verifyDeviceRevocationSuccessful(response.isSuccessful)
-            }
+    private fun parse(serverUrl: String) = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
+
+    private fun connect(serverUrl: String): ActualServerClient {
+        val url = parse(serverUrl).toString().trimEnd('/')
+        if (url != this.serverUrl) closeBudgetsNow()
+        return ActualServerClient(http, url).also {
+            server = it
+            this.serverUrl = url
         }
     }
 
-    /** Prevents credential changes during a multi-request sync. */
-    suspend fun <T> withExclusiveSession(block: suspend () -> T): T = sessionMutex.withLock { block() }
+    private fun requireServer(): ActualServerClient = server?.takeIf { it.token != null } ?: throw TandemApiException("sign_in_required")
 
-    private suspend fun <T> withMaintenanceOperation(
-        signature: String,
-        idempotencyKeyOverride: String? = null,
-        request: suspend (String) -> T,
-    ): T {
-        val idempotencyKey =
-            idempotencyKeyOverride
-                ?: maintenanceKeyMutex.withLock {
-                    pendingMaintenanceKeys.getOrPut(signature) { Uuid.random().toString() }
-                }
-        return try {
-            request(idempotencyKey).also {
-                if (idempotencyKeyOverride == null) {
-                    maintenanceKeyMutex.withLock {
-                        if (pendingMaintenanceKeys[signature] == idempotencyKey) {
-                            pendingMaintenanceKeys.remove(signature)
-                        }
-                    }
-                }
-            }
-        } catch (error: TandemApiException) {
-            if (idempotencyKeyOverride == null && (error.httpStatus == 400 || error.httpStatus == 429)) {
-                maintenanceKeyMutex.withLock {
-                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
-                        pendingMaintenanceKeys.remove(signature)
-                    }
-                }
-            }
-            if (idempotencyKeyOverride == null && (error.errorCode == "operation_uncertain" || error.errorCode == "operation_rejected")) {
-                // The server has definitively stopped processing this key. A later call is a
-                // deliberate user retry and must get a new key; uncertain results still tell
-                // the user to check Actual before submitting again.
-                maintenanceKeyMutex.withLock {
-                    if (pendingMaintenanceKeys[signature] == idempotencyKey) {
-                        pendingMaintenanceKeys.remove(signature)
-                    }
-                }
-            }
-            throw error
-        }
+    private suspend fun fileFor(
+        client: ActualServerClient,
+        budgetId: String,
+    ): ActualRemoteFile =
+        client.listFiles().firstOrNull { !it.deleted && it.groupId == budgetId } ?: throw ActualServerException("budget-unavailable")
+
+    private suspend fun closeBudgets() = budgetMutex.withLock { closeBudgetsNow() }
+
+    private fun closeBudgetsNow() {
+        openBudgets.values.forEach { runCatching { it.closeNow() } }
+        openBudgets.clear()
     }
 
-    /** Runs one generated request with this instance's server and credential selected. */
-    internal suspend fun <T> withGeneratedApi(block: suspend () -> T): T =
-        GeneratedApiAccess.mutex.withLock {
-            configureGeneratedApi()
-            block()
-        }
-
-    private suspend fun parseBudgetCatalog(
-        response: Either<CallException, HttpCallResponse<Map<String, JsonElement>>>,
-    ): List<BudgetCatalogItem> {
-        val payload = unwrap(response)
-        val budgets =
-            payload["budgets"] as? JsonArray
-                ?: throw TandemApiProtocolException("Budget catalog response is missing its budgets")
-
-        return budgets.map { element ->
-            val budget =
-                element as? JsonObject
-                    ?: throw TandemApiProtocolException("Budget catalog contains an invalid item")
-            val encrypted =
-                (budget["isEncrypted"] as? JsonPrimitive)?.booleanOrNull
-                    ?: throw TandemApiProtocolException("Budget catalog item has an invalid encryption flag")
-            BudgetCatalogItem(
-                budgetId = budget.requiredString("budgetId"),
-                name = budget.requiredString("name"),
-                isEncrypted = encrypted,
-            )
-        }
-    }
-
-    suspend fun forgetSession() {
-        sessionMutex.withLock {
-            GeneratedApiAccess.mutex.withLock {
-                clearGeneratedAuthProvider()
-                accessToken = null
-                serverUrl = null
-                authenticatedDevice = null
-                verifiedLocalServerUrl = null
-            }
-        }
-    }
-
-    private fun configureGeneratedApi() {
-        val currentServerUrl = serverUrl
-        if (currentServerUrl.isNullOrBlank() || accessToken.isNullOrBlank()) {
-            throw TandemApiException("sign_in_required")
-        }
-        GeneratedApiAccess.ensureContentEncoding()
-        Api.baseUrl = parseServerUrl(verifiedLocalServerUrl ?: currentServerUrl, allowInsecurePrivateNetwork)
-        setGeneratedAuthProvider(bearerAuth)
-    }
-
-    private fun setGeneratedAuthProvider(provider: Auth.BearerAuth) {
-        Api.setAuthProvider(provider)
-        activeAuthProvider = provider
-    }
-
-    private fun clearGeneratedAuthProvider() {
-        activeAuthProvider?.let(Api::clearAuthProvider)
-        activeAuthProvider = null
-    }
-
-    private suspend fun restoreSessionLocked(
-        serverUrl: String,
-        token: String,
-    ) {
-        val sessionToken =
-            token.takeIf { it.isNotBlank() }
-                ?: throw TandemApiProtocolException("Stored device credential is empty")
-        val parsedUrl = parseServerUrl(serverUrl, allowInsecurePrivateNetwork)
-        GeneratedApiAccess.mutex.withLock {
-            clearGeneratedAuthProvider()
-            this.serverUrl = parsedUrl.toString()
-            accessToken = sessionToken
-        }
-    }
-
-    private suspend inline fun <reified T> unwrap(result: Either<CallException, HttpCallResponse<T>>): JsonObject =
-        result.fold(
-            { error -> throw error.toTandemApiException() },
-            { response -> Json.encodeToJsonElement(response.data).jsonObject },
-        )
-
-    private suspend inline fun <reified T> requireOk(result: Either<CallException, HttpCallResponse<T>>) {
-        result.fold(
-            { error -> throw error.toTandemApiException() },
-            { response ->
-                val statusObject = Json.encodeToJsonElement(response.data).jsonObject
-                val actualStatus = statusObject["status"]?.jsonPrimitive?.contentOrNull
-                verifyApiStatus(
-                    isSuccessful = response.isSuccessful,
-                    hasExpectedStatus = actualStatus == "ok",
-                )
-            },
-        )
-    }
-
-    private suspend fun CallException.toTandemApiException(): TandemApiException =
-        when (this) {
-            is HttpCallException -> TandemApiException(apiErrorCode() ?: "http-$code", code, this)
-            else -> TandemApiException("network-error", cause = this)
-        }
-
-    private suspend fun HttpCallException.apiErrorCode(): String? =
+    /** Runs a call to Actual and reports its failures with Tandem's error codes. */
+    internal suspend fun <T> call(block: suspend () -> T): T =
         try {
-            val root = Json.parseToJsonElement(raw.bodyAsText()) as? JsonObject
-            val error = root?.get("error") as? JsonObject
-            (error?.get("code") as? JsonPrimitive)?.contentOrNull
+            withContext(Dispatchers.IO) { block() }
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
-            null
-        }
-}
-
-internal fun verifyApiStatus(
-    isSuccessful: Boolean,
-    hasExpectedStatus: Boolean,
-) {
-    if (!isSuccessful || !hasExpectedStatus) {
-        throw TandemApiProtocolException("The server returned an unexpected response")
-    }
-}
-
-internal fun verifyDeviceRevocationSuccessful(isSuccessful: Boolean) {
-    if (!isSuccessful) throw TandemApiException("device-revocation-failed")
-}
-
-internal fun normalizeDeviceName(value: String): String {
-    val normalized = StringBuilder()
-    var index = 0
-    var codePoints = 0
-    var pendingSpace = false
-    while (index < value.length && codePoints < 100) {
-        val character = value[index]
-        val hasSurrogatePair =
-            character.isHighSurrogate() && index + 1 < value.length && value[index + 1].isLowSurrogate()
-        val unitCount = if (hasSurrogatePair) 2 else 1
-        val isControl = character.code in 0..31 || character.code in 127..159
-        val isSeparator = isControl || character == '\uFEFF' || character.isWhitespace() || (character.isSurrogate() && !hasSurrogatePair)
-        when {
-            isSeparator -> {
-                if (normalized.isNotEmpty()) pendingSpace = true
-                index += unitCount
-            }
-            else -> {
-                if (pendingSpace) {
-                    normalized.append(' ')
-                    codePoints += 1
-                    pendingSpace = false
-                    if (codePoints == 100) break
-                }
-                normalized.append(character)
-                if (hasSurrogatePair) normalized.append(value[index + 1])
-                codePoints += 1
-                index += unitCount
-            }
-        }
-    }
-    return normalized.toString().trim().ifBlank { "Mobile device" }
-}
-
-/** The generated OpenAPI package stores its URL and auth provider in process-wide state. */
-internal object GeneratedApiAccess {
-    val mutex = Mutex()
-
-    fun ensureContentEncoding() {
-        if (Api.client.pluginOrNull(ContentEncoding) != null) return
-        Api.updateClient(
-            decorator = {
-                followRedirects = false
-                install(ContentEncoding) {
-                    gzip()
-                    deflate()
-                }
-            },
-        )
-    }
-}
-
-internal fun parseServerUrl(
-    value: String,
-    allowInsecurePrivateNetwork: Boolean,
-): Url {
-    val address = value.trim().trimEnd('/')
-    val hasExplicitHost =
-        address
-            .substringAfter("://", missingDelimiterValue = "")
-            .substringBefore('/')
-            .substringBefore('?')
-            .substringBefore('#')
-            .isNotBlank()
-    val url =
-        try {
-            Url(address)
+        } catch (error: TandemApiException) {
+            throw error
+        } catch (error: ActualEditException) {
+            throw TandemApiException(error.code ?: "invalid_request", 422, error, error.message)
+        } catch (error: UnsupportedRuleException) {
+            throw TandemApiException("rule_unsupported", 422, error)
+        } catch (error: ActualServerException) {
+            throw TandemApiException(serverErrorCode(error.reason), error.httpStatus, error)
+        } catch (error: ActualSyncException) {
+            throw TandemApiException(error.reason.replace('-', '_'), null, error)
+        } catch (error: InvalidTransactionRequestException) {
+            throw TandemApiException("invalid_request", 422, error, error.message)
+        } catch (error: IOException) {
+            throw TandemApiException("address_unreachable", null, error)
         } catch (error: Exception) {
-            throw TandemApiException("invalid-server-url", cause = error)
+            throw TandemApiException("unexpected_error", null, error)
         }
-    val secure = url.protocol.name == "https"
-    val allowedLocalHttp = allowInsecurePrivateNetwork && url.protocol.name == "http" && isLocalHttpHost(url.host)
-    if (!hasExplicitHost || url.host.isBlank() || (!secure && !allowedLocalHttp) || url.user != null || url.password != null) {
-        throw TandemApiException("invalid-server-url")
-    }
-    return url
-}
 
-private data class EndpointProbe(
-    val status: Int,
-    val body: String,
-) {
-    private val json: JsonObject?
-        get() =
-            try {
-                Json.parseToJsonElement(body) as? JsonObject
-            } catch (_: Exception) {
-                null
-            }
-
-    fun isTandemResponse(): Boolean =
-        (status == 200 && json?.stringValue("status") == "ok") ||
-            isTandemNotReady()
-
-    fun isTandemNotReady(): Boolean = status == 503 && json?.stringValue("status") == "not_ready"
-
-    fun isActualLoginEndpoint(): Boolean {
-        if (status != 200) return false
-        val data = json?.get("data") as? JsonObject ?: return false
-        return json?.stringValue("status") == "ok" && data["bootstrapped"]?.jsonPrimitive?.booleanOrNull != null
-    }
-}
-
-private fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
-
-/** Allows cleartext only for loopback names and validated private-network IP literals. */
-fun isLocalHttpHost(value: String): Boolean {
-    val host =
-        value
-            .lowercase()
-            .removePrefix("[")
-            .removeSuffix("]")
-            .removeSuffix(".")
-    if (
-        host == "localhost" ||
-        host == "::1" ||
-        host.endsWith(".localhost")
-    ) {
-        return true
-    }
-    val octetStrings = host.split('.')
-    if (octetStrings.size == 4 && octetStrings.all { it.isNotEmpty() && it.all(Char::isDigit) }) {
-        if (octetStrings.any { it.length > 1 && it.startsWith('0') }) return false
-        val octets = octetStrings.map { it.toIntOrNull() ?: return false }
-        if (octets.any { it !in 0..255 }) return false
-        val (first, second) = octets
-        return first == 10 ||
-            (first == 172 && second in 16..31) ||
-            (first == 192 && second == 168) ||
-            first == 127 ||
-            (first == 169 && second == 254)
-    }
-    if (!host.contains(':') || '%' in host) return false
-    val compression = host.indexOf("::")
-    val firstIpv6Segment =
-        if (compression >= 0) {
-            if (compression != host.lastIndexOf("::")) return false
-            val (left, right) = host.split("::", limit = 2)
-            val leftGroups = left.split(':').filter(String::isNotEmpty)
-            val rightGroups = right.split(':').filter(String::isNotEmpty)
-            val groups = leftGroups + rightGroups
-            if (groups.isEmpty() || groups.size >= 8 || groups.any { !it.isIpv6Hextet() }) return false
-            (leftGroups.firstOrNull() ?: rightGroups.first()).toIntOrNull(16) ?: return false
-        } else {
-            val groups = host.split(':')
-            if (groups.size != 8 || groups.any { !it.isIpv6Hextet() }) return false
-            groups.first().toIntOrNull(16) ?: return false
+    private fun serverErrorCode(reason: String): String =
+        when (reason) {
+            "invalid-password" -> "invalid_credentials"
+            "unauthorized", "token-expired" -> "sign_in_expired"
+            "budget-unavailable", "file-not-found" -> "budget_unavailable"
+            "encrypted-budget" -> "encrypted_budget"
+            "file-has-reset" -> "file_has_reset"
+            "file-has-new-key" -> "file_has_new_key"
+            "not-found", "network-failure" -> "address_unreachable"
+            else -> reason.replace('-', '_')
         }
-    return firstIpv6Segment in 0xfc00..0xfdff ||
-        firstIpv6Segment in 0xfe80..0xfebf
 }
 
-private fun String.isIpv6Hextet(): Boolean = length in 1..4 && all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
-
-private fun maintenanceSignature(vararg fields: String?): String =
-    JsonArray(fields.map { field -> field?.let(::JsonPrimitive) ?: JsonNull }).toString()
-
-private fun JsonObject.requiredString(name: String): String =
-    (this[name] as? JsonPrimitive)
-        ?.takeIf { it.isString }
-        ?.contentOrNull
-        ?.takeIf { it.isNotBlank() }
-        ?: throw TandemApiProtocolException("Server response is missing a valid $name")
-
-private fun JsonObject.optionalString(name: String): String? =
-    when (val value = this[name]) {
-        null, JsonNull -> null
-        is JsonPrimitive -> value.contentOrNull?.takeIf(String::isNotBlank)
-        else -> throw TandemApiProtocolException("Server response contains an invalid $name")
-    }
-
-private fun JsonObject.requiredBoolean(name: String): Boolean =
-    (this[name] as? JsonPrimitive)?.booleanOrNull
-        ?: throw TandemApiProtocolException("Server response is missing a valid $name")
-
-private fun JsonObject.requiredInt(name: String): Int =
-    (this[name] as? JsonPrimitive)?.intOrNull ?: throw TandemApiProtocolException("$name is required")
-
-private fun JsonObject.requiredStringArray(name: String): List<String> {
-    val values =
-        this[name] as? JsonArray
-            ?: throw TandemApiProtocolException("Server response is missing a valid $name")
-    return values.map { value ->
-        (value as? JsonPrimitive)
-            ?.takeIf { it.isString }
-            ?.contentOrNull
-            ?.takeIf { it.isNotBlank() }
-            ?: throw TandemApiProtocolException("Server response contains an invalid $name entry")
-    }
-}
-
-internal const val LOCAL_IDENTITY_TIMEOUT_MILLIS = 2_000L
+private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")

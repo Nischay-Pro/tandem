@@ -3,19 +3,14 @@ package app.tandemforactual.ui
 import app.tandemforactual.api.client.ActualLoginMethodOption
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.api.generated.Api
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.DefaultRequest
-import io.ktor.client.plugins.compression.ContentEncoding
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import io.ktor.http.takeFrom
-import io.ktor.serialization.kotlinx.json.json
+import kotlinx.io.IOException
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -35,9 +30,8 @@ internal data class LoginMethodsObservation(
 
 internal data class LoginMethodsOutcomes(
     val success: LoginMethodsObservation,
-    val actualOnly: LoginMethodsObservation,
     val unreachable: LoginMethodsObservation,
-    val actualUnavailable: LoginMethodsObservation,
+    val serverError: LoginMethodsObservation,
 )
 
 internal suspend fun loginMethodsOutcomes(): LoginMethodsOutcomes {
@@ -47,26 +41,11 @@ internal suspend fun loginMethodsOutcomes(): LoginMethodsOutcomes {
     val engine =
         MockEngine { request ->
             requests += request
-            if (offline) throw IllegalStateException("offline")
+            if (offline) throw IOException("offline")
             val (body, status) = responses[request.url.encodedPath] ?: ("" to HttpStatusCode.NotFound)
             respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
         }
-    val previousClient = Api.client
-    val previousBaseUrl = Api.baseUrl
-    val client = TandemApiClient()
-    Api.updateClient(
-        createHttpClient = {
-            HttpClient(engine) {
-                followRedirects = false
-                install(ContentNegotiation) { json(Api.json) }
-                install(ContentEncoding) {
-                    gzip()
-                    deflate()
-                }
-                install(DefaultRequest) { url.takeFrom(Api.baseUrl) }
-            }
-        },
-    )
+    val client = TandemApiClient(http = HttpClient(engine))
 
     suspend fun loadScenario(
         scenarioResponses: Map<String, Pair<String, HttpStatusCode>>,
@@ -85,49 +64,26 @@ internal suspend fun loginMethodsOutcomes(): LoginMethodsOutcomes {
         )
     }
 
-    try {
-        val success =
-            loadScenario(
-                mapOf(
-                    "/api/v1/auth/methods" to
-                        (
-                            """{"bootstrapped":true,"loginMethod":"password","availableLoginMethods":[{"method":"password","displayName":"Password","active":true},
-                                {"method":"openid","displayName":"OpenID","active":true}]}""" to
-                                HttpStatusCode.OK
-                        ),
-                ),
-            )
-        val actualOnly =
-            loadScenario(
-                mapOf(
-                    "/api/v1/auth/methods" to ("Not found" to HttpStatusCode.NotFound),
-                    "/api/v1/health/ready" to
-                        (
-                            """{"error":{"code":"proxy_unavailable","message":"private detail"}}""" to
-                                HttpStatusCode.InternalServerError
-                        ),
-                    "/account/needs-bootstrap" to
-                        ("""{"status":"ok","data":{"bootstrapped":true}}""" to HttpStatusCode.OK),
-                ),
-            )
-        val unreachable = loadScenario(emptyMap(), simulateOffline = true)
-        val actualUnavailable =
-            loadScenario(
-                mapOf(
-                    "/api/v1/auth/methods" to
-                        (
-                            """{"error":{"code":"actual_unavailable","message":"private detail"}}""" to
-                                HttpStatusCode.ServiceUnavailable
-                        ),
-                ),
-            )
-
-        return LoginMethodsOutcomes(success, actualOnly, unreachable, actualUnavailable)
-    } finally {
-        Api.baseUrl = previousBaseUrl
-        Api.client.close()
-        previousClient.close()
-    }
+    val success =
+        loadScenario(
+            mapOf(
+                "/account/needs-bootstrap" to
+                    ("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""" to HttpStatusCode.OK),
+                "/account/login-methods" to
+                    (
+                        """{"status":"ok","methods":[{"method":"password","displayName":"Password","active":1},
+                            {"method":"openid","displayName":"OpenID","active":1}]}""" to HttpStatusCode.OK
+                    ),
+            ),
+        )
+    val unreachable = loadScenario(emptyMap(), simulateOffline = true)
+    val serverError =
+        loadScenario(
+            mapOf(
+                "/account/needs-bootstrap" to ("""{"status":"error","reason":"internal-error"}""" to HttpStatusCode.ServiceUnavailable),
+            ),
+        )
+    return LoginMethodsOutcomes(success, unreachable, serverError)
 }
 
 internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
@@ -145,32 +101,18 @@ internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
         ),
         outcomes.success.actualLoginMethods,
     )
-
-    assertEquals(
-        "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address.",
-        outcomes.actualOnly.signInError,
-    )
-    assertFalse(outcomes.actualOnly.isServerReachable)
-    assertNull(outcomes.actualOnly.actualLoginMethods)
-    assertEquals(
-        listOf("/api/v1/auth/methods", "/api/v1/health/ready", "/account/needs-bootstrap"),
-        outcomes.actualOnly.requests.map { it.path },
-    )
+    assertEquals(listOf("/account/needs-bootstrap", "/account/login-methods"), outcomes.success.requests.map { it.path })
 
     assertEquals("Tandem isn’t responding at this address. Check the server address.", outcomes.unreachable.signInError)
     assertFalse(outcomes.unreachable.isServerReachable)
     assertNull(outcomes.unreachable.actualLoginMethods)
-    assertEquals(3, outcomes.unreachable.requests.size)
 
-    assertEquals("Tandem can’t connect to Actual. Check that the Actual server is running.", outcomes.actualUnavailable.signInError)
-    assertTrue(outcomes.actualUnavailable.isServerReachable)
-    assertNull(outcomes.actualUnavailable.actualLoginMethods)
-    assertEquals(listOf("/api/v1/auth/methods"), outcomes.actualUnavailable.requests.map { it.path })
+    assertTrue(outcomes.serverError.isServerReachable)
+    assertNull(outcomes.serverError.actualLoginMethods)
+    assertEquals(listOf("/account/needs-bootstrap"), outcomes.serverError.requests.map { it.path })
 
     assertTrue(
-        listOf(outcomes.success, outcomes.actualOnly, outcomes.unreachable, outcomes.actualUnavailable)
-            .flatMap { it.requests }
-            .all { it.authorization == null },
-        "Sign-in availability checks and diagnostic probes must not send credentials",
+        listOf(outcomes.success, outcomes.unreachable, outcomes.serverError).flatMap { it.requests }.all { it.authorization == null },
+        "Sign-in availability checks must not send credentials",
     )
 }

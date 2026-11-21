@@ -107,9 +107,8 @@ internal fun LiveUpcomingBillsCard(
                 ).joinToString(" · "),
                 schedule.amountLabel(state),
                 leading = RowLeading.Icon(Lucide.CalendarDays),
-            ) {
-                navigation.openSchedule(schedule.id)
-            }
+                onClick = { navigation.openSchedule(schedule.id) },
+            )
         }
     }
 }

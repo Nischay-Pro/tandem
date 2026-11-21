@@ -2,7 +2,6 @@ plugins {
   alias(libs.plugins.kotlinMultiplatform)
   alias(libs.plugins.kotlinSerialization)
   alias(libs.plugins.androidKmpLibrary)
-  alias(libs.plugins.openapiKmpGen)
   alias(libs.plugins.ktlint)
   alias(libs.plugins.kover)
 }
@@ -28,6 +27,15 @@ kotlin {
       implementation(libs.coroutinesCore)
       implementation(libs.ktorClientCore)
       implementation(libs.ktorClientEncoding)
+      api(libs.serializationJson)
+      api(libs.ktorClientCore)
+      implementation(libs.coroutinesCore)
+    }
+    androidMain.dependencies {
+      implementation(libs.ktorClientOkhttp)
+    }
+    iosMain.dependencies {
+      implementation(libs.ktorClientDarwin)
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))
@@ -51,12 +59,6 @@ tasks.configureEach {
   }
 }
 
-kmpgen {
-  spec(packageName = "app.tandemforactual.api.generated") {
-    specFile = file("../../docs/api/openapi-v1.json")
-  }
-}
-
 ktlint {
   filter {
     include("**/src/**/*.kt", "**/*.kts")
@@ -72,13 +74,6 @@ ktlint {
 
 kover {
   reports {
-    filters {
-      excludes {
-        // The generated API surface is checked by route/method/header contract tests.
-        // Its compiler-generated default-argument bridges are not meaningful line coverage.
-        classes("app.tandemforactual.api.generated.**")
-      }
-    }
     verify {
       rule {
         minBound(100)

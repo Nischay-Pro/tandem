@@ -49,6 +49,8 @@ robolectricSdk28 = { module = "org.robolectric:android-all-instrumented", versio
 robolectricSdk36 = { module = "org.robolectric:android-all-instrumented", version = "16-robolectric-13921718-i7" }
 ktorClientMock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktorClientJava = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
+ktorClientOkhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktorClientDarwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktorClientCore = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktorClientEncoding = { module = "io.ktor:ktor-client-encoding", version.ref = "ktor" }
 room3Runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
