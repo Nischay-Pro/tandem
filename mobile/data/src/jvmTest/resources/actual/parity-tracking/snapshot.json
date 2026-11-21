@@ -1,0 +1,4173 @@
+{
+  "today": "2026-11-21",
+  "displaySettings": {
+    "budgetType": "tracking",
+    "currencyCode": "USD",
+    "currencySymbol": "$",
+    "currencyFractionDigits": 2,
+    "numberFormat": null,
+    "hideFraction": false,
+    "currencySymbolPosition": "before",
+    "currencySpaceBetweenAmountAndSymbol": false
+  },
+  "records": [
+    {
+      "type": "account",
+      "id": "834dd1a4-3968-4aeb-81ca-d233027afdcf",
+      "body": {
+        "id": "834dd1a4-3968-4aeb-81ca-d233027afdcf",
+        "name": "Savings",
+        "offbudget": false,
+        "closed": false,
+        "balance_current": 200000,
+        "account_group_id": null,
+        "sort_order": 32768
+      },
+      "revision": "8c8249439759266e8b26b296c799cb95bb6adabc1eba1a29f85c9c8db91658c8"
+    },
+    {
+      "type": "account",
+      "id": "a365224d-0f26-4110-8a60-e6f0736a80f4",
+      "body": {
+        "id": "a365224d-0f26-4110-8a60-e6f0736a80f4",
+        "name": "Old wallet",
+        "offbudget": false,
+        "closed": true,
+        "balance_current": 0,
+        "account_group_id": null,
+        "sort_order": 65536
+      },
+      "revision": "1a42efd3966f76499b7dba16242a5c2355068884cac5bf56e32c15e02cef72af"
+    },
+    {
+      "type": "account",
+      "id": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+      "body": {
+        "id": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "name": "Checking",
+        "offbudget": false,
+        "closed": false,
+        "balance_current": 1205236,
+        "account_group_id": null,
+        "sort_order": 16384
+      },
+      "revision": "4142287060cb930faf95899d99230c0bc6804f3eb022dbab25c8232c9c24f177"
+    },
+    {
+      "type": "account",
+      "id": "caf5acdd-cead-4ba2-b15f-f3b86ddb3f53",
+      "body": {
+        "id": "caf5acdd-cead-4ba2-b15f-f3b86ddb3f53",
+        "name": "Brokerage",
+        "offbudget": true,
+        "closed": false,
+        "balance_current": 905000,
+        "account_group_id": null,
+        "sort_order": 16384
+      },
+      "revision": "8b7cd0d10eac6c5e14a9349cd446945797abfba5706e582e3ec95666ad8cb610"
+    },
+    {
+      "type": "account",
+      "id": "cfa7926d-0cbb-436b-a382-3628e66adf1f",
+      "body": {
+        "id": "cfa7926d-0cbb-436b-a382-3628e66adf1f",
+        "name": "Credit card",
+        "offbudget": false,
+        "closed": false,
+        "balance_current": -119500,
+        "account_group_id": null,
+        "sort_order": 49152
+      },
+      "revision": "9929a8e275a9b2312d24a329bc5506dea532b13f03beb70eb83f6a19fc62d1bb"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-05",
+      "body": {
+        "month": "2026-05",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 0
+          }
+        ]
+      },
+      "revision": "63f6444bc5da08ac1ce1744390cec34ff4506bfff2b3b51df031d7070f9c9a45"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-06",
+      "body": {
+        "month": "2026-06",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 0
+          }
+        ]
+      },
+      "revision": "3222d759a61ae8004c3b28742bef8b7659490e71d3cccc0376fc201aa09e6c4d"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-07",
+      "body": {
+        "month": "2026-07",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 0
+          }
+        ]
+      },
+      "revision": "1bbad87e9e06495c6d9600211a4ac6c8c6fb0721e70fee02835c8fb40e9e7198"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-08",
+      "body": {
+        "month": "2026-08",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 207000,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 1082345,
+        "totalSpent": -222700,
+        "totalBalance": -15700,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 10000,
+                "spent": -8700,
+                "balance": 1300,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 150000,
+                "spent": -150000,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 160000,
+            "spent": -158700,
+            "balance": 1300
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 10000,
+                "spent": -22000,
+                "balance": -12000,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 37000,
+                "spent": -42000,
+                "balance": -5000,
+                "carryover": false
+              }
+            ],
+            "budgeted": 47000,
+            "spent": -64000,
+            "balance": -17000
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 390000,
+                "received": 400000,
+                "balance": 790000,
+                "carryover": false
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 682345,
+                "balance": -682345,
+                "carryover": false
+              }
+            ],
+            "budgeted": 390000,
+            "received": 1082345,
+            "balance": 107655
+          }
+        ]
+      },
+      "revision": "ff0df3a6184e5a3c47eeefbbee8ab1ac155648abb1db6557903be80b6de07732"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-09",
+      "body": {
+        "month": "2026-09",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 208000,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 400000,
+        "totalSpent": -219799,
+        "totalBalance": -11799,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 10000,
+                "spent": -8800,
+                "balance": 1200,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 150000,
+                "spent": -150000,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 160000,
+            "spent": -158800,
+            "balance": 1200
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 10000,
+                "spent": -17000,
+                "balance": -7000,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 38000,
+                "spent": -43999,
+                "balance": -5999,
+                "carryover": true
+              }
+            ],
+            "budgeted": 48000,
+            "spent": -60999,
+            "balance": -12999
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 5000,
+                "spent": 0,
+                "balance": 5000,
+                "carryover": false
+              }
+            ],
+            "budgeted": 5000,
+            "spent": 0,
+            "balance": 5000
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 390000,
+                "received": 400000,
+                "balance": 790000,
+                "carryover": false
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 390000,
+            "received": 400000,
+            "balance": 790000
+          }
+        ]
+      },
+      "revision": "918610e2665d0f31532074ee91668444dd830cb1fcacd97cdfc099b1db9dfc5f"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-10",
+      "body": {
+        "month": "2026-10",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 209000,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 400000,
+        "totalSpent": -300900,
+        "totalBalance": -97899,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 10000,
+                "spent": -8900,
+                "balance": 1100,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 150000,
+                "spent": -150000,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 160000,
+            "spent": -158900,
+            "balance": 1100
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 10000,
+                "spent": -100000,
+                "balance": -90000,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 39000,
+                "spent": -42000,
+                "balance": -8999,
+                "carryover": true
+              }
+            ],
+            "budgeted": 49000,
+            "spent": -142000,
+            "balance": -98999
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": -3000,
+                "balance": -3000,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": -3000,
+            "balance": -3000
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 390000,
+                "received": 400000,
+                "balance": 790000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 390000,
+            "received": 400000,
+            "balance": 790000
+          }
+        ]
+      },
+      "revision": "a43e80c5111f90f5c0ac987a62dcc1db0cab0b50c5ee50cfa7df9f75c654b4cf"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-11",
+      "body": {
+        "month": "2026-11",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 210000,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 400000,
+        "totalSpent": -222710,
+        "totalBalance": -21709,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 10000,
+                "spent": -13000,
+                "balance": -3000,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 150000,
+                "spent": -150000,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 160000,
+            "spent": -163000,
+            "balance": -3000
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 10000,
+                "spent": -7000,
+                "balance": 3000,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 40000,
+                "spent": -52710,
+                "balance": -21709,
+                "carryover": true
+              }
+            ],
+            "budgeted": 50000,
+            "spent": -59710,
+            "balance": -18709
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 390000,
+                "received": 400000,
+                "balance": 1580000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 390000,
+            "received": 400000,
+            "balance": 1580000
+          }
+        ]
+      },
+      "revision": "02eb4a5b81db64c767f297dec061cb53e4d7051a1efaa05a51c7c932557e5c8b"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-12",
+      "body": {
+        "month": "2026-12",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 211000,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 189291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 10000,
+                "spent": 0,
+                "balance": 10000,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 150000,
+                "spent": 0,
+                "balance": 150000,
+                "carryover": false
+              }
+            ],
+            "budgeted": 160000,
+            "spent": 0,
+            "balance": 160000
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 10000,
+                "spent": 0,
+                "balance": 10000,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 41000,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 51000,
+            "spent": 0,
+            "balance": 29291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 390000,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 390000,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "3c408b60f2628b7dae282a28766fe0fb62bc3bb78fe320ccb2bbd8a92f06160a"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-01",
+      "body": {
+        "month": "2027-01",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "7ec70cf291816c600161fbdd3a41953935f2417b8b508ca45c5da1af274b27f7"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-02",
+      "body": {
+        "month": "2027-02",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "be2d969115595a0c60814f6c9033eb58348087d0408738bbc4f647f851a9055c"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-03",
+      "body": {
+        "month": "2027-03",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "e3c25e0fd80cf9dcc70f02f2dd69715750e0216586c515bb6086551fb9db6166"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-04",
+      "body": {
+        "month": "2027-04",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "78b3814a9b439bc67fd07fa75307a9f8833759485ce438d0029204f13dea80cd"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-05",
+      "body": {
+        "month": "2027-05",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "fa2f68425d06a30d7a2c15aeb5f3e1219fb3175fdbd2591a7ab82a6759e6620a"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-06",
+      "body": {
+        "month": "2027-06",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "01d0d9e0557eed4f5458485a5ef7d3ddab3399c99c8859194c4b21ba00acdd0f"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-07",
+      "body": {
+        "month": "2027-07",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "a279f1f70fd4d1bddc54c9fc0a8d96e1d9b10e2de349efd511d60a669240c48e"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-08",
+      "body": {
+        "month": "2027-08",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "8ae09d6968585251a8bebd200d06ea8cd555967dba2f14b1210032523c2bb071"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-09",
+      "body": {
+        "month": "2027-09",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "5ec9043269de7cd62d35b68a9cd10c3c8782d1545a650360906ebfb3c325ccf0"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-10",
+      "body": {
+        "month": "2027-10",
+        "incomeAvailable": null,
+        "lastMonthOverspent": null,
+        "forNextMonth": null,
+        "totalBudgeted": 0,
+        "toBudget": null,
+        "fromLastMonth": null,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 19291,
+        "categoryGroups": [
+          {
+            "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+            "name": "Bills",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "021db49c-1692-4b75-87dc-898a610beff3",
+                "name": "Electricity",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+                "name": "Rent",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+            "name": "Everyday",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+                "name": "Dining",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+                "name": "Groceries",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 19291,
+                "carryover": true
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 19291
+          },
+          {
+            "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+            "name": "Archive",
+            "is_income": false,
+            "hidden": true,
+            "categories": [
+              {
+                "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+                "name": "Old category",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+                "name": "Salary",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 1970000,
+                "carryover": true
+              },
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "budgeted": 0,
+                "received": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "received": 0,
+            "balance": 1970000
+          }
+        ]
+      },
+      "revision": "38041e0daf772758bdc71913789eb2e6080296f23a171f95f300181691247556"
+    },
+    {
+      "type": "category",
+      "id": "021db49c-1692-4b75-87dc-898a610beff3",
+      "body": {
+        "id": "021db49c-1692-4b75-87dc-898a610beff3",
+        "name": "Electricity",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8"
+      },
+      "revision": "f856883db9e5588927c9d050fbdfc9045f0f05ffa64bd65b73fd11ce54357707"
+    },
+    {
+      "type": "category",
+      "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+      "body": {
+        "id": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "name": "Groceries",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6"
+      },
+      "revision": "174c4bd2a9e2dd247a28081203b4609b6ab59ba38fa04dead511b03d65491953"
+    },
+    {
+      "type": "category",
+      "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+      "body": {
+        "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "037f62c15a1ac8de03f485270ab205098f0c193d053ef494cdfcc9bad410166f"
+    },
+    {
+      "type": "category",
+      "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+      "body": {
+        "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "name": "Starting Balances",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "eb14437142d256e97e1c21efeef65f6ebff94392bf614b13aad1bf68fc52e7fc"
+    },
+    {
+      "type": "category",
+      "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+      "body": {
+        "id": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+        "name": "Rent",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8"
+      },
+      "revision": "fdc5f98d451a5034a89c7a35d0f37825c7ba462b787da321e181034b15b629f4"
+    },
+    {
+      "type": "category",
+      "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+      "body": {
+        "id": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "name": "Dining",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6"
+      },
+      "revision": "760e9b6773a16ba55c4a6f814e2b171b882dcc3419bae7dd40607268d4f30393"
+    },
+    {
+      "type": "category",
+      "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+      "body": {
+        "id": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+        "name": "Salary",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "1084a097a2023d99dd8744bea99c8ddefb73f3ca3e6740709fcdc1c849ab1fde"
+    },
+    {
+      "type": "category",
+      "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+      "body": {
+        "id": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+        "name": "Old category",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5"
+      },
+      "revision": "673d231386bc97bb265b770a862f8565653374cb3709c71267587158230ef49d"
+    },
+    {
+      "type": "category-group",
+      "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+      "body": {
+        "id": "1e910fbb-9b4c-4685-8b23-fff70ba0b7d6",
+        "name": "Everyday",
+        "is_income": false,
+        "hidden": false
+      },
+      "revision": "b0cb7fc2a6073007c7e4a1689738fac10f937a5aac36567985beb8df66877649"
+    },
+    {
+      "type": "category-group",
+      "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+      "body": {
+        "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false
+      },
+      "revision": "1e710d3b732d58221349b33f5c874add4057a304a3ff1ee5b3c3311eb21e1e49"
+    },
+    {
+      "type": "category-group",
+      "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+      "body": {
+        "id": "93c99a51-f7cc-4ed2-9df5-71867f7cd2d8",
+        "name": "Bills",
+        "is_income": false,
+        "hidden": false
+      },
+      "revision": "86d0c68876bca89e5c4ae95dc2969163569fa47b3da4570f0729866f82705bc4"
+    },
+    {
+      "type": "category-group",
+      "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+      "body": {
+        "id": "9dfa1b1f-672e-4344-acaa-a5bd66a288c5",
+        "name": "Archive",
+        "is_income": false,
+        "hidden": true
+      },
+      "revision": "87c633d919302261099178ac413f7d5b241165991d0343769ff908265654c104"
+    },
+    {
+      "type": "payee",
+      "id": "042f8ace-1d94-4683-bfb6-f1d58feef539",
+      "body": {
+        "id": "042f8ace-1d94-4683-bfb6-f1d58feef539",
+        "name": "Dividend",
+        "transfer_acct": null
+      },
+      "revision": "adc7ad97e42db0646011566ac5b0d57da60e0767cf3e5b7e3858b75ed80a74e0"
+    },
+    {
+      "type": "payee",
+      "id": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+      "body": {
+        "id": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+        "name": "Power Co",
+        "transfer_acct": null
+      },
+      "revision": "825f4ba3d33d24dfcff11a196615408f1b85c95ce301cad2b090198a3c119103"
+    },
+    {
+      "type": "payee",
+      "id": "0cadecff-422e-4a48-8ab2-79dbbeb722ff",
+      "body": {
+        "id": "0cadecff-422e-4a48-8ab2-79dbbeb722ff",
+        "name": "Deleted later",
+        "transfer_acct": null
+      },
+      "revision": "f8c52a443e732945392dcb9afcf62dc51ce668eb8083193fd253a2831e5deedc"
+    },
+    {
+      "type": "payee",
+      "id": "1847ca3e-a65e-41f2-84be-d9c2a46f36b1",
+      "body": {
+        "id": "1847ca3e-a65e-41f2-84be-d9c2a46f36b1",
+        "name": "Brokerage",
+        "transfer_acct": "caf5acdd-cead-4ba2-b15f-f3b86ddb3f53"
+      },
+      "revision": "c42bec6e961ec61ea5ac77cd1c962df902466257e9bc91b1f5cb301da1ec90ec"
+    },
+    {
+      "type": "payee",
+      "id": "27b13683-1890-4e43-80f4-fc08d70fd352",
+      "body": {
+        "id": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "name": "Market",
+        "transfer_acct": null
+      },
+      "revision": "d6f61330f2054246bb1b6f249301015d0a92469a73489ba6adab2bfade9e2b17"
+    },
+    {
+      "type": "payee",
+      "id": "2d37bb57-a822-40c9-81d3-00c48aa884ea",
+      "body": {
+        "id": "2d37bb57-a822-40c9-81d3-00c48aa884ea",
+        "name": "Old wallet",
+        "transfer_acct": "a365224d-0f26-4110-8a60-e6f0736a80f4"
+      },
+      "revision": "64fbdd6555d8d2c82b8125b18c418c922409445475a5b5013b7ce6e4edd94b2d"
+    },
+    {
+      "type": "payee",
+      "id": "3de2f0c6-403e-427f-85dc-cbc3ba6a2b4e",
+      "body": {
+        "id": "3de2f0c6-403e-427f-85dc-cbc3ba6a2b4e",
+        "name": "Checking",
+        "transfer_acct": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3"
+      },
+      "revision": "92f4a98c9605ef3b798f7406aa00630b64ec24404d4cd43e0a5489abe32533b6"
+    },
+    {
+      "type": "payee",
+      "id": "5b705345-8ef4-4b47-986f-b4422437c567",
+      "body": {
+        "id": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "name": "Starting Balance",
+        "transfer_acct": null
+      },
+      "revision": "9d6b5b783c976644fc46bcaf7d84f05ffe1ffee7d28b0d1e3b4f226753f3f5fb"
+    },
+    {
+      "type": "payee",
+      "id": "5d3df285-ae10-4073-b339-6bd34ece520a",
+      "body": {
+        "id": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "name": "Bistro & Bar",
+        "transfer_acct": null
+      },
+      "revision": "576f2569ba6b1c1d2b96e258646bdbb38a9a9afbe9e7543a4517e5bc29acdf8e"
+    },
+    {
+      "type": "payee",
+      "id": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+      "body": {
+        "id": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "name": "Landlord",
+        "transfer_acct": null
+      },
+      "revision": "643e2d74baf691f54e2c8b226a60c225e89e52fc80772be06ea8ab2bd6eb62b4"
+    },
+    {
+      "type": "payee",
+      "id": "86d506dc-0ea1-417e-acf4-0e22b79ecb8e",
+      "body": {
+        "id": "86d506dc-0ea1-417e-acf4-0e22b79ecb8e",
+        "name": "Corner shop",
+        "transfer_acct": null
+      },
+      "revision": "6639d9d948778fe4e52d8adcbd3dd4fe772a864d0ef51fb84d2bef2031a8a1eb"
+    },
+    {
+      "type": "payee",
+      "id": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+      "body": {
+        "id": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+        "name": "Superstore",
+        "transfer_acct": null
+      },
+      "revision": "6a4b997518e832f3daea505a4f7ed4345bd784a0eb2d9678c1f9b407a162ee03"
+    },
+    {
+      "type": "payee",
+      "id": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+      "body": {
+        "id": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+        "name": "Employer",
+        "transfer_acct": null
+      },
+      "revision": "cfd703e02c616f120275d70601f4c9eed12a465a11e258dabac03a6747778d1a"
+    },
+    {
+      "type": "payee",
+      "id": "c65eda66-fdfa-41b1-8d95-ecf937ae56af",
+      "body": {
+        "id": "c65eda66-fdfa-41b1-8d95-ecf937ae56af",
+        "name": "Mystery",
+        "transfer_acct": null
+      },
+      "revision": "6353966a62b3364a0773817f41bda2dbd534d4318de4136f39d9ca0f4a9c7138"
+    },
+    {
+      "type": "payee",
+      "id": "ccf4e088-8b9f-4fe9-b3a5-974aa049514a",
+      "body": {
+        "id": "ccf4e088-8b9f-4fe9-b3a5-974aa049514a",
+        "name": "Credit card",
+        "transfer_acct": "cfa7926d-0cbb-436b-a382-3628e66adf1f"
+      },
+      "revision": "d1d923e0967100bdb61ca4fcd10c654be00971fbd6a7f6b0781b69a07817308f"
+    },
+    {
+      "type": "payee",
+      "id": "f835af43-7c0d-4aa1-94a9-55f78cc30de3",
+      "body": {
+        "id": "f835af43-7c0d-4aa1-94a9-55f78cc30de3",
+        "name": "Savings",
+        "transfer_acct": "834dd1a4-3968-4aeb-81ca-d233027afdcf"
+      },
+      "revision": "805b47309f2c9851b4b0e1a36e3a1b2bb6889ddc51283a410c496b9ed708d1a6"
+    },
+    {
+      "type": "rule",
+      "id": "54417a95-ffd4-4e3f-b2f9-a64accd0dea4",
+      "body": {
+        "id": "54417a95-ffd4-4e3f-b2f9-a64accd0dea4",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "payee",
+            "value": "5d3df285-ae10-4073-b339-6bd34ece520a",
+            "type": "id"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "category",
+            "value": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "9f282f8d1e50dbc7b783482fef12554a70e8e45380fa1413fd1344116c87fec2"
+    },
+    {
+      "type": "rule",
+      "id": "7dcd8337-5923-47bf-be6f-ec23560e7e68",
+      "body": {
+        "id": "7dcd8337-5923-47bf-be6f-ec23560e7e68",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "payee",
+            "value": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+            "type": "id"
+          },
+          {
+            "op": "is",
+            "field": "account",
+            "value": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+            "type": "id"
+          },
+          {
+            "op": "isapprox",
+            "field": "date",
+            "value": {
+              "frequency": "monthly",
+              "start": "2026-08-02",
+              "interval": 1,
+              "patterns": [],
+              "skipWeekend": false,
+              "weekendSolveMode": "after",
+              "endMode": "never"
+            },
+            "type": "date"
+          },
+          {
+            "op": "is",
+            "field": "amount",
+            "value": -150000,
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "link-schedule",
+            "field": null,
+            "value": "0a731987-bec0-41fc-b48b-1dddd1f26434",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "3aaa4d14ca9b52e232064b55fcf1192cbde3ab9726795514008f5433d6337a2b"
+    },
+    {
+      "type": "schedule",
+      "id": "0a731987-bec0-41fc-b48b-1dddd1f26434",
+      "body": {
+        "id": "0a731987-bec0-41fc-b48b-1dddd1f26434",
+        "name": "Rent",
+        "rule": "7dcd8337-5923-47bf-be6f-ec23560e7e68",
+        "next_date": "2026-12-02",
+        "completed": false,
+        "posts_transaction": false,
+        "payee": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -150000,
+        "amountOp": "is",
+        "date": {
+          "frequency": "monthly",
+          "start": "2026-08-02",
+          "interval": 1,
+          "patterns": [],
+          "skipWeekend": false,
+          "weekendSolveMode": "after",
+          "endMode": "never"
+        }
+      },
+      "revision": "3bf37b51b12134e9228841986b2e35f9dacb99d2c1b1c228dd41916da9a979d7"
+    },
+    {
+      "type": "transaction",
+      "id": "0566f74b-9637-41cc-ac0b-4f0270d775bb",
+      "body": {
+        "id": "0566f74b-9637-41cc-ac0b-4f0270d775bb",
+        "account": "834dd1a4-3968-4aeb-81ca-d233027afdcf",
+        "amount": 200000,
+        "date": "2026-08-01",
+        "payee": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "category": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "86f2ccb4908768939277c8c6434cb0d531670c7c15e9be0a7668748736008892"
+    },
+    {
+      "type": "transaction",
+      "id": "05bb350c-ba85-4489-8ada-367b61b667af",
+      "body": {
+        "id": "05bb350c-ba85-4489-8ada-367b61b667af",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 400000,
+        "date": "2026-11-01",
+        "payee": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+        "category": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Employer",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "16850ca69df4bbb4f6cf41e07eed74963c869be9fa00648129ac427a371b09a1"
+    },
+    {
+      "type": "transaction",
+      "id": "06bb2ebd-e406-49e9-be9f-894aa42a3b1c",
+      "body": {
+        "id": "06bb2ebd-e406-49e9-be9f-894aa42a3b1c",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -12000,
+        "date": "2026-10-12",
+        "payee": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "category": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Bistro",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "1c4e2162faf410d40d98452c4f42e65577b10cd596a61c26d65cc376a9350149"
+    },
+    {
+      "type": "transaction",
+      "id": "0994063b-1d95-4692-b122-d65feddd8d59",
+      "body": {
+        "id": "0994063b-1d95-4692-b122-d65feddd8d59",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -2500,
+        "date": "2026-10-21",
+        "payee": "c65eda66-fdfa-41b1-8d95-ecf937ae56af",
+        "category": null,
+        "notes": "uncategorized",
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Mystery",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "dc4dd20e027f5cbd49e0f788dbe69198a9522081f8e1bebf7c0abcaf6c6ab038"
+    },
+    {
+      "type": "transaction",
+      "id": "209064ca-07a0-4016-b56d-8b741ffafd41",
+      "body": {
+        "id": "209064ca-07a0-4016-b56d-8b741ffafd41",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -43210,
+        "date": "2026-11-09",
+        "payee": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": "edited after import",
+        "cleared": true,
+        "reconciled": true,
+        "importedId": null,
+        "importedPayee": "Market",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "abe3dd8288ec4e1498e03d887eed20beb7e7708dcbe3d76300e6915cd9282bd2"
+    },
+    {
+      "type": "transaction",
+      "id": "29fa52ff-8ab1-4fbe-8d74-7fe901d12d88",
+      "body": {
+        "id": "29fa52ff-8ab1-4fbe-8d74-7fe901d12d88",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -42000,
+        "date": "2026-10-09",
+        "payee": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Market",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "022d748a69ba6ffa782676690fa4d01a06fb0245b3c58ae9186a5c23aaefee9b"
+    },
+    {
+      "type": "transaction",
+      "id": "2a408ed7-86f1-4323-b57c-092ab72423b4",
+      "body": {
+        "id": "2a408ed7-86f1-4323-b57c-092ab72423b4",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 400000,
+        "date": "2026-10-01",
+        "payee": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+        "category": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Employer",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "1d1e15bf6dc7a6fea6c3a61a395731fdad47131e2e3634be6a4031593fae95f6"
+    },
+    {
+      "type": "transaction",
+      "id": "2e6a614e-9192-46e8-8281-9499c6d9fb15",
+      "body": {
+        "id": "2e6a614e-9192-46e8-8281-9499c6d9fb15",
+        "account": "caf5acdd-cead-4ba2-b15f-f3b86ddb3f53",
+        "amount": 900000,
+        "date": "2026-08-01",
+        "payee": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "aac6b8fcb245b9c33e2c950c1c11e8d907c745e992ca1b07bfffeaf2b3f889c0"
+    },
+    {
+      "type": "transaction",
+      "id": "316bd867-7d7a-4860-8ddf-5ad90acee685",
+      "body": {
+        "id": "316bd867-7d7a-4860-8ddf-5ad90acee685",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 400000,
+        "date": "2026-08-01",
+        "payee": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+        "category": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Employer",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "6c6b3acf815c8d36e7e5b7e5a0be556fb1030b0f7491e9ec261822fd7331d37f"
+    },
+    {
+      "type": "transaction",
+      "id": "3af00b3a-0358-424e-a272-5d01123f9e83",
+      "body": {
+        "id": "3af00b3a-0358-424e-a272-5d01123f9e83",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -12000,
+        "date": "2026-11-06",
+        "payee": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Superstore",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": true,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": [
+          {
+            "id": "82c63419-b21d-48eb-b42b-407e9f199930",
+            "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+            "amount": -8000,
+            "date": "2026-11-06",
+            "payee": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+            "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+            "notes": "food",
+            "cleared": true,
+            "reconciled": false,
+            "importedId": null,
+            "importedPayee": null,
+            "startingBalance": false,
+            "schedule": null,
+            "transferId": null,
+            "isParent": false,
+            "isChild": true,
+            "parentId": "3af00b3a-0358-424e-a272-5d01123f9e83",
+            "subtransactions": []
+          },
+          {
+            "id": "8b421a12-bf16-41c6-b2ee-e7fd157747ed",
+            "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+            "amount": -4000,
+            "date": "2026-11-06",
+            "payee": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+            "category": "021db49c-1692-4b75-87dc-898a610beff3",
+            "notes": null,
+            "cleared": true,
+            "reconciled": false,
+            "importedId": null,
+            "importedPayee": null,
+            "startingBalance": false,
+            "schedule": null,
+            "transferId": null,
+            "isParent": false,
+            "isChild": true,
+            "parentId": "3af00b3a-0358-424e-a272-5d01123f9e83",
+            "subtransactions": []
+          }
+        ]
+      },
+      "revision": "b792c235e7c1fec28645447288280767cca7934dc17716026c3826b3adf97fe4"
+    },
+    {
+      "type": "transaction",
+      "id": "48311b3a-f33f-4f1b-9a8b-aeb5ed69e75a",
+      "body": {
+        "id": "48311b3a-f33f-4f1b-9a8b-aeb5ed69e75a",
+        "account": "cfa7926d-0cbb-436b-a382-3628e66adf1f",
+        "amount": -30000,
+        "date": "2026-08-01",
+        "payee": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "category": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "51f5d9851bcf2c2b7eb64ab9fa68795a25158846a1d16be00f3fa78de988c604"
+    },
+    {
+      "type": "transaction",
+      "id": "48a47356-83a7-4a11-b017-da860be2fc64",
+      "body": {
+        "id": "48a47356-83a7-4a11-b017-da860be2fc64",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -7000,
+        "date": "2026-11-12",
+        "payee": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "category": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Bistro",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "a00caf5867d6da4742f30f3fe6560095b2ddfead9e0b12d5599d56f183f9fbb4"
+    },
+    {
+      "type": "transaction",
+      "id": "62b1c63a-13de-4dc8-bf7a-776ac25d126a",
+      "body": {
+        "id": "62b1c63a-13de-4dc8-bf7a-776ac25d126a",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -9000,
+        "date": "2026-11-05",
+        "payee": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+        "category": "021db49c-1692-4b75-87dc-898a610beff3",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Power Co",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "f8f8147f872da7e4c5ac5c2c7d39154a44460988f0ed93f4703431904a9691a1"
+    },
+    {
+      "type": "transaction",
+      "id": "63839dd9-3764-4e27-8dd3-06762edcc125",
+      "body": {
+        "id": "63839dd9-3764-4e27-8dd3-06762edcc125",
+        "account": "cfa7926d-0cbb-436b-a382-3628e66adf1f",
+        "amount": -88000,
+        "date": "2026-10-03",
+        "payee": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "category": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Bistro",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "60d15da5ed3b6553ee7227a38ad8558c2b314734ee39c1cea4e9e87ed1847c41"
+    },
+    {
+      "type": "transaction",
+      "id": "71e0ed13-ef31-4b61-8e32-894c775e33d1",
+      "body": {
+        "id": "71e0ed13-ef31-4b61-8e32-894c775e33d1",
+        "account": "a365224d-0f26-4110-8a60-e6f0736a80f4",
+        "amount": -12345,
+        "date": "2026-11-21",
+        "payee": "3de2f0c6-403e-427f-85dc-cbc3ba6a2b4e",
+        "category": null,
+        "notes": "Closing account",
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": "eacb2247-8e50-49b7-b567-736c03525d25",
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "57be91fc8a2de6c3c0d22f5b106b27cd44cbb2fef66d35bbb3b290d395a2aee2"
+    },
+    {
+      "type": "transaction",
+      "id": "80263e12-20f0-47ee-9394-22bdf2d50448",
+      "body": {
+        "id": "80263e12-20f0-47ee-9394-22bdf2d50448",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -8800,
+        "date": "2026-09-05",
+        "payee": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+        "category": "021db49c-1692-4b75-87dc-898a610beff3",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Power Co",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "76db448694011af6fc4235865a0ae17a6918680757396eb6225b5c3939b6d8af"
+    },
+    {
+      "type": "transaction",
+      "id": "82c63419-b21d-48eb-b42b-407e9f199930",
+      "body": {
+        "id": "82c63419-b21d-48eb-b42b-407e9f199930",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -8000,
+        "date": "2026-11-06",
+        "payee": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": "food",
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": true,
+        "parentId": "3af00b3a-0358-424e-a272-5d01123f9e83",
+        "subtransactions": []
+      },
+      "revision": "3cec25eecf801e49567a346b9a873c84bbdd4261bf86abef788becbad2e6f911"
+    },
+    {
+      "type": "transaction",
+      "id": "82fc9480-3f2b-4256-8c5a-76ec61d40db0",
+      "body": {
+        "id": "82fc9480-3f2b-4256-8c5a-76ec61d40db0",
+        "account": "a365224d-0f26-4110-8a60-e6f0736a80f4",
+        "amount": 12345,
+        "date": "2026-08-01",
+        "payee": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "category": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "bda9df02973b03b0db17a9d8afb04a1be6aee0136c7f6ddec9f8629b4d964188"
+    },
+    {
+      "type": "transaction",
+      "id": "87c29d0b-4772-4d53-b255-a12cac2c7cf8",
+      "body": {
+        "id": "87c29d0b-4772-4d53-b255-a12cac2c7cf8",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -22000,
+        "date": "2026-08-12",
+        "payee": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "category": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Bistro",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "ca702a1f7f31b419cce2b5e75023861d88cbadaa1cce214462ac3b3ed9a5bd6d"
+    },
+    {
+      "type": "transaction",
+      "id": "8b421a12-bf16-41c6-b2ee-e7fd157747ed",
+      "body": {
+        "id": "8b421a12-bf16-41c6-b2ee-e7fd157747ed",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -4000,
+        "date": "2026-11-06",
+        "payee": "9ec3bdd0-163f-4bc6-9e93-3b45b6873040",
+        "category": "021db49c-1692-4b75-87dc-898a610beff3",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": true,
+        "parentId": "3af00b3a-0358-424e-a272-5d01123f9e83",
+        "subtransactions": []
+      },
+      "revision": "b1a5f0aa8907b61496cb0ed87e30c5d53d4eb95e2ba92db4d230b31cdea8db7d"
+    },
+    {
+      "type": "transaction",
+      "id": "8c13d1fa-6dbe-46d2-a627-6e8c206deb2c",
+      "body": {
+        "id": "8c13d1fa-6dbe-46d2-a627-6e8c206deb2c",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -8700,
+        "date": "2026-08-05",
+        "payee": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+        "category": "021db49c-1692-4b75-87dc-898a610beff3",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Power Co",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "55d99ae89aa251f5b38530fd96290c6efa1bdebf1e336738f4fbf48350766570"
+    },
+    {
+      "type": "transaction",
+      "id": "903584a0-ff8f-47c9-9f62-9bb626c5f6cc",
+      "body": {
+        "id": "903584a0-ff8f-47c9-9f62-9bb626c5f6cc",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -150000,
+        "date": "2026-10-02",
+        "payee": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "category": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Landlord",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "090017c09fea2ceab79bfa4420b5793b7f60e5df28fadb0f40e574539a81239f"
+    },
+    {
+      "type": "transaction",
+      "id": "9b45aa61-36ff-40c0-b39b-4633eafac2c4",
+      "body": {
+        "id": "9b45aa61-36ff-40c0-b39b-4633eafac2c4",
+        "account": "caf5acdd-cead-4ba2-b15f-f3b86ddb3f53",
+        "amount": 5000,
+        "date": "2026-10-10",
+        "payee": "042f8ace-1d94-4683-bfb6-f1d58feef539",
+        "category": null,
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Dividend",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "c6093a73e81bf4dcebea45368b97f0f9b2ead55a98e9e73c0cbda387284fc6c6"
+    },
+    {
+      "type": "transaction",
+      "id": "9e299eb9-89dc-427a-9226-a573c95e084a",
+      "body": {
+        "id": "9e299eb9-89dc-427a-9226-a573c95e084a",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -3000,
+        "date": "2026-10-20",
+        "payee": "86d506dc-0ea1-417e-acf4-0e22b79ecb8e",
+        "category": "ecc8d7d9-8242-4166-b607-4f96790fd201",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Archive store",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "a96a2f58e53533e594b5dcb9942ba3d8ac16d22028e3c174ac5408a770dafaa1"
+    },
+    {
+      "type": "transaction",
+      "id": "a26d879f-8342-4ea8-b85c-349570bdc9ff",
+      "body": {
+        "id": "a26d879f-8342-4ea8-b85c-349570bdc9ff",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -150000,
+        "date": "2026-08-02",
+        "payee": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "category": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Landlord",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "61cc652e591f2de250d4739027715218d335cb0f67c56847186f8e54d2c99eb7"
+    },
+    {
+      "type": "transaction",
+      "id": "b6cd1985-d68f-4679-b48a-8613cbc2a99e",
+      "body": {
+        "id": "b6cd1985-d68f-4679-b48a-8613cbc2a99e",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 500000,
+        "date": "2026-08-01",
+        "payee": "5b705345-8ef4-4b47-986f-b4422437c567",
+        "category": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": true,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "0615dfabf232b6bfcc7f4d1c51329bf00de441757bbb38b04c79c9cd7c9d0b9f"
+    },
+    {
+      "type": "transaction",
+      "id": "b91eb8a0-a8a7-4ef6-8b38-e27d26129fbe",
+      "body": {
+        "id": "b91eb8a0-a8a7-4ef6-8b38-e27d26129fbe",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -42000,
+        "date": "2026-09-09",
+        "payee": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Market",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "bd8dff6e4713b7a8ceecd1e212f7fd027d94ccc132ce9b45be21e14145257a7c"
+    },
+    {
+      "type": "transaction",
+      "id": "bd972c8f-4269-476e-bd15-42888fdc16dd",
+      "body": {
+        "id": "bd972c8f-4269-476e-bd15-42888fdc16dd",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -150000,
+        "date": "2026-09-02",
+        "payee": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "category": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Landlord",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "e2705ffefbddee1253bf65056ee7d8c919fbb2e5cc1dbf4f431ce60623fb7bfe"
+    },
+    {
+      "type": "transaction",
+      "id": "c24e9f32-290d-4282-9da3-a3c0e41baa4f",
+      "body": {
+        "id": "c24e9f32-290d-4282-9da3-a3c0e41baa4f",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 400000,
+        "date": "2026-09-01",
+        "payee": "9f152c5d-7933-4b26-8613-14d7de5d8ec2",
+        "category": "cd281459-8ab3-4595-a6e4-debe2ef493d1",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Employer",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "8ad748e61a8db169ff448f2ed56a1330fb3310bb7d5a9ebd4e116abdbcfbf267"
+    },
+    {
+      "type": "transaction",
+      "id": "c391d04c-c395-4cc9-b63e-7445d64c4a97",
+      "body": {
+        "id": "c391d04c-c395-4cc9-b63e-7445d64c4a97",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -1999,
+        "date": "2026-09-15",
+        "payee": "86d506dc-0ea1-417e-acf4-0e22b79ecb8e",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Corner shop",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "7a37d34f54574d1b26537101e52d62e933591314e0bf8dcd45beacd88397e643"
+    },
+    {
+      "type": "transaction",
+      "id": "ca513bf4-4290-4b32-922e-6b26a497d606",
+      "body": {
+        "id": "ca513bf4-4290-4b32-922e-6b26a497d606",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -150000,
+        "date": "2026-11-02",
+        "payee": "7c00fa04-9587-4767-8a62-f204a2200eaa",
+        "category": "626040ec-5a06-4893-bb5b-739c3b5dd843",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Landlord",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "784bc3562b0dc748bb3c1c5632b952d17f91966c6722c803d3b25960e169be71"
+    },
+    {
+      "type": "transaction",
+      "id": "d0cd7c0a-c014-4407-93bb-a9ccef85dfce",
+      "body": {
+        "id": "d0cd7c0a-c014-4407-93bb-a9ccef85dfce",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -8900,
+        "date": "2026-10-05",
+        "payee": "097754c3-9106-45e9-bef3-14df2d8f27d3",
+        "category": "021db49c-1692-4b75-87dc-898a610beff3",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Power Co",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "6f45af303d750635676cef78e40ea956d76aabcd54d7db3654e37ab49d1e6337"
+    },
+    {
+      "type": "transaction",
+      "id": "db45ef8a-c26c-4834-9e71-6723a677cec8",
+      "body": {
+        "id": "db45ef8a-c26c-4834-9e71-6723a677cec8",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -42000,
+        "date": "2026-08-09",
+        "payee": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Market",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "87a791fde401de496d1743fcb7a2dea418732de1434c6419ade05afd13feb14b"
+    },
+    {
+      "type": "transaction",
+      "id": "e0d00f7b-7c1f-4061-b2ff-5eca08d6ed52",
+      "body": {
+        "id": "e0d00f7b-7c1f-4061-b2ff-5eca08d6ed52",
+        "account": "cfa7926d-0cbb-436b-a382-3628e66adf1f",
+        "amount": -1500,
+        "date": "2026-11-04",
+        "payee": "27b13683-1890-4e43-80f4-fc08d70fd352",
+        "category": "0649b6f1-2582-4f77-a41f-dfad1b547845",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Market",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "bc8af1e0e7561f4612357d87766881cf96e8838a5d4010aee5f1076ec8081320"
+    },
+    {
+      "type": "transaction",
+      "id": "e73b6bc4-1f81-4a60-8564-536640a1b220",
+      "body": {
+        "id": "e73b6bc4-1f81-4a60-8564-536640a1b220",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -17000,
+        "date": "2026-09-12",
+        "payee": "5d3df285-ae10-4073-b339-6bd34ece520a",
+        "category": "b86e6da5-c8fb-4720-b398-a392d2b91600",
+        "notes": null,
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": "Bistro",
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "8649cf162fa33a711747dc2135cd225a592c42e1f20aad5e9b66785d79c55f17"
+    },
+    {
+      "type": "transaction",
+      "id": "eacb2247-8e50-49b7-b567-736c03525d25",
+      "body": {
+        "id": "eacb2247-8e50-49b7-b567-736c03525d25",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": 12345,
+        "date": "2026-11-21",
+        "payee": "2d37bb57-a822-40c9-81d3-00c48aa884ea",
+        "category": null,
+        "notes": "Closing account",
+        "cleared": false,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": "71e0ed13-ef31-4b61-8e32-894c775e33d1",
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "d02b0342a0ca797e2b4fe9fcc2371f0f4542ffb665b536409b1c4454c44d688c"
+    },
+    {
+      "type": "transaction",
+      "id": "f5427da4-7f77-4fd9-bbf0-76a23bce6df4",
+      "body": {
+        "id": "f5427da4-7f77-4fd9-bbf0-76a23bce6df4",
+        "account": "c0e2da2c-b3c6-48a2-a596-d23e65b9d7d3",
+        "amount": -25000,
+        "date": "2026-10-25",
+        "payee": "f835af43-7c0d-4aa1-94a9-55f78cc30de3",
+        "category": null,
+        "notes": "to savings",
+        "cleared": true,
+        "reconciled": false,
+        "importedId": null,
+        "importedPayee": null,
+        "startingBalance": false,
+        "schedule": null,
+        "transferId": null,
+        "isParent": false,
+        "isChild": false,
+        "parentId": null,
+        "subtransactions": []
+      },
+      "revision": "8dda45f0b029c637d534012e4063f582f61063201552101a7630426237a9f61a"
+    }
+  ]
+}

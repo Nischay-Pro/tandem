@@ -1,0 +1,16 @@
+{
+  "deleted": 0,
+  "fileId": "f3c84701-c5c3-49b6-b54b-d2e4b3e1bba3",
+  "groupId": "9d2b0dae-6ec2-4b31-a7ba-3ad56e294e58",
+  "name": "Parity tracking",
+  "encryptKeyId": null,
+  "owner": "6ade1129-af29-410e-916c-e32c44d4ce29",
+  "usersWithAccess": [
+    {
+      "userId": "6ade1129-af29-410e-916c-e32c44d4ce29",
+      "displayName": "",
+      "userName": "",
+      "owner": true
+    }
+  ]
+}
