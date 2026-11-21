@@ -19,6 +19,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -58,8 +59,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -1648,10 +1652,25 @@ fun TandemApp(
                 route.showsBottomNavigation() &&
                 !imeVisible &&
                 !transactionSheetActive
+        val shortcutsEnabled = tabShellRoute != null && state.selectedBudgetId.isNotBlank()
+        val rootFocus = remember { FocusRequester() }
+        LaunchedEffect(shortcutsEnabled) { if (shortcutsEnabled) runCatching { rootFocus.requestFocus() } }
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .onPreviewKeyEvent { event ->
+                        val shortcut = event.keyboardShortcut()?.takeIf { shortcutsEnabled } ?: return@onPreviewKeyEvent false
+                        when (shortcut) {
+                            KeyboardShortcut.NewTransaction -> QuickActionEvents.requestAddTransaction()
+                            KeyboardShortcut.Search -> navigation.open(AppRoute.ACTIVITY_SEARCH)
+                            KeyboardShortcut.Sync -> syncNow()
+                            KeyboardShortcut.Back -> navigation.back()
+                            is KeyboardShortcut.Tab -> navigation.selectTab(shortcut.route)
+                        }
+                        true
+                    }.focusRequester(rootFocus)
+                    .focusable()
                     .background(appBackgroundBrush(state.backgroundStyle, palette))
                     .safeDrawingPadding(),
         ) {

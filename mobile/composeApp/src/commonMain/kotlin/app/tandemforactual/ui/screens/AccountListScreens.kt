@@ -251,6 +251,7 @@ internal fun AccountSummaryCard(
     onDragStarted: (() -> Unit)? = null,
     onDragBy: ((Float) -> Unit)? = null,
     onDragStopped: (() -> Unit)? = null,
+    highlighted: Boolean = false,
 ) {
     val palette = tandemPalette
     val stackBalance = LocalDensity.current.fontScale >= 1.5f
@@ -260,7 +261,7 @@ internal fun AccountSummaryCard(
             account.balanceMinor > 0 -> palette.positive
             else -> palette.negative
         }
-    SurfaceCard(modifier = modifier) {
+    SurfaceCard(modifier = modifier, highlighted = highlighted) {
         Row(
             modifier =
                 Modifier
@@ -503,6 +504,7 @@ internal fun AccountsScreen(
     liveAccounts: List<LiveAccountSummary>,
     merchantIconMatcher: MerchantIconMatcherPack?,
     mobileSession: TandemMobileSession,
+    detailInPane: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var addAccountDialog by rememberSaveable { mutableStateOf(false) }
@@ -803,12 +805,13 @@ internal fun AccountsScreen(
                             canMoveUp = canMoveUp,
                             canMoveDown = canMoveDown,
                             reorderEnabled = !state.readOnlyMode,
+                            highlighted = detailInPane && account.id == state.selectedAccountId,
                             onClick = {
                                 if (reorderModeConsumesItemTap(selectedAccountOrderId)) {
                                     selectedAccountOrderId = null
                                 } else {
                                     state.selectedAccountId = account.id
-                                    navigation.open(AppRoute.ACCOUNT_DETAIL)
+                                    if (!detailInPane) navigation.open(AppRoute.ACCOUNT_DETAIL)
                                 }
                             },
                             onLongClick = {
