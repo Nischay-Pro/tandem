@@ -25,3 +25,9 @@ The macOS mobile CI job builds this Xcode simulator target. This Linux
 workspace cannot run Xcode locally. The build checks Swift, project wiring,
 framework linking, and assets; scheduled-task behavior still requires a
 simulator or device runtime check before it is treated as verified.
+
+The `TandemShare` extension adds Tandem to the share sheet for text. It saves the
+shared text to the `group.app.tandemforactual.ios` App Group, and the app turns
+it into a prefilled transaction when it next becomes active. Signing for a device
+needs that App Group enabled for both `app.tandemforactual.ios` and
+`app.tandemforactual.ios.share` in the selected team.

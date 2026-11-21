@@ -36,33 +36,25 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
-          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "eligible=false" >> "$GITHUB_OUTPUT"
             echo "Nightly publishing only runs from main; this dispatch will not publish."
             exit 0
           fi
 
-          current_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
-          if [[ "$current_main" != "$source_sha" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            echo "main moved from $source_sha to $current_main; skipping stale nightly work."
-            exit 0
-          fi
-
           nightly_refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/nightly")"
           last_nightly_sha="$(jq -r '[.[] | select(.ref == "refs/tags/nightly") | .object.sha][0] // empty' <<<"$nightly_refs")"
-          if [[ "$last_nightly_sha" == "$source_sha" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            echo "No new main commit since the last nightly ($source_sha); skipping this run."
-            exit 0
-          fi
 
+          # Follow main while it moves: CI cancels superseded main runs, so only the newest commit can turn green.
           for _ in $(seq 1 110); do
             current_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
             if [[ "$current_main" != "$source_sha" ]]; then
+              echo "main moved from $source_sha to $current_main; following the newest commit."
+              source_sha="$current_main"
+            fi
+            if [[ "$last_nightly_sha" == "$source_sha" ]]; then
               echo "eligible=false" >> "$GITHUB_OUTPUT"
-              echo "main moved from $source_sha to $current_main; skipping stale nightly work."
+              echo "No new main commit since the last nightly ($source_sha); skipping this run."
               exit 0
             fi
 
@@ -74,14 +66,19 @@ jobs:
             conclusion="$(jq -r '.conclusion' <<<"$decision")"
 
             if [[ "$result" == "publish" ]]; then
+              echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
               echo "eligible=true" >> "$GITHUB_OUTPUT"
               echo "CI passed for $source_sha."
               exit 0
             fi
             if [[ "$result" == "skip" ]]; then
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              echo "CI ended as $conclusion; skipping nightly publication."
-              exit 0
+              latest_main="$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')"
+              if [[ "$conclusion" != "cancelled" || "$latest_main" == "$source_sha" ]]; then
+                echo "eligible=false" >> "$GITHUB_OUTPUT"
+                echo "CI ended as $conclusion; skipping nightly publication."
+                exit 0
+              fi
+              continue
             fi
 
             echo "CI status for $source_sha is $status; checking again in 30 seconds."

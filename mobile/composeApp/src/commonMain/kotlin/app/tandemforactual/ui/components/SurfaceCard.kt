@@ -25,6 +25,7 @@ internal fun SurfaceCard(
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
     animateSizeChanges: Boolean = true,
+    highlighted: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -47,8 +48,8 @@ internal fun SurfaceCard(
                     },
                 ),
         shape = RoundedCornerShape(TandemShapes.large),
-        color = palette.surface,
-        border = BorderStroke(1.dp, palette.border),
+        color = if (highlighted) palette.accentSurface else palette.surface,
+        border = if (highlighted) BorderStroke(1.5.dp, palette.accent) else BorderStroke(1.dp, palette.border),
     ) {
         Column(content = content)
     }

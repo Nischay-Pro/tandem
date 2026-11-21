@@ -158,12 +158,16 @@ internal fun ScreenContent(
             RuleEditorSheet(state, mobileSession)
         }
         AppRoute.ACCOUNTS ->
-            AccountsScreen(
-                state,
-                navigation,
-                liveAccounts,
-                merchantIconMatcher,
-                mobileSession,
+            ListDetailPanes(
+                detailKey = state.selectedAccountId.takeIf { selected -> liveAccounts.any { it.id == selected } },
+                emptyTitle = "Choose an account",
+                emptyMessage = "Its balance and activity appear here.",
+                list = { detailInPane ->
+                    AccountsScreen(state, navigation, liveAccounts, merchantIconMatcher, mobileSession, detailInPane)
+                },
+                detail = {
+                    AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher, isForegroundRoute)
+                },
             )
         AppRoute.ACCOUNT_DETAIL ->
             AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher, isForegroundRoute)
