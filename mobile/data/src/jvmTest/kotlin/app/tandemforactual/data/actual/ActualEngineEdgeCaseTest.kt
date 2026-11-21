@@ -394,6 +394,56 @@ class ActualEngineEdgeCaseTest {
     }
 
     @Test
+    fun writerRollbackRestoresTheClockAndMessageLog() {
+        val store = crdtDb()
+        try {
+            val clock = store.loadClock()
+            val timestamp = clock.clock.timestamp
+            val merkleHash = clock.merkle.hash
+            val writer = ActualWriter(store, clock, { 1_795_254_060_000L }) { "p1" }
+
+            assertFailsWith<IllegalStateException> {
+                writer.batch {
+                    writer.insert("payees", mapOf("name" to "Unsaved"))
+                    error("Operation journal was not saved")
+                }
+            }
+            assertEquals(timestamp, clock.clock.timestamp)
+            assertEquals(merkleHash, clock.merkle.hash)
+            assertTrue(store.messagesSince(timestamp.toString()).isEmpty())
+            assertNull(store.db.first("SELECT id FROM payees WHERE id = 'p1'"))
+        } finally {
+            store.db.close()
+        }
+    }
+
+    @Test
+    fun receiveOnlySyncNeverUploadsPendingChanges() {
+        val server = FakeServer(XorCipher())
+        val now = 1_795_254_060_000L
+        val store = crdtDb()
+        try {
+            val clock = store.loadClock()
+            val engine = ActualSyncEngine(store, server.transport, "group", "file", XorCipher()) { now }
+            store.apply(listOf(CrdtMessage(clock.clock.send(now), "payees", "p1", "name", CrdtValue.Text("Pending"))), clock, false)
+
+            val error =
+                assertFailsWith<ActualSyncException> {
+                    runBlocking { engine.fullSync(clock, null, receiveOnly = true) }
+                }
+            assertEquals("out-of-sync", error.reason)
+            assertTrue(server.requests.isNotEmpty())
+            assertTrue(server.requests.all { it.messages.isEmpty() })
+            assertTrue(server.store.isEmpty())
+
+            runBlocking { engine.fullSync(clock, null) }
+            assertEquals(1, server.store.size)
+        } finally {
+            store.db.close()
+        }
+    }
+
+    @Test
     fun syncReportsActualErrorReasons() {
         val now = 1_000_000_000L
         val store = crdtDb()

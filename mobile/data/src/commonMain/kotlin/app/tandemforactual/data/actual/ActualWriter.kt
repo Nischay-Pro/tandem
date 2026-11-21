@@ -33,7 +33,17 @@ class ActualWriter(
         id: String,
     ) = send(table, id, mapOf("tombstone" to 1L))
 
-    fun <T> batch(block: () -> T): T = db.transaction(block)
+    fun <T> batch(block: () -> T): T {
+        val timestamp = clock.clock.timestamp
+        val merkle = clock.merkle
+        return try {
+            db.transaction(block)
+        } catch (error: Throwable) {
+            clock.clock.timestamp = timestamp
+            clock.merkle = merkle
+            throw error
+        }
+    }
 
     private fun send(
         table: String,

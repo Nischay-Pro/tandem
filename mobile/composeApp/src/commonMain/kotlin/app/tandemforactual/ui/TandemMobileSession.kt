@@ -7,14 +7,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
+import app.tandemforactual.api.client.ActualBudgetParity
+import app.tandemforactual.api.client.ActualDirectBudget
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.api.client.GeneratedBudgetSyncRemote
 import app.tandemforactual.api.client.ServerCapabilities
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.client.compareWithGateway
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -328,10 +332,27 @@ internal class TandemMobileSession(
         val coordinator =
             BudgetSyncCoordinator(
                 repository,
-                app.tandemforactual.api.client
-                    .GeneratedBudgetSyncRemote(apiClient),
+                GeneratedBudgetSyncRemote(apiClient),
             )
     }
+
+    /** Checks a separately downloaded copy against the gateway before any writes are routed to it. */
+    internal suspend fun previewDirectBudget(
+        budgetId: String,
+        direct: ActualDirectBudget,
+        encryptionPassword: String?,
+    ): ActualBudgetParity =
+        synchronizationMutex.withLock {
+            check(apiClient.isAuthenticated && isCurrentIdentityCacheOwner()) { "Sign in to the server and account that own this budget." }
+            require(direct.groupId == budgetId) { "Choose the same budget on the Actual server and the gateway." }
+            val gateway =
+                apiClient.withExclusiveSession {
+                    GeneratedBudgetSyncRemote(apiClient).readSnapshot(budgetId, encryptionPassword)
+                }
+            withContext(Dispatchers.Default) {
+                direct.preview(currentDateIso()).compareWithGateway(gateway)
+            }
+        }
 
     internal suspend fun bindEncryptedBudgetDatabase(
         budgetId: String,

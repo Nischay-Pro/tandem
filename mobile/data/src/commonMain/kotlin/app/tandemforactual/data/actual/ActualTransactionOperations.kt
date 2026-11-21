@@ -140,15 +140,16 @@ class ActualTransactionOperations(
             }
         }
         if (base.value("transferId") != latest.value("transferId")) return conflict("transfer-pair-changed", listOf("transferId"))
+        val actualId = actualId(transactionId)
         latest.value("transferId")?.let { transferId ->
             val counterpart = reader.transaction(transferId as String) ?: return conflict("transfer-pair-incomplete", listOf("transferId"))
-            if (counterpart.value("id") != transferId || counterpart.value("transferId") != latest.value("id") ||
+            // Actual stores the pair links as row IDs, while Tandem snapshots can use imported IDs.
+            if (actualId(counterpart.value("id") as String) != transferId || counterpart.value("transferId") != actualId ||
                 (counterpart.value("amount") as Long) != -(latest.value("amount") as Long)
             ) {
                 return conflict("transfer-pair-changed", listOf("transferId", "amount"))
             }
         }
-        val actualId = actualId(transactionId)
         if (action == "delete") {
             if (!sameStructure(base, latest)) return conflict("delete-versus-edit", structuredConflicts(base, latest))
             val edited = EDIT_FIELDS.filter { !same(it, base.value(it), latest.value(it)) }

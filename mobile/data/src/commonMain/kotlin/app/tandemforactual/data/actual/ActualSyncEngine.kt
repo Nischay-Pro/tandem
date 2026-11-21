@@ -40,6 +40,7 @@ class ActualSyncEngine(
     suspend fun fullSync(
         clock: StoredClock,
         lastSyncedTimestamp: String?,
+        receiveOnly: Boolean = false,
     ): ActualSyncResult {
         val received = mutableListOf<CrdtMessage>()
         var since = lastSyncedTimestamp ?: ActualTimestamp(now() - 5 * 60 * 1000, 0, "0").toString()
@@ -47,7 +48,7 @@ class ActualSyncEngine(
         var prevDiff: Long? = null
         while (true) {
             val currentTime = clock.clock.timestamp.toString()
-            val outgoing = store.messagesSince(since)
+            val outgoing = if (receiveOnly) emptyList() else store.messagesSince(since)
             val response =
                 transport.sync(
                     SyncRequest(
