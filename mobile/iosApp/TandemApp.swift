@@ -98,6 +98,12 @@ private final class TandemSceneDelegate: NSObject, UIWindowSceneDelegate {
         return true
     }
 
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        if let text = SharedTextInbox.take(from: UserDefaults(suiteName: SharedTextInbox.appGroup)) {
+            QuickActionEvents.shared.shareText(text: text)
+        }
+    }
+
     func windowScene(
         _ windowScene: UIWindowScene,
         performActionFor shortcutItem: UIApplicationShortcutItem,
