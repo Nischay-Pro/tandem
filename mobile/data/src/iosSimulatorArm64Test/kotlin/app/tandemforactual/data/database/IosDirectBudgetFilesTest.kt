@@ -9,6 +9,7 @@ import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.runBlocking
 import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
+import platform.Foundation.dataWithContentsOfFile
 import platform.posix.memcpy
 import kotlin.test.Test
 import kotlin.test.assertEquals
