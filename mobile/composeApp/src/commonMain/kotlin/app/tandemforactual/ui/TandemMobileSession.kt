@@ -341,6 +341,7 @@ internal class TandemMobileSession(
         budgetId: String,
         direct: ActualDirectBudget,
         encryptionPassword: String?,
+        staging: LocalBudgetRepository? = null,
     ): ActualBudgetParity =
         synchronizationMutex.withLock {
             check(apiClient.isAuthenticated && isCurrentIdentityCacheOwner()) { "Sign in to the server and account that own this budget." }
@@ -350,7 +351,12 @@ internal class TandemMobileSession(
                     GeneratedBudgetSyncRemote(apiClient).readSnapshot(budgetId, encryptionPassword)
                 }
             withContext(Dispatchers.Default) {
-                direct.preview(currentDateIso()).compareWithGateway(gateway)
+                val today = currentDateIso()
+                if (staging == null) {
+                    direct.preview(today).compareWithGateway(gateway)
+                } else {
+                    direct.stageMobileCache(today, gateway, staging)
+                }
             }
         }
 

@@ -1603,7 +1603,7 @@ internal object GeneratedApiAccess {
     }
 }
 
-private fun parseServerUrl(
+internal fun parseServerUrl(
     value: String,
     allowInsecurePrivateNetwork: Boolean,
 ): Url {
