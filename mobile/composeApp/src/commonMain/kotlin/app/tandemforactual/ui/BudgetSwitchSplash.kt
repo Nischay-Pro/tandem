@@ -3,8 +3,10 @@
 package app.tandemforactual.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -12,19 +14,28 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +85,60 @@ internal fun BudgetSwitchSplash(budgetName: String?) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/** Coinbase-style pill that turns Advanced mode on or off; the change happens behind the splash. */
+@Composable
+internal fun AdvancedModeSwitch(
+    state: AppState,
+    modifier: Modifier = Modifier,
+) {
+    val palette = tandemPalette
+    val advanced = (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED
+    val thumbOffset by animateDpAsState(
+        if (advanced) 16.dp else 0.dp,
+        tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+        label = "advanced-thumb",
+    )
+    val trackColor by animateColorAsState(
+        if (advanced) palette.accent else palette.raised,
+        tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+        label = "advanced-track",
+    )
+    val thumbColor by animateColorAsState(
+        if (advanced) palette.accentContent else palette.muted,
+        tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+        label = "advanced-thumb-color",
+    )
+    Row(
+        modifier
+            .clip(CircleShape)
+            .background(palette.surface)
+            .border(1.dp, palette.border, CircleShape)
+            .toggleable(value = advanced, role = Role.Switch) {
+                state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL)
+            }.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Advanced", color = palette.text, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.Medium)
+        Box(
+            Modifier
+                .width(38.dp)
+                .height(22.dp)
+                .clip(CircleShape)
+                .background(trackColor)
+                .padding(3.dp),
+        ) {
+            Box(
+                Modifier
+                    .offset(x = thumbOffset)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(thumbColor),
+            )
         }
     }
 }

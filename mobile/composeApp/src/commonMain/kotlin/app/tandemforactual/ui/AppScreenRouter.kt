@@ -110,10 +110,18 @@ internal fun ScreenContent(
                 onRetrySync = onRetrySync,
                 notificationPermissionEnabled = notificationPermissionEnabled,
             )
-        AppRoute.NOTIFICATION_ONBOARDING ->
-            NotificationOnboardingScreen(state, navigation, onRequestNotificationPermission)
-        AppRoute.SYNC_ONBOARDING -> SyncOnboardingScreen(state, navigation, notificationPermissionEnabled)
         AppRoute.SETUP_COMPLETE -> SetupCompleteScreen(state, navigation)
+        AppRoute.PERSONALIZE -> PersonalizeScreen(state, navigation)
+        AppRoute.HOME ->
+            HomeScreen(
+                state,
+                mobileSession,
+                navigation,
+                liveAccounts,
+                liveBudgetMonth,
+                liveSchedules,
+                liveActivityTransactions,
+            )
         AppRoute.BUDGET ->
             BudgetScreen(
                 state,

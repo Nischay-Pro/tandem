@@ -63,15 +63,23 @@ class LandscapeChromeTest {
 
     @Test
     fun sideRailExposesAllPrimaryTabsAccessibly() {
+        val mode = androidx.compose.runtime.mutableStateOf(InterfaceMode.MINIMAL)
         composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true, interfaceMode = mode.value) {
                 SideNavigationRail(AppRoute.BUDGET, {})
             }
         }
 
-        listOf("Budget", "Accounts", "Activity", "Reports", "Settings").forEach { label ->
-            composeTestRule.onNodeWithContentDescription(label).assertExists()
-        }
+        listOf("Home", "Activity", "Budget", "Settings").forEach { composeTestRule.onNodeWithContentDescription(it).assertExists() }
+        composeTestRule.onNodeWithContentDescription("Accounts").assertDoesNotExist()
+        composeTestRule.runOnIdle { mode.value = InterfaceMode.ADVANCED }
+        listOf(
+            "Home",
+            "Accounts",
+            "Activity",
+            "Budget",
+            "Reports",
+        ).forEach { composeTestRule.onNodeWithContentDescription(it).assertExists() }
     }
 
     @Test

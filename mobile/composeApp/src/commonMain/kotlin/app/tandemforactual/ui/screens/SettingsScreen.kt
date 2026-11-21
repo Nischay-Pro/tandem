@@ -42,6 +42,9 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.home_customize
+import app.tandemforactual.ui.generated.resources.mode_advanced
+import app.tandemforactual.ui.generated.resources.mode_advanced_detail
 import app.tandemforactual.ui.generated.resources.settings_about
 import app.tandemforactual.ui.generated.resources.settings_about_detail
 import app.tandemforactual.ui.generated.resources.settings_appearance
@@ -60,6 +63,9 @@ import app.tandemforactual.ui.generated.resources.settings_manage_payees
 import app.tandemforactual.ui.generated.resources.settings_manage_payees_detail
 import app.tandemforactual.ui.generated.resources.settings_notifications
 import app.tandemforactual.ui.generated.resources.settings_notifications_detail
+import app.tandemforactual.ui.generated.resources.settings_personalize_detail
+import app.tandemforactual.ui.generated.resources.settings_reset_personalization
+import app.tandemforactual.ui.generated.resources.settings_reset_personalization_detail
 import app.tandemforactual.ui.generated.resources.settings_section_budget
 import app.tandemforactual.ui.generated.resources.settings_section_connection
 import app.tandemforactual.ui.generated.resources.settings_section_personalization
@@ -80,8 +86,10 @@ import com.composables.icons.lucide.Languages
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Palette
+import com.composables.icons.lucide.RotateCcw
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
 import org.jetbrains.compose.resources.stringResource
@@ -112,6 +120,28 @@ internal fun SettingsScreen(
             }
         }
         SectionCard(stringResource(Res.string.settings_section_personalization)) {
+            ListRow(
+                stringResource(Res.string.home_customize),
+                stringResource(Res.string.settings_personalize_detail),
+                leading = RowLeading.Icon(Lucide.Sparkles),
+                onClick = { navigation.open(AppRoute.PERSONALIZE) },
+            )
+            DividerLine()
+            ToggleRow(
+                stringResource(Res.string.mode_advanced),
+                stringResource(Res.string.mode_advanced_detail),
+                (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED,
+            ) { state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL) }
+            if (state.experience != null) {
+                DividerLine()
+                ListRow(
+                    stringResource(Res.string.settings_reset_personalization),
+                    stringResource(Res.string.settings_reset_personalization_detail),
+                    leading = RowLeading.Icon(Lucide.RotateCcw),
+                    onClick = { state.resetExperience() },
+                )
+            }
+            DividerLine()
             ListRow(
                 stringResource(Res.string.settings_appearance),
                 stringResource(Res.string.settings_appearance_detail),

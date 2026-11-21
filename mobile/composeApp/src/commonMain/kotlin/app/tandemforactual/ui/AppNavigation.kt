@@ -56,7 +56,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -79,6 +81,7 @@ import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.nav_accounts
 import app.tandemforactual.ui.generated.resources.nav_activity
 import app.tandemforactual.ui.generated.resources.nav_budget
+import app.tandemforactual.ui.generated.resources.nav_home
 import app.tandemforactual.ui.generated.resources.nav_reports
 import app.tandemforactual.ui.generated.resources.nav_settings
 import app.tandemforactual.ui.model.LiveAccountSummary
@@ -1006,6 +1009,22 @@ internal fun NavigationGlyph(
                     style = Stroke(stroke, cap = StrokeCap.Round),
                 )
             }
+            AppRoute.HOME -> {
+                val roof =
+                    Path().apply {
+                        moveTo(inset, size.height * 0.48f)
+                        lineTo(size.width / 2f, inset)
+                        lineTo(size.width - inset, size.height * 0.48f)
+                    }
+                drawPath(roof, color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawRoundRect(
+                    color,
+                    topLeft = Offset(inset * 2.2f, size.height * 0.42f),
+                    size = Size(size.width - inset * 4.4f, size.height * 0.58f - inset),
+                    cornerRadius = CornerRadius(stroke),
+                    style = Stroke(stroke),
+                )
+            }
             AppRoute.SETTINGS -> {
                 listOf(0.32f, 0.52f, 0.72f).forEachIndexed { index, fraction ->
                     val y = size.height * fraction
@@ -1030,11 +1049,29 @@ internal fun NavigationGlyph(
 internal fun navigationLabelDensity(density: Density): Density = Density(density.density, density.fontScale.coerceAtMost(1.3f))
 
 @Composable
-internal fun navigationTabs(): List<Pair<AppRoute, String>> =
-    listOf(
-        AppRoute.BUDGET to stringResource(Res.string.nav_budget),
-        AppRoute.ACCOUNTS to stringResource(Res.string.nav_accounts),
-        AppRoute.ACTIVITY to stringResource(Res.string.nav_activity),
-        AppRoute.REPORTS to stringResource(Res.string.nav_reports),
-        AppRoute.SETTINGS to stringResource(Res.string.nav_settings),
-    )
+internal fun navigationTabs(): List<Pair<AppRoute, String>> = navigationTabs(LocalInterfaceMode.current)
+
+/** Minimal keeps four destinations; Advanced adds Accounts and Reports and reaches Settings from Home. */
+@Composable
+internal fun navigationTabs(mode: InterfaceMode): List<Pair<AppRoute, String>> =
+    navigationRoutes(mode).map { route ->
+        route to
+            stringResource(
+                when (route) {
+                    AppRoute.HOME -> Res.string.nav_home
+                    AppRoute.BUDGET -> Res.string.nav_budget
+                    AppRoute.ACCOUNTS -> Res.string.nav_accounts
+                    AppRoute.ACTIVITY -> Res.string.nav_activity
+                    AppRoute.REPORTS -> Res.string.nav_reports
+                    else -> Res.string.nav_settings
+                },
+            )
+    }
+
+internal fun navigationRoutes(mode: InterfaceMode): List<AppRoute> =
+    when (mode) {
+        InterfaceMode.MINIMAL -> listOf(AppRoute.HOME, AppRoute.ACTIVITY, AppRoute.BUDGET, AppRoute.SETTINGS)
+        InterfaceMode.ADVANCED -> listOf(AppRoute.HOME, AppRoute.ACCOUNTS, AppRoute.ACTIVITY, AppRoute.BUDGET, AppRoute.REPORTS)
+    }
+
+internal val LocalInterfaceMode = androidx.compose.runtime.staticCompositionLocalOf { InterfaceMode.MINIMAL }

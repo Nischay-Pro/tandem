@@ -103,7 +103,7 @@ internal fun assertLoginMethodsOutcomes(outcomes: LoginMethodsOutcomes) {
     )
     assertEquals(listOf("/account/needs-bootstrap", "/account/login-methods"), outcomes.success.requests.map { it.path })
 
-    assertEquals("Tandem isn’t responding at this address. Check the server address.", outcomes.unreachable.signInError)
+    assertEquals("Actual isn’t responding at this address. Check the server address.", outcomes.unreachable.signInError)
     assertFalse(outcomes.unreachable.isServerReachable)
     assertNull(outcomes.unreachable.actualLoginMethods)
 

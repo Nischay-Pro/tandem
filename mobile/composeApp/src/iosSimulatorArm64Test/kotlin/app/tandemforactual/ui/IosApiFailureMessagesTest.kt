@@ -19,17 +19,17 @@ class IosApiFailureMessagesTest {
     fun signInAndSyncUseTheSameNetworkAndServiceMessages() {
         val cases =
             listOf(
-                "network-error" to (null to "Tandem isn’t responding at this address. Check the server address."),
+                "network-error" to (null to "Actual isn’t responding at this address. Check the server address."),
                 "http-404" to (404 to "Tandem isn’t available here. Check the server address."),
                 "http-405" to (405 to "Tandem isn’t available here. Check the server address."),
                 "http-400" to (400 to "Tandem couldn’t accept this request. Check the details."),
                 "http-422" to (422 to "Tandem couldn’t accept this request. Check the details."),
                 "http-408" to (408 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
                 "http-429" to (429 to "Tandem couldn’t complete the request. Wait a moment before trying again."),
-                "http-500" to (500 to "Tandem is temporarily unavailable. Try again shortly."),
-                "http-502" to (502 to "Tandem is temporarily unavailable. Try again shortly."),
-                "http-503" to (503 to "Tandem is temporarily unavailable. Try again shortly."),
-                "http-504" to (504 to "Tandem is temporarily unavailable. Try again shortly."),
+                "http-500" to (500 to "The Actual server is temporarily unavailable. Try again shortly."),
+                "http-502" to (502 to "The Actual server is temporarily unavailable. Try again shortly."),
+                "http-503" to (503 to "The Actual server is temporarily unavailable. Try again shortly."),
+                "http-504" to (504 to "The Actual server is temporarily unavailable. Try again shortly."),
                 "schedule_changed" to (409 to "This scheduled transaction changed in Actual. Refresh the schedule before trying again."),
                 "actual_unavailable" to (503 to "Tandem can’t connect to Actual. Check that the Actual server is running."),
             )
@@ -45,7 +45,7 @@ class IosApiFailureMessagesTest {
         val thrownNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
                 .userFacingMessage("fallback", ApiFailureContext.SIGN_IN)
-        assertEquals("Tandem isn’t responding at this address. Check the server address.", thrownNetwork)
+        assertEquals("Actual isn’t responding at this address. Check the server address.", thrownNetwork)
         assertFalse(thrownNetwork.contains("private host details"))
         val thrownSyncNetwork =
             TandemApiException("network-error", cause = IllegalStateException("private host details"))
