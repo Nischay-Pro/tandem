@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Captures Tandem screenshots at Pixel 11 Pro Fold screen sizes using the debug build's screenshot mode.
+# Captures Tandem screenshots at Pixel 11 and Pixel 11 Pro Fold screen sizes using the debug build's screenshot mode.
 # Usage: capture-android.sh <apk> <output dir> [server url]
 set -euo pipefail
 apk="$1"
@@ -21,15 +21,11 @@ clean_status_bar() {
 }
 
 wait=75
-for layout in open folded; do
-  # Pixel 11 Pro Fold screens: 2076x2152 inner and 1080x2342 cover.
-  if [ "$layout" = folded ]; then
-    adb shell wm size 1080x2342
-    adb shell wm density 420
-  else
-    adb shell wm size 2076x2152
-    adb shell wm density 390
-  fi
+# name:size:density. Pixel 11 is 1080x2424; Pixel 11 Pro Fold is 2076x2152 inside and 1080x2342 on the cover.
+for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-11-pro-fold-folded:1080x2342:420; do
+  IFS=: read -r name size density <<<"$device"
+  adb shell wm size "$size"
+  adb shell wm density "$density"
   sleep 5
   for mode in light dark; do
     if [ "$mode" = dark ]; then adb shell cmd uimode night yes >/dev/null; else adb shell cmd uimode night no >/dev/null; fi
@@ -47,8 +43,8 @@ for layout in open folded; do
       wait=25
       clean_status_bar
       sleep 2
-      adb exec-out screencap -p > "$out/pixel-11-pro-fold-$layout-$mode-$screen.png"
-      echo "captured pixel-11-pro-fold-$layout-$mode-$screen"
+      adb exec-out screencap -p > "$out/$name-$mode-$screen.png"
+      echo "captured $name-$mode-$screen"
     done
   done
 done
