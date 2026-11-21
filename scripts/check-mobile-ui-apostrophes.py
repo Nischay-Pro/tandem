@@ -17,6 +17,11 @@ SOURCE_ROOTS = (
 STRING_LITERAL = re.compile(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"')
 STRAIGHT_APOSTROPHE = re.compile(r"[A-Za-z]'[a-z]")
 SOURCE_SUFFIXES = {".kt", ".swift"}
+RESOURCE_STRING = re.compile(r"<string\b[^>]*>([\s\S]*?)</string>")
+
+
+def is_string_resource(path: Path) -> bool:
+    return path.name == "strings.xml" and "composeResources" in path.parts
 
 
 def is_test_source(path: Path) -> bool:
@@ -33,11 +38,12 @@ def main() -> int:
             return 2
 
         for path in sorted(source_root.rglob("*")):
-            if path.suffix not in SOURCE_SUFFIXES or "build" in path.parts or is_test_source(path):
+            resource = is_string_resource(path)
+            if (path.suffix not in SOURCE_SUFFIXES and not resource) or "build" in path.parts or is_test_source(path):
                 continue
             source_count += 1
             content = path.read_text(encoding="utf-8")
-            for match in STRING_LITERAL.finditer(content):
+            for match in (RESOURCE_STRING if resource else STRING_LITERAL).finditer(content):
                 if STRAIGHT_APOSTROPHE.search(match.group()):
                     line = content.count("\n", 0, match.start()) + 1
                     relative_path = path.relative_to(ROOT)

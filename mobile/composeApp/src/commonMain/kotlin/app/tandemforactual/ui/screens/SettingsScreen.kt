@@ -37,6 +37,34 @@ import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.settings_about
+import app.tandemforactual.ui.generated.resources.settings_about_detail
+import app.tandemforactual.ui.generated.resources.settings_appearance
+import app.tandemforactual.ui.generated.resources.settings_appearance_detail
+import app.tandemforactual.ui.generated.resources.settings_budget_preferences
+import app.tandemforactual.ui.generated.resources.settings_budget_preferences_detail
+import app.tandemforactual.ui.generated.resources.settings_budget_rules
+import app.tandemforactual.ui.generated.resources.settings_budget_rules_detail
+import app.tandemforactual.ui.generated.resources.settings_getting_started
+import app.tandemforactual.ui.generated.resources.settings_getting_started_detail
+import app.tandemforactual.ui.generated.resources.settings_local_data
+import app.tandemforactual.ui.generated.resources.settings_local_data_detail
+import app.tandemforactual.ui.generated.resources.settings_manage_payees
+import app.tandemforactual.ui.generated.resources.settings_manage_payees_detail
+import app.tandemforactual.ui.generated.resources.settings_notifications
+import app.tandemforactual.ui.generated.resources.settings_notifications_detail
+import app.tandemforactual.ui.generated.resources.settings_section_budget
+import app.tandemforactual.ui.generated.resources.settings_section_connection
+import app.tandemforactual.ui.generated.resources.settings_section_personalization
+import app.tandemforactual.ui.generated.resources.settings_section_privacy
+import app.tandemforactual.ui.generated.resources.settings_section_support
+import app.tandemforactual.ui.generated.resources.settings_security
+import app.tandemforactual.ui.generated.resources.settings_security_detail
+import app.tandemforactual.ui.generated.resources.settings_server_device
+import app.tandemforactual.ui.generated.resources.settings_server_device_detail
+import app.tandemforactual.ui.generated.resources.settings_sync_preferences
+import app.tandemforactual.ui.generated.resources.settings_sync_preferences_detail
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
@@ -49,6 +77,7 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+import org.jetbrains.compose.resources.stringResource
 
 private data class AppearancePalettePreset(
     val title: String,
@@ -75,77 +104,77 @@ internal fun SettingsScreen(
                 SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
             }
         }
-        SectionCard("Personalization") {
+        SectionCard(stringResource(Res.string.settings_section_personalization)) {
             ListRow(
-                "Appearance",
-                "Theme, accent color, and motion",
+                stringResource(Res.string.settings_appearance),
+                stringResource(Res.string.settings_appearance_detail),
                 leading = RowLeading.Icon(Lucide.Palette),
                 onClick = { navigation.open(AppRoute.APPEARANCE) },
             )
         }
-        SectionCard("Budget") {
+        SectionCard(stringResource(Res.string.settings_section_budget)) {
             ListRow(
-                "Budget preferences",
-                "Number format and planning",
+                stringResource(Res.string.settings_budget_preferences),
+                stringResource(Res.string.settings_budget_preferences_detail),
                 leading = RowLeading.Icon(Lucide.WalletCards),
                 onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
             )
             DividerLine()
             ListRow(
-                "Manage payees",
-                "Rename, merge, and set default categories",
+                stringResource(Res.string.settings_manage_payees),
+                stringResource(Res.string.settings_manage_payees_detail),
                 leading = RowLeading.Icon(Lucide.Tags),
                 onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
             )
             DividerLine()
             ListRow(
-                "Budget rules",
-                "Rules that categorize transactions",
+                stringResource(Res.string.settings_budget_rules),
+                stringResource(Res.string.settings_budget_rules_detail),
                 leading = RowLeading.Icon(Lucide.ListChecks),
                 onClick = { navigation.open(AppRoute.BUDGET_RULES) },
             )
         }
-        SectionCard("Connection") {
+        SectionCard(stringResource(Res.string.settings_section_connection)) {
             ListRow(
-                "Sync preferences",
-                "When and over which network to sync",
+                stringResource(Res.string.settings_sync_preferences),
+                stringResource(Res.string.settings_sync_preferences_detail),
                 leading = RowLeading.Icon(Lucide.CloudSync),
                 onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
             )
             DividerLine()
             ListRow(
-                "Server and device",
-                "Server address, local address, and this device",
+                stringResource(Res.string.settings_server_device),
+                stringResource(Res.string.settings_server_device_detail),
                 leading = RowLeading.Icon(Lucide.Smartphone),
                 onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
             )
             DividerLine()
             ListRow(
-                "Notifications",
-                "Sync problems and changes to review",
+                stringResource(Res.string.settings_notifications),
+                stringResource(Res.string.settings_notifications_detail),
                 leading = RowLeading.Icon(Lucide.Bell),
                 onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
             )
         }
-        SectionCard("Privacy") {
+        SectionCard(stringResource(Res.string.settings_section_privacy)) {
             ListRow(
-                "Security and privacy",
-                "Biometric unlock, encrypted budget, and hidden amounts",
+                stringResource(Res.string.settings_security),
+                stringResource(Res.string.settings_security_detail),
                 leading = RowLeading.Icon(Lucide.ShieldCheck),
                 onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
             )
             DividerLine()
             ListRow(
-                "Local data and storage",
-                "Cached records and pending edits",
+                stringResource(Res.string.settings_local_data),
+                stringResource(Res.string.settings_local_data_detail),
                 leading = RowLeading.Icon(Lucide.Database),
                 onClick = { navigation.open(AppRoute.LOCAL_DATA) },
             )
         }
-        SectionCard("Support") {
+        SectionCard(stringResource(Res.string.settings_section_support)) {
             ListRow(
-                "Getting started",
-                "Tips for using Tandem",
+                stringResource(Res.string.settings_getting_started),
+                stringResource(Res.string.settings_getting_started_detail),
                 leading = RowLeading.Icon(Lucide.BookOpen),
                 onClick = {
                     state.hasDismissedBudgetHint = false
@@ -154,8 +183,8 @@ internal fun SettingsScreen(
             )
             DividerLine()
             ListRow(
-                "About, help, and licenses",
-                "Version and open-source licenses",
+                stringResource(Res.string.settings_about),
+                stringResource(Res.string.settings_about_detail),
                 leading = RowLeading.Icon(Lucide.Info),
                 onClick = { navigation.open(AppRoute.ABOUT) },
             )

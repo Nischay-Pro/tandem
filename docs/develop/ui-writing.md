@@ -101,3 +101,17 @@ edit. They follow the Apple Human Interface Guidelines for writing.
 Android builds and physical-device display checks run from Linux. The shared
 Kotlin targets compile for iOS here, but the native Swift host, Xcode asset
 catalog, and iOS launch screen need a macOS/Xcode build for verification.
+
+## Text resources and translation
+
+App text is moving into Compose resources so Tandem can be translated. English lives in
+`mobile/composeApp/src/commonMain/composeResources/values/strings.xml`; read it with
+`stringResource(Res.string.<name>)`. The navigation tabs and the main Settings list use it so far, and
+other screens move over as they're touched.
+
+- Name keys after where the text appears, such as `settings_sync_preferences` and
+  `settings_sync_preferences_detail`.
+- Write values in the same style as the rest of this guide. `check-mobile-ui-apostrophes.py` and
+  `check-mobile-ui-vocabulary.py` check `strings.xml` the same way they check Kotlin and Swift literals.
+- A translation is a sibling folder with the same keys, such as `values-fr/strings.xml`. Compose picks it
+  from the device language, and any key it lacks falls back to English.
