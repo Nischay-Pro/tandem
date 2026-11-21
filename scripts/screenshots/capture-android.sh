@@ -43,6 +43,8 @@ for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-
         --es TANDEM_SCREENSHOT_SELECT "'$select'" >/dev/null
       sleep "$wait"
       wait=25
+      clean_status_bar
+      sleep 2
       adb exec-out screencap -p > "$out/$name-$mode-$screen.png"
       echo "captured $name-$mode-$screen"
     done
