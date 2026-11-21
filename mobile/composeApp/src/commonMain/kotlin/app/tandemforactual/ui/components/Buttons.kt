@@ -168,10 +168,10 @@ internal fun TandemIconButton(
     hoveredContainerColor: Color? = null,
     shape: Shape = CircleShape,
     borderColor: Color? = null,
+    modalClose: Boolean = icon == Lucide.X && contentDescription == "Close",
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    val modalClose = icon == Lucide.X && contentDescription == "Close"
     val closeHoverColor = if (palette.surface.luminance() < 0.5f) palette.border else palette.surface
     val resolvedContainerColor = containerColor ?: palette.raised.takeIf { modalClose }
     val resolvedHoveredContainerColor = hoveredContainerColor ?: closeHoverColor.takeIf { modalClose }
