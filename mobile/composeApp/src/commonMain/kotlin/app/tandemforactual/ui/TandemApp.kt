@@ -285,7 +285,7 @@ fun TandemApp(
                     backStack.clear()
                     backStack.add(newRouteEntry(AppRoute.BUDGET))
                 } else if (firstCachedBudget != null) {
-                    state.selectedBudget = firstCachedBudget.name
+                    state.selectedBudget = cachedBudgetName(state.selectedBudgetId, state.selectedBudget, firstCachedBudget)
                     state.selectedBudgetId = firstCachedBudget.budgetId
                     state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
                     backStack.clear()
@@ -631,6 +631,13 @@ fun TandemApp(
     val routeEntry = backStack.last()
     val route = routeEntry.route
     SideEffect { mobileSession.setBudgetActionRoute(routeEntry) }
+    LaunchedEffect(mobileSession.budgets, state.selectedBudgetId) {
+        mobileSession.budgets
+            .firstOrNull { it.budgetId == state.selectedBudgetId }
+            ?.name
+            ?.takeIf { it.isNotBlank() && it != state.selectedBudget }
+            ?.let { state.selectedBudget = it }
+    }
     val quickAddRequested by QuickActionEvents.addTransactionRequested.collectAsState()
     LaunchedEffect(
         quickAddRequested,
