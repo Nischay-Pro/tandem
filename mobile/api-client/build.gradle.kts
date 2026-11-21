@@ -24,6 +24,7 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       implementation(project(":data"))
+      implementation(libs.room3Runtime)
       implementation(libs.coroutinesCore)
       implementation(libs.ktorClientCore)
       implementation(libs.ktorClientEncoding)

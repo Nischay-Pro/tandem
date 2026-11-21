@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.store.BudgetChange
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetRecordDisplayMetadata
@@ -26,6 +27,20 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 object BudgetSyncJson {
+    internal fun projectDirectSnapshot(
+        snapshot: ActualSnapshot,
+        groupId: String,
+        generation: String,
+        cursor: String,
+    ): RemoteBudgetSnapshot =
+        RemoteBudgetSnapshot(
+            budgetId = groupId,
+            generation = generation,
+            cursor = cursor,
+            records = snapshot.records.map { it.body.toRemoteRecord(groupId, it.type, it.id, it.revision, generation) },
+            displaySettings = snapshot.displaySettings,
+        )
+
     fun parseSnapshot(
         payload: Map<String, JsonElement>,
         expectedBudgetId: String,

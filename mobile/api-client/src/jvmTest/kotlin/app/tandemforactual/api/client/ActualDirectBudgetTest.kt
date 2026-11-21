@@ -1,16 +1,25 @@
 package app.tandemforactual.api.client
 
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.database.DirectBudgetFiles
+import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.data.store.RemoteBudgetSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -18,6 +27,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import java.util.zip.ZipOutputStream
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,15 +45,30 @@ class ActualDirectBudgetTest {
             val archive = fixture.resolve("budget.zip").readBytes()
             val serverState = SyncProtocol.decodeResponse(fixture.resolve("sync-response.bin").readBytes())
             val path = File.createTempFile("actual-budget", ".sqlite")
+            var reset = false
+            var invalidMerkle = false
+            var failure: Exception? = null
 
             fun connect() = ActualDatabase(BundledSQLiteDriver().open(path.path))
             try {
                 HttpClient(
                     MockEngine { request ->
                         when (request.url.encodedPath) {
+                            "/account/login" -> respond("""{"data":{"token":"session"}}""")
+                            "/sync/list-user-files" ->
+                                respond(
+                                    """
+                                    {"data":[{"fileId":"file","groupId":"group","name":"Direct"},
+                                             {"fileId":"encrypted","groupId":"locked","encryptKeyId":"key","name":"Locked"},
+                                             {"fileId":"deleted","groupId":"old","deleted":1},{"fileId":"local"}]}
+                                    """.trimIndent(),
+                                )
                             "/sync/get-user-file-info" -> respond("""{"data":{"groupId":"group"}}""")
                             "/sync/download-user-file" -> respond(archive)
                             "/sync/sync" -> {
+                                if (reset) return@MockEngine respond("file-has-reset", HttpStatusCode.Conflict)
+                                failure?.let { throw it }
+                                if (invalidMerkle) return@MockEngine respond(SyncProtocol.encode(SyncResponse(emptyList(), "invalid")))
                                 val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                                 respond(
                                     SyncProtocol.encode(
@@ -55,6 +80,11 @@ class ActualDirectBudgetTest {
                         }
                     },
                 ).use { http ->
+                    verifyWorkspaceLifecycle(http)
+                    verifyFirstTimeSetup(http, ::connect) { data ->
+                        path.writeBytes(data)
+                        connect()
+                    }
                     val client = ActualServerClient(http, "https://budget.example").apply { token = "session" }
                     val budget =
                         ActualDirectBudget.download(client, "file", now, newId) { data ->
@@ -80,6 +110,37 @@ class ActualDirectBudgetTest {
                             }
                         val legacy = RemoteBudgetSnapshot("group", "revision", "1", oldRecords, preview.displaySettings)
                         assertTrue(preview.compareWithGateway(legacy).matches)
+                        val cache =
+                            openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+                        try {
+                            val repository = LocalBudgetRepository(cache, now)
+                            assertTrue(budget.stageMobileCache(today, legacy, repository).matches)
+                            val checkpoint = repository.readSyncCheckpoint(budget.groupId)
+                            reset = true
+                            assertFailsWith<ActualServerException> {
+                                ActualDirectSyncCoordinator(budget, repository).synchronize(today, sendQueuedWrites = true)
+                            }
+                            assertEquals(checkpoint, repository.readSyncCheckpoint(budget.groupId))
+                            assertEquals("file-has-reset", repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            reset = false
+                            invalidMerkle = true
+                            assertFailsWith<Exception> { ActualDirectSyncCoordinator(budget, repository).synchronize(today, false) }
+                            assertEquals("invalid-merkle", repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            invalidMerkle = false
+                            for ((injectedError, code) in listOf(
+                                CancellationException("cancelled in transport") to "sync-cancelled",
+                                IllegalStateException("broken transport") to "direct-sync-failed",
+                            )) {
+                                failure = injectedError
+                                assertFailsWith<Exception> { ActualDirectSyncCoordinator(budget, repository).synchronize(today, false) }
+                                assertEquals(code, repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            }
+                        } finally {
+                            reset = false
+                            invalidMerkle = false
+                            failure = null
+                            cache.closeDatabase()
+                        }
                         val changed = oldRecords[1].copy(revision = "changed")
                         val added = oldRecords.first().copy(recordId = "extra")
                         val mismatch = preview.compareWithGateway(legacy.copy(records = listOf(changed, added), displaySettings = null))
@@ -117,6 +178,110 @@ class ActualDirectBudgetTest {
         }
 
     @Test
+    fun rejectsUnsafeDirectSignInAddresses() =
+        runBlocking {
+            HttpClient(MockEngine { error("The URL should be rejected before any request") }).use { http ->
+                for (url in listOf("http://budget.example", "https://budget.example/?x=1", "https://budget.example/#fragment")) {
+                    assertFailsWith<TandemApiException> { ActualDirectSession.signInWithPassword(http, url, "test") }
+                }
+            }
+        }
+
+    private suspend fun verifyWorkspaceLifecycle(http: HttpClient) {
+        val directory = createTempDirectory("direct-workspace").toFile()
+        val files =
+            object : DirectBudgetFiles {
+                override val installationId = "fixture-installation"
+                private val actualPath = directory.resolve("actual.sqlite")
+
+                override fun installActual(bytes: ByteArray): ActualDatabase {
+                    check(!actualPath.exists())
+                    actualPath.writeBytes(bytes)
+                    return openActual()
+                }
+
+                override fun openActual(): ActualDatabase = ActualDatabase(BundledSQLiteDriver().open(actualPath.path))
+
+                override fun openMobileCache(): TandemDatabase =
+                    openTandemDatabase(
+                        Room
+                            .databaseBuilder<TandemDatabase>(name = directory.resolve("mobile.db").path)
+                            .setQueryCoroutineContext(Dispatchers.IO),
+                    )
+            }
+        try {
+            val session = ActualDirectSession.signInWithPassword(http, "https://budget.example", "test")
+            val workspace = ActualDirectWorkspace.create(session, files, "group", "2026-11-21", now, newId)
+            val checkpoint =
+                try {
+                    assertEquals("fixture-installation", workspace.installationId)
+                    assertEquals("group", workspace.budgetId)
+                    assertTrue(workspace.synchronize("2026-11-21", false).fullSnapshotApplied)
+                    checkNotNull(workspace.repository.readSyncCheckpoint("group"))
+                } finally {
+                    workspace.close()
+                }
+            workspace.close()
+            assertFailsWith<IllegalStateException> { workspace.synchronize("2026-11-21", false) }
+            assertFailsWith<IllegalStateException> { ActualDirectWorkspace.create(session, files, "group", "2026-11-21", now, newId) }
+            val reopened = ActualDirectWorkspace.reopen(session, files, "group", now, newId)
+            try {
+                assertEquals(checkpoint, reopened.repository.readSyncCheckpoint("group"))
+                assertTrue(reopened.synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                reopened.close()
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    private suspend fun verifyFirstTimeSetup(
+        http: HttpClient,
+        connect: () -> ActualDatabase,
+        install: (ByteArray) -> ActualDatabase,
+    ) {
+        val session = ActualDirectSession.signInWithPassword(http, "https://budget.example", "test")
+        assertEquals(
+            listOf(BudgetCatalogItem("group", "Direct", false), BudgetCatalogItem("locked", "Locked", true)),
+            session.listBudgets(),
+        )
+        val cache = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+        try {
+            val repository = LocalBudgetRepository(cache, now)
+            val budget = session.openNewBudget("group", "2026-11-21", repository, now, newId, install)
+            try {
+                assertEquals(budget.cacheGeneration, repository.readSyncCheckpoint("group")?.generation)
+                assertTrue(repository.countVisibleRecords("group", "transaction") > 0)
+                assertTrue(ActualDirectSyncCoordinator(budget, repository).synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                budget.close()
+            }
+            val reopened = session.reopenBudget("group", repository, now, newId, connect)
+            try {
+                assertEquals(budget.cacheGeneration, reopened.cacheGeneration)
+                assertTrue(ActualDirectSyncCoordinator(reopened, repository).synchronize("2026-11-21", false).fullSnapshotApplied)
+            } finally {
+                reopened.close()
+            }
+            repository.applyFullSnapshot("group", "different-installation", "1", repository.readSyncCheckpoint("group"), emptyList())
+            assertFailsWith<IllegalStateException> { session.reopenBudget("group", repository, now, newId, connect) }
+            assertFailsWith<IllegalStateException> {
+                session.openNewBudget("group", "2026-11-21", repository, now, newId) { error("Unexpected install") }
+            }
+            for ((id, reason) in listOf("locked" to "encrypted-budget", "old" to "budget-unavailable")) {
+                val error =
+                    assertFailsWith<ActualServerException> {
+                        session.openNewBudget(id, "2026-11-21", repository, now, newId) { error("Unexpected install") }
+                    }
+                assertEquals(reason, error.reason)
+            }
+        } finally {
+            cache.closeDatabase()
+        }
+    }
+
+    @Test
     fun rejectsUnavailableBudgetArchives() =
         runBlocking {
             var info = """{"data":{}}"""
@@ -141,6 +306,14 @@ class ActualDirectBudgetTest {
                     }.reason,
                 )
                 info = """{"data":{"groupId":"group"}}"""
+                assertEquals(
+                    "file-has-reset",
+                    assertFailsWith<ActualServerException> {
+                        ActualDirectBudget.download(client, "file", now, newId, expectedGroupId = "previous-group") {
+                            error("Unexpected install")
+                        }
+                    }.reason,
+                )
                 assertEquals(
                     "invalid-budget-archive",
                     assertFailsWith<ActualServerException> {
