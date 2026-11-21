@@ -32,6 +32,7 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.PrimaryButton
 import app.tandemforactual.ui.components.RowLeading
+import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CloudCheck
@@ -160,6 +161,12 @@ internal fun TransactionDetailScreen(
         }
         PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) {
             navigation.open(AppRoute.EDIT_TRANSACTION)
+        }
+        state.addAgainDraft()?.let { draft ->
+            SecondaryButton("Add again", enabled = !state.readOnlyMode) {
+                navigation.newTransaction(draft.accountId)
+                state.applyAddAgain(draft)
+            }
         }
     }
 }
