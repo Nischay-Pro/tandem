@@ -13,7 +13,7 @@ fi
 docs_only=false
 while IFS= read -r -d '' file; do
   case "$file" in
-    *.md) docs_only=true ;;
+    *.md | docs/images/*) docs_only=true ;;
     *) echo false; exit 0 ;;
   esac
 done < "$changed_files"
