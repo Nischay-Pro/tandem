@@ -7,14 +7,19 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.Alignment
 
 /** Shared timing for app transitions so navigation and state changes feel like one system. */
 internal object TandemMotion {
@@ -78,14 +83,6 @@ internal fun tandemSheetEnter(reduceMotion: Boolean): EnterTransition =
 internal fun tandemSheetExit(reduceMotion: Boolean): ExitTransition =
     slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.SHEET_MILLIS)) { it }
 
-internal fun tandemFloatingEnter(reduceMotion: Boolean): EnterTransition =
-    slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.REVEAL_MILLIS)) { it } +
-        tandemFadeEnter(reduceMotion)
-
-internal fun tandemFloatingExit(reduceMotion: Boolean): ExitTransition =
-    slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.REVEAL_MILLIS)) { it } +
-        tandemFadeExit(reduceMotion)
-
 internal fun tandemBottomBarEnter(reduceMotion: Boolean): EnterTransition =
     slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
         tandemFadeEnter(reduceMotion, TandemMotion.CROSSFADE_MILLIS)
@@ -93,3 +90,37 @@ internal fun tandemBottomBarEnter(reduceMotion: Boolean): EnterTransition =
 internal fun tandemBottomBarExit(reduceMotion: Boolean): ExitTransition =
     slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
         tandemFadeExit(reduceMotion, TandemMotion.CROSSFADE_MILLIS)
+
+/** Floating buttons glide off the bottom edge and back, instead of being clipped like an expanding section. */
+internal fun tandemFloatingEnter(reduceMotion: Boolean): EnterTransition =
+    if (reduceMotion) {
+        fadeIn(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        slideInVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) { it * 2 } +
+            fadeIn(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.enterEasing))
+    }
+
+internal fun tandemFloatingExit(reduceMotion: Boolean): ExitTransition =
+    if (reduceMotion) {
+        fadeOut(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        slideOutVertically(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) { it * 2 } +
+            fadeOut(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.exitEasing))
+    }
+
+/** A floating button's label slides in and out with the width change, so pill and circle morph in one motion. */
+internal fun tandemLabelEnter(reduceMotion: Boolean): EnterTransition =
+    if (reduceMotion) {
+        fadeIn(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        expandHorizontally(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow), Alignment.Start) +
+            fadeIn(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.enterEasing))
+    }
+
+internal fun tandemLabelExit(reduceMotion: Boolean): ExitTransition =
+    if (reduceMotion) {
+        fadeOut(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow), Alignment.Start) +
+            fadeOut(tween(TandemMotion.CONTROL_MILLIS, easing = TandemMotion.exitEasing))
+    }

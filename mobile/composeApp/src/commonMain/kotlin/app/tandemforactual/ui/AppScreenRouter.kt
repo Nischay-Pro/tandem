@@ -172,6 +172,8 @@ internal fun ScreenContent(
         AppRoute.ACCOUNT_DETAIL ->
             AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher, isForegroundRoute)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
+        AppRoute.CLOSED_ACCOUNTS ->
+            AccountsScreen(state, navigation, liveAccounts, merchantIconMatcher, mobileSession, closedOnly = true)
         AppRoute.ACTIVITY ->
             ListDetailPanes(
                 detailKey =

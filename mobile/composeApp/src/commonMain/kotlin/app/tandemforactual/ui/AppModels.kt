@@ -160,6 +160,7 @@ internal enum class AppRoute(
     ACCOUNTS("Accounts"),
     ACCOUNT_DETAIL("Checking"),
     ACCOUNT_OPTIONS("Account options"),
+    CLOSED_ACCOUNTS("Closed accounts"),
     ACTIVITY("Activity"),
     REPORTS("Reports"),
     REPORT_DETAIL("Report"),
