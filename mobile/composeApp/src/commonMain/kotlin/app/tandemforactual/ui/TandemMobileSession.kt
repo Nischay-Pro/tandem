@@ -470,6 +470,10 @@ internal class TandemMobileSession(
         private set
 
     val syncError: String? get() = syncPresentation.error
+
+    suspend fun recentPayeeIds(budgetId: String): List<String> =
+        runCatching { repository?.recentPayeeIds(budgetId, RECENT_PAYEE_COUNT) }.getOrNull().orEmpty()
+
     val syncRecovery: SyncRecovery get() = syncRecovery(syncPresentation.errorCode, syncPresentation.errorStatus)
 
     suspend fun budgetMonthBody(
@@ -5771,3 +5775,5 @@ internal fun missingServerFeature(
     val feature = requiredServerFeature(kind) ?: return null
     return feature.takeUnless { capabilities == null || capabilities.supports(it) }
 }
+
+private const val RECENT_PAYEE_COUNT = 5

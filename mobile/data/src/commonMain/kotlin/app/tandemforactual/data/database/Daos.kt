@@ -303,6 +303,22 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT payeeId FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction' AND payeeId IS NOT NULL
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    GROUP BY payeeId
+    ORDER BY MAX(recordDate) DESC, payeeId ASC
+    LIMIT :limit
+    """,
+    )
+    suspend fun findRecentPayeeIds(
+        budgetId: String,
+        limit: Int,
+    ): List<String>
+
+    @Query(
+        """
     SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = :recordType
       AND localDeleted = 0
