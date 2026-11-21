@@ -24,12 +24,17 @@ kotlin {
   sourceSets {
     commonMain.dependencies {
       implementation(project(":data"))
+      implementation(libs.coroutinesCore)
       implementation(libs.ktorClientCore)
       implementation(libs.ktorClientEncoding)
     }
     jvmTest.dependencies {
       implementation(kotlin("test"))
       implementation(libs.ktorClientMock)
+      implementation(libs.ktorClientJava)
+      implementation(libs.sqliteBundled)
+      implementation(libs.coroutinesCore)
+      implementation(libs.serializationJson)
     }
     getByName("androidHostTest") {
       dependencies {
