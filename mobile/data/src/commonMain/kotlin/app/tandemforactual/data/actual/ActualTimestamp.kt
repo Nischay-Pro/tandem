@@ -127,7 +127,7 @@ private fun pad(
     width: Int,
 ): String = value.toString().padStart(width, '0')
 
-private fun daysInMonth(
+internal fun daysInMonth(
     year: Long,
     month: Long,
 ): Long =
@@ -138,7 +138,7 @@ private fun daysInMonth(
     }
 
 // Howard Hinnant's days-from-civil algorithms.
-private fun daysFromCivil(
+internal fun daysFromCivil(
     year: Long,
     month: Long,
     day: Long,
@@ -151,7 +151,7 @@ private fun daysFromCivil(
     return era * 146_097 + doe - 719_468
 }
 
-private fun civilFromDays(days: Long): Triple<Long, Long, Long> {
+internal fun civilFromDays(days: Long): Triple<Long, Long, Long> {
     val z = days + 719_468
     val era = z.floorDiv(146_097L)
     val doe = z - era * 146_097

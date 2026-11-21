@@ -49,6 +49,7 @@ class ActualEditsRoundTripTest {
                     .plusMonths(1)
                     .toString()
             val budget = download(client, file.fileId, directory.resolve("edit.sqlite"))
+            budget.sync()
             val snapshot = budget.snapshot(today)
 
             fun id(
@@ -117,6 +118,45 @@ class ActualEditsRoundTripTest {
                             )
                         },
                     )
+                val scheduleId = snapshot.records.first { it.type == "schedule" }.id
+                edits.schedules.rename(scheduleId, "Rent $tag")
+                edits.schedules.edit(
+                    scheduleId,
+                    buildJsonObject {
+                        put("amountOp", "isbetween")
+                        put(
+                            "amountRangeMinor",
+                            buildJsonObject {
+                                put("num1", -151_000)
+                                put("num2", -149_000)
+                            },
+                        )
+                        put(
+                            "date",
+                            buildJsonObject {
+                                put("frequency", "monthly")
+                                put("start", "2026-08-01")
+                                put("interval", 1)
+                                put(
+                                    "patterns",
+                                    JsonArray(
+                                        listOf(
+                                            buildJsonObject {
+                                                put("type", "day")
+                                                put("value", -1)
+                                            },
+                                        ),
+                                    ),
+                                )
+                                put("skipWeekend", true)
+                                put("weekendSolveMode", "before")
+                                put("endMode", "never")
+                            },
+                        )
+                    },
+                )
+                edits.schedules.skip(scheduleId, checkNotNull(edits.schedules.nextDate(scheduleId)))
+                ids["schedule"] = scheduleId
                 ids +=
                     mapOf(
                         "wallet" to wallet,
