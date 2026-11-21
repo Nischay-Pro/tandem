@@ -216,7 +216,7 @@ internal fun SettingRowLayout(
                     amountAnnotatedString(subtitle),
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
