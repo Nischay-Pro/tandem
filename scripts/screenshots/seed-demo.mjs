@@ -21,14 +21,30 @@ const day = (offset) => {
   const d = new Date(Date.now() - offset * 86_400_000);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const month = (offset) => day(0).slice(0, 7) === day(offset).slice(0, 7) ? day(0).slice(0, 7) : day(offset).slice(0, 7);
+const month = (offset) =>
+  day(0).slice(0, 7) === day(offset).slice(0, 7)
+    ? day(0).slice(0, 7)
+    : day(offset).slice(0, 7);
 
 await api.runImport("Demo household", async () => {
-  const checking = await api.createAccount({ name: "Everyday checking", offbudget: false }, 325000);
-  const savings = await api.createAccount({ name: "Savings", offbudget: false }, 1250000);
-  const card = await api.createAccount({ name: "Credit card", offbudget: false }, -42000);
+  const checking = await api.createAccount(
+    { name: "Everyday checking", offbudget: false },
+    325000,
+  );
+  const savings = await api.createAccount(
+    { name: "Savings", offbudget: false },
+    1250000,
+  );
+  const card = await api.createAccount(
+    { name: "Credit card", offbudget: false },
+    -42000,
+  );
   for (const account of [checking, savings, card]) {
-    for (const t of await api.getTransactions(account, "2000-01-01", "2100-01-01")) {
+    for (const t of await api.getTransactions(
+      account,
+      "2000-01-01",
+      "2100-01-01",
+    )) {
       await api.updateTransaction(t.id, { date: day(75) });
     }
   }
@@ -41,7 +57,8 @@ await api.runImport("Demo household", async () => {
     Saving: ["Emergency fund", "Holiday"],
   })) {
     const groupId = await api.createCategoryGroup({ name: group });
-    for (const name of names) categories[name] = await api.createCategory({ name, group_id: groupId });
+    for (const name of names)
+      categories[name] = await api.createCategory({ name, group_id: groupId });
   }
 
   const pattern = [
@@ -56,24 +73,70 @@ await api.runImport("Demo household", async () => {
   const history = [];
   for (let i = 2; i < 60; i++) {
     const [payee, category, amount] = pattern[i % pattern.length];
-    history.push({ date: day(i), amount: amount - (i % 5) * 37, payee_name: payee, category: categories[category] });
+    history.push({
+      date: day(i),
+      amount: amount - (i % 5) * 37,
+      payee_name: payee,
+      category: categories[category],
+    });
   }
-  history.push({ date: day(3), amount: -180000, payee_name: "Landlord", category: categories.Rent });
-  history.push({ date: day(0), amount: -4218, payee_name: "Corner Market", category: categories.Groceries, notes: "Weekly shop" });
-  history.push({ date: day(0), amount: -540, payee_name: "Blue Bottle Coffee", category: categories["Dining out"] });
-  history.push({ date: day(1), amount: -2650, payee_name: "Shell", category: categories.Fuel });
+  history.push({
+    date: day(3),
+    amount: -180000,
+    payee_name: "Landlord",
+    category: categories.Rent,
+  });
+  history.push({
+    date: day(0),
+    amount: -4218,
+    payee_name: "Corner Market",
+    category: categories.Groceries,
+    notes: "Weekly shop",
+  });
+  history.push({
+    date: day(0),
+    amount: -540,
+    payee_name: "Blue Bottle Coffee",
+    category: categories["Dining out"],
+  });
+  history.push({
+    date: day(1),
+    amount: -2650,
+    payee_name: "Shell",
+    category: categories.Fuel,
+  });
   await api.addTransactions(checking, history);
   await api.addTransactions(card, [
-    { date: day(1), amount: -1599, payee_name: "Spotify", category: categories.Entertainment },
-    { date: day(5), amount: -12999, payee_name: "Bookshop", category: categories.Hobbies },
+    {
+      date: day(1),
+      amount: -1599,
+      payee_name: "Spotify",
+      category: categories.Entertainment,
+    },
+    {
+      date: day(5),
+      amount: -12999,
+      payee_name: "Bookshop",
+      category: categories.Hobbies,
+    },
   ]);
 
   const assigned = {
-    Rent: 180000, Groceries: 60000, Utilities: 22000, Phone: 6000, Fuel: 25000, Transit: 12000,
-    "Dining out": 15000, Entertainment: 8000, Hobbies: 15000, "Emergency fund": 50000, Holiday: 30000,
+    Rent: 180000,
+    Groceries: 60000,
+    Utilities: 22000,
+    Phone: 6000,
+    Fuel: 25000,
+    Transit: 12000,
+    "Dining out": 15000,
+    Entertainment: 8000,
+    Hobbies: 15000,
+    "Emergency fund": 50000,
+    Holiday: 30000,
   };
   for (const target of new Set([month(0), month(31)])) {
-    for (const [name, amount] of Object.entries(assigned)) await api.setBudgetAmount(target, categories[name], amount);
+    for (const [name, amount] of Object.entries(assigned))
+      await api.setBudgetAmount(target, categories[name], amount);
   }
 });
 
