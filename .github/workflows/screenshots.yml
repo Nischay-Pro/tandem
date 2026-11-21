@@ -2,6 +2,12 @@ name: App screenshots
 
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which screenshots to capture
+        type: choice
+        default: both
+        options: [both, ios, android]
   push:
     branches: [feat/screenshot-mode]
 
@@ -11,6 +17,7 @@ permissions:
 jobs:
   ios:
     name: iPhone and iPad screenshots
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms != 'android' }}
     runs-on: macos-26
     timeout-minutes: 90
     env:
@@ -129,7 +136,8 @@ jobs:
           retention-days: 14
 
   android:
-    name: Pixel Fold screenshots
+    name: Pixel 11 Pro Fold screenshots
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms != 'ios' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -175,7 +183,7 @@ jobs:
         working-directory: mobile
         run: ./gradlew :androidApp:assembleDebug
 
-      - name: Capture screenshots on a Pixel Fold emulator
+      - name: Capture screenshots at Pixel 11 Pro Fold sizes
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 36
