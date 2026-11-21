@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.FullSnapshotResult
 import app.tandemforactual.data.store.LocalBudgetRepository
@@ -7,6 +8,7 @@ import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.data.store.RemoteOperationResult
 import app.tandemforactual.data.store.RemoteOperationStatus
 import app.tandemforactual.data.store.encodeLocalWriteConflictDetails
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -76,7 +78,15 @@ class ActualDirectSyncCoordinator(
                 )
             } catch (error: Exception) {
                 withContext(NonCancellable) {
-                    runCatching { repository.markSyncFailed(budgetId, "direct-sync-failed") }
+                    val reason =
+                        when (error) {
+                            is ActualServerException -> error.reason
+                            is ActualSyncException -> error.reason
+                            is CancellationException -> "sync-cancelled"
+                            else -> "direct-sync-failed"
+                        }
+                    val code = reason.takeIf { it.matches(Regex("^[a-z][a-z0-9_-]{0,79}$")) } ?: "direct-sync-failed"
+                    runCatching { repository.markSyncFailed(budgetId, code) }
                 }
                 throw error
             }

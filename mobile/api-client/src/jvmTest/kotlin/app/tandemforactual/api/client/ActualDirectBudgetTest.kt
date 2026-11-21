@@ -1,16 +1,23 @@
 package app.tandemforactual.api.client
 
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.data.store.RemoteBudgetSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -35,6 +42,7 @@ class ActualDirectBudgetTest {
             val archive = fixture.resolve("budget.zip").readBytes()
             val serverState = SyncProtocol.decodeResponse(fixture.resolve("sync-response.bin").readBytes())
             val path = File.createTempFile("actual-budget", ".sqlite")
+            var reset = false
 
             fun connect() = ActualDatabase(BundledSQLiteDriver().open(path.path))
             try {
@@ -44,6 +52,7 @@ class ActualDirectBudgetTest {
                             "/sync/get-user-file-info" -> respond("""{"data":{"groupId":"group"}}""")
                             "/sync/download-user-file" -> respond(archive)
                             "/sync/sync" -> {
+                                if (reset) return@MockEngine respond("file-has-reset", HttpStatusCode.Conflict)
                                 val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                                 respond(
                                     SyncProtocol.encode(
@@ -80,6 +89,22 @@ class ActualDirectBudgetTest {
                             }
                         val legacy = RemoteBudgetSnapshot("group", "revision", "1", oldRecords, preview.displaySettings)
                         assertTrue(preview.compareWithGateway(legacy).matches)
+                        val cache =
+                            openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+                        try {
+                            val repository = LocalBudgetRepository(cache, now)
+                            assertTrue(budget.stageMobileCache(today, legacy, repository).matches)
+                            val checkpoint = repository.readSyncCheckpoint(budget.groupId)
+                            reset = true
+                            assertFailsWith<ActualServerException> {
+                                ActualDirectSyncCoordinator(budget, repository).synchronize(today, sendQueuedWrites = true)
+                            }
+                            assertEquals(checkpoint, repository.readSyncCheckpoint(budget.groupId))
+                            assertEquals("file-has-reset", repository.readSyncState(budget.groupId)?.lastErrorCode)
+                        } finally {
+                            reset = false
+                            cache.closeDatabase()
+                        }
                         val changed = oldRecords[1].copy(revision = "changed")
                         val added = oldRecords.first().copy(recordId = "extra")
                         val mismatch = preview.compareWithGateway(legacy.copy(records = listOf(changed, added), displaySettings = null))
