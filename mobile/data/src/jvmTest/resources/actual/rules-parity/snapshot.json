@@ -1,0 +1,1940 @@
+{
+  "today": "2026-11-21",
+  "displaySettings": {
+    "budgetType": "envelope",
+    "currencyCode": "USD",
+    "currencySymbol": "$",
+    "currencyFractionDigits": 2,
+    "numberFormat": null,
+    "hideFraction": false,
+    "currencySymbolPosition": "before",
+    "currencySpaceBetweenAmountAndSymbol": false
+  },
+  "records": [
+    {
+      "type": "account",
+      "id": "47122cf9-2285-4b89-b3aa-918d6e4acba2",
+      "body": {
+        "id": "47122cf9-2285-4b89-b3aa-918d6e4acba2",
+        "name": "Brokerage",
+        "offbudget": true,
+        "closed": false,
+        "balance_current": 0,
+        "account_group_id": null,
+        "sort_order": 16384
+      },
+      "revision": "68cde7d2de7931e279bb4cb78142b6b3325d93163da48ba36ec849c48aeb3bdd"
+    },
+    {
+      "type": "account",
+      "id": "4cb453b5-ea75-4ec2-af63-647f38732229",
+      "body": {
+        "id": "4cb453b5-ea75-4ec2-af63-647f38732229",
+        "name": "Checking",
+        "offbudget": false,
+        "closed": false,
+        "balance_current": 0,
+        "account_group_id": null,
+        "sort_order": 16384
+      },
+      "revision": "68a1c4aa70826b3523710b7cc8b0d639906df033820d257053af181786c2914b"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-08",
+      "body": {
+        "month": "2026-08",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "05ce49de9cefb77509d085d3950c736eaec3b64737c4f32fc88c7e08031e5501"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-09",
+      "body": {
+        "month": "2026-09",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "5e749495e889dab2da96758865c547272cc8a7877d5cc9372e9c1c7cc653f47f"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-10",
+      "body": {
+        "month": "2026-10",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "cafbdbaecac4664326f8b5e9ee1e84a786675d75ea200221262e03be010ec26a"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-11",
+      "body": {
+        "month": "2026-11",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "66fc0255a5467e2784bf3c99dfcc4fe38ac4cc562eb360c5877053cde659c2b8"
+    },
+    {
+      "type": "budget-month",
+      "id": "2026-12",
+      "body": {
+        "month": "2026-12",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "c430c3b03ad8962cd406b1b117c2b8c48afd06c9b3319ed30fe4cc0dfca2d870"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-01",
+      "body": {
+        "month": "2027-01",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "2ef5a34b242ddcd9a649c6126289dccb67c7d3056f5e547ee54b07416089e57b"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-02",
+      "body": {
+        "month": "2027-02",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "eeae6075b437da35dd74034048ce4eb3cfdb6f237dfcb040e98f75efc726d7a4"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-03",
+      "body": {
+        "month": "2027-03",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "e64ea7628791c0e14121969f5025ff6ede7868ba7e7a9a7f9dbab688e6e62cf9"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-04",
+      "body": {
+        "month": "2027-04",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "a39416fd4c0466a0f084d3134ff407bfff3efde76e59478ad67a2aeff934fbfc"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-05",
+      "body": {
+        "month": "2027-05",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "f096040866b96848e80acfa778198dc32035323f34ee41d75cbba769f916e6ed"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-06",
+      "body": {
+        "month": "2027-06",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "e3154d818e046c8d5bf200c18c68aa554d721aacd325e1c06c3442b982aa589a"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-07",
+      "body": {
+        "month": "2027-07",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "1c884cda479943fa9ce35aef39c594f61f282afaf8aa4062090b20b3cfac5e29"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-08",
+      "body": {
+        "month": "2027-08",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "cb755c9e37cb3cf0e0349ea28887bf6a74281480c0bd12787d67cedc5e2ad5ad"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-09",
+      "body": {
+        "month": "2027-09",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "75fb067023da29be9a1c715961c505119bfed437cceaf585a8e4cba1e0f37ec3"
+    },
+    {
+      "type": "budget-month",
+      "id": "2027-10",
+      "body": {
+        "month": "2027-10",
+        "incomeAvailable": 0,
+        "lastMonthOverspent": 0,
+        "forNextMonth": 0,
+        "totalBudgeted": 0,
+        "toBudget": 0,
+        "fromLastMonth": 0,
+        "totalIncome": 0,
+        "totalSpent": 0,
+        "totalBalance": 0,
+        "categoryGroups": [
+          {
+            "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "name": "Spending",
+            "is_income": false,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+                "name": "Bills",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+                "name": "Fun",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              },
+              {
+                "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+                "name": "Food",
+                "is_income": false,
+                "hidden": false,
+                "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+                "budgeted": 0,
+                "spent": 0,
+                "balance": 0,
+                "carryover": false
+              }
+            ],
+            "budgeted": 0,
+            "spent": 0,
+            "balance": 0
+          },
+          {
+            "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+            "name": "Income",
+            "is_income": true,
+            "hidden": false,
+            "categories": [
+              {
+                "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+                "name": "Income",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              },
+              {
+                "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+                "name": "Starting Balances",
+                "is_income": true,
+                "hidden": false,
+                "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+                "received": 0
+              }
+            ],
+            "received": 0
+          }
+        ]
+      },
+      "revision": "f943a96c0602581d816d657e08b131e5733f7663862343d3eb9361b53352c094"
+    },
+    {
+      "type": "category",
+      "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+      "body": {
+        "id": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+        "name": "Food",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec"
+      },
+      "revision": "2088454b7a326a1815bc3ce7c62b4e3c2b1576f4339b93d9e6a3a227c8f9f210"
+    },
+    {
+      "type": "category",
+      "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+      "body": {
+        "id": "3c1699a5-522a-435e-86dc-93d900a14f0e",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "037f62c15a1ac8de03f485270ab205098f0c193d053ef494cdfcc9bad410166f"
+    },
+    {
+      "type": "category",
+      "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+      "body": {
+        "id": "506e8d9d-7ed0-4397-84e4-07a9185dc6b2",
+        "name": "Starting Balances",
+        "is_income": true,
+        "hidden": false,
+        "group_id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00"
+      },
+      "revision": "eb14437142d256e97e1c21efeef65f6ebff94392bf614b13aad1bf68fc52e7fc"
+    },
+    {
+      "type": "category",
+      "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+      "body": {
+        "id": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+        "name": "Bills",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec"
+      },
+      "revision": "8b761202aadb8337cc0add533fdf909a2990c6ceed8a6aa7f0c1cb2e54a51a25"
+    },
+    {
+      "type": "category",
+      "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+      "body": {
+        "id": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+        "name": "Fun",
+        "is_income": false,
+        "hidden": false,
+        "group_id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec"
+      },
+      "revision": "96ff3cd33526495dcf5c98d4549df76bc47fd03acd72a0f3c38924171efca003"
+    },
+    {
+      "type": "category-group",
+      "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+      "body": {
+        "id": "2E1F5BDB-209B-43F9-AF2C-3CE28E380C00",
+        "name": "Income",
+        "is_income": true,
+        "hidden": false
+      },
+      "revision": "1e710d3b732d58221349b33f5c874add4057a304a3ff1ee5b3c3311eb21e1e49"
+    },
+    {
+      "type": "category-group",
+      "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+      "body": {
+        "id": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+        "name": "Spending",
+        "is_income": false,
+        "hidden": false
+      },
+      "revision": "be1555bd856e29e25080a018631e201e65089f3e52584f357b9d30f563f3e918"
+    },
+    {
+      "type": "payee",
+      "id": "53257fd6-e438-479c-8b6e-aa3edfa92dea",
+      "body": {
+        "id": "53257fd6-e438-479c-8b6e-aa3edfa92dea",
+        "name": "Checking",
+        "transfer_acct": "4cb453b5-ea75-4ec2-af63-647f38732229"
+      },
+      "revision": "1d1f996bee0612fb91e8bb322614a1b1a39d8ea313d84489b73ff269157c4ae1"
+    },
+    {
+      "type": "payee",
+      "id": "6c308bec-7d4b-4b7a-998e-2b4a8e6eed25",
+      "body": {
+        "id": "6c308bec-7d4b-4b7a-998e-2b4a8e6eed25",
+        "name": "Big Income",
+        "transfer_acct": null
+      },
+      "revision": "792ae4aa8760d39889fe54f0285dc1d1be8601aa336e53301a8a4aa446063ac7"
+    },
+    {
+      "type": "payee",
+      "id": "935b7906-46db-4ead-86bb-488f6d19f274",
+      "body": {
+        "id": "935b7906-46db-4ead-86bb-488f6d19f274",
+        "name": "Brokerage",
+        "transfer_acct": "47122cf9-2285-4b89-b3aa-918d6e4acba2"
+      },
+      "revision": "fff970f431857deb692957707e57644776a1377251c0cd8ea2af4305bb8aa90c"
+    },
+    {
+      "type": "payee",
+      "id": "c9cc7a72-54cf-4ba3-9c59-c1bd23e0b3fb",
+      "body": {
+        "id": "c9cc7a72-54cf-4ba3-9c59-c1bd23e0b3fb",
+        "name": "Cinema",
+        "transfer_acct": null
+      },
+      "revision": "98f39ec3b557cb2d3fb06696f9a7e1b5664f4f05fe2ca523d3b3b3dc0c793504"
+    },
+    {
+      "type": "payee",
+      "id": "dd65d3cd-2a60-4c49-8335-40ae9f36dba5",
+      "body": {
+        "id": "dd65d3cd-2a60-4c49-8335-40ae9f36dba5",
+        "name": "Market",
+        "transfer_acct": null
+      },
+      "revision": "cd37f8f9d2c6a922a3f3ab6cee6afde454d508fe0107db416a210cd3c761b339"
+    },
+    {
+      "type": "rule",
+      "id": "007cd6fd-079a-43ec-9375-cb3ecb222382",
+      "body": {
+        "id": "007cd6fd-079a-43ec-9375-cb3ecb222382",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "payee",
+            "value": "c9cc7a72-54cf-4ba3-9c59-c1bd23e0b3fb",
+            "type": "id"
+          },
+          {
+            "op": "is",
+            "field": "account",
+            "value": "4cb453b5-ea75-4ec2-af63-647f38732229",
+            "type": "id"
+          },
+          {
+            "op": "isapprox",
+            "field": "date",
+            "value": {
+              "frequency": "monthly",
+              "start": "2026-01-05",
+              "interval": 1,
+              "patterns": [],
+              "skipWeekend": false,
+              "weekendSolveMode": "after",
+              "endMode": "never"
+            },
+            "type": "date"
+          },
+          {
+            "op": "is",
+            "field": "amount",
+            "value": -4000,
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "link-schedule",
+            "field": null,
+            "value": "eb2e9a4e-c7cd-4212-b790-d9925baddb40",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "c5556e17c14b4575e1e842ba0efead1c1ed47b54d6984e11b0e039b3be5ad153"
+    },
+    {
+      "type": "rule",
+      "id": "16e02461-3383-49c9-bee8-a7f8e6e74286",
+      "body": {
+        "id": "16e02461-3383-49c9-bee8-a7f8e6e74286",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "category_group",
+            "value": "8285bf7f-a51f-49e9-97a1-86cc4e4ae9ec",
+            "type": "id"
+          },
+          {
+            "op": "gte",
+            "field": "date",
+            "value": "2026-12-01",
+            "type": "date"
+          }
+        ],
+        "actions": [
+          {
+            "op": "append-notes",
+            "field": "notes",
+            "value": " december",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "94308392dbd0a6bf15c92ff666f6a43cf850afce8a2ee4858feb02d91fbddb20"
+    },
+    {
+      "type": "rule",
+      "id": "17596ab9-74ab-4493-8543-0f2401c00f96",
+      "body": {
+        "id": "17596ab9-74ab-4493-8543-0f2401c00f96",
+        "stage": "post",
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "isapprox",
+            "field": "amount",
+            "value": -1000,
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "append-notes",
+            "field": "notes",
+            "value": " ~10",
+            "type": "id"
+          },
+          {
+            "op": "set",
+            "field": "cleared",
+            "value": false,
+            "type": "boolean"
+          }
+        ]
+      },
+      "revision": "c7b1401cb15cef845526f357aa4075ba16775bf054f4e261ae323e51dadb6cd8"
+    },
+    {
+      "type": "rule",
+      "id": "2357367f-ded7-4208-b43b-7137ebd1c26c",
+      "body": {
+        "id": "2357367f-ded7-4208-b43b-7137ebd1c26c",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "offBudget",
+            "field": "account",
+            "type": "id"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "notes",
+            "value": "off budget",
+            "type": "string"
+          }
+        ]
+      },
+      "revision": "7fa864dd0821c0c0ed2841eb3281c83057e217ea226f4e3fedb0bbfe078dd2dd"
+    },
+    {
+      "type": "rule",
+      "id": "5ac1aaae-0127-417e-beba-5214caf0a3fd",
+      "body": {
+        "id": "5ac1aaae-0127-417e-beba-5214caf0a3fd",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "doesNotContain",
+            "field": "notes",
+            "value": "keep",
+            "type": "string"
+          },
+          {
+            "op": "is",
+            "field": "imported_payee",
+            "value": "drop me",
+            "type": "string"
+          }
+        ],
+        "actions": [
+          {
+            "op": "delete-transaction"
+          }
+        ]
+      },
+      "revision": "1832b5f1daa58edb33c925665c4485ad1f0bd380097dc07d401d7aadc5782dac"
+    },
+    {
+      "type": "rule",
+      "id": "6b9c28fa-ea91-4c43-9b28-ecda2c3fc5d6",
+      "body": {
+        "id": "6b9c28fa-ea91-4c43-9b28-ecda2c3fc5d6",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "oneOf",
+            "field": "category",
+            "value": [
+              "cb413877-19e1-4595-a84a-94e0b3b43be5",
+              "7903f9f2-739d-42e0-80fc-780ef9e797dd"
+            ],
+            "type": "id"
+          },
+          {
+            "op": "hasTags",
+            "field": "notes",
+            "value": "#split",
+            "type": "string"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "category",
+            "value": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+            "type": "id",
+            "options": {
+              "splitIndex": 1
+            }
+          },
+          {
+            "op": "set-split-amount",
+            "field": null,
+            "value": 50,
+            "type": "number",
+            "options": {
+              "splitIndex": 1,
+              "method": "fixed-percent"
+            }
+          },
+          {
+            "op": "set",
+            "field": "category",
+            "value": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+            "type": "id",
+            "options": {
+              "splitIndex": 2
+            }
+          },
+          {
+            "op": "set-split-amount",
+            "field": null,
+            "type": "number",
+            "options": {
+              "splitIndex": 2,
+              "method": "remainder"
+            }
+          }
+        ]
+      },
+      "revision": "498b973cdae1d080008ba9d2296594609c099b38b48f1362cb5380ea1cd81356"
+    },
+    {
+      "type": "rule",
+      "id": "80781442-e8ff-44ac-b0ae-2199a5db8631",
+      "body": {
+        "id": "80781442-e8ff-44ac-b0ae-2199a5db8631",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "gt",
+            "field": "amount",
+            "value": 500000,
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "payee_name",
+            "value": "Big Income",
+            "type": "string"
+          }
+        ]
+      },
+      "revision": "e2f20c7f072341f1a071dae95fe8d7683b0f5b52699a7fdc5f57643dd2599e30"
+    },
+    {
+      "type": "rule",
+      "id": "8ea01e21-9d42-4577-bf4d-05d1da9a9737",
+      "body": {
+        "id": "8ea01e21-9d42-4577-bf4d-05d1da9a9737",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "matches",
+            "field": "imported_payee",
+            "value": "^cine(ma|plex)",
+            "type": "string"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "payee",
+            "value": "c9cc7a72-54cf-4ba3-9c59-c1bd23e0b3fb",
+            "type": "id"
+          },
+          {
+            "op": "set",
+            "field": "category",
+            "value": "cb413877-19e1-4595-a84a-94e0b3b43be5",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "9813380c2b3177b6300da5ffbf589db6fefff25b4c8380a049978e4e8d2b78b4"
+    },
+    {
+      "type": "rule",
+      "id": "b50fe926-d08b-4e50-b130-cab1c90a5c07",
+      "body": {
+        "id": "b50fe926-d08b-4e50-b130-cab1c90a5c07",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "payee",
+            "value": "dd65d3cd-2a60-4c49-8335-40ae9f36dba5",
+            "type": "id"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "category",
+            "value": "3954f2b3-514e-49a8-be17-79af6efc4bfa",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "c7397ceb804702be37c1272278c0d8d60ea1f6a24251ddcf2131e2bc90579688"
+    },
+    {
+      "type": "rule",
+      "id": "dfe26b3b-597f-4249-9e49-87f83c13d190",
+      "body": {
+        "id": "dfe26b3b-597f-4249-9e49-87f83c13d190",
+        "stage": null,
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "is",
+            "field": "date",
+            "value": "2026-07",
+            "type": "date"
+          },
+          {
+            "op": "lt",
+            "field": "amount",
+            "value": 0,
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "append-notes",
+            "field": "notes",
+            "value": " july",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "72e277f3852dc518e0f68a67c38c7e35a7bae0e1f491cabbac07462fbde69198"
+    },
+    {
+      "type": "rule",
+      "id": "e540186b-7f81-44ec-8326-bcca9e8c2f15",
+      "body": {
+        "id": "e540186b-7f81-44ec-8326-bcca9e8c2f15",
+        "stage": null,
+        "conditionsOp": "or",
+        "conditions": [
+          {
+            "op": "contains",
+            "field": "notes",
+            "value": "rent",
+            "type": "string"
+          },
+          {
+            "op": "isbetween",
+            "field": "amount",
+            "value": {
+              "num1": -200000,
+              "num2": -150000
+            },
+            "type": "number"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "category",
+            "value": "7903f9f2-739d-42e0-80fc-780ef9e797dd",
+            "type": "id"
+          },
+          {
+            "op": "prepend-notes",
+            "field": "notes",
+            "value": "[bill] ",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "51fd0734e056d1e4b0d3480e2df104aeed60fe8930246dec92510ece91fc2d00"
+    },
+    {
+      "type": "rule",
+      "id": "faf12cac-7846-42b3-8ed1-72b14c00d625",
+      "body": {
+        "id": "faf12cac-7846-42b3-8ed1-72b14c00d625",
+        "stage": "pre",
+        "conditionsOp": "and",
+        "conditions": [
+          {
+            "op": "contains",
+            "field": "imported_payee",
+            "value": "MKT",
+            "type": "string"
+          }
+        ],
+        "actions": [
+          {
+            "op": "set",
+            "field": "payee",
+            "value": "dd65d3cd-2a60-4c49-8335-40ae9f36dba5",
+            "type": "id"
+          }
+        ]
+      },
+      "revision": "9d98b93de863eb38b1dc653595de32b8a2aa81c1eff9233bf8b7306731ff2932"
+    },
+    {
+      "type": "schedule",
+      "id": "eb2e9a4e-c7cd-4212-b790-d9925baddb40",
+      "body": {
+        "id": "eb2e9a4e-c7cd-4212-b790-d9925baddb40",
+        "name": "Gym",
+        "rule": "007cd6fd-079a-43ec-9375-cb3ecb222382",
+        "next_date": "2026-12-05",
+        "completed": false,
+        "posts_transaction": false,
+        "payee": "c9cc7a72-54cf-4ba3-9c59-c1bd23e0b3fb",
+        "account": "4cb453b5-ea75-4ec2-af63-647f38732229",
+        "amount": -4000,
+        "amountOp": "is",
+        "date": {
+          "frequency": "monthly",
+          "start": "2026-01-05",
+          "interval": 1,
+          "patterns": [],
+          "skipWeekend": false,
+          "weekendSolveMode": "after",
+          "endMode": "never"
+        }
+      },
+      "revision": "fe2e63166bfbd743fbcab551ef50877ce8d5b758e2285e4406a2dd03eb9d8afc"
+    }
+  ]
+}

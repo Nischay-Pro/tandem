@@ -1,11 +1,127 @@
 package app.tandemforactual.data.actual
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
 /** Actual's transaction mutations (`batchUpdateTransactions`) and transfer bookkeeping (`transfer.ts`). */
 class ActualTransactions(
     private val writer: ActualWriter,
-    private val runRules: (Map<String, Any?>) -> Map<String, Any?> = { it },
 ) {
     private val db get() = writer.db
+
+    private val rules = ActualRuleEngine(writer.db, ::insertPayee)
+
+    private fun runRules(transaction: Map<String, Any?>) = rules.run(transaction, writer::uuid)
+
+    /** `db.insertPayee`: a payee and the mapping row that points it at itself. */
+    fun insertPayee(
+        name: String,
+        id: String = writer.uuid(),
+    ): String {
+        writer.insert("payees", linkedMapOf("id" to id, "name" to name))
+        writer.insert("payee_mapping", linkedMapOf("id" to id, "targetId" to id))
+        return id
+    }
+
+    /**
+     * `accounts/sync.addTransactions`: resolves payee names, runs the budget's rules, expands splits and inserts the
+     * transactions, as Actual's API does for added and posted transactions.
+     */
+    fun addTransactions(
+        accountId: String,
+        transactions: List<Map<String, Any?>>,
+        runTransfers: Boolean,
+    ): List<String> =
+        writer.batch {
+            val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
+            val added = mutableListOf<MutableMap<String, Any?>>()
+            for (input in transactions) {
+                require(input["date"] != null) { "`date` is required when adding a transaction" }
+                val trans = LinkedHashMap(input - setOf("payee_name", "subtransactions"))
+                val payeeName = (input["payee_name"] as String?)?.trim()?.ifEmpty { null }
+                trans["imported_payee"] = ((trans["imported_payee"] as String?)?.ifEmpty { null } ?: payeeName)?.trim()
+                trans["account"] = accountId
+                if (trans["payee"] == null && payeeName != null) {
+                    trans["payee"] =
+                        payeesToCreate[payeeName.lowercase()]?.first
+                            ?: db
+                                .query("SELECT id, name FROM payees WHERE tombstone = 0")
+                                .firstOrNull {
+                                    (it["name"] as String?)?.lowercase() ==
+                                        payeeName.lowercase()
+                                }?.get("id")
+                            ?: writer.uuid().also { payeesToCreate[payeeName.lowercase()] = it to payeeName }
+                }
+                trans["category"] = trans["category"]
+                @Suppress("UNCHECKED_CAST")
+                val given = (input["subtransactions"] as List<Map<String, Any?>>?)?.map { it + ("account" to accountId) }
+                val ruled = runRules(trans)
+                val final = LinkedHashMap<String, Any?>()
+                final["id"] = writer.uuid()
+                final.putAll(ruled)
+                final["account"] = accountId
+                final["cleared"] = ruled["cleared"] ?: true
+                @Suppress("UNCHECKED_CAST")
+                val subtransactions = (final.remove("subtransactions") as List<Map<String, Any?>>?) ?: given
+                if (!subtransactions.isNullOrEmpty()) added += makeSplit(final, subtransactions) else added += final
+            }
+            val used = added.map { it["payee"] }.toSet()
+            payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> insertPayee(name, id) }
+            val now = writer.nowMillis()
+            added.forEachIndexed { index, t -> if (t["sort_order"] == null) t["sort_order"] = now - index * 1024L }
+            if (runTransfers) {
+                batchUpdate(added = added)
+            } else {
+                added.map { insert(it) }
+            }
+        }
+
+    private fun makeSplit(
+        parent: Map<String, Any?>,
+        subtransactions: List<Map<String, Any?>>,
+    ): List<MutableMap<String, Any?>> {
+        val children =
+            subtransactions.mapIndexed { index, data ->
+                linkedMapOf<String, Any?>("amount" to 0L).apply {
+                    putAll(data)
+                    this["sort_order"] = -index.toLong()
+                    this["category"] = if (data.containsKey("category")) data["category"] else parent["category"]
+                    this["payee"] = if (data.containsKey("payee")) data["payee"] else parent["payee"]
+                    this["id"] = data["id"] ?: writer.uuid()
+                    this["account"] = parent["account"]
+                    this["date"] = parent["date"]
+                    this["cleared"] = parent["cleared"]
+                    this["reconciled"] = parent["reconciled"]
+                    this["starting_balance_flag"] = parent["starting_balance_flag"]
+                    this["is_child"] = true
+                    this["parent_id"] = parent["id"]
+                    this["error"] = null
+                }
+            }
+        val amount = (parent["amount"] as Number?)?.toLong() ?: 0L
+        val total = children.sumOf { (it["amount"] as Number?)?.toLong() ?: 0L }
+        val head =
+            LinkedHashMap(parent).apply {
+                this["is_parent"] = true
+                this["error"] =
+                    if (total ==
+                        amount
+                    ) {
+                        null
+                    } else {
+                        stringifyJson(
+                            JsonObject(
+                                mapOf(
+                                    "type" to JsonPrimitive("SplitTransactionError"),
+                                    "version" to JsonPrimitive(1),
+                                    "difference" to JsonPrimitive(amount - total),
+                                ),
+                            ),
+                        )
+                    }
+            }
+        return listOf(head) + children
+    }
 
     /** A transaction row from `v_transactions_internal` in Actual's public field names. */
     fun get(id: String): Map<String, Any?>? =

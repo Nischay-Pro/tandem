@@ -338,3 +338,34 @@ class ActualDirectBudgetTest {
             }
         }
 }
+
+class ScheduleProjectionTest {
+    @Test
+    fun rangeSchedulesProjectTheirPostedAmount() {
+        fun schedule(amount: kotlinx.serialization.json.JsonElement) =
+            app.tandemforactual.data.actual.ActualRecord(
+                "schedule",
+                "s",
+                kotlinx.serialization.json.JsonObject(mapOf("id" to kotlinx.serialization.json.JsonPrimitive("s"), "amount" to amount)),
+                "r",
+            )
+        val settings =
+            app.tandemforactual.data.store
+                .BudgetDisplaySettings("USD", "$", 2, null, false, "before", false)
+
+        fun project(amount: kotlinx.serialization.json.JsonElement) =
+            BudgetSyncJson
+                .projectDirectSnapshot(
+                    app.tandemforactual.data.actual
+                        .ActualSnapshot(listOf(schedule(amount)), settings),
+                    "g",
+                    "actual:node",
+                    "1",
+                ).records
+                .single()
+                .amountMinor
+        assertEquals(-150_000L, project(Json.parseToJsonElement("""{"num1":-151000,"num2":-149000}""")))
+        assertEquals(null, project(Json.parseToJsonElement("""{"num1":-1}""")))
+        assertEquals(-5L, project(kotlinx.serialization.json.JsonPrimitive(-5)))
+    }
+}

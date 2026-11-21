@@ -387,10 +387,18 @@ object BudgetSyncJson {
             accountId = firstString("account", "accountId"),
             categoryId = firstString("category", "categoryId"),
             payeeId = firstString("payee", "payeeId"),
-            amountMinor = firstLong("amount", "amountMinor"),
+            amountMinor = if (recordType == "schedule") scheduleAmount() else firstLong("amount", "amountMinor"),
             budgetMonth = firstString("month", "budgetMonth"),
             displayMetadata = toDisplayMetadata(),
         )
+
+    /** A schedule posts a fixed amount, or the rounded midpoint of an "is between" range. */
+    private fun JsonObject.scheduleAmount(): Long? {
+        val range = this["amount"] as? JsonObject ?: return firstLong("amount", "amountMinor")
+        val low = range.firstLong("num1") ?: return null
+        val high = range.firstLong("num2") ?: return null
+        return kotlin.math.round((low + high) / 2.0).toLong()
+    }
 
     private fun JsonObject.firstString(vararg names: String): String? = names.firstNotNullOfOrNull { name -> optionalString(name) }
 

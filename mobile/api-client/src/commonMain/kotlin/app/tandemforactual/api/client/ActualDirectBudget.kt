@@ -66,9 +66,20 @@ class ActualDirectBudget private constructor(
         }
     }
 
+    /** Runs Actual's schedule service once a day after a successful sync, then uploads anything it changed. */
+    private suspend fun runSchedules(today: String) {
+        db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
+        if (db.first("SELECT value FROM tandem_prefs WHERE id = 'lastScheduleRun'")?.get("value") == today) return
+        ActualBudgetEdits(writer, { today }).schedules.runService(syncSuccess = true)
+        db.execute("INSERT OR REPLACE INTO tandem_prefs (id, value) VALUES ('lastScheduleRun', ?)", today)
+        synchronize()
+    }
+
     /** Builds the mobile cache projection at the same checkpoint as the completed CRDT sync. */
     suspend fun refreshProjection(today: String) =
         mutex.withLock {
+            synchronize()
+            runSchedules(today)
             val sync = synchronize()
             BudgetSyncJson.projectDirectSnapshot(reader.read(today), groupId, cacheGeneration, sync.lastSyncedTimestamp)
         }
@@ -137,6 +148,7 @@ class ActualDirectBudget private constructor(
     ): T =
         mutex.withLock {
             synchronize()
+            runSchedules(today)
             val result = block(ActualBudgetEdits(writer, { today }))
             synchronize()
             result

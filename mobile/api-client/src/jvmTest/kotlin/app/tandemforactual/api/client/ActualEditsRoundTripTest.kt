@@ -157,6 +157,7 @@ class ActualEditsRoundTripTest {
                 )
                 edits.schedules.skip(scheduleId, checkNotNull(edits.schedules.nextDate(scheduleId)))
                 ids["schedule"] = scheduleId
+                ids["posted"] = edits.schedules.post(scheduleId, checkNotNull(edits.schedules.nextDate(scheduleId)))
                 ids +=
                     mapOf(
                         "wallet" to wallet,
@@ -169,10 +170,31 @@ class ActualEditsRoundTripTest {
                         "rule" to rule,
                     )
             }
+            val bistro = id("payee", "Bistro & Bar")
+            val ruled = "tandem:${UUID.randomUUID()}"
+            val created =
+                budget.submit(
+                    UUID.randomUUID().toString(),
+                    ruled,
+                    "create",
+                    buildJsonObject {
+                        put("account", checking)
+                        put("amount", -2_100)
+                        put("date", today)
+                        put("payee", bistro)
+                        put("category", null as String?)
+                        put("notes", "rules applied")
+                        put("cleared", false)
+                    },
+                    null,
+                )
+            check(created.status == app.tandemforactual.data.actual.OperationStatus.COMMITTED)
+            budget.sync()
+            ids["ruled"] = ruled
             budget.close()
 
             val fresh = download(client, file.fileId, directory.resolve("fresh.sqlite"))
-            fresh.sync()
+            fresh.refreshProjection(today)
             val reread = fresh.snapshot(today)
             fresh.close()
             if (out != null) {
