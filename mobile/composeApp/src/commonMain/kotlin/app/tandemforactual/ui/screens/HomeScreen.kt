@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.Text
@@ -71,14 +72,11 @@ internal fun HomeScreen(
     }
     PageLazyColumn {
         item(key = "home-header") {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    budgetDisplayNameForHeader(state.selectedBudget),
-                    Modifier.weight(1f),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.sectionTitle,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AdvancedModeSwitch(state)
                 if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
                     TandemIconButton(Lucide.Settings, stringResource(Res.string.nav_settings)) { navigation.selectTab(AppRoute.SETTINGS) }
@@ -206,8 +204,8 @@ private fun HomeEntryCard(
             }) {
                 listOfNotNull(
                     month?.incomeAvailableMinor?.let { "Income" to it },
-                    month?.totalBudgetedMinor?.let { "Budgeted" to it },
-                    month?.totalSpentMinor?.let { "Spent" to it },
+                    month?.totalBudgetedMinor?.let { "Budgeted" to kotlin.math.abs(it) },
+                    month?.totalSpentMinor?.let { "Spent" to kotlin.math.abs(it) },
                 ).forEachIndexed { index, (label, amount) ->
                     if (index > 0) DividerLine()
                     ListRow(

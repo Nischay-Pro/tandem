@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -98,12 +99,14 @@ class OnboardingWordingTest {
         var tab: AppRoute? = null
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                PersonalizeScreen(state, noOpNavigation().copy(selectTab = { tab = it }))
+                PersonalizeScreen(state, noOpNavigation().copy(reset = { tab = it }))
             }
         }
 
         composeTestRule.onNodeWithText("Want Tandem tailored to you?").assertExists()
+        composeTestRule.onNodeWithContentDescription("Step 1 of 5").assertExists()
         composeTestRule.onNodeWithText("Just connect to Actual").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
         assertEquals(AppRoute.HOME, tab)
         assertEquals(ExperienceSettings(personalizationDeferred = true), state.experience)
     }
@@ -114,11 +117,11 @@ class OnboardingWordingTest {
         var tab: AppRoute? = null
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                PersonalizeScreen(state, noOpNavigation().copy(selectTab = { tab = it }))
+                PersonalizeScreen(state, noOpNavigation().copy(reset = { tab = it }))
             }
         }
 
-        composeTestRule.onNodeWithText("Choose my goals").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
         listOf("Stay organized", "Get control of my spending", "Pay down debt", "Save for something", "Analyze my finances")
             .forEach { composeTestRule.onNodeWithText(it).performScrollTo().performClick() }
         composeTestRule.onNodeWithText("Continue").performClick()
@@ -128,7 +131,8 @@ class OnboardingWordingTest {
         composeTestRule.onNodeWithText("Advanced").performClick()
         composeTestRule.onNodeWithText("Continue").performClick()
         composeTestRule.onNodeWithText("Suggested for you").assertExists()
-        composeTestRule.onAllNodesWithText("Add to Home")[0].performClick()
+        composeTestRule.onAllNodesWithText("Add")[0].performClick()
+        composeTestRule.onNodeWithText("Added").assertExists()
         composeTestRule.onNodeWithText("Open Home").performClick()
 
         assertEquals(AppRoute.HOME, tab)
@@ -145,11 +149,13 @@ class OnboardingWordingTest {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) { PersonalizeScreen(state, noOpNavigation()) }
         }
-        composeTestRule.onNodeWithText("Choose my goals").performClick()
-        composeTestRule.onNodeWithText("Pay down debt").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("Pay down debt").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Continue").performClick()
         composeTestRule.onNodeWithText("How much detail would you like?").assertExists()
         assertEquals(FinancialGoal.DEBT, state.experience?.emphasis)
+        composeTestRule.onAllNodesWithContentDescription("Back")[0].performClick()
+        composeTestRule.onNodeWithText("What would you like to do with your money?").assertExists()
     }
 
     @Test

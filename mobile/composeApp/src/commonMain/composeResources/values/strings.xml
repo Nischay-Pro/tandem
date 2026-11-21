@@ -202,4 +202,12 @@
     <string name="settings_personalize_detail">Goals, home focus, and detail level</string>
     <string name="settings_reset_personalization">Reset personalization</string>
     <string name="settings_reset_personalization_detail">Return to the neutral home. Your budget data stays as it is.</string>
+    <string name="decide_personalize">Personalize Tandem</string>
+    <string name="decide_personalize_detail">Pick your goals and get a Home that fits them</string>
+    <string name="decide_connect_detail">Start with a simple Home. Personalize any time in Settings.</string>
+    <string name="mode_minimal_short">Focused and calm</string>
+    <string name="mode_advanced_short">Dense and detailed</string>
+    <string name="tools_add_short">Add</string>
+    <string name="tools_added_short">Added</string>
+    <string name="personalize_progress">Step %1$d of %2$d</string>
 </resources>
