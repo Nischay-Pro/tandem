@@ -6,11 +6,11 @@ Choose a page by what you need to do.
 
 | Page                                               | For                                                          |
 | -------------------------------------------------- | ------------------------------------------------------------ |
-| [Install the server](deploy/install.md)            | Operators setting up Tandem beside Actual.                   |
+| [Install extension sync](deploy/install.md)        | Operators adding optional planning sync beside Actual.       |
 | [Configuration reference](deploy/configuration.md) | Operators changing settings in `.env`.                       |
-| [Reverse proxy](deploy/reverse-proxy.md)           | Operators routing HTTPS traffic to Actual and Tandem.        |
-| [Upgrade](deploy/upgrade.md)                       | Operators rebuilding or rolling back the API.                |
-| [Back up and restore](deploy/backup-restore.md)    | Operators protecting and recovering budget data.             |
+| [Reverse proxy](deploy/reverse-proxy.md)           | Operators routing the extension sync path.                   |
+| [Upgrade](deploy/upgrade.md)                       | Operators updating or rolling back extension sync.           |
+| [Back up and restore](deploy/backup-restore.md)    | Operators protecting and recovering planning records.        |
 | [Troubleshooting](deploy/troubleshooting.md)       | Operators diagnosing connection and readiness failures.      |
 | [Trust and security](deploy/trust.md)              | Operators deciding what data and access the server can hold. |
 
@@ -36,9 +36,9 @@ Choose a page by what you need to do.
 | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [Build from source](develop/build-from-source.md)                   | Developers building the API, Android app, or iOS app.                |
 | [Test Tandem](develop/testing.md)                                   | Contributors running API and mobile checks before review.            |
-| [Actual compatibility tests](develop/actual-compatibility-tests.md) | Contributors checking the adapter against the pinned Actual release. |
+| [Actual compatibility tests](develop/actual-compatibility-tests.md) | Contributors checking direct sync against the pinned Actual release. |
 | [Toolchain](develop/toolchain.md)                                   | Developers setting up Gradle, Kotlin, and the generated client.      |
 | [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                           |
-| [API reference](develop/api-reference.md)                           | Developers integrating with the Tandem API.                          |
+| [Extension sync API](develop/api-reference.md)                      | Developers integrating with the optional extension sync service.     |
 | [App and server versioning](develop/versioning.md)                  | Contributors changing the API or features the app depends on.        |
 | [OpenAPI document](api/openapi-v1.json)                             | Tools generating or checking API clients. Keep this path stable.     |

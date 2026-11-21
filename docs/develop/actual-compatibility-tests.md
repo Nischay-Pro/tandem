@@ -1,50 +1,19 @@
-# Test Actual compatibility
+# Actual compatibility tests
 
-For contributors checking Tandem against the Actual server and API versions
-listed in [Actual compatibility](../concepts/actual-compatibility.md). This
-test uses a disposable Actual server and synthetic budgets.
+`scripts/test-actual-compatibility.sh` checks Tandem's direct sync against the
+pinned Actual server release:
 
-## Run the compatibility test
+1. Starts the pinned Actual image and bootstraps a password.
+2. Seeds envelope and tracking budgets, then creates an end-to-end encrypted
+   budget, all with Actual's own client.
+3. Runs the Kotlin round trips: every budget edit applied through Actual and read
+   back by Actual's client, and an encrypted budget opened, edited and read back.
 
-1. **Start the isolated compatibility test** from the repository root:
+CI runs it in the API client job. Run it locally with Docker and the Android SDK:
 
-   ```sh
-   ./scripts/test-actual-compatibility.sh
-   ```
+```sh
+./scripts/test-actual-compatibility.sh
+```
 
-   Docker Compose starts a pinned Actual server and PostgreSQL on a private
-   network, runs the adapter tests, then removes the test services and data.
-   It does not connect to a configured Actual server or use a real budget.
-
-   **Check:** the command exits successfully. If Docker cannot start the
-   services, confirm Docker is running and that the test's local port is free,
-   then retry. If an adapter assertion fails, check the pinned-version notes
-   in [Actual compatibility](../concepts/actual-compatibility.md) before
-   changing the adapter.
-
-## Verified coverage
-
-| Area                 | What the disposable test checks                                                                                                                                                                                                                                                                                                 | Limit                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Transactions         | Create, update, sync, read from an independent workspace, and delete.                                                                                                                                                                                                                                                           | One ordinary transaction path.                                                                                            |
-| Concurrent edits     | Two workspaces edit the same transaction amount and converge after sync.                                                                                                                                                                                                                                                        | Confirms observed convergence; it does not establish which edit wins or cover every field and entity.                     |
-| Transfers and splits | Create paired transfer legs, update/delete transfers, create splits, edit split parents and children, and detect changed split structure.                                                                                                                                                                                       | Exercises the pinned Actual release only.                                                                                 |
-| Encrypted budgets    | Reads fail without the budget password and succeed when the password is supplied.                                                                                                                                                                                                                                               | Test setup uses an internal Actual handler to create an encrypted synthetic fixture; production reads use the public API. |
-| Session token        | The automated suite checks catalog reads and transaction writes with a password-issued token. A separate live check used Actual 26.11.0 with OpenID enforced and password login disabled; Tandem used `ACTUAL_SESSION_TOKEN`, read a synthetic budget, wrote and synced a transaction, and an independent session read it back. | The OpenID-only check is a live verification, not a repeatable CI test.                                                   |
-| Large snapshot       | Reads 15,000 synthetic transactions, then repeats after opening a fresh API session from the same local workspace.                                                                                                                                                                                                              | Server-side read and JSON serialization only; it does not measure a process restart, network transfer, or phone parsing.  |
-
-One local run returned 15,116 records and 8,644,137 JSON bytes. The first read
-took 436 ms and the reopened-session read took 453 ms with the same transaction
-revision digest. Treat these numbers as one server-side datapoint, not a mobile
-performance guarantee. Measure transfer and parsing on representative phones
-and networks before changing sync intervals.
-
-The automated session-token test uses a token issued by the disposable server's
-password login. Separately, on 2026-11-12, a live compatibility check used a
-disposable Actual 26.11.0 server with OpenID enforced and password login
-disabled. Tandem started with `ACTUAL_SESSION_TOKEN` and no Actual
-password, reported ready, read a synthetic budget, wrote and synced a
-transaction, and an independent session read it back using the OpenID-issued
-token. That OIDC-only check is not part of CI yet. For the compatibility
-boundary, see [Actual compatibility](../concepts/actual-compatibility.md). For
-general developer checks, see [Test Tandem](testing.md).
+When Actual releases a new version, update the image digest in the script and
+the fixtures, then rerun.

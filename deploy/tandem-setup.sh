@@ -56,12 +56,10 @@ if [[ ! -e "$environment_file" ]]; then
   fi
 
   postgres_password="$(openssl rand -hex 32)"
-  encryption_key="$(openssl rand -hex 32)"
   cp "$temporary_directory/example.env" "$temporary_directory/.env"
   sed -i \
     -e "s/^TANDEM_API_TAG=.*/TANDEM_API_TAG=$api_tag/" \
     -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$postgres_password/" \
-    -e "s/^AUTH_TOKEN_ENCRYPTION_KEY=.*/AUTH_TOKEN_ENCRYPTION_KEY=$encryption_key/" \
     "$temporary_directory/.env"
   umask 077
   chmod 600 "$temporary_directory/.env"

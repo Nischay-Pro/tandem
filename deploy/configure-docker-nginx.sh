@@ -280,7 +280,7 @@ if ((${#nginx_matches[@]} == 0)); then
   if ((${#nginx_manager_images[@]} > 0)); then
     printf 'Detected a managed Nginx proxy (%s); leaving its generated configuration untouched.\n' \
       "${nginx_manager_images[0]}"
-    printf 'Configure /api/v1/ in that proxy and route it to tandem-api:19753 on the tandem-edge network.\n'
+    printf 'Configure /extension/v1/ in that proxy and route it to tandem-api:19753 on the tandem-edge network.\n'
   else
     printf 'No matching HTTPS Nginx site was detected; leaving Nginx unchanged.\n'
   fi
@@ -379,67 +379,10 @@ else
   route_file="$temporary_directory/tandem-locations.conf"
   cat > "$route_file" <<'NGINX'
     # TANDEM-SETUP-MANAGED-ROUTES
-    location = /api/v1 {
-        return 308 /api/v1/;
-    }
-
-    location ^~ /api/v1/auth/actual-return/ {
-        access_log off;
-        error_log /dev/null emerg;
-        limit_req zone=tandem_setup_auth burst=5 nodelay;
-        limit_req_status 429;
-        resolver 127.0.0.11 valid=30s ipv6=off;
-        set $tandem_api tandem-api:19753;
-        proxy_pass http://$tandem_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header Cache-Control "no-store" always;
-    }
-
-    location = /api/v1/auth/login {
-        limit_req zone=tandem_setup_auth burst=5 nodelay;
-        limit_req_status 429;
-        resolver 127.0.0.11 valid=30s ipv6=off;
-        set $tandem_api tandem-api:19753;
-        proxy_pass http://$tandem_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header Cache-Control "no-store" always;
-    }
-
-    location = /api/v1/auth/openid/start {
-        limit_req zone=tandem_setup_auth burst=5 nodelay;
-        limit_req_status 429;
-        resolver 127.0.0.11 valid=30s ipv6=off;
-        set $tandem_api tandem-api:19753;
-        proxy_pass http://$tandem_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header Cache-Control "no-store" always;
-    }
-
-    location = /api/v1/auth/openid/complete {
-        limit_req zone=tandem_setup_auth burst=5 nodelay;
-        limit_req_status 429;
-        resolver 127.0.0.11 valid=30s ipv6=off;
-        set $tandem_api tandem-api:19753;
-        proxy_pass http://$tandem_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        add_header Cache-Control "no-store" always;
-    }
-
-    location ^~ /api/v1/ {
+    location ^~ /extension/v1/ {
         limit_req zone=tandem_setup_api burst=60 nodelay;
         limit_req_status 429;
+        client_max_body_size 256k;
         resolver 127.0.0.11 valid=30s ipv6=off;
         set $tandem_api tandem-api:19753;
         proxy_pass http://$tandem_api;
@@ -541,8 +484,8 @@ server_start, opening, closing, body = matches[0]
 if "TANDEM-SETUP-MANAGED-ROUTES" in body:
     print("")
     raise SystemExit(0)
-if re.search(r"(?m)^\s*location\b[^{};]*?/api/v1", body):
-    raise SystemExit("An existing /api/v1 route is present; refusing to replace it.")
+if re.search(r"(?m)^\s*location\b[^{};]*?/extension/v1", body):
+    raise SystemExit("An existing /extension/v1 route is present; refusing to replace it.")
 
 mode = os.stat(config_path).st_mode & 0o777
 metadata = os.stat(config_path)

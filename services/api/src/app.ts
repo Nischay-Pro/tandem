@@ -1,571 +1,405 @@
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import swagger from "@fastify/swagger";
-import { randomUUID } from "node:crypto";
-import { performance } from "node:perf_hooks";
-import Fastify, {
-  LogController,
-  type FastifyInstance,
-  type FastifyRequest,
-  type FastifyServerOptions,
-} from "fastify";
-import { READINESS_TIMEOUT_MS } from "./config.js";
-import type { HealthDatabase } from "./database.js";
-import {
-  ActualPrincipalSessionExpiredError,
-  ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
-} from "./actual/actual-session.js";
-import { DeviceAuthorization } from "./auth/device-auth.js";
-import { registerDeviceAuthorizationRoutes } from "./auth/device-authorization-routes.js";
-import { registerLocalIdentityRoutes } from "./auth/local-identity-routes.js";
-import { registerActualLoginMethodsRoute } from "./auth/actual-login-method-routes.js";
-import type { ActualPasswordGrant } from "./auth/actual-password-login.js";
-import type { ActualOpenIdLogin } from "./auth/actual-openid-login.js";
-import { runAsActualPrincipal } from "./auth/actual-principal-context.js";
-import type { ActualLoginMethods } from "./auth/actual-login-methods.js";
-import { logSecurityAuditEvent } from "./security-audit.js";
-import type { TransactionApiPort } from "./actual/transaction-api.js";
-import type { BudgetMaintenanceApiPort } from "./actual/budget-maintenance-api.js";
-import type { BudgetReadApiPort } from "./budget-projection/budget-read-api.js";
-import {
-  registerBudgetMaintenanceRoutes,
-  type BudgetMaintenanceJournal,
-} from "./actual/budget-maintenance-routes.js";
-import { registerBudgetReadRoutes } from "./budget-projection/budget-read-routes.js";
-import { registerHealthRoutes } from "./health/health-routes.js";
-import { registerCapabilitiesRoute } from "./capabilities.js";
-import { registerOpenApiRoute } from "./openapi/openapi-route.js";
-import { registerTransactionRoutes } from "./actual/transaction-routes.js";
-import {
-  API_ERROR_SCHEMA,
-  buildOpenApiLocalReference,
-} from "./openapi/error-responses.js";
-import {
-  isStorageFullError,
-  SERVER_STORAGE_FULL_ERROR,
-} from "./storage-failure.js";
-import { BudgetEncryptionPasswordError } from "./actual/budget-encryption-errors.js";
-import {
-  BudgetPasswordAttemptLimiter,
-  budgetPasswordAttemptKey,
-} from "./actual/budget-password-attempts.js";
+import type { BudgetAccess } from "./actual-access.js";
+import type { ExtensionStore, RecordWrite, WrappedKey } from "./store.js";
 
-declare module "fastify" {
-  interface FastifySchema {
-    "x-tandem-rate-limited"?: boolean;
-  }
-}
+export const API_VERSION = 1;
+const MAX_CIPHERTEXT = 65_536;
 
-export function safeErrorType(error: unknown): string {
-  if (!(error instanceof Error)) return error === null ? "null" : typeof error;
-  const name = error.constructor.name;
-  return /^[A-Za-z][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "Error";
-}
-
-export interface ApiAppOptions {
-  readinessTimeoutMs?: number;
-  actualReadiness?: () => {
-    ready: boolean;
-    code?: string;
-    message?: string;
-  };
-  readActualLoginMethods?: () => Promise<ActualLoginMethods>;
-  signInWithActualPassword?: (password: string) => Promise<ActualPasswordGrant>;
-  actualOpenIdLogin?: ActualOpenIdLogin;
-  persistActualSessionToken?: (
-    principalId: string,
-    sessionToken: string,
-  ) => Promise<void>;
-  onClose?: () => Promise<void>;
-  deviceAuth?: DeviceAuthorization;
-  transactionApi?: TransactionApiPort;
-  budgetMaintenanceApi?: BudgetMaintenanceApiPort;
-  maintenanceJournal?: BudgetMaintenanceJournal;
-  budgetReadApi?: BudgetReadApiPort;
-  trustProxy?: false | string[];
-  logger?: FastifyServerOptions["logger"];
-}
-
-export async function buildApiApp(
-  database: HealthDatabase,
-  options: ApiAppOptions = {},
-): Promise<FastifyInstance> {
-  const readinessTimeoutMs = options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS;
-  const requestErrors = new WeakMap<FastifyRequest, unknown>();
-  const requestPrincipalIds = new WeakMap<FastifyRequest, string>();
-  const responseErrorCodes = new WeakMap<FastifyRequest, string>();
-  const requestStartedAt = new WeakMap<FastifyRequest, number>();
-  const app = Fastify({
-    logger: options.logger ?? false,
-    logController: new LogController({ disableRequestLogging: true }),
-    requestIdHeader: false,
-    genReqId: () => randomUUID(),
-    trustProxy: options.trustProxy ?? false,
-  });
-  app.addSchema(API_ERROR_SCHEMA);
-  app.removeContentTypeParser("text/plain");
-  app.addHook("onRequest", async (request, reply) => {
-    requestStartedAt.set(request, performance.now());
-    reply.header("x-request-id", request.id);
-  });
-  app.setErrorHandler((error, request, reply) => {
-    if (isStorageFullError(error)) {
-      requestErrors.set(request, error);
-      reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
-      return;
-    }
-    const statusCode = safeHttpStatus(frameworkErrorStatus(error));
-    requestErrors.set(request, error);
-    const response = safeFrameworkErrorResponse(
-      statusCode,
-      frameworkErrorCode(error),
-    );
-    reply.code(statusCode).send({ error: response });
-  });
-  app.setNotFoundHandler((_request, reply) => {
-    reply.code(404).send({
-      error: {
-        code: "route_not_found",
-        message:
-          "Tandem API route was not found. Check the address and /api/v1/ proxy route.",
-      },
-    });
-  });
-  const passwordAttempts = new BudgetPasswordAttemptLimiter();
-  const passwordAttemptKeys = new WeakMap<FastifyRequest, string>();
-  app.addHook("preHandler", async (request, reply) => {
-    const key = budgetPasswordAttemptKey(request);
-    if (key === undefined) return;
-    passwordAttemptKeys.set(request, key);
-    const retryAfterSeconds = passwordAttempts.retryAfterSeconds(key);
-    if (retryAfterSeconds === 0) return;
-    reply.header("retry-after", String(retryAfterSeconds));
-    return reply.code(429).send({
-      error: {
-        code: "budget_password_attempts_exceeded",
-        message:
-          "Too many incorrect budget passwords. Wait a few minutes, then try again.",
-      },
-    });
-  });
-  app.addHook("onSend", async (request, reply, payload) => {
-    const statusCode = reply.statusCode;
-    let errorCode: string | undefined;
-    if (statusCode === 409 || statusCode >= 500) {
-      errorCode = responseErrorCode(payload, statusCode);
-      responseErrorCodes.set(request, errorCode);
-    }
-    const attemptKey = passwordAttemptKeys.get(request);
-    if (attemptKey !== undefined) {
-      if (errorCode === "budget_password_incorrect") {
-        passwordAttempts.recordFailure(attemptKey);
-      } else if (statusCode < 400) {
-        passwordAttempts.recordSuccess(attemptKey);
-      }
-    }
-    return payload;
-  });
-  app.addHook("onResponse", async (request, reply) => {
-    const statusCode = reply.statusCode;
-    const route = request.routeOptions.url ?? "unmatched";
-    const logFields = {
-      requestId: request.id,
-      method: request.method,
-      route,
-      statusCode,
-      durationMs: Math.round(
-        performance.now() - requestStartedAt.get(request)!,
-      ),
-      ...(responseErrorCodes.has(request)
-        ? { errorCode: responseErrorCodes.get(request) }
-        : {}),
-    };
-    const hasThrownError = requestErrors.has(request);
-    const thrownError = requestErrors.get(request);
-    if (hasThrownError || statusCode === 409 || statusCode >= 500) {
-      request.log.error(
-        {
-          ...logFields,
-          ...(hasThrownError ? { errorType: safeErrorType(thrownError) } : {}),
-        },
-        "API request failed",
-      );
-    } else {
-      request.log.info(logFields, "API request completed");
-    }
-  });
-  if (options.deviceAuth) {
-    app.addHook("onRequest", async (request) => {
-      const match = request.headers.authorization?.match(
-        /^Bearer ([A-Za-z0-9_-]{43})$/i,
-      );
-      const device = await options.deviceAuth?.authenticate(match?.[1]);
-      if (device) requestPrincipalIds.set(request, device.principalId);
-    });
-    app.addHook("preHandler", (request, _reply, done) => {
-      const principalId = requestPrincipalIds.get(request);
-      if (principalId === undefined) {
-        done();
-        return;
-      }
-      runAsActualPrincipal(principalId, () => done());
-    });
-  }
-
-  await app.register(swagger, {
-    refResolver: {
-      buildLocalReference(schema, _baseUri, _fragment, index) {
-        return buildOpenApiLocalReference(schema, index);
-      },
+const error = (code: string, message: string) => ({ error: { code, message } });
+const errorSchema = {
+  type: "object",
+  properties: {
+    error: {
+      type: "object",
+      properties: { code: { type: "string" }, message: { type: "string" } },
+      required: ["code", "message"],
     },
+  },
+  required: ["error"],
+} as const;
+const base64 = {
+  type: "string",
+  maxLength: MAX_CIPHERTEXT,
+  pattern: "^[A-Za-z0-9+/]*={0,2}$",
+} as const;
+const sealedRecord = {
+  type: "object",
+  properties: {
+    recordId: { type: "string" },
+    recordType: { type: "string" },
+    schemaVersion: { type: "integer" },
+    revision: { type: "integer" },
+    deleted: { type: "boolean" },
+    iv: { type: "string" },
+    ciphertext: { type: "string" },
+    seq: { type: "integer" },
+  },
+  required: [
+    "recordId",
+    "recordType",
+    "schemaVersion",
+    "revision",
+    "deleted",
+    "iv",
+    "ciphertext",
+    "seq",
+  ],
+} as const;
+const wrappedKey = {
+  type: "object",
+  properties: {
+    keyId: { type: "string", minLength: 1, maxLength: 64 },
+    wrappedKey: base64,
+    wrapSalt: base64,
+    keyCheck: base64,
+  },
+  required: ["keyId", "wrappedKey", "wrapSalt", "keyCheck"],
+} as const;
+const budgetParams = {
+  type: "object",
+  properties: {
+    budgetId: { type: "string", pattern: "^[A-Za-z0-9-]{1,100}$" },
+  },
+  required: ["budgetId"],
+} as const;
+
+export interface AppOptions {
+  store: ExtensionStore;
+  access: BudgetAccess;
+  /** Identifies the Actual server, so budgets on different self-hosted servers never share a scope. */
+  actualServerUrl: string;
+}
+
+/**
+ * Tandem's optional extension sync: it stores planning records the device has already sealed, so a budget's planning
+ * details can follow its members across devices. Budget data itself never passes through here.
+ */
+export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
+  const app = Fastify({ bodyLimit: 256 * 1024, logger: false });
+  await app.register(swagger, {
     openapi: {
-      openapi: "3.1.0",
       info: {
-        title: "Tandem for Actual Budget API",
-        version: "0.1.0",
-        description: "Unofficial API for the Tandem for Actual Budget app.",
+        title: "Tandem extension sync",
+        version: `${API_VERSION}.0.0`,
+        description:
+          "Optional encrypted sync for Tandem planning records. Budget data syncs with Actual directly.",
       },
-      tags: [
-        { name: "Health" },
-        { name: "Authentication" },
-        { name: "Budgets" },
-        { name: "Transactions" },
-      ],
       components: {
         securitySchemes: {
-          bearerAuth: {
-            type: "http",
-            scheme: "bearer",
-            bearerFormat: "opaque",
+          actualToken: { type: "apiKey", in: "header", name: "x-actual-token" },
+        },
+      },
+    },
+  });
+  const scope = (budgetId: string) => `${options.actualServerUrl}|${budgetId}`;
+
+  async function authorize(
+    token: string | undefined,
+    budgetId: string,
+    reply: FastifyReply,
+  ) {
+    if (!token) {
+      await reply
+        .code(401)
+        .send(error("sign_in_required", "Sign in to Actual first."));
+      return false;
+    }
+    const access = await options.access.check(token, budgetId);
+    if (access === "allowed") return true;
+    await reply
+      .code(access === "denied" ? 403 : 503)
+      .send(
+        access === "denied"
+          ? error(
+              "budget_forbidden",
+              "This Actual session can't open this budget.",
+            )
+          : error(
+              "actual_unavailable",
+              "Tandem couldn't reach the Actual server.",
+            ),
+      );
+    return false;
+  }
+
+  app.get(
+    "/extension/v1/health/live",
+    {
+      schema: {
+        operationId: "getLiveness",
+        response: {
+          200: { type: "object", properties: { status: { type: "string" } } },
+        },
+      },
+    },
+    async () => ({ status: "ok" }),
+  );
+
+  app.get(
+    "/extension/v1/health/ready",
+    {
+      schema: {
+        operationId: "getReadiness",
+        response: {
+          200: { type: "object", properties: { status: { type: "string" } } },
+          503: errorSchema,
+        },
+      },
+    },
+    async (_request, reply) => {
+      try {
+        await options.store.ping();
+        return { status: "ok" };
+      } catch {
+        return reply
+          .code(503)
+          .send(
+            error("storage_unavailable", "Extension storage isn't reachable."),
+          );
+      }
+    },
+  );
+
+  app.get(
+    "/extension/v1/capabilities",
+    {
+      schema: {
+        operationId: "getCapabilities",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              apiVersion: { type: "integer" },
+              features: { type: "array", items: { type: "string" } },
+            },
           },
         },
       },
     },
-  });
-  registerCapabilitiesRoute(app);
-  registerHealthRoutes(app, {
-    database,
-    readinessTimeoutMs,
-    ...(options.actualReadiness === undefined
-      ? {}
-      : { actualReadiness: options.actualReadiness }),
-  });
-  registerOpenApiRoute(app);
-  registerActualLoginMethodsRoute(app, {
-    ...(options.readActualLoginMethods === undefined
-      ? {}
-      : { readActualLoginMethods: options.readActualLoginMethods }),
-  });
+    async () => ({
+      apiVersion: API_VERSION,
+      features: ["planning-records", "planning-key"],
+    }),
+  );
 
-  if (options.deviceAuth) {
-    registerLocalIdentityRoutes(app, options.deviceAuth);
-    registerDeviceAuthorizationRoutes(app, {
-      deviceAuth: options.deviceAuth,
-      trustProxy: options.trustProxy ?? false,
-      ...(options.signInWithActualPassword === undefined
-        ? {}
-        : { signInWithActualPassword: options.signInWithActualPassword }),
-      ...(options.persistActualSessionToken === undefined
-        ? {}
-        : { persistActualSessionToken: options.persistActualSessionToken }),
-      ...(options.actualOpenIdLogin === undefined
-        ? {}
-        : { actualOpenIdLogin: options.actualOpenIdLogin }),
-      requireDevice,
-    });
-    registerTransactionRoutes(app, {
-      deviceAuth: options.deviceAuth,
-      ...(options.transactionApi === undefined
-        ? {}
-        : { transactionApi: options.transactionApi }),
-      requireDevice,
-      invalidTransactionRequest,
-      transactionNotFound,
-      actualNotConfigured,
-      reportTransactionFailure,
-      actualRequestFailed,
-    });
-    registerBudgetMaintenanceRoutes(app, {
-      deviceAuth: options.deviceAuth,
-      maintenanceApi: options.budgetMaintenanceApi,
-      journal: options.maintenanceJournal,
-      requireDevice,
-      invalidBudgetRequest,
-      transactionNotFound,
-      actualNotConfigured,
-      reportTransactionFailure,
-      actualRequestFailed,
-    });
-    registerBudgetReadRoutes(app, {
-      deviceAuth: options.deviceAuth,
-      budgetReadApi: options.budgetReadApi,
-      requireDevice,
-      invalidBudgetRequest,
-      transactionNotFound,
-      actualNotConfigured,
-      budgetReadFailed,
-      reportTransactionFailure,
-    });
-  }
+  app.get<{ Params: { budgetId: string } }>(
+    "/extension/v1/budgets/:budgetId/key",
+    {
+      schema: {
+        operationId: "getPlanningKey",
+        security: [{ actualToken: [] }],
+        params: budgetParams,
+        response: {
+          200: wrappedKey,
+          401: errorSchema,
+          403: errorSchema,
+          404: errorSchema,
+          503: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (
+        !(await authorize(
+          request.headers["x-actual-token"] as string | undefined,
+          request.params.budgetId,
+          reply,
+        ))
+      )
+        return reply;
+      const key = await options.store.key(scope(request.params.budgetId));
+      return (
+        key ??
+        reply
+          .code(404)
+          .send(
+            error(
+              "key_not_found",
+              "No planning key has been shared for this budget.",
+            ),
+          )
+      );
+    },
+  );
 
-  app.addHook("onClose", async () => {
-    try {
-      await options.onClose?.();
-    } finally {
-      await database.close();
-    }
-  });
-  await app.ready();
+  app.put<{
+    Params: { budgetId: string };
+    Body: WrappedKey & { expectedKeyId: string | null };
+  }>(
+    "/extension/v1/budgets/:budgetId/key",
+    {
+      schema: {
+        operationId: "putPlanningKey",
+        security: [{ actualToken: [] }],
+        params: budgetParams,
+        body: {
+          ...wrappedKey,
+          properties: {
+            ...wrappedKey.properties,
+            expectedKeyId: { type: ["string", "null"] },
+          },
+          required: [...wrappedKey.required, "expectedKeyId"],
+        },
+        response: {
+          200: { type: "object", properties: { status: { type: "string" } } },
+          401: errorSchema,
+          403: errorSchema,
+          409: errorSchema,
+          503: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (
+        !(await authorize(
+          request.headers["x-actual-token"] as string | undefined,
+          request.params.budgetId,
+          reply,
+        ))
+      )
+        return reply;
+      const { expectedKeyId, ...key } = request.body;
+      return (await options.store.putKey(
+        scope(request.params.budgetId),
+        key,
+        expectedKeyId,
+      ))
+        ? { status: "stored" }
+        : reply
+            .code(409)
+            .send(
+              error(
+                "key_conflict",
+                "The planning key changed on another device.",
+              ),
+            );
+    },
+  );
+
+  app.get<{
+    Params: { budgetId: string };
+    Querystring: { after?: number; limit?: number };
+  }>(
+    "/extension/v1/budgets/:budgetId/changes",
+    {
+      schema: {
+        operationId: "getPlanningChanges",
+        security: [{ actualToken: [] }],
+        params: budgetParams,
+        querystring: {
+          type: "object",
+          properties: {
+            after: { type: "integer", minimum: 0 },
+            limit: { type: "integer", minimum: 1, maximum: 500 },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              records: { type: "array", items: sealedRecord },
+              cursor: { type: "integer" },
+              hasMore: { type: "boolean" },
+            },
+          },
+          401: errorSchema,
+          403: errorSchema,
+          503: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (
+        !(await authorize(
+          request.headers["x-actual-token"] as string | undefined,
+          request.params.budgetId,
+          reply,
+        ))
+      )
+        return reply;
+      return options.store.changes(
+        scope(request.params.budgetId),
+        request.query.after ?? 0,
+        request.query.limit ?? 200,
+      );
+    },
+  );
+
+  app.put<{
+    Params: { budgetId: string; recordId: string };
+    Body: RecordWrite;
+  }>(
+    "/extension/v1/budgets/:budgetId/records/:recordId",
+    {
+      schema: {
+        operationId: "putPlanningRecord",
+        security: [{ actualToken: [] }],
+        params: {
+          type: "object",
+          properties: {
+            ...budgetParams.properties,
+            recordId: { type: "string", pattern: "^[A-Za-z0-9-]{1,100}$" },
+          },
+          required: ["budgetId", "recordId"],
+        },
+        body: {
+          type: "object",
+          properties: {
+            recordType: { type: "string", pattern: "^[a-z_.]{1,64}$" },
+            schemaVersion: { type: "integer", minimum: 1 },
+            revision: { type: "integer", minimum: 1 },
+            baseRevision: { type: ["integer", "null"], minimum: 1 },
+            deleted: { type: "boolean" },
+            iv: base64,
+            ciphertext: base64,
+          },
+          required: [
+            "recordType",
+            "schemaVersion",
+            "revision",
+            "baseRevision",
+            "deleted",
+            "iv",
+            "ciphertext",
+          ],
+        },
+        response: {
+          200: { type: "object", properties: { seq: { type: "integer" } } },
+          401: errorSchema,
+          403: errorSchema,
+          409: {
+            type: "object",
+            properties: {
+              error: errorSchema.properties.error,
+              current: { anyOf: [sealedRecord, { type: "null" }] },
+            },
+          },
+          503: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (
+        !(await authorize(
+          request.headers["x-actual-token"] as string | undefined,
+          request.params.budgetId,
+          reply,
+        ))
+      )
+        return reply;
+      const result = await options.store.write(
+        scope(request.params.budgetId),
+        request.params.recordId,
+        request.body,
+      );
+      if (result.status === "stored") return { seq: result.seq };
+      return reply.code(409).send({
+        ...error("revision_conflict", "This record changed on another device."),
+        current: result.current ?? null,
+      });
+    },
+  );
+
   return app;
-}
-
-function safeHttpStatus(statusCode: number | undefined): number {
-  switch (statusCode) {
-    case 400:
-    case 401:
-    case 404:
-    case 409:
-    case 413:
-    case 415:
-    case 429:
-    case 500:
-    case 502:
-    case 503:
-      return statusCode;
-    case 422:
-      // Validation failures use the API's documented BadRequest status.
-      return 400;
-    default:
-      // Never emit a framework status without a corresponding API response.
-      return 500;
-  }
-}
-
-export function frameworkErrorStatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null || !("statusCode" in error)) {
-    return undefined;
-  }
-  const statusCode = (error as { statusCode?: unknown }).statusCode;
-  return typeof statusCode === "number" ? statusCode : undefined;
-}
-
-export function frameworkErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : undefined;
-}
-
-export function safeFrameworkErrorResponse(
-  statusCode: number,
-  frameworkCode?: string,
-) {
-  if (
-    frameworkCode === "FST_ERR_CTP_INVALID_MEDIA_TYPE" ||
-    statusCode === 415
-  ) {
-    return {
-      code: "unsupported_media_type",
-      message: "Send this request as application/json.",
-    };
-  }
-  if (frameworkCode === "FST_ERR_CTP_BODY_TOO_LARGE" || statusCode === 413) {
-    return {
-      code: "request_too_large",
-      message: "This request is too large. Reduce it and try again.",
-    };
-  }
-  switch (statusCode) {
-    case 400:
-      return {
-        code: "invalid_request",
-        message: "Check the request details and try again.",
-      };
-    case 401:
-      return {
-        code: "invalid_device_credential",
-        message: "Valid device credentials are required.",
-      };
-    case 404:
-      return {
-        code: "route_not_found",
-        message:
-          "Tandem API route was not found. Check the address and /api/v1/ proxy route.",
-      };
-    case 409:
-      return {
-        code: "request_conflict",
-        message:
-          "This request conflicts with the latest budget. Refresh, then try again.",
-      };
-    case 429:
-      return {
-        code: "rate_limited",
-        message: "Too many requests. Wait a moment, then try again.",
-      };
-    case 502:
-      return {
-        code: "actual_operation_failed",
-        message: "The Actual Budget operation could not be completed.",
-      };
-    case 503:
-      return {
-        code: "actual_unavailable",
-        message: "Check the server connection and try again.",
-      };
-    default:
-      return {
-        code: "internal_error",
-        message: "Tandem couldn’t complete the request. Try again shortly.",
-      };
-  }
-}
-
-export function errorCodeFromPayload(payload: unknown): string | undefined {
-  if (typeof payload !== "string") return undefined;
-  try {
-    const value: unknown = JSON.parse(payload);
-    if (typeof value !== "object" || value === null || !("error" in value))
-      return undefined;
-    const error = (value as { error?: unknown }).error;
-    if (typeof error !== "object" || error === null || !("code" in error))
-      return undefined;
-    const code = (error as { code?: unknown }).code;
-    return typeof code === "string" && /^[a-z0-9_-]{1,80}$/i.test(code)
-      ? code
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function responseErrorCode(
-  payload: unknown,
-  statusCode: number,
-): string {
-  return errorCodeFromPayload(payload) ?? `http_${statusCode}`;
-}
-
-function invalidBudgetRequest(reply: import("fastify").FastifyReply) {
-  return reply.code(400).send({
-    error: {
-      code: "invalid_request",
-      message: "Budget read request is invalid",
-    },
-  });
-}
-
-function budgetReadFailed(
-  reply: import("fastify").FastifyReply,
-  error?: unknown,
-) {
-  if (error instanceof BudgetEncryptionPasswordError) {
-    return reply.code(502).send({
-      error: { code: error.code, message: error.message },
-    });
-  }
-  if (error instanceof ActualPrincipalSessionExpiredError) {
-    return reply.code(401).send({
-      error: {
-        code: "actual_sign_in_expired",
-        message: ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
-      },
-    });
-  }
-  return reply.code(502).send({
-    error: {
-      code: "budget_sync_failed",
-      message: "The budget projection could not be refreshed",
-    },
-  });
-}
-
-function invalidTransactionRequest(
-  reply: import("fastify").FastifyReply,
-  message = "Transaction request is invalid",
-  code = "invalid_request",
-) {
-  return reply.code(400).send({
-    error: { code, message },
-  });
-}
-
-function transactionNotFound(reply: import("fastify").FastifyReply) {
-  return reply.code(404).send({
-    error: { code: "not_found", message: "Resource was not found" },
-  });
-}
-
-function actualNotConfigured(reply: import("fastify").FastifyReply) {
-  return reply.code(503).send({
-    error: {
-      code: "actual_not_configured",
-      message: "Actual Budget integration is not configured",
-    },
-  });
-}
-
-function actualRequestFailed(
-  reply: import("fastify").FastifyReply,
-  error?: unknown,
-) {
-  if (isStorageFullError(error)) {
-    return reply.code(503).send({ error: SERVER_STORAGE_FULL_ERROR });
-  }
-  if (error instanceof BudgetEncryptionPasswordError) {
-    return reply.code(502).send({
-      error: { code: error.code, message: error.message },
-    });
-  }
-  if (error instanceof ActualPrincipalSessionExpiredError) {
-    return reply.code(401).send({
-      error: {
-        code: "actual_sign_in_expired",
-        message: ACTUAL_PRINCIPAL_SESSION_EXPIRED_MESSAGE,
-      },
-    });
-  }
-  return reply.code(502).send({
-    error: {
-      code: "actual_operation_failed",
-      message: "The Actual Budget operation could not be completed",
-    },
-  });
-}
-
-function reportTransactionFailure(context: string, error?: unknown): void {
-  try {
-    console.error(context, {
-      errorType: error instanceof Error ? error.name : typeof error,
-    });
-  } catch {
-    // Never let diagnostic logging expose financial data or mask the response.
-  }
-}
-
-async function requireDevice(
-  deviceAuth: DeviceAuthorization,
-  request: FastifyRequest,
-  reply: import("fastify").FastifyReply,
-) {
-  const authorization = request.headers.authorization;
-  const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/i);
-  const device = await deviceAuth.authenticate(match?.[1]);
-  if (device) {
-    return device;
-  }
-  logSecurityAuditEvent({
-    event: "device.auth",
-    outcome: "rejected",
-    reason: "invalid_device_credential",
-    clientAddress: request.ip,
-    route: request.routeOptions.url,
-  });
-  reply.header("www-authenticate", 'Bearer realm="tandem-for-actual"');
-  await reply.code(401).send({
-    error: {
-      code: "invalid_device_credential",
-      message: "Valid device credentials required",
-    },
-  });
-  return undefined;
 }

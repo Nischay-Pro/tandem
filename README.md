@@ -15,9 +15,9 @@
   </picture>
 </p>
 
-Tandem is a mobile app and a small server that connects it to your own Actual
-Budget service. Actual remains the source of truth. Tandem keeps a local copy on
-the phone and syncs saved changes with Actual when the connection returns.
+Tandem is a mobile app for your own Actual Budget server. It syncs with Actual
+directly, keeps a local copy on the phone, and sends saved changes when the
+connection returns. Actual remains the source of truth.
 
 ## A closer look
 
@@ -48,23 +48,20 @@ the phone and syncs saved changes with Actual when the connection returns.
 ## Get started
 
 1. Run an Actual Budget server.
-2. Follow the [server installation guide](docs/deploy/install.md) to set up Tandem's API gateway. Set `ACTUAL_SERVER_URL` in Tandem's `.env` to the Actual server URL reachable from the API container, then start the services with Docker Compose.
-3. [Install the Android app](docs/using/install-app.md), enter the HTTPS server address that routes `/api/v1/` to Tandem, and sign in with your Actual account.
+2. [Install the app](docs/using/install-app.md), enter your Actual server's
+   HTTPS address, and sign in with your Actual password.
 
-The setup script fetches the deployment Compose file from `main` and creates
-`.env` on the first run. Docker Compose pulls the Tandem API image using the
-tag in `.env`, which defaults to `latest-nightly`. See the
-[deployment configuration](docs/deploy/configuration.md) and
-[troubleshooting guide](docs/deploy/troubleshooting.md) for server settings and
-connection problems. The [operator guides](docs/README.md#run-tandem) also cover
-proxy setup, upgrades, backups, and restores.
+Encrypted budgets open with their budget password, as in Actual.
+
+To sync planning details such as savings goals between devices, you can also
+run the optional [extension sync service](docs/deploy/install.md).
 
 ## How it works
 
-The phone stores its budget copy locally. The Tandem API uses Actual's supported
-Node client to read and write budgets. This gives Tandem a server-side trust
-boundary; review [architecture and data privacy](docs/concepts/architecture-and-trust.md)
-before deploying it. For Actual's encrypted budgets, see the
+The app downloads each budget from Actual and keeps it on the device. Changes
+travel as Actual sync messages, so Actual, its web app and every device stay in
+step. Budget calculations run on the device. See
+[architecture and trust](docs/concepts/architecture-and-trust.md) and the
 [compatibility notes](docs/concepts/actual-compatibility.md).
 
 ## Build from source
@@ -72,8 +69,8 @@ before deploying it. For Actual's encrypted budgets, see the
 See [build instructions](docs/develop/build-from-source.md),
 [testing instructions](docs/develop/testing.md), the
 [toolchain reference](docs/develop/toolchain.md), and the
-[API reference](docs/develop/api-reference.md). The machine-readable API
-contract remains at [`docs/api/openapi-v1.json`](docs/api/openapi-v1.json).
+[extension sync API](docs/develop/api-reference.md). Its machine-readable
+contract is [`docs/api/openapi-v1.json`](docs/api/openapi-v1.json).
 
 ## Documentation
 

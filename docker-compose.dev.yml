@@ -25,20 +25,14 @@ services:
       dockerfile: services/api/Dockerfile.dev
     environment:
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
       HOST: 0.0.0.0
       PORT: 19753
-      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
-      ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
-      ACTUAL_SESSION_TOKEN: ${ACTUAL_SESSION_TOKEN:-}
-      ACTUAL_API_DATA_DIR: /data/actual-api
+      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-http://actual-compat-server:5006}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "127.0.0.1:19753:19753"
-    volumes:
-      - ./.dev-tmp/actual/api-workspace:/data/actual-api
     networks:
       - tandem-private
 
@@ -51,7 +45,6 @@ services:
     command: ["pnpm", "check:all"]
     environment:
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
     volumes:
       - ./.dev-tmp/stryker:/workspace/.dev-tmp/stryker
     depends_on:
@@ -66,6 +59,8 @@ services:
     user: "${ACTUAL_COMPAT_UID:-1000}:${ACTUAL_COMPAT_GID:-1000}"
     volumes:
       - ./.dev-tmp/actual/compat-gate-server:/data
+    ports:
+      - "127.0.0.1:${ACTUAL_COMPAT_HOST_PORT:-55006}:5006"
     healthcheck:
       test:
         [
@@ -80,33 +75,6 @@ services:
     networks:
       - tandem-private
 
-  actual-compat-tests:
-    profiles: ["actual-compat"]
-    build:
-      context: .
-      dockerfile: services/api/Dockerfile.dev
-    user: "0:0"
-    command: ["pnpm", "--filter", "@tandem-for-actual/api", "test:actual"]
-    environment:
-      HOME: /home/node
-      DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD:-development-only-password}@postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY:-5323b1ab617c73bf862318e07e388d79d4f902170d607b5be38e6a6f66e2eb3c}
-      ACTUAL_SERVER_URL: http://actual-compat-server:5006
-      ACTUAL_COMPAT_TEST_PASSWORD: compatibility-test-only-password
-      ACTUAL_API_DATA_DIR: /actual-api-data/device-one
-    volumes:
-      - actual-compat-client-data:/actual-api-data
-    depends_on:
-      actual-compat-server:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - tandem-private
-
 networks:
   tandem-private:
     internal: true
-
-volumes:
-  actual-compat-client-data:

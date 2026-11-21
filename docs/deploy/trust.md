@@ -1,19 +1,15 @@
-# Trust and security for operators
+# Trust and security
 
-Tandem's API can read budget data through Actual's supported Node client. Treat
-the API host, its PostgreSQL database, the Actual workspace volume, and backups
-as sensitive. The server stores encrypted Actual session tokens in PostgreSQL.
+Extension sync is designed so that losing its database discloses no financial
+details:
 
-- Keep PostgreSQL private and expose the API only through a trusted HTTPS reverse proxy.
-- Keep the install directory's `.env` private. It contains database credentials and the session encryption key.
-- Set `TRUST_PROXY` to the proxy address or a narrow CIDR. Keep callback query strings out of access and error logs.
-- Protect the Actual workspace volume and backup files. Backups can contain readable budget data.
-- Keep `AUTH_TOKEN_ENCRYPTION_KEY` stable and include it in protected backup storage.
+- Records arrive already sealed by the device. The service can't decrypt them.
+- Each budget's planning key is shared only in wrapped form; unwrapping it needs
+  the budget's Actual encryption key, which never leaves members' devices.
+- Every request must carry an Actual session token. The service asks your Actual
+  server which budgets that session can open, so a budget id alone grants nothing.
+- Writes must name the revision they replace, so concurrent edits surface as
+  conflicts instead of overwriting each other.
 
-Nightly API images are published as `ghcr.io/nischay-pro/tandem-api:latest-nightly`.
-The setup command defaults to this tag. To pin a particular version, set
-`TANDEM_API_TAG` in `.env` to the desired image tag.
-
-For the data flow, see [Architecture and trust](../concepts/architecture-and-trust.md).
-For user-side offline behavior and status messages, see
-[Offline sync and conflicts](../using/offline-sync-and-conflicts.md).
+The service can still see budget ids, record ids and types, sizes and timing.
+Keep it on the same host or network as Actual and behind HTTPS.

@@ -15,14 +15,12 @@ FROM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=19753 \
-    ACTUAL_API_DATA_DIR=/data/actual-api
+    PORT=19753
 
 WORKDIR /app
 COPY --from=build --chown=node:node /production/api ./
-RUN mkdir -p /data/actual-api && chown node:node /data/actual-api
 USER node
 EXPOSE 19753
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:19753/api/v1/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:19753/extension/v1/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "dist/entrypoint.js"]

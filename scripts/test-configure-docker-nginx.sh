@@ -115,7 +115,7 @@ printf 'y\n' | TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
     > "$tls_root/first-run.log"
 
 grep -Fq '# TANDEM-SETUP-MANAGED-ROUTES' "$tls_root/nginx.conf"
-grep -Fq 'location ^~ /api/v1/' "$tls_root/nginx.conf"
+grep -Fq 'location ^~ /extension/v1/' "$tls_root/nginx.conf"
 grep -Fq 'limit_req_zone $binary_remote_addr zone=tandem_setup_api:10m rate=600r/m;' "$tls_root/nginx.conf"
 grep -Fq 'TRUST_PROXY=172.30.0.10' "$tls_root/install/.env"
 grep -Fq 'tandem-edge:' "$tls_root/actual-budget/compose.override.yaml"
@@ -192,7 +192,7 @@ printf 'y\n' | TANDEM_NGINX_TEST_HOST=1 \
   PATH="$fake_bin:$PATH" \
   bash "$project_root/deploy/configure-docker-nginx.sh" "$host_root/install" \
     > "$host_root/run.log"
-grep -Fq 'location ^~ /api/v1/' "$host_root/nginx.conf"
+grep -Fq 'location ^~ /extension/v1/' "$host_root/nginx.conf"
 grep -Fq 'proxy_pass http://127.0.0.1:19753;' "$host_root/nginx.conf"
 ! grep -Fq 'resolver 127.0.0.11' "$host_root/nginx.conf"
 grep -Fq 'TRUST_PROXY=127.0.0.1/32,172.30.0.1/32' "$host_root/install/.env"
