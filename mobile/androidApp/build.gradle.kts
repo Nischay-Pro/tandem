@@ -89,6 +89,7 @@ dependencies {
   implementation(libs.coroutinesCore)
   implementation(libs.workRuntimeKtx)
   implementation(libs.activityCompose)
+  implementation(libs.windowManager)
   implementation(libs.coreSplashScreen)
   implementation(libs.biometric)
   implementation(libs.fragment)
