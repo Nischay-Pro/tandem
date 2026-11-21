@@ -12,6 +12,7 @@ adb install -r "$apk" >/dev/null
 adb shell settings put global sysui_demo_allowed 1
 demo() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
 clean_status_bar() {
+  demo exit
   demo enter
   demo clock -e hhmm 0941
   demo battery -e level 100 -e plugged false
@@ -29,6 +30,7 @@ for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-
   sleep 5
   for mode in light dark; do
     if [ "$mode" = dark ]; then adb shell cmd uimode night yes >/dev/null; else adb shell cmd uimode night no >/dev/null; fi
+    clean_status_bar
     for spec in "budget:" "activity:Corner Market" "accounts:Everyday checking" "reports:" "category:Phone"; do
       screen="${spec%%:*}"
       select="${spec#*:}"
@@ -41,8 +43,6 @@ for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-
         --es TANDEM_SCREENSHOT_SELECT "'$select'" >/dev/null
       sleep "$wait"
       wait=25
-      clean_status_bar
-      sleep 2
       adb exec-out screencap -p > "$out/$name-$mode-$screen.png"
       echo "captured $name-$mode-$screen"
     done

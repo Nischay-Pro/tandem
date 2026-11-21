@@ -17,7 +17,7 @@ permissions:
 jobs:
   ios:
     name: iPhone and iPad screenshots
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platforms != 'android' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms != 'android' }}
     runs-on: macos-26
     timeout-minutes: 90
     env:
