@@ -56,12 +56,15 @@ import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
+import app.tandemforactual.ui.model.LiveCategorySummary
 import app.tandemforactual.ui.model.booleanValue
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.reports.ReportWindow
 import app.tandemforactual.ui.reports.reportMonthLabel
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CircleDot
+import com.composables.icons.lucide.Gauge
+import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Minus
 import com.composables.icons.lucide.Pencil
@@ -70,6 +73,7 @@ import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.launch
@@ -205,6 +209,7 @@ internal fun CategoryDetailScreen(
                 state.formatCurrency(if (isTrackingBudget) category.activityMinor else category.balanceMinor),
                 if (isTrackingBudget) "For the selected month" else "${state.formatCurrency(category.assignedMinor)} assigned",
             )
+            CategoryInsightsSection(state, mobileSession, category, isTrackingBudget)
             SectionCard("This month") {
                 if (!isTrackingBudget) {
                     Row(
@@ -946,4 +951,53 @@ internal fun openReportCategoryActivity(
             dateFilter,
         )
     navigation.open(AppRoute.ACTIVITY_SEARCH)
+}
+
+@Composable
+private fun CategoryInsightsSection(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    category: LiveCategorySummary,
+    isTrackingBudget: Boolean,
+) {
+    val today = remember { platformTodayIsoDate() }
+    val monthId = state.selectedMonthId
+    val isCurrentMonth = monthId == today.take(7)
+    val pace =
+        if (isTrackingBudget || !isCurrentMonth) {
+            null
+        } else {
+            categoryPace(
+                category.assignedMinor,
+                category.activityMinor,
+                today.drop(8).take(2).toIntOrNull() ?: 0,
+                daysInMonth(monthId) ?: 0,
+            )
+        }
+    var lastMonthSpent by remember(state.selectedBudgetId, monthId, category.id) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(state.selectedBudgetId, monthId, category.id) {
+        lastMonthSpent =
+            previousMonthId(monthId)?.let { previous ->
+                categorySpendingInMonth(mobileSession.budgetMonthBody(state.selectedBudgetId, previous), category.id)
+            }
+    }
+    val lastMonth = lastMonthSpent
+    if (pace == null && lastMonth == null) return
+    SectionCard("Insights") {
+        pace?.let {
+            ListRow(
+                it.status.title,
+                categoryPaceDetail(it, state::formatCurrency),
+                leading = RowLeading.Icon(if (it.status == CategoryPaceStatus.ON_TRACK) Lucide.Gauge else Lucide.TriangleAlert),
+            )
+        }
+        if (pace != null && lastMonth != null) DividerLine()
+        lastMonth?.let {
+            ListRow(
+                "Last month",
+                lastMonthSpendingDetail(it, (-category.activityMinor).coerceAtLeast(0), monthId < today.take(7), state::formatCurrency),
+                leading = RowLeading.Icon(Lucide.History),
+            )
+        }
+    }
 }
