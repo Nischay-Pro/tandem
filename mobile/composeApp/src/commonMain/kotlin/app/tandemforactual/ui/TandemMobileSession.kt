@@ -77,12 +77,18 @@ import kotlin.uuid.Uuid
 internal data class SyncPresentationState(
     val isSyncing: Boolean = false,
     val error: String? = null,
+    val errorCode: String? = null,
+    val errorStatus: Int? = null,
 ) {
     fun begin(): SyncPresentationState = copy(isSyncing = true)
 
     fun succeeded(): SyncPresentationState = SyncPresentationState()
 
-    fun failed(message: String): SyncPresentationState = SyncPresentationState(error = message)
+    fun failed(
+        message: String,
+        code: String? = null,
+        status: Int? = null,
+    ): SyncPresentationState = SyncPresentationState(error = message, errorCode = code, errorStatus = status)
 
     fun stopped(): SyncPresentationState = copy(isSyncing = false)
 }
@@ -464,6 +470,7 @@ internal class TandemMobileSession(
         private set
 
     val syncError: String? get() = syncPresentation.error
+    val syncRecovery: SyncRecovery get() = syncRecovery(syncPresentation.errorCode, syncPresentation.errorStatus)
 
     suspend fun budgetMonthBody(
         budgetId: String,
@@ -3019,7 +3026,7 @@ internal class TandemMobileSession(
         serverUrl: String,
         password: String,
         deviceName: String,
-    ) {
+    ): Boolean {
         signInError = null
         signOutNotice = null
         deviceRevocationError = null
@@ -3027,13 +3034,14 @@ internal class TandemMobileSession(
         cachedBudgets = emptyList()
         openIdLoginProofState.clear()
         val previousSession = apiClient.exportStoredSession()
-        try {
+        return try {
             val signedInDevice = apiClient.signInWithPassword(serverUrl, password, deviceName)
-            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return
+            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return false
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
             retryQueuedBudgetReorders()
+            true
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
@@ -3044,6 +3052,7 @@ internal class TandemMobileSession(
                     ApiFailureContext.SIGN_IN,
                 )
             restorePreviousSessionAfterSignIn(previousSession)
+            false
         } catch (_: Exception) {
             isServerReachable = false
             signInError =
@@ -3054,6 +3063,7 @@ internal class TandemMobileSession(
                     "Couldn’t sign in. Check the address and try again.",
                 )
             restorePreviousSessionAfterSignIn(previousSession)
+            false
         } finally {
             isSigningIn = false
             if (apiClient.isAuthenticated) loadCachedBudgets()
@@ -3124,7 +3134,7 @@ internal class TandemMobileSession(
         serverUrl: String,
         code: String,
         callbackState: String,
-    ) {
+    ): Boolean {
         signInError = null
         deviceRevocationError = null
         isSigningIn = true
@@ -3133,17 +3143,18 @@ internal class TandemMobileSession(
         if (codeVerifier == null) {
             signInError = "This sign-in is no longer active. Start sign-in again."
             isSigningIn = false
-            return
+            return false
         }
         cachedBudgets = emptyList()
-        try {
+        return try {
             val signedInDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code, codeVerifier)
             openIdLoginProofState.clear()
-            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return
+            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return false
             isServerReachable = true
             persistCurrentSession()
             loadBudgets()
             retryQueuedBudgetReorders()
+            true
         } catch (error: CancellationException) {
             openIdLoginProofState.clear()
             throw error
@@ -3155,6 +3166,7 @@ internal class TandemMobileSession(
                     ApiFailureContext.SIGN_IN,
                 )
             restorePreviousSessionAfterSignIn(previousSession)
+            false
         } catch (_: Exception) {
             isServerReachable = false
             signInError =
@@ -3165,6 +3177,7 @@ internal class TandemMobileSession(
                     "Tandem couldn’t finish sign-in. Check the server address.",
                 )
             restorePreviousSessionAfterSignIn(previousSession)
+            false
         } finally {
             isSigningIn = false
             openIdLoginProofState.clear()
@@ -3248,6 +3261,7 @@ internal class TandemMobileSession(
             present(
                 syncPresentation.failed(
                     "These changes belong to another server or account. Sign in there before syncing them.",
+                    IDENTITY_MISMATCH_ERROR_CODE,
                 ),
             )
             return null
@@ -3306,6 +3320,8 @@ internal class TandemMobileSession(
                         context = ApiFailureContext.SYNC,
                         fallback = "Tandem couldn’t sync this budget. Try again shortly.",
                     ),
+                    error.errorCode,
+                    error.httpStatus,
                 ),
             )
             return null

@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -550,6 +551,7 @@ internal fun SignInScreen(
             mobileSession.loadActualLoginMethods(state.serverUrl)
         }
     }
+    val keyboard = LocalSoftwareKeyboardController.current
     val loginMethods = mobileSession.actualLoginMethods
     val passwordActive =
         loginMethods?.availableLoginMethods?.any { it.method == "password" && it.active } ?: (loginMethods?.loginMethod == "password")
@@ -669,7 +671,10 @@ internal fun SignInScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
                     loading = mobileSession.isSigningIn,
-                    onClick = onSignIn,
+                    onClick = {
+                        keyboard?.hide()
+                        onSignIn()
+                    },
                 )
             }
             if (serverAddressIsValid(state.serverUrl) && openIdActive) {
@@ -1207,8 +1212,13 @@ internal fun SwitchBudgetScreen(
             InlineMessage(
                 it,
                 InlineMessageKind.ERROR,
-                actionLabel = "Try again".takeIf { mobileSession.isAuthenticated && !mobileSession.isLoadingBudgets },
-                onAction = onRefreshBudgets,
+                actionLabel =
+                    when {
+                        !mobileSession.isAuthenticated -> "Sign in"
+                        mobileSession.isLoadingBudgets -> null
+                        else -> "Try again"
+                    },
+                onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
             )
         }
     }
