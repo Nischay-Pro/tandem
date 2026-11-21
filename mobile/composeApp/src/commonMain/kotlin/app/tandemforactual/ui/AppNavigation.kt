@@ -3,7 +3,6 @@
 package app.tandemforactual.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -11,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.TandemBackButton
 import app.tandemforactual.ui.components.TandemIconButton
@@ -122,7 +123,13 @@ internal fun FloatingAction(
 ) {
     val palette = tandemPalette
     val isCompact = compact || LocalDensity.current.fontScale >= 1.5f
-    val shape = if (isCompact) CircleShape else RoundedCornerShape(TandemShapes.large)
+    val shape = RoundedCornerShape(TandemShapes.capsule)
+    val morph = spring<Dp>(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
+    val horizontalPadding by animateDpAsState(
+        if (isCompact) TandemSpacing.large else TandemSpacing.extraLarge,
+        if (tandemReduceMotion) snap() else morph,
+        label = "floating-action-padding",
+    )
     val actionColor =
         when {
             !enabled -> palette.muted
@@ -138,7 +145,6 @@ internal fun FloatingAction(
     Row(
         modifier =
             modifier
-                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
                 .height(56.dp)
                 .defaultMinSize(minWidth = 56.dp)
                 .clip(shape)
@@ -146,18 +152,22 @@ internal fun FloatingAction(
                 .then(if (outlined) Modifier.border(1.dp, palette.border, shape) else Modifier)
                 .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = if (isCompact) TandemSpacing.large else TandemSpacing.extraLarge),
+                .padding(horizontal = horizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (isCompact) 0.dp else TandemSpacing.small),
     ) {
         if (loading) {
             CircularProgressIndicator(Modifier.size(22.dp), color = actionColor, strokeWidth = 2.dp)
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = actionColor)
         }
-        AnimatedVisibility(visible = !isCompact, enter = tandemFadeEnter(tandemReduceMotion), exit = tandemFadeExit(tandemReduceMotion)) {
+        AnimatedVisibility(
+            visible = !isCompact,
+            enter = tandemLabelEnter(tandemReduceMotion),
+            exit = tandemLabelExit(tandemReduceMotion),
+        ) {
             Text(
                 label,
+                modifier = Modifier.padding(start = TandemSpacing.small),
                 color = actionColor,
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.SemiBold,
