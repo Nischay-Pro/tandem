@@ -40,6 +40,10 @@ internal fun apiFailureMessage(
         "operation_uncertain" -> "Tandem can’t confirm whether Actual saved this change. Check Actual before changing it again."
         "operation_in_progress" -> "Tandem is still processing this change. Wait for it to finish."
         "operation_not_found" -> "Tandem can’t find this edit’s status. Check Actual before removing the edit."
+        "file_has_reset", "out_of_sync" ->
+            "This budget’s sync history was reset in Actual. Download it again. Tandem keeps a backup of this device’s copy."
+        "file_has_new_key" -> "This budget’s encryption password changed in Actual. Download it again and unlock it with the new password."
+        "budget_unavailable" -> "This budget is no longer in Actual. Choose another budget."
         "schedule_changed" -> "This scheduled transaction changed in Actual. Refresh the schedule before trying again."
         "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget before trying again."
         "idempotency_key_reused" -> "This change is linked to a different request. Refresh the budget before trying again."
@@ -93,6 +97,7 @@ internal enum class SyncRecovery(
     SIGN_IN("Sign in again"),
     CHECK_SERVER("Check server address"),
     CHOOSE_BUDGET("Choose another budget"),
+    DOWNLOAD_AGAIN("Download again"),
 }
 
 /** The step that fixes a failed sync; anything not listed is worth simply retrying. */
@@ -104,7 +109,8 @@ internal fun syncRecovery(
         null -> SyncRecovery.RETRY
         "invalid_device_credential", "sign_in_expired", "sign_in_required", IDENTITY_MISMATCH_ERROR_CODE -> SyncRecovery.SIGN_IN
         "actual_only", "tandem_route_unavailable" -> SyncRecovery.CHECK_SERVER
-        "not_found" -> SyncRecovery.CHOOSE_BUDGET
+        "not_found", "budget_unavailable" -> SyncRecovery.CHOOSE_BUDGET
+        "file_has_reset", "file_has_new_key", "out_of_sync" -> SyncRecovery.DOWNLOAD_AGAIN
         else ->
             when (apiFailureHttpStatus(errorCode, httpStatus)) {
                 401 -> SyncRecovery.SIGN_IN

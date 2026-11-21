@@ -413,6 +413,11 @@ class TandemMobileSessionTest {
                     ) = error("offline")
 
                     override fun remove(budgetId: String) = Unit
+
+                    override fun retire(
+                        budgetId: String,
+                        label: String,
+                    ) = Unit
                 }
             try {
                 val preferences = AppPreferencesStore(database)

@@ -12,6 +12,12 @@ interface ActualBudgetFiles {
     ): ActualDatabase
 
     fun remove(budgetId: String)
+
+    /** Moves a closed budget aside as a backup instead of deleting it, so a sync reset never discards local changes. */
+    fun retire(
+        budgetId: String,
+        label: String,
+    )
 }
 
 /** Budget ids become file names, so only Actual's id characters are accepted. */

@@ -139,6 +139,13 @@ internal class TempBudgetFiles : ActualBudgetFiles {
 
     private fun file(budgetId: String) = directory.resolve("$budgetId.sqlite")
 
+    override fun retire(
+        budgetId: String,
+        label: String,
+    ) {
+        file(budgetId).renameTo(directory.resolve("$budgetId-$label.sqlite"))
+    }
+
     override fun open(budgetId: String): ActualDatabase? =
         file(budgetId)
             .takeIf {

@@ -314,6 +314,15 @@ class TandemApiClient(
         }
     }
 
+    /** Sets the device's copy aside as a dated backup, for when Actual reset the budget's sync history. */
+    suspend fun retireBudget(budgetId: String) {
+        budgetMutex.withLock {
+            openBudgets.remove(budgetId)?.close()
+            budgetPasswords.remove(budgetId)
+            budgetFiles?.retire(budgetId, "reset-${now()}")
+        }
+    }
+
     internal suspend fun <T> edit(
         budgetId: String,
         password: String? = null,

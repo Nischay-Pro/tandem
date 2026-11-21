@@ -76,6 +76,27 @@ class IosActualBudgetFiles(
         }
     }
 
+    override fun retire(
+        budgetId: String,
+        label: String,
+    ) {
+        lock.lock()
+        try {
+            val backups = "$root/backups"
+            NSFileManager.defaultManager.createDirectoryAtPath(backups, true, null, null)
+            listOf("", "-wal", "-shm", "-journal").forEach { suffix ->
+                val source = path(budgetId) + suffix
+                if (NSFileManager.defaultManager.fileExistsAtPath(source)) {
+                    check(
+                        rename(source, "$backups/$budgetId-${budgetFileName(label)}$suffix") == 0,
+                    ) { "Could not keep a backup of this budget." }
+                }
+            }
+        } finally {
+            lock.unlock()
+        }
+    }
+
     override fun remove(budgetId: String) {
         listOf("", "-wal", "-shm", "-journal").forEach {
             val file = path(budgetId) + it

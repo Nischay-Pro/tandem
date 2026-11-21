@@ -9,6 +9,7 @@ import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -48,6 +49,11 @@ class AndroidActualBudgetFilesTest {
             }
         }
         assertNull(files.open("budget-2"))
+        files.install("budget-3", byteArrayOf()).close()
+        files.retire("budget-3", "reset-1")
+        assertNull(files.open("budget-3"))
+        assertTrue(java.io.File(context.noBackupFilesDir, "actual/backups/budget-3-reset-1.sqlite").isFile)
+        files.retire("missing", "reset-2")
         assertFailsWith<IllegalArgumentException> { files.open("../other") }
     }
 }

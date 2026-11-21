@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
@@ -78,6 +80,7 @@ import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.WalletCards
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -156,6 +159,8 @@ internal fun SyncCenterScreen(
     val attentionCount = transactionsNeedingReview.size + budgetMutationReviews.size + schedulesNeedingReview.size
     val waitingCount = transactionsWaiting.size + budgetMutations.size + schedulesWaiting.size
 
+    val scope = rememberCoroutineScope()
+    val vault = LocalEncryptedBudgetVault.current
     PageLazyColumn {
         val capabilities = mobileSession.serverCapabilities
         if (capabilities?.clientUpdateRequired == true) {
@@ -194,6 +199,11 @@ internal fun SyncCenterScreen(
                         SyncRecovery.CHECK_SERVER -> navigation.open(AppRoute.SERVER_ADDRESS)
                         SyncRecovery.CHOOSE_BUDGET -> navigation.open(AppRoute.SWITCH_BUDGET)
                         SyncRecovery.RETRY -> onSyncNow()
+                        SyncRecovery.DOWNLOAD_AGAIN ->
+                            scope.launch {
+                                mobileSession.downloadBudgetAgain(state.selectedBudgetId, vault)
+                                navigation.reset(AppRoute.SWITCH_BUDGET)
+                            }
                     }
                 },
                 lastSyncedAtEpochMs = mobileSession.localSyncState?.lastSyncedAtEpochMs,

@@ -50,4 +50,16 @@ class AndroidActualBudgetFiles(
     override fun remove(budgetId: String) {
         listOf("", "-wal", "-shm", "-journal").forEach { File(file(budgetId).path + it).delete() }
     }
+
+    @Synchronized
+    override fun retire(
+        budgetId: String,
+        label: String,
+    ) {
+        val backup = root.resolve("backups").apply { mkdirs() }.resolve("$budgetId-${budgetFileName(label)}")
+        listOf("", "-wal", "-shm", "-journal").forEach { suffix ->
+            val source = File(file(budgetId).path + suffix)
+            if (source.exists()) check(source.renameTo(File(backup.path + suffix))) { "Could not keep a backup of this budget." }
+        }
+    }
 }

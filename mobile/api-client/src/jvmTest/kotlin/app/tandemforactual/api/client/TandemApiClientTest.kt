@@ -271,6 +271,10 @@ class TandemApiClientTest {
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(server.messages.size > 300)
 
+            client.retireBudget("group")
+            assertNull(files.open("group"))
+            assertTrue(files.directory.listFiles()!!.any { it.name.startsWith("group-reset-") })
+            client.budget("group")
             client.removeBudget("group")
             assertNull(files.open("group"))
             val redownloaded = client.budget("group")
