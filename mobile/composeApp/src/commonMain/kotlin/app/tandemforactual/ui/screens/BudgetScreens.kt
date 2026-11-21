@@ -87,6 +87,8 @@ import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 internal fun LazyListScope.budgetPendingChangeBannerItems(
@@ -317,6 +319,15 @@ internal fun BudgetScreen(
         )
     val showTransactionAction = showCreateActions && !isLandscape
     val actionDockVisible = showCreateActions
+    LaunchedEffect(state.budgetScrollToSummaryRequested, routeListState) {
+        val listState = routeListState ?: return@LaunchedEffect
+        if (state.budgetScrollToSummaryRequested) {
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 3 }
+            delay(1_000)
+            listState.animateScrollToItem(2)
+            state.budgetScrollToSummaryRequested = false
+        }
+    }
     var actionDockScrolledAway by remember { mutableStateOf(false) }
     LaunchedEffect(routeListState) {
         val listState = routeListState ?: return@LaunchedEffect

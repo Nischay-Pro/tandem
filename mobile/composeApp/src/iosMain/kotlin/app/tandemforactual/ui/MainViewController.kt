@@ -7,8 +7,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
+import platform.Foundation.NSProcessInfo
 import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
+import kotlin.native.Platform
 import kotlin.time.Clock
 
 @Suppress("ktlint:standard:function-naming")
@@ -60,6 +62,16 @@ private fun createTandemViewController(
             onOpenNotificationSettings = onOpenNotificationSettings,
             appResumeEvents = syncEvents.appResumeEvents,
             networkRestoredEvents = syncEvents.networkRestoredEvents,
+            screenshotScript = remember { iosScreenshotScript() },
         )
     }
+}
+
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+private fun iosScreenshotScript(): ScreenshotScript? {
+    if (!Platform.isDebugBinary) return null
+    val environment =
+        NSProcessInfo.processInfo.environment.entries
+            .associate { (key, value) -> key.toString() to value?.toString() }
+    return ScreenshotScript.from(environment)
 }

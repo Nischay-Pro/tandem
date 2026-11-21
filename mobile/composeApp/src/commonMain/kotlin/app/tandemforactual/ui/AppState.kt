@@ -151,6 +151,7 @@ internal class AppState {
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
     var syncOnOpen by mutableStateOf(true)
     var appLanguage by mutableStateOf("")
+    var budgetScrollToSummaryRequested by mutableStateOf(false)
     var backgroundSyncEnabled by mutableStateOf(false)
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
