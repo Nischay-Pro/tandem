@@ -1,5 +1,7 @@
 // Creates the "Demo household" budget used for app screenshots on a fresh Actual server.
+import console from "node:console";
 import fs from "node:fs";
+import process from "node:process";
 import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 
 const url = process.env.ACTUAL_URL ?? "http://localhost:5006";
@@ -7,9 +9,11 @@ const password = process.env.ACTUAL_PASSWORD ?? "demo-password";
 const dataDir = process.env.SEED_DATA_DIR ?? "/tmp/tandem-seed";
 fs.mkdirSync(dataDir, { recursive: true });
 
-const status = await (await fetch(`${url}/account/needs-bootstrap`)).json();
+const status = await (
+  await globalThis.fetch(`${url}/account/needs-bootstrap`)
+).json();
 if (!status.data?.bootstrapped) {
-  await fetch(`${url}/account/bootstrap`, {
+  await globalThis.fetch(`${url}/account/bootstrap`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ password }),
