@@ -169,15 +169,27 @@ internal fun ScreenContent(
             AccountDetailScreen(state, navigation, liveAccounts, mobileSession, merchantIconMatcher, isForegroundRoute)
         AppRoute.ACCOUNT_OPTIONS -> AccountOptionsScreen(state, liveAccounts, mobileSession, navigation)
         AppRoute.ACTIVITY ->
-            ActivityScreen(
-                state,
-                mobileSession,
-                navigation,
-                liveActivityTransactions,
-                activitySortCache,
-                onActivitySelectionTotalChanged,
-                mobileSession.isSyncing,
-                onSyncNow,
+            ListDetailPanes(
+                detailKey =
+                    state.selectedTransactionRecordId.takeIf { selected ->
+                        selected.isNotBlank() && liveActivityTransactions.any { it.recordId == selected }
+                    },
+                emptyTitle = "Choose a transaction",
+                emptyMessage = "Its details appear here.",
+                list = { detailInPane ->
+                    ActivityScreen(
+                        state,
+                        mobileSession,
+                        navigation,
+                        liveActivityTransactions,
+                        activitySortCache,
+                        onActivitySelectionTotalChanged,
+                        mobileSession.isSyncing,
+                        onSyncNow,
+                        detailInPane,
+                    )
+                },
+                detail = { TransactionDetailScreen(state, mobileSession, navigation, merchantIconMatcher, showPayee = true) },
             )
         AppRoute.REPORTS ->
             ReportsScreen(

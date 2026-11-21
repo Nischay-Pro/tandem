@@ -48,6 +48,7 @@ internal fun TransactionDetailScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     merchantIconMatcher: MerchantIconMatcherPack?,
+    showPayee: Boolean = false,
 ) {
     val isLive = state.selectedTransactionIsLive
     val amount = state.selectedTransactionAmountMinor
@@ -101,6 +102,18 @@ internal fun TransactionDetailScreen(
                         )
                     }
                 }
+            }
+            if (showPayee) {
+                Text(
+                    state.selectedTransactionPayeeName.ifBlank { state.transactionPayee },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.sectionTitle,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),

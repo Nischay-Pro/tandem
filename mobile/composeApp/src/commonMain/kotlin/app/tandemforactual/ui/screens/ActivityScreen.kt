@@ -65,6 +65,7 @@ internal fun ActivityScreen(
     onActivitySelectionTotalChanged: (Long?) -> Unit,
     isRefreshing: Boolean,
     onSyncNow: () -> Unit,
+    detailInPane: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -243,6 +244,7 @@ internal fun ActivityScreen(
                             } else {
                                 null
                             },
+                        highlighted = detailInPane && transactionId != null && transactionId == state.selectedTransactionRecordId,
                         onSwipeDelete =
                             if (isLiveBudget && !state.readOnlyMode && !selectionMode && transactionId != null) {
                                 { scope.launch { mobileSession.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)) } }
@@ -259,7 +261,7 @@ internal fun ActivityScreen(
                                 }
                             if (selectedTransactionIds.isEmpty()) selectionMode = false
                         } else {
-                            openTransaction(state, navigation, transaction, isLive = isLiveBudget)
+                            openTransaction(state, navigation, transaction, isLive = isLiveBudget, navigate = !detailInPane)
                         }
                     }
                 }

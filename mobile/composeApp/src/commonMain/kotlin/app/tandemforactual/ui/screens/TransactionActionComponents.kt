@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -54,6 +55,7 @@ internal fun TransactionRow(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onSwipeDelete: (() -> Unit)? = null,
+    highlighted: Boolean = false,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -69,45 +71,52 @@ internal fun TransactionRow(
         }
         val row: @Composable () -> Unit = {
             val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
-            ListRow(
-                transaction.payee,
-                secondaryLabel,
-                amountText.takeUnless { activityStyle || syncStatus != null },
-                leading =
-                    when {
-                        selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
-                        activityStyle -> activityTransactionLeading(transaction)
-                        else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
-                    },
-                options =
-                    ListRowOptions(
-                        trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
-                        subtitleMaxLines = 1,
-                    ),
-                onClick = onClick,
-                onLongClick = onLongClick,
-                trailingContent =
-                    if (activityStyle || syncStatus != null) {
-                        {
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                            ) {
-                                ActivityTransactionAmount(
-                                    amountText,
-                                    amountMinorUnits = transaction.amountMinorUnits,
-                                    fractionDigits =
-                                        transaction.displaySettings
-                                            ?.takeUnless { it.hideFraction }
-                                            ?.currencyFractionDigits ?: 0,
-                                )
-                                syncStatus?.let { TransactionSyncChip(it) }
+            Box(
+                Modifier
+                    .padding(horizontal = if (highlighted) TandemSpacing.extraSmall else 0.dp)
+                    .clip(RoundedCornerShape(TandemShapes.control))
+                    .background(if (highlighted) palette.accentSurface else Color.Transparent),
+            ) {
+                ListRow(
+                    transaction.payee,
+                    secondaryLabel,
+                    amountText.takeUnless { activityStyle || syncStatus != null },
+                    leading =
+                        when {
+                            selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
+                            activityStyle -> activityTransactionLeading(transaction)
+                            else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                        },
+                    options =
+                        ListRowOptions(
+                            trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
+                            subtitleMaxLines = 1,
+                        ),
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    trailingContent =
+                        if (activityStyle || syncStatus != null) {
+                            {
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                                ) {
+                                    ActivityTransactionAmount(
+                                        amountText,
+                                        amountMinorUnits = transaction.amountMinorUnits,
+                                        fractionDigits =
+                                            transaction.displaySettings
+                                                ?.takeUnless { it.hideFraction }
+                                                ?.currencyFractionDigits ?: 0,
+                                    )
+                                    syncStatus?.let { TransactionSyncChip(it) }
+                                }
                             }
-                        }
-                    } else {
-                        null
-                    },
-            )
+                        } else {
+                            null
+                        },
+                )
+            }
         }
         if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
         if (showDivider) {
@@ -249,6 +258,7 @@ internal fun openTransaction(
     navigation: AppNavigation,
     transaction: TransactionItem,
     isLive: Boolean,
+    navigate: Boolean = true,
 ) {
     state.transactionPayee = transaction.payee
     state.transactionCategory = transaction.category
@@ -277,7 +287,7 @@ internal fun openTransaction(
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
     state.selectedTransactionIsTransfer = transaction.isTransfer
-    navigation.open(AppRoute.TRANSACTION_DETAIL)
+    if (navigate) navigation.open(AppRoute.TRANSACTION_DETAIL)
 }
 
 internal suspend fun deleteTransactionSelection(
