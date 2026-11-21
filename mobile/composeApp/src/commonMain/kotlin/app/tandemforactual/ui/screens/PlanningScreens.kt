@@ -50,6 +50,15 @@ import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+private fun BudgetDisplaySettings?.amountOptions() =
+    TextFieldOptions(
+        placeholder = "0",
+        currencySymbol = this?.currencySymbol ?: "$",
+        currencySymbolAfter = this?.currencySymbolPosition == "after",
+        currencySymbolSpace = this?.currencySpaceBetweenAmountAndSymbol == true,
+        amountFractionDigits = this?.currencyFractionDigits ?: 2,
+    )
+
 /** Parses a percentage such as "19.99" into basis points exactly, without floating point. */
 internal fun parseRateBasisPoints(value: String): Int? {
     val text = value.trim().removeSuffix("%").trim()
@@ -114,7 +123,7 @@ internal fun SavingsGoalsCard(
                     else -> "${formatCurrency(saved, settings)} of ${formatCurrency(goal.targetMinor, settings)}"
                 }
             Column(
-                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+                Modifier.fillMaxWidth().padding(bottom = TandemSpacing.medium),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 ListRow(
@@ -124,20 +133,24 @@ internal fun SavingsGoalsCard(
                     onClick = { onEdit(goal) },
                     options = ListRowOptions(dense = true),
                 )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(CircleShape)
-                        .background(palette.raised),
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(progress)
-                            .clip(CircleShape)
-                            .background(palette.accent),
-                    )
+                if (saved != null) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.medium)) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(CircleShape)
+                                .background(palette.raised),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(progress)
+                                    .clip(CircleShape)
+                                    .background(palette.accent),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -199,7 +212,7 @@ internal fun SavingsGoalSheet(
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader(if (goal == null) "New savings goal" else "Savings goal", onClose = onDismiss)
                 TextFieldCard("Name", name, { name = it.take(60) }, TextFieldOptions(placeholder = "Emergency fund"))
-                MoneyAmountInput("Target", target, "0.00", { target = it }, fractionDigits = settings?.currencyFractionDigits ?: 2)
+                TextFieldCard("Target", target, { target = it }, settings.amountOptions())
                 TextFieldCard("Target date (optional)", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2027-06-01"))
                 ListRow(
                     "Track with category",
@@ -278,14 +291,7 @@ internal fun DebtTermsSheet(
                     fontSize = TandemTypography.compactBody,
                 )
                 TextFieldCard("APR (%)", apr, { apr = it.take(6) }, TextFieldOptions(placeholder = "19.99"))
-                MoneyAmountInput(
-                    "Minimum payment",
-                    minimum,
-                    "0.00",
-                    { minimum = it },
-                    fractionDigits =
-                        settings?.currencyFractionDigits ?: 2,
-                )
+                TextFieldCard("Minimum payment", minimum, { minimum = it }, settings.amountOptions())
                 TextFieldCard(
                     "Due day of the month",
                     dueDay,
