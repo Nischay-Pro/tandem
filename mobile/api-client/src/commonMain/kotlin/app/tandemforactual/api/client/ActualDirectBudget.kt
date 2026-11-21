@@ -4,9 +4,14 @@ import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
 import app.tandemforactual.data.actual.ActualSyncEngine
+import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ZipArchive
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.RemoteOperationResult
+import app.tandemforactual.data.store.RemoteOperationStatus
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
@@ -46,12 +51,20 @@ class ActualDirectBudget private constructor(
     private val operations = ActualTransactionOperations(ActualWriter(store, clock, now, newId))
 
 
-    suspend fun sync() =
+    suspend fun sync() = mutex.withLock { synchronize() }
+
+    private suspend fun synchronize(): ActualSyncResult {
+        val lastSyncedTimestamp = db.first("SELECT timestamp FROM tandem_direct_sync WHERE id = 1")?.get("timestamp") as String?
+        return syncEngine.fullSync(clock, lastSyncedTimestamp).also {
+            db.execute("UPDATE tandem_direct_sync SET timestamp = ? WHERE id = 1", it.lastSyncedTimestamp)
+        }
+    }
+
+    /** Builds the mobile cache projection at the same checkpoint as the completed CRDT sync. */
+    suspend fun refreshProjection(today: String) =
         mutex.withLock {
-            val lastSyncedTimestamp = db.first("SELECT timestamp FROM tandem_direct_sync WHERE id = 1")?.get("timestamp") as String?
-            syncEngine.fullSync(clock, lastSyncedTimestamp).also {
-                db.execute("UPDATE tandem_direct_sync SET timestamp = ? WHERE id = 1", it.lastSyncedTimestamp)
-            }
+            val sync = synchronize()
+            BudgetSyncJson.projectDirectSnapshot(reader.read(today), groupId, sync.lastSyncedTimestamp)
         }
 
     suspend fun snapshot(today: String) = mutex.withLock { reader.read(today) }
@@ -72,6 +85,40 @@ class ActualDirectBudget private constructor(
         patch: JsonObject,
         baseSnapshot: JsonObject?,
     ) = mutex.withLock { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
+
+    /**
+     * Applies a transaction assigned to this budget's direct outbox. The caller must establish ownership of the
+     * outbox before switching from the gateway.
+     */
+    suspend fun submit(operation: OutboxOperationEntity): RemoteOperationResult {
+        if (operation.budgetId != groupId || operation.recordType != "transaction") {
+            throw BudgetSyncProtocolException("The operation does not belong to this direct transaction outbox")
+        }
+        val action =
+            when (operation.action) {
+                "CREATE" -> "create"
+                "UPDATE" -> "update"
+                "DELETE" -> "delete"
+                else -> throw BudgetSyncProtocolException("This action is unavailable in the direct transaction outbox")
+            }
+        val result =
+            submit(
+                operation.operationId,
+                operation.recordId,
+                action,
+                BudgetSyncJson.parseJsonObject(operation.patchJson),
+                operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
+            )
+        return RemoteOperationResult(
+            result.operationId,
+            groupId,
+            result.transactionId,
+            RemoteOperationStatus.valueOf(result.status.name),
+            result.errorCode,
+            result.conflictType,
+            result.conflictingFields,
+        )
+    }
 
     suspend fun close() = mutex.withLock { db.close() }
 

@@ -3,6 +3,8 @@ package app.tandemforactual.api.client
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.OperationStatus
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.RemoteOperationStatus
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
 import kotlinx.coroutines.runBlocking
@@ -102,10 +104,8 @@ class ActualServerRoundTripTest {
                 OperationStatus.COMMITTED,
                 initial.submit(UUID.randomUUID().toString(), shop, "update", buildJsonObject { put("amount", -4321); put("cleared", true) }, base(shop)).status,
             )
-            assertEquals(
-                OperationStatus.COMMITTED,
-                initial.submit(UUID.randomUUID().toString(), transfer, "update", buildJsonObject { put("amount", -7000) }, base(transfer)).status,
-            )
+            val transferUpdate = outboxUpdate(initial.groupId, transfer, base(transfer))
+            assertEquals(RemoteOperationStatus.COMMITTED, initial.submit(transferUpdate).status)
             assertEquals(OperationStatus.COMMITTED, initial.submit(UUID.randomUUID().toString(), toDelete, "delete", JsonObject(emptyMap()), base(toDelete)).status)
             val stale = base(shop)
             initial.submit(UUID.randomUUID().toString(), shop, "update", buildJsonObject { put("notes", "first") }, stale)
@@ -126,7 +126,9 @@ class ActualServerRoundTripTest {
             val retried = reopened.submit(conflictId, shop, "update", buildJsonObject { put("notes", "retried") }, reopened.transaction(shop))
             assertEquals(OperationStatus.CONFLICT, retried.status)
             assertEquals(listOf("notes"), retried.conflictingFields)
-            reopened.sync()
+            val projection = reopened.refreshProjection(java.time.LocalDate.now().toString())
+            assertEquals(reopened.groupId, projection.budgetId)
+            assertEquals(-7000L, projection.records.single { it.recordType == "transaction" && it.recordId == transfer }.amountMinor)
         } finally {
             reopened.close()
         }
@@ -138,6 +140,39 @@ class ActualServerRoundTripTest {
         } finally {
             fresh.close()
         }
+    }
+
+    private fun outboxUpdate(
+        budgetId: String,
+        transactionId: String,
+        base: JsonObject,
+    ): OutboxOperationEntity {
+        val operationId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        return OutboxOperationEntity(
+            operationId = operationId,
+            idempotencyKey = operationId,
+            budgetId = budgetId,
+            recordType = "transaction",
+            recordId = transactionId,
+            action = "UPDATE",
+            baseRevision = null,
+            baseSnapshotJson = base.toString(),
+            patchJson = """{"amount":-7000}""",
+            optimisticJson = null,
+            optimisticRecordDate = null,
+            optimisticAccountId = null,
+            optimisticCategoryId = null,
+            optimisticPayeeId = null,
+            optimisticAmountMinor = -7000,
+            optimisticBudgetMonth = null,
+            status = "sending",
+            attemptCount = 1,
+            serverOperationId = null,
+            lastErrorCode = null,
+            createdAtEpochMs = now,
+            updatedAtEpochMs = now,
+        )
     }
 
     private suspend fun verifyDownload(
