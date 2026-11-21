@@ -654,8 +654,6 @@ class TandemApiClient(
             "not-found", "network-failure" -> "address_unreachable"
             else -> reason.replace('-', '_')
         }
-
-    private companion object {
-        val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")
-    }
 }
+
+private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")
