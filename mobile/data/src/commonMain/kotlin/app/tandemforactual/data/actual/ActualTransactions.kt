@@ -39,8 +39,11 @@ class ActualTransactions(
         writer.batch {
             val deletedIds = LinkedHashSet(deleted)
             if (deleted.isNotEmpty()) {
-                db.query("SELECT id FROM v_transactions_internal WHERE parent_id IN (${deleted.joinToString { "?" }})", *deleted.toTypedArray())
-                    .forEach { deletedIds += it["id"] as String }
+                db
+                    .query(
+                        "SELECT id FROM v_transactions_internal WHERE parent_id IN (${deleted.joinToString { "?" }})",
+                        *deleted.toTypedArray(),
+                    ).forEach { deletedIds += it["id"] as String }
             }
             val accounts = db.query("SELECT * FROM accounts WHERE tombstone = 0").associateBy { it["id"] as String }
             val addedIds =
@@ -103,7 +106,10 @@ class ActualTransactions(
         val ruled = runRules(counterpart)
         val schedule = ruled["schedule"] ?: transaction["schedule"]
         val id = insert(counterpart + mapOf("notes" to ruled["notes"], "cleared" to ruled["cleared"], "schedule" to schedule))
-        update(transaction["id"] as String, mapOf("transfer_id" to id) + (if (schedule != null) mapOf("schedule" to schedule) else emptyMap()))
+        update(
+            transaction["id"] as String,
+            mapOf("transfer_id" to id) + (if (schedule != null) mapOf("schedule" to schedule) else emptyMap()),
+        )
         clearCategory(transaction + ("transfer_id" to id), transferAccount)
     }
 

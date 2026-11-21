@@ -1,0 +1,240 @@
+package app.tandemforactual.data.actual
+
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.io.File
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+
+class ActualTransactionOperationsTest {
+    private class Budget(
+        val db: ActualDatabase,
+        val operations: ActualTransactionOperations,
+    ) {
+        val reader = ActualBudgetReader(db)
+        val checking = account("Checking")
+        val savings = account("Savings")
+        val savingsPayee = db.first("SELECT id FROM payees WHERE transfer_acct = ?", savings)?.get("id") as String
+        val groceries = db.first("SELECT id FROM categories WHERE name = 'Groceries'")?.get("id") as String
+        val create =
+            buildJsonObject {
+                put("account", checking)
+                put("amount", -1234)
+                put("date", "2026-11-21")
+                put("payee", JsonNull)
+                put("category", groceries)
+                put("notes", JsonNull)
+                put("cleared", false)
+            }
+
+        fun account(name: String) = db.first("SELECT id FROM accounts WHERE name = ?", name)?.get("id") as String
+
+        fun id() = "tandem:${UUID.randomUUID()}"
+
+        fun submit(
+            id: String,
+            action: String,
+            patch: JsonObject,
+            base: JsonObject? = null,
+            operationId: String = UUID.randomUUID().toString(),
+        ) = operations.submit(operationId, id, action, patch, base)
+    }
+
+    private fun withBudget(block: Budget.() -> Unit) {
+        val path = File.createTempFile("actual-transactions", ".sqlite")
+
+        fun fixture(name: String) = checkNotNull(javaClass.getResource("/actual/parity-envelope/$name")).readBytes()
+        path.writeBytes(ZipArchive.read(fixture("budget.zip")).getValue("db.sqlite"))
+        val db = ActualDatabase(BundledSQLiteDriver().open(path.path))
+        try {
+            val now = { 1_795_255_200_000L }
+            val store = ActualMessageStore(db)
+            val clock = store.loadClock()
+            store.resetNode(clock)
+            val response = SyncProtocol.decodeResponse(fixture("sync-response.bin"))
+            val engine =
+                ActualSyncEngine(store, {
+                    SyncResponse(
+                        response.messages.filter { msg ->
+                            msg.timestamp > it.since
+                        },
+                        response.merkle,
+                    )
+                }, "group", "file", now = now)
+            runBlocking { engine.fullSync(clock, null) }
+            Budget(db, ActualTransactionOperations(ActualWriter(store, clock, now) { UUID.randomUUID().toString() })).block()
+        } finally {
+            db.close()
+            path.delete()
+        }
+    }
+
+    @Test
+    fun persistsOutcomesAndChecksStaleEdits() =
+        withBudget {
+            val id = id()
+            val result = submit(id, "create", create)
+            assertEquals(OperationStatus.COMMITTED, result.status)
+            assertEquals(result, submit(id, "create", JsonObject(emptyMap()), operationId = result.operationId))
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", create).status)
+            val patch = buildJsonObject { put("amount", -1000) }
+            assertEquals(listOf("amount"), submit(id, "create", JsonObject(create + patch)).conflictingFields)
+            val base = checkNotNull(reader.transaction(id))
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", patch, base).status)
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", patch, base).status)
+            assertEquals("same-field-edit", submit(id, "update", buildJsonObject { put("amount", -10) }, base).conflictType)
+            val empty = JsonObject(emptyMap())
+            assertEquals("delete-versus-edit", submit(id, "delete", empty, base).conflictType)
+            assertEquals(OperationStatus.COMMITTED, submit(id, "delete", empty, reader.transaction(id)).status)
+            assertNull(reader.transaction(id))
+            assertEquals(OperationStatus.COMMITTED, submit(id, "delete", empty, base).status)
+            assertEquals("deleted-remotely", submit(id, "update", patch, base).conflictType)
+        }
+
+    @Test
+    fun maintainsTransferPairsAndValidatesReferences() =
+        withBudget {
+            val transfer = JsonObject(create + mapOf("payee" to JsonPrimitive(savingsPayee), "category" to JsonNull))
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", transfer).status)
+            val base = checkNotNull(reader.transaction(id))
+            val other = (base.getValue("transferId") as JsonPrimitive).content
+            val update = buildJsonObject { put("amount", -7000) }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", update, base).status)
+            assertEquals(JsonPrimitive(7000), reader.transaction(other)?.get("amount"))
+            assertEquals(
+                OperationStatus.COMMITTED,
+                submit(id, "update", buildJsonObject { put("payee", JsonNull) }, reader.transaction(id)).status,
+            )
+            assertNull(reader.transaction(other))
+            assertEquals("transfer-pair-changed", submit(id, "update", update, base).conflictType)
+            for ((field, value, expected) in listOf(
+                Triple("account", "missing", "account-not-found"),
+                Triple("account", account("Old wallet"), "account-closed"),
+                Triple("account", savings, "transfer-account-same-as-source"),
+                Triple("payee", "missing", "payee-not-found"),
+                Triple("category", "missing", "category-not-found"),
+            )) {
+                assertEquals(expected, submit(id(), "create", JsonObject(transfer + (field to JsonPrimitive(value)))).errorCode)
+            }
+        }
+
+    @Test
+    fun rejectsMalformedRequestsBeforeWriting() =
+        withBudget {
+            val id = id()
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "unknown", create) }
+            assertFailsWith<InvalidTransactionRequestException> { submit("unstable", "create", create) }
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "create", JsonObject(create - "amount")) }
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "create", JsonObject(create + ("typo" to JsonNull))) }
+            for ((field, value) in listOf(
+                "account" to JsonPrimitive(""),
+                "amount" to JsonPrimitive("123"),
+                "date" to JsonPrimitive("November 21"),
+                "cleared" to JsonPrimitive("true"),
+                "notes" to JsonArray(emptyList()),
+                "category" to JsonPrimitive(123),
+            )) {
+                assertFailsWith<InvalidTransactionRequestException> { submit(id, "create", JsonObject(create + (field to value))) }
+            }
+            assertNull(reader.transaction(id))
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", create).status)
+            val base = reader.transaction(id)
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "update", JsonObject(emptyMap())) }
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "update", JsonObject(emptyMap()), base) }
+            assertFailsWith<InvalidTransactionRequestException> { submit(id, "update", JsonObject(mapOf("typo" to JsonNull)), base) }
+        }
+
+    @Test
+    fun handlesSplitAndBrokenTransferConflicts() =
+        withBudget {
+            val records = reader.read("2026-11-21").records.filter { it.type == "transaction" }
+            val split = records.first { it.body.value("isParent") == true }
+            val child = records.first { it.body.value("parentId") == split.id }
+            val category = buildJsonObject { put("category", groceries) }
+            assertEquals("same-field-edit", submit(split.id, "update", category, split.body).conflictType)
+            val changedStructure = JsonObject(split.body + ("subtransactions" to JsonArray(emptyList())))
+            assertEquals("same-field-edit", submit(split.id, "update", category, changedStructure).conflictType)
+            assertEquals("delete-versus-edit", submit(split.id, "delete", JsonObject(emptyMap()), changedStructure).conflictType)
+            val date = buildJsonObject { put("date", "2026-11-22") }
+            assertEquals("split-child-field-not-editable", submit(child.id, "update", date, child.body).errorCode)
+            assertEquals(OperationStatus.COMMITTED, submit(split.id, "delete", JsonObject(emptyMap()), split.body).status)
+            assertNull(reader.transaction(child.id))
+
+            val transfer = JsonObject(create + mapOf("payee" to JsonPrimitive(savingsPayee), "category" to JsonNull))
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", transfer).status)
+            val base = checkNotNull(reader.transaction(id))
+            val counterpart = base.value("transferId") as String
+            val patch = buildJsonObject { put("amount", -7000) }
+            db.execute("UPDATE transactions SET amount = 1 WHERE id = ?", counterpart)
+            assertEquals(listOf("transferId", "amount"), submit(id, "update", patch, base).conflictingFields)
+            db.execute("UPDATE transactions SET tombstone = 1 WHERE id = ?", counterpart)
+            assertEquals("transfer-pair-incomplete", submit(id, "update", patch, base).conflictType)
+        }
+
+    @Test
+    fun validatesUpdatedAccountsPayeesAndCategories() =
+        withBudget {
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", create).status)
+            val base = checkNotNull(reader.transaction(id))
+            val closed = account("Old wallet")
+            val closedPayee = db.first("SELECT id FROM payees WHERE transfer_acct = ?", closed)?.get("id") as String
+            val hidden = "hidden-category-for-test"
+            db.execute("INSERT INTO categories (id, name, hidden) VALUES (?, 'Hidden', 1)", hidden)
+            for ((field, value, expected) in listOf(
+                Triple("account", "missing", "account-not-found"),
+                Triple("account", closed, "account-closed"),
+                Triple("payee", "missing", "payee-not-found"),
+                Triple("payee", closedPayee, "transfer-account-closed"),
+                Triple("category", hidden, "category-hidden"),
+            )) {
+                assertEquals(expected, submit(id, "update", buildJsonObject { put(field, value) }, base).errorCode)
+            }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", buildJsonObject { put("payee", savingsPayee) }, base).status)
+            val transfer = checkNotNull(reader.transaction(id))
+            val other = transfer.value("transferId") as String
+            assertEquals(OperationStatus.COMMITTED, submit(id, "delete", JsonObject(emptyMap()), transfer).status)
+            assertNull(reader.transaction(other))
+        }
+
+    @Test
+    fun preservesTheSplitChildWhenDeletingItsTransferCounterpart() =
+        withBudget {
+            val child = reader.read("2026-11-21").records.first { it.type == "transaction" && it.body.value("isChild") == true }
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", create).status)
+            val rowId = db.first("SELECT id FROM v_transactions WHERE imported_id = ?", id)?.get("id")
+            db.execute("UPDATE transactions SET transferred_id = ? WHERE id = ?", child.id, rowId)
+            db.execute("UPDATE transactions SET transferred_id = ?, amount = 1234 WHERE id = ?", rowId, child.id)
+            assertEquals(OperationStatus.COMMITTED, submit(id, "delete", JsonObject(emptyMap()), reader.transaction(id)).status)
+            assertEquals(JsonNull, checkNotNull(reader.transaction(child.id))["transferId"])
+        }
+
+    @Test
+    fun clearsCategoryWhenMovingToAnOffBudgetAccount() =
+        withBudget {
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", create).status)
+            val patch = buildJsonObject { put("account", account("Brokerage")) }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", patch, reader.transaction(id)).status)
+            assertEquals(JsonNull, checkNotNull(reader.transaction(id))["category"])
+        }
+
+    @Test
+    fun readsDecimalAndStructuredJsonValues() {
+        assertEquals(1.5, scalar(JsonPrimitive(1.5)))
+        val values = JsonArray(listOf(JsonPrimitive("field")))
+        assertEquals(values, scalar(values))
+    }
+}

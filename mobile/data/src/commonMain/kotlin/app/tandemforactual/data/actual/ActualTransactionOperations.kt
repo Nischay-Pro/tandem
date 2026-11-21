@@ -40,7 +40,8 @@ class ActualTransactionOperations(
 
     init {
         db.execute(
-            "CREATE TABLE IF NOT EXISTS tandem_operations (operation_id TEXT PRIMARY KEY, transaction_id TEXT NOT NULL, status TEXT NOT NULL, " +
+            "CREATE TABLE IF NOT EXISTS tandem_operations " +
+                "(operation_id TEXT PRIMARY KEY, transaction_id TEXT NOT NULL, status TEXT NOT NULL, " +
                 "error_code TEXT, conflict_type TEXT, conflicting_fields TEXT NOT NULL DEFAULT '[]')",
         )
     }
@@ -69,11 +70,18 @@ class ActualTransactionOperations(
                 when (action) {
                     "create" -> create(operationId, transactionId, patch)
                     "update", "delete" ->
-                        change(operationId, transactionId, action, patch, baseSnapshot ?: throw InvalidTransactionRequestException("baseSnapshot is required"))
+                        change(
+                            operationId,
+                            transactionId,
+                            action,
+                            patch,
+                            baseSnapshot ?: throw InvalidTransactionRequestException("baseSnapshot is required"),
+                        )
                     else -> throw InvalidTransactionRequestException("Unsupported action $action")
                 }
             db.execute(
-                "INSERT INTO tandem_operations (operation_id, transaction_id, status, error_code, conflict_type, conflicting_fields) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO tandem_operations " +
+                    "(operation_id, transaction_id, status, error_code, conflict_type, conflicting_fields) VALUES (?, ?, ?, ?, ?, ?)",
                 outcome.operationId,
                 outcome.transactionId,
                 outcome.status.name,
@@ -89,14 +97,25 @@ class ActualTransactionOperations(
         transactionId: String,
         patch: JsonObject,
     ): OperationOutcome {
-        if (!TANDEM_ID.matches(transactionId)) throw InvalidTransactionRequestException("transactionId must be a stable Tandem transaction ID")
+        if (!TANDEM_ID.matches(
+                transactionId,
+            )
+        ) {
+            throw InvalidTransactionRequestException("transactionId must be a stable Tandem transaction ID")
+        }
         val input = parseCreate(patch)
         reader.transaction(transactionId)?.let { existing ->
             val mismatched = createMismatches(existing, input)
             return if (mismatched.isEmpty()) {
                 OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
             } else {
-                OperationOutcome(operationId, transactionId, OperationStatus.CONFLICT, conflictType = "transaction-id-already-exists", conflictingFields = mismatched)
+                OperationOutcome(
+                    operationId,
+                    transactionId,
+                    OperationStatus.CONFLICT,
+                    conflictType = "transaction-id-already-exists",
+                    conflictingFields = mismatched,
+                )
             }
         }
         validateCreate(input)?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
@@ -114,7 +133,9 @@ class ActualTransactionOperations(
                         "imported_id" to transactionId,
                     ),
                 ),
-            runTransfers = input["payee"]?.let { payee -> db.first("SELECT transfer_acct FROM payees WHERE id = ?", payee)?.get("transfer_acct") } != null,
+            runTransfers =
+                input["payee"]?.let { payee -> db.first("SELECT transfer_acct FROM payees WHERE id = ?", payee)?.get("transfer_acct") } !=
+                    null,
         )
         return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
     }
@@ -144,7 +165,8 @@ class ActualTransactionOperations(
         latest.value("transferId")?.let { transferId ->
             val counterpart = reader.transaction(transferId as String) ?: return conflict("transfer-pair-incomplete", listOf("transferId"))
             // Actual stores the pair links as row IDs, while Tandem snapshots can use imported IDs.
-            if (actualId(counterpart.value("id") as String) != transferId || counterpart.value("transferId") != actualId ||
+            if (actualId(counterpart.value("id") as String) != transferId ||
+                counterpart.value("transferId") != actualId ||
                 (counterpart.value("amount") as Long) != -(latest.value("amount") as Long)
             ) {
                 return conflict("transfer-pair-changed", listOf("transferId", "amount"))
@@ -160,8 +182,19 @@ class ActualTransactionOperations(
         val patch = parsePatch(patchJson)
         if (!sameStructure(base, latest)) return conflict("same-field-edit", structuredConflicts(base, latest))
         if (base.value("isChild") == true) {
-            val unsupported = listOf("account", "date", "cleared", "reconciled").filter { it in patch && !same(it, patch[it], base.value(it)) }
-            if (unsupported.isNotEmpty()) return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = "split-child-field-not-editable")
+            val unsupported =
+                listOf("account", "date", "cleared", "reconciled").filter {
+                    it in patch &&
+                        !same(it, patch[it], base.value(it))
+                }
+            if (unsupported.isNotEmpty()) {
+                return OperationOutcome(
+                    operationId,
+                    transactionId,
+                    OperationStatus.REJECTED,
+                    errorCode = "split-child-field-not-editable",
+                )
+            }
         }
         val applicable = LinkedHashMap<String, Any?>()
         val conflicts = mutableListOf<String>()
@@ -175,14 +208,19 @@ class ActualTransactionOperations(
             }
             if (!same(field, latest.value(field), local)) conflicts += field
         }
-        if (base.value("isParent") == true && "category" in patch && !same("category", patch["category"], base.value("category")) &&
+        if (base.value("isParent") == true &&
+            "category" in patch &&
+            !same("category", patch["category"], base.value("category")) &&
             !same("category", patch["category"], latest.value("category"))
         ) {
             conflicts += "category"
         }
         if (conflicts.isNotEmpty()) return conflict("same-field-edit", conflicts.distinct())
         if (applicable.isEmpty()) return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
-        validateUpdate(applicable, latest)?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
+        validateUpdate(
+            applicable,
+            latest,
+        )?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
         transactions.batchUpdate(updated = listOf(applicable + ("id" to actualId)))
         return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
     }
@@ -257,7 +295,11 @@ class ActualTransactionOperations(
     private fun parseCreate(patch: JsonObject): Map<String, Any?> {
         val allowed = listOf("account", "amount", "date", "payee", "category", "notes", "cleared")
         val unsupported = patch.keys - allowed.toSet()
-        if (unsupported.isNotEmpty()) throw InvalidTransactionRequestException("transaction create input contains unsupported fields: ${unsupported.joinToString()}")
+        if (unsupported.isNotEmpty()) {
+            throw InvalidTransactionRequestException(
+                "transaction create input contains unsupported fields: ${unsupported.joinToString()}",
+            )
+        }
         allowed.forEach { if (it !in patch) throw InvalidTransactionRequestException("transaction create input is missing $it") }
         return parseFields(patch)
     }
@@ -265,7 +307,11 @@ class ActualTransactionOperations(
     private fun parsePatch(patch: JsonObject): Map<String, Any?> {
         if (patch.isEmpty()) throw InvalidTransactionRequestException("transaction patch must contain at least one field")
         val unsupported = patch.keys - EDIT_FIELDS.toSet()
-        if (unsupported.isNotEmpty()) throw InvalidTransactionRequestException("transaction patch contains unsupported fields: ${unsupported.joinToString()}")
+        if (unsupported.isNotEmpty()) {
+            throw InvalidTransactionRequestException(
+                "transaction patch contains unsupported fields: ${unsupported.joinToString()}",
+            )
+        }
         return parseFields(patch)
     }
 
@@ -273,14 +319,26 @@ class ActualTransactionOperations(
         patch.mapValues { (field, element) ->
             val primitive = element as? JsonPrimitive ?: throw InvalidTransactionRequestException("$field must be a scalar")
             when (field) {
-                "account" -> primitive.takeIf { it.isString && it.content.isNotBlank() }?.content ?: throw InvalidTransactionRequestException("account must be a non-empty string")
-                "amount" -> primitive.takeIf { !it.isString }?.longOrNull ?: throw InvalidTransactionRequestException("amount must be an integer")
+                "account" ->
+                    primitive.takeIf { it.isString && it.content.isNotBlank() }?.content
+                        ?: throw InvalidTransactionRequestException("account must be a non-empty string")
+                "amount" ->
+                    primitive.takeIf { !it.isString }?.longOrNull
+                        ?: throw InvalidTransactionRequestException("amount must be an integer")
                 "date" ->
                     primitive.takeIf { it.isString && DATE.matches(it.content) }?.content
                         ?: throw InvalidTransactionRequestException("date must use YYYY-MM-DD format")
-                "cleared", "reconciled" -> primitive.takeIf { !it.isString }?.booleanOrNull ?: throw InvalidTransactionRequestException("$field must be a boolean")
+                "cleared", "reconciled" ->
+                    primitive.takeIf { !it.isString }?.booleanOrNull
+                        ?: throw InvalidTransactionRequestException("$field must be a boolean")
                 "notes" -> if (primitive is JsonNull) null else primitive.contentOrNull?.ifEmpty { null }
-                else -> if (primitive is JsonNull) null else primitive.takeIf { it.isString && it.content.isNotBlank() }?.content ?: throw InvalidTransactionRequestException("$field must be a non-empty string or null")
+                else ->
+                    if (primitive is JsonNull) {
+                        null
+                    } else {
+                        primitive.takeIf { it.isString && it.content.isNotBlank() }?.content
+                            ?: throw InvalidTransactionRequestException("$field must be a non-empty string or null")
+                    }
             }
         }
 
@@ -291,7 +349,13 @@ class ActualTransactionOperations(
         if (STRUCTURE.any { base.value(it) != remote.value(it) }) return false
         val baseChildren = base.children()
         val remoteChildren = remote.children()
-        if (base.value("isParent") != true && remote.value("isParent") != true && baseChildren.isEmpty() && remoteChildren.isEmpty()) return true
+        if (base.value("isParent") != true &&
+            remote.value("isParent") != true &&
+            baseChildren.isEmpty() &&
+            remoteChildren.isEmpty()
+        ) {
+            return true
+        }
         return baseChildren.sorted() == remoteChildren.sorted()
     }
 
@@ -300,9 +364,17 @@ class ActualTransactionOperations(
         remote: JsonObject,
     ): List<String> {
         val fields =
-            STRUCTURE.filter {
-                if (it == "transferId" || it == "parentId") base.value(it) != null || remote.value(it) != null else base.value(it) == true || remote.value(it) == true
-            }.toMutableList()
+            STRUCTURE
+                .filter {
+                    if (it == "transferId" ||
+                        it == "parentId"
+                    ) {
+                        base.value(it) != null || remote.value(it) != null
+                    } else {
+                        base.value(it) == true ||
+                            remote.value(it) == true
+                    }
+                }.toMutableList()
         if (base.children().isNotEmpty() || remote.children().isNotEmpty()) fields += "subtransactions"
         return fields
     }
@@ -323,20 +395,24 @@ class ActualTransactionOperations(
             }
         return normal(left) == normal(right)
     }
-
-    private companion object {
-        val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled")
-        val STRUCTURE = listOf("transferId", "isParent", "isChild", "parentId")
-        val TANDEM_ID = Regex("^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
-        val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}$")
-    }
 }
+
+private val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled")
+private val STRUCTURE = listOf("transferId", "isParent", "isChild", "parentId")
+private val TANDEM_ID = Regex("^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
+private val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}$")
 
 internal fun JsonObject.value(key: String): Any? = scalar(this[key])
 
 internal fun scalar(element: JsonElement?): Any? =
     when (element) {
         null, JsonNull -> null
-        is JsonPrimitive -> if (element.isString) element.content else element.booleanOrNull ?: element.longOrNull ?: element.content.toDouble()
+        is JsonPrimitive ->
+            if (element.isString) {
+                element.content
+            } else {
+                element.booleanOrNull ?: element.longOrNull
+                    ?: element.content.toDouble()
+            }
         else -> element
     }

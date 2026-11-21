@@ -27,7 +27,8 @@ class ActualDirectBudget private constructor(
         if (downloaded) {
             db.transaction {
                 db.execute(
-                    "CREATE TABLE tandem_direct_sync (id INTEGER PRIMARY KEY, file_id TEXT NOT NULL, group_id TEXT NOT NULL, timestamp TEXT)",
+                    "CREATE TABLE tandem_direct_sync " +
+                        "(id INTEGER PRIMARY KEY, file_id TEXT NOT NULL, group_id TEXT NOT NULL, timestamp TEXT)",
                 )
                 db.execute("INSERT INTO tandem_direct_sync (id, file_id, group_id) VALUES (1, ?, ?)", fileId, groupId)
             }
@@ -44,7 +45,6 @@ class ActualDirectBudget private constructor(
     private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, now = now)
     private val reader = ActualBudgetReader(db)
     private val operations = ActualTransactionOperations(ActualWriter(store, clock, now, newId))
-
 
     suspend fun sync() =
         mutex.withLock {
