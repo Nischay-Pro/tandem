@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
@@ -53,7 +54,8 @@ class ActualDirectBudget private constructor(
     internal val cacheGeneration = "actual:${clock.clock.timestamp.node}"
     private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, now = now)
     private val reader = ActualBudgetReader(db)
-    private val operations = ActualTransactionOperations(ActualWriter(store, clock, now, newId))
+    private val writer = ActualWriter(store, clock, now, newId)
+    private val operations = ActualTransactionOperations(writer)
 
     suspend fun sync() = mutex.withLock { synchronize() }
 
@@ -127,6 +129,18 @@ class ActualDirectBudget private constructor(
     }
 
     suspend fun transaction(id: String) = mutex.withLock { reader.transaction(id) }
+
+    /** Applies a budget edit against freshly synced state, then uploads it, as the gateway's maintenance routes did. */
+    suspend fun <T> edit(
+        today: String,
+        block: (ActualBudgetEdits) -> T,
+    ): T =
+        mutex.withLock {
+            synchronize()
+            val result = block(ActualBudgetEdits(writer, { today }))
+            synchronize()
+            result
+        }
 
     suspend fun submit(
         operationId: String,
