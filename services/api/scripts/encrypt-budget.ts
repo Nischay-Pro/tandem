@@ -14,23 +14,40 @@ const lib = (await Actual.init({
   dataDir: fs.mkdtempSync("/tmp/encrypt-budget-"),
 })) as unknown as { send: (name: string, args: unknown) => Promise<unknown> };
 
-const existing = (await Actual.getBudgets()).find((b) => b.name === name && b.groupId);
+const existing = (await Actual.getBudgets()).find(
+  (b) => b.name === name && b.groupId,
+);
 if (existing) {
   console.log(`exists ${existing.groupId}`);
 } else {
   await Actual.runImport(name, async () => {
-    const checking = await Actual.createAccount({ name: "Checking", offbudget: false }, 250_000);
+    const checking = await Actual.createAccount(
+      { name: "Checking", offbudget: false },
+      250_000,
+    );
     const group = await Actual.createCategoryGroup({ name: "Everyday" });
-    const food = await Actual.createCategory({ name: "Groceries", group_id: group });
+    const food = await Actual.createCategory({
+      name: "Groceries",
+      group_id: group,
+    });
     const market = await Actual.createPayee({ name: "Market" });
     await Actual.addTransactions(checking, [
-      { date: "2026-11-03", amount: -4_250, payee: market, category: food, notes: "Weekly shop" },
+      {
+        date: "2026-11-03",
+        amount: -4_250,
+        payee: market,
+        category: food,
+        notes: "Weekly shop",
+      },
       { date: "2026-11-10", amount: -3_100, payee: market, category: food },
     ]);
   });
-  const created = (await Actual.getBudgets()).find((b) => b.name === name && b.groupId)!;
+  const created = (await Actual.getBudgets()).find(
+    (b) => b.name === name && b.groupId,
+  )!;
   await Actual.downloadBudget(created.groupId!);
-  const result = (await lib.send("key-make", { password: budgetPassword })) as { error?: unknown } | undefined;
+  const result = (await lib.send("key-make", { password: budgetPassword })) as
+    { error?: unknown } | undefined;
   if (result?.error) throw new Error(JSON.stringify(result.error));
   await Actual.sync();
   console.log(`encrypted ${created.groupId}`);
