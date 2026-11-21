@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ActualBudgetEdits
+import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualMessageStore
@@ -28,6 +29,7 @@ class ActualDirectBudget private constructor(
     now: () -> Long,
     newId: () -> String,
     downloaded: Boolean,
+    key: ActualBudgetKey?,
 ) {
     private val mutex = Mutex()
 
@@ -51,7 +53,7 @@ class ActualDirectBudget private constructor(
     private val store = ActualMessageStore(db)
     private val clock = store.loadClock().also { if (downloaded) store.resetNode(it) }
     internal val cacheGeneration = "actual:${clock.clock.timestamp.node}"
-    private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, now = now)
+    private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, cipher = key, now = now)
     private val reader = ActualBudgetReader(db)
     private val writer = ActualWriter(store, clock, now, newId)
     private val operations = ActualTransactionOperations(writer)
@@ -180,15 +182,38 @@ class ActualDirectBudget private constructor(
             now: () -> Long,
             newId: () -> String,
             expectedGroupId: String?,
+            unlock: suspend (ActualKeyInfo) -> ActualBudgetKey,
             install: (ByteArray) -> ActualDatabase,
         ): ActualDirectBudget {
             val info = server.fileInfo(fileId)
             val groupId = info.groupId ?: throw ActualServerException("missing-group-id")
             if (expectedGroupId != null && groupId != expectedGroupId) throw ActualServerException("file-has-reset")
-            if (info.encryptMeta != null) throw ActualServerException("encrypted-budget")
-            val entries = ZipArchive.read(server.download(fileId))
-            val data = entries["db.sqlite"] ?: throw ActualServerException("invalid-budget-archive")
-            return open(install(data), server, fileId, groupId, now, newId, downloaded = true)
+            val keyInfo = info.encryptMeta?.let { server.keyInfo(fileId) }
+            val key = keyInfo?.let { unlock(it) }
+            val archive = server.download(fileId).let { bytes -> if (key != null) key.decrypt(bytes, info.encryptMeta) else bytes }
+            val data = ZipArchive.read(archive)["db.sqlite"] ?: throw ActualServerException("invalid-budget-archive")
+            val db = install(data)
+            if (keyInfo != null) saveKeyInfo(db, keyInfo)
+            return open(db, server, fileId, groupId, now, newId, downloaded = true, key)
+        }
+
+        /** The key Actual encrypted this budget with, saved without the password or the derived key. */
+        fun storedKeyInfo(db: ActualDatabase): ActualKeyInfo? =
+            runCatching {
+                db.query("SELECT id, value FROM tandem_prefs WHERE id IN ('keyId', 'keySalt', 'keyTest')").associate {
+                    it["id"] as String to
+                        it["value"] as String?
+                }
+            }.getOrNull()?.takeIf { it["keyId"] != null }?.let { ActualKeyInfo(it["keyId"], it["keySalt"], it["keyTest"]) }
+
+        private fun saveKeyInfo(
+            db: ActualDatabase,
+            info: ActualKeyInfo,
+        ) {
+            db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
+            listOf("keyId" to info.id, "keySalt" to info.salt, "keyTest" to info.test).forEach { (id, value) ->
+                db.execute("INSERT OR REPLACE INTO tandem_prefs (id, value) VALUES (?, ?)", id, value)
+            }
         }
 
         /** The Actual file id saved with a downloaded budget, or null for a database Tandem didn't download. */
@@ -203,7 +228,8 @@ class ActualDirectBudget private constructor(
             groupId: String,
             now: () -> Long,
             newId: () -> String,
-        ): ActualDirectBudget = open(db, server, fileId, groupId, now, newId, downloaded = false)
+            key: ActualBudgetKey?,
+        ): ActualDirectBudget = open(db, server, fileId, groupId, now, newId, downloaded = false, key)
 
         private fun open(
             db: ActualDatabase,
@@ -213,9 +239,10 @@ class ActualDirectBudget private constructor(
             now: () -> Long,
             newId: () -> String,
             downloaded: Boolean,
+            key: ActualBudgetKey?,
         ): ActualDirectBudget =
             try {
-                ActualDirectBudget(db, server, fileId, groupId, now, newId, downloaded)
+                ActualDirectBudget(db, server, fileId, groupId, now, newId, downloaded, key)
             } catch (error: Throwable) {
                 runCatching { db.close() }
                 throw error

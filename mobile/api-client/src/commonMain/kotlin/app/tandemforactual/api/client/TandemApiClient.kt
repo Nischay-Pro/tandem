@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ActualBudgetEdits
+import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
@@ -125,6 +126,7 @@ class TandemApiClient(
     private var server: ActualServerClient? = null
     private var serverUrl: String? = null
     private var device: AuthenticatedDevice? = null
+    private val budgetPasswords = mutableMapOf<String, String>()
     private val openBudgets = mutableMapOf<String, ActualDirectBudget>()
 
     val isAuthenticated: Boolean get() = server?.token != null
@@ -243,14 +245,22 @@ class TandemApiClient(
             server = null
             serverUrl = null
             device = null
+            budgetPasswords.clear()
         }
     }
 
     /** Opens the device's copy of a budget, downloading it from Actual the first time. */
-    internal suspend fun budget(budgetId: String): ActualDirectBudget = withContext(Dispatchers.IO) { openBudget(budgetId) }
+    internal suspend fun budget(
+        budgetId: String,
+        password: String? = null,
+    ): ActualDirectBudget = withContext(Dispatchers.IO) { openBudget(budgetId, password) }
 
-    private suspend fun openBudget(budgetId: String): ActualDirectBudget =
+    private suspend fun openBudget(
+        budgetId: String,
+        password: String?,
+    ): ActualDirectBudget =
         budgetMutex.withLock {
+            password?.let { budgetPasswords[budgetId] = it }
             openBudgets[budgetId]?.let { return@withLock it }
             val client = requireServer()
             val files = budgetFiles ?: throw TandemApiException("not_supported")
@@ -258,10 +268,13 @@ class TandemApiClient(
             val budget =
                 if (existing != null) {
                     val fileId = ActualDirectBudget.storedFileId(existing) ?: call { fileFor(client, budgetId).fileId }
-                    ActualDirectBudget.reopen(existing, client, fileId, budgetId, now, newId)
+                    val key =
+                        ActualDirectBudget.storedKeyInfo(existing)?.let { info ->
+                            runCatching { unlock(budgetId, info) }.onFailure { existing.close() }.getOrThrow()
+                        }
+                    ActualDirectBudget.reopen(existing, client, fileId, budgetId, now, newId, key)
                 } else {
                     val file = call { fileFor(client, budgetId) }
-                    if (file.encryptKeyId != null) throw TandemApiException("encrypted_budget")
                     call {
                         ActualDirectBudget.download(
                             client,
@@ -269,12 +282,29 @@ class TandemApiClient(
                             now,
                             newId,
                             expectedGroupId = budgetId,
+                            unlock = { info -> unlock(budgetId, info) },
                         ) { files.install(budgetId, it) }
                     }
                 }
             openBudgets[budgetId] = budget
             budget
         }
+
+    /** Derives the budget key from its password and checks it against Actual's test message. */
+    private fun unlock(
+        budgetId: String,
+        info: ActualKeyInfo,
+    ): ActualBudgetKey {
+        val password = budgetPasswords[budgetId] ?: throw TandemApiException("budget_password_required")
+        val keyId = info.id ?: throw TandemApiException("encrypted_budget")
+        val test = info.test ?: throw TandemApiException("encrypted_budget")
+        val key = ActualBudgetKey.derive(keyId, password, info.salt.orEmpty())
+        if (!key.opens(test)) {
+            budgetPasswords.remove(budgetId)
+            throw TandemApiException("budget_password_incorrect")
+        }
+        return key
+    }
 
     /** Closes and deletes the device's copy of a budget. */
     suspend fun removeBudget(budgetId: String) {
@@ -284,11 +314,21 @@ class TandemApiClient(
         }
     }
 
+    /** Sets the device's copy aside as a dated backup, for when Actual reset the budget's sync history. */
+    suspend fun retireBudget(budgetId: String) {
+        budgetMutex.withLock {
+            openBudgets.remove(budgetId)?.close()
+            budgetPasswords.remove(budgetId)
+            budgetFiles?.retire(budgetId, "reset-${now()}")
+        }
+    }
+
     internal suspend fun <T> edit(
         budgetId: String,
+        password: String? = null,
         block: (ActualBudgetEdits) -> T,
     ): T {
-        val budget = budget(budgetId)
+        val budget = budget(budgetId, password)
         return call { budget.edit(today(), block) }
     }
 
@@ -296,7 +336,7 @@ class TandemApiClient(
     suspend fun runBudgetBankSync(
         budgetId: String,
         encryptionPassword: String?,
-    ): Unit = call { budget(budgetId).sync() }
+    ): Unit = call { budget(budgetId, encryptionPassword).sync() }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun importBudgetAccountTransactions(
@@ -323,7 +363,7 @@ class TandemApiClient(
         accountGroupId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): String = edit(budgetId) { it.createAccount(name, offbudget, accountGroupId) }
+    ): String = edit(budgetId, encryptionPassword) { it.createAccount(name, offbudget, accountGroupId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun closeBudgetAccount(
@@ -333,7 +373,7 @@ class TandemApiClient(
         transferCategoryId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.closeAccount(accountId, transferAccountId, transferCategoryId) }
+    ) = edit(budgetId, encryptionPassword) { it.closeAccount(accountId, transferAccountId, transferCategoryId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun renameBudgetAccount(
@@ -342,7 +382,7 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.renameAccount(accountId, name) }
+    ) = edit(budgetId, encryptionPassword) { it.renameAccount(accountId, name) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun reopenBudgetAccount(
@@ -350,7 +390,7 @@ class TandemApiClient(
         accountId: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.reopenAccount(accountId) }
+    ) = edit(budgetId, encryptionPassword) { it.reopenAccount(accountId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun moveBudgetAccount(
@@ -359,7 +399,7 @@ class TandemApiClient(
         targetAccountId: String?,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.moveAccount(accountId, targetAccountId) }
+    ) = edit(budgetId, encryptionPassword) { it.moveAccount(accountId, targetAccountId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun renameBudgetCategory(
@@ -368,7 +408,7 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) = edit(budgetId) { it.renameCategory(categoryId, name) }
+    ) = edit(budgetId, encryptionPassword) { it.renameCategory(categoryId, name) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategory(
@@ -377,7 +417,7 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ): String = edit(budgetId) { it.createCategory(categoryGroupId, name) }
+    ): String = edit(budgetId, encryptionPassword) { it.createCategory(categoryGroupId, name) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategoryGroup(
@@ -386,7 +426,7 @@ class TandemApiClient(
         isIncome: Boolean,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ): String = edit(budgetId) { it.createCategoryGroup(name, isIncome) }
+    ): String = edit(budgetId, encryptionPassword) { it.createCategoryGroup(name, isIncome) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetCategoryGroup(
@@ -397,7 +437,7 @@ class TandemApiClient(
         targetId: String?,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) = edit(budgetId) { it.manageCategoryGroup(groupId, action, name, targetId) }
+    ) = edit(budgetId, encryptionPassword) { it.manageCategoryGroup(groupId, action, name, targetId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetCategory(
@@ -408,7 +448,7 @@ class TandemApiClient(
         encryptionPassword: String?,
         targetGroupId: String? = null,
         idempotencyKey: String? = null,
-    ) = edit(budgetId) { it.manageCategory(categoryId, action, targetId, targetGroupId) }
+    ) = edit(budgetId, encryptionPassword) { it.manageCategory(categoryId, action, targetId, targetGroupId) }
 
     /** [order] holds optional `categoryGroups`, `categories` and `accounts` lists, each with `baseOrder` and `order`. */
     @Suppress("UNUSED_PARAMETER")
@@ -418,7 +458,7 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKey: String,
     ) {
-        edit(budgetId) { it.setOrders(order) }
+        edit(budgetId, encryptionPassword) { it.setOrders(order) }
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -427,7 +467,7 @@ class TandemApiClient(
         name: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): String = edit(budgetId) { it.createPayee(name) }
+    ): String = edit(budgetId, encryptionPassword) { it.createPayee(name) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun setBudgetCategoryAmount(
@@ -437,7 +477,7 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.setBudgetAmount(categoryId, month, amountMinor) }
+    ) = edit(budgetId, encryptionPassword) { it.setBudgetAmount(categoryId, month, amountMinor) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun setBudgetCategoryCarryover(
@@ -447,7 +487,7 @@ class TandemApiClient(
         enabled: Boolean,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.setBudgetCarryover(categoryId, month, enabled) }
+    ) = edit(budgetId, encryptionPassword) { it.setBudgetCarryover(categoryId, month, enabled) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun copyBudgetMonth(
@@ -455,7 +495,7 @@ class TandemApiClient(
         month: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.copyBudgetMonth(month) }
+    ) = edit(budgetId, encryptionPassword) { it.copyBudgetMonth(month) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun applyBudgetTemplate(
@@ -464,7 +504,7 @@ class TandemApiClient(
         assignments: List<Pair<String, Long>>,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.applyBudgetTemplate(month, assignments) }
+    ) = edit(budgetId, encryptionPassword) { it.applyBudgetTemplate(month, assignments) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun holdBudgetForNextMonth(
@@ -473,7 +513,7 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.holdBudgetForNextMonth(month, amountMinor) }
+    ) = edit(budgetId, encryptionPassword) { it.holdBudgetForNextMonth(month, amountMinor) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun resetBudgetHold(
@@ -481,7 +521,7 @@ class TandemApiClient(
         month: String,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.resetBudgetHold(month) }
+    ) = edit(budgetId, encryptionPassword) { it.resetBudgetHold(month) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun moveMoneyBetweenCategories(
@@ -492,7 +532,7 @@ class TandemApiClient(
         amountMinor: Long,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId) { it.moveMoney(month, fromCategoryId, toCategoryId, amountMinor) }
+    ) = edit(budgetId, encryptionPassword) { it.moveMoney(month, fromCategoryId, toCategoryId, amountMinor) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun deleteBudgetCategory(
@@ -501,7 +541,7 @@ class TandemApiClient(
         transferCategoryId: String?,
         encryptionPassword: String?,
         idempotencyKey: String? = null,
-    ) = edit(budgetId) { it.deleteCategory(categoryId, transferCategoryId) }
+    ) = edit(budgetId, encryptionPassword) { it.deleteCategory(categoryId, transferCategoryId) }
 
     /** [action] is rename, edit, skip, post or delete; [fields] carries an edit's changes. */
     @Suppress("UNUSED_PARAMETER")
@@ -518,7 +558,7 @@ class TandemApiClient(
         require(action !in setOf("post", "skip") || !expectedNextDate.isNullOrBlank()) {
             "Posting or skipping a schedule requires its displayed next date"
         }
-        edit(budgetId) { edits ->
+        edit(budgetId, encryptionPassword) { edits ->
             when (action) {
                 "rename" -> edits.schedules.rename(scheduleId, name.orEmpty())
                 "edit" ->
@@ -543,7 +583,7 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) {
-        edit(budgetId) { it.createRule(rule) }
+        edit(budgetId, encryptionPassword) { it.createRule(rule) }
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -555,7 +595,7 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) {
-        edit(budgetId) { edits ->
+        edit(budgetId, encryptionPassword) { edits ->
             when (action) {
                 "edit" -> edits.updateRule(ruleId, rule ?: throw ActualEditException("A rule needs conditions"))
                 "delete" ->
@@ -582,7 +622,7 @@ class TandemApiClient(
         categoryId: String? = null,
         idempotencyKeyOverride: String? = null,
     ) {
-        edit(budgetId) { edits ->
+        edit(budgetId, encryptionPassword) { edits ->
             when (action) {
                 "rename" -> edits.renamePayee(payeeId, name.orEmpty())
                 "merge" -> edits.mergePayee(payeeId, targetPayeeId ?: throw ActualEditException("Choose a payee to merge into"))

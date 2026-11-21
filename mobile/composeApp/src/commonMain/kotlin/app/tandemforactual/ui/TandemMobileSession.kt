@@ -389,6 +389,27 @@ internal class TandemMobileSession(
         return null
     }
 
+    /**
+     * Recovers from a reset in Actual: the device's copy and any edits it could not send are kept as a backup, and the
+     * budget is downloaded fresh. Returns how many unsent edits the backup holds.
+     */
+    internal suspend fun downloadBudgetAgain(
+        budgetId: String,
+        vault: EncryptedBudgetVault?,
+    ): Int {
+        val unsent =
+            pendingBudgetMutationCount(budgetId) +
+                repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
+        if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
+        apiClient.retireBudget(budgetId)
+        mainStorage?.repository?.removeBudget(budgetId)
+        vault?.delete(budgetId)
+        cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
+        loadLocalRecords(budgetId)
+        loadBudgets()
+        return unsent
+    }
+
     internal suspend fun mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =
         mainStorage?.repository?.budgetWrites(budgetId).orEmpty()
 

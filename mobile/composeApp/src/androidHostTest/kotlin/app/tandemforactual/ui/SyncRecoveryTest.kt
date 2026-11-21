@@ -20,6 +20,9 @@ class SyncRecoveryTest {
     @Test
     fun missingBudgetsAskToChooseAnother() {
         assertEquals(SyncRecovery.CHOOSE_BUDGET, syncRecovery("not_found", 404))
+        assertEquals(SyncRecovery.CHOOSE_BUDGET, syncRecovery("budget_unavailable"))
+        assertEquals(SyncRecovery.DOWNLOAD_AGAIN, syncRecovery("file_has_reset", 400))
+        assertEquals(SyncRecovery.DOWNLOAD_AGAIN, syncRecovery("file_has_new_key"))
     }
 
     @Test

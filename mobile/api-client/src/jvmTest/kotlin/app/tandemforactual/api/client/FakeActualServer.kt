@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualTimestamp
 import app.tandemforactual.data.actual.MerkleTrie
@@ -14,6 +15,8 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.File
 import kotlin.io.path.createTempDirectory
 
@@ -27,6 +30,16 @@ internal class FakeActualServer {
     var password = "test"
     var syncFailure: String? = null
     var syncCalls = 0
+    val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
+    private val sealedArchive = budgetKey.encrypt(archive)
+    private val lockedMessages = linkedMapOf<String, MessageEnvelope>()
+    private var lockedMerkle = MerkleTrie.fromJson("{}")
+    private val keyTest =
+        budgetKey.encrypt("test".encodeToByteArray()).let {
+            """{"value":"${b64(
+                it.data,
+            )}","meta":{"keyId":"key","algorithm":"aes-256-gcm","iv":"${b64(it.iv)}","authTag":"${b64(it.authTag)}"}}"""
+        }
     var files =
         """
         {"status":"ok","data":[{"fileId":"file","groupId":"group","name":"Direct"},
@@ -52,25 +65,59 @@ internal class FakeActualServer {
                         }
                     }
                     "/sync/list-user-files" -> respond(files)
-                    "/sync/get-user-file-info" -> respond("""{"status":"ok","data":{"fileId":"file","groupId":"group","name":"Direct"}}""")
-                    "/sync/download-user-file" -> respond(archive)
+                    "/sync/get-user-file-info" ->
+                        if (request.headers["x-actual-file-id"] == "encrypted") {
+                            respond(
+                                """{"status":"ok","data":{"fileId":"encrypted","groupId":"locked","name":"Locked",""" +
+                                    """"encryptMeta":{"keyId":"key","iv":"${b64(
+                                        sealedArchive.iv,
+                                    )}","authTag":"${b64(sealedArchive.authTag)}"}}}""",
+                            )
+                        } else {
+                            respond("""{"status":"ok","data":{"fileId":"file","groupId":"group","name":"Direct"}}""")
+                        }
+                    "/sync/download-user-file" ->
+                        respond(
+                            if (request.headers["x-actual-file-id"] ==
+                                "encrypted"
+                            ) {
+                                sealedArchive.data
+                            } else {
+                                archive
+                            },
+                        )
+                    "/sync/user-get-key" ->
+                        respond(
+                            buildJsonObject {
+                                put("status", "ok")
+                                put(
+                                    "data",
+                                    buildJsonObject {
+                                        put("id", "key")
+                                        put("salt", "salt")
+                                        put("test", keyTest)
+                                    },
+                                )
+                            }.toString(),
+                        )
                     "/sync/sync" -> {
                         syncCalls++
                         syncFailure?.let { return@MockEngine respond(it, HttpStatusCode.BadRequest) }
                         val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
+                        val locked = sent.fileId == "encrypted"
+                        val store = if (locked) lockedMessages else messages
                         for (message in sent.messages) {
-                            if (messages.putIfAbsent(message.timestamp, message) ==
-                                null
-                            ) {
-                                merkle = merkle.insert(checkNotNull(ActualTimestamp.parse(message.timestamp)))
+                            if (store.putIfAbsent(message.timestamp, message) == null) {
+                                val stamp = checkNotNull(ActualTimestamp.parse(message.timestamp))
+                                if (locked) lockedMerkle = lockedMerkle.insert(stamp) else merkle = merkle.insert(stamp)
                             }
                         }
                         val sentTimestamps = sent.messages.map { it.timestamp }.toSet()
                         respond(
                             SyncProtocol.encode(
                                 SyncResponse(
-                                    messages.values.filter { it.timestamp > sent.since && it.timestamp !in sentTimestamps },
-                                    merkle.prune().toJson().toString(),
+                                    store.values.filter { it.timestamp > sent.since && it.timestamp !in sentTimestamps },
+                                    (if (locked) lockedMerkle else merkle).prune().toJson().toString(),
                                 ),
                             ),
                         )
@@ -81,11 +128,23 @@ internal class FakeActualServer {
         )
 }
 
+private fun b64(bytes: ByteArray) =
+    java.util.Base64
+        .getEncoder()
+        .encodeToString(bytes)
+
 /** Keeps budget databases in a temporary directory. */
 internal class TempBudgetFiles : ActualBudgetFiles {
     val directory: File = createTempDirectory("budgets").toFile()
 
     private fun file(budgetId: String) = directory.resolve("$budgetId.sqlite")
+
+    override fun retire(
+        budgetId: String,
+        label: String,
+    ) {
+        file(budgetId).renameTo(directory.resolve("$budgetId-$label.sqlite"))
+    }
 
     override fun open(budgetId: String): ActualDatabase? =
         file(budgetId)
