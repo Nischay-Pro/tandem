@@ -166,6 +166,19 @@ def source_failures(source: str, relative_path: str) -> list[str]:
     return failures
 
 
+def resource_failures(source: str, relative_path: str) -> list[str]:
+    failures: list[str] = []
+    for match in re.finditer(r"<string\b[^>]*>([\s\S]*?)</string>", source):
+        value = match.group(1)
+        if not is_user_facing_literal(value):
+            continue
+        line = source.count("\n", 0, match.start()) + 1
+        for message, pattern in RULES:
+            if pattern.search(value):
+                failures.append(f"{relative_path}:{line}: {message}")
+    return failures
+
+
 def old_product_name_failures(source: str, relative_path: str) -> list[str]:
     normalized = source
     if relative_path.endswith(".kt"):
@@ -267,7 +280,8 @@ def main() -> int:
             print(f"missing mobile source directory: {source_root}", file=sys.stderr)
             return 2
         for path in sorted(source_root.rglob("*")):
-            if path.suffix not in {".kt", ".swift"}:
+            resource = path.name == "strings.xml" and "composeResources" in path.parts
+            if path.suffix not in {".kt", ".swift"} and not resource:
                 continue
             if "build" in path.parts or path.name.endswith(("Test.kt", "Tests.swift")):
                 continue
@@ -277,7 +291,9 @@ def main() -> int:
                 relative_path = path.relative_to(ROOT).as_posix()
             except ValueError:
                 relative_path = path.as_posix()
-            failures.extend(source_failures(content, relative_path))
+            failures.extend(
+                resource_failures(content, relative_path) if resource else source_failures(content, relative_path)
+            )
             failures.extend(old_product_name_failures(content, relative_path))
 
     if not source_count:
