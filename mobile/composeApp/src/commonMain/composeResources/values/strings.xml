@@ -34,4 +34,7 @@
     <string name="settings_getting_started_detail">Tips for using Tandem</string>
     <string name="settings_about">About, help, and licenses</string>
     <string name="settings_about_detail">Version and open-source licenses</string>
+    <string name="language_change">Change language</string>
+    <string name="language_close">Close</string>
+    <string name="language_device_detail">Follows the language set on this device</string>
 </resources>
