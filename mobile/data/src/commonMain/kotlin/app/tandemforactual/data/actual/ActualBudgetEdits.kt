@@ -28,6 +28,14 @@ class ActualBudgetEdits(
 ) {
     private val db get() = writer.db
 
+    fun linkBankAccount(
+        accountId: String,
+        source: String,
+        providerAccountId: String,
+        bankId: String,
+        bankName: String?,
+    ) = ActualBankSync(writer, today).linkAccount(accountId, source, providerAccountId, bankId, bankName)
+
     /** `transactions-import`: reconciles statement rows into an account the way Actual does. */
     fun importTransactions(
         accountId: String,

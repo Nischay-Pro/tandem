@@ -9,6 +9,7 @@ data class ImportRow(
     val importedId: String? = null,
     val category: String? = null,
     val cleared: Boolean? = null,
+    val rawSyncedData: String? = null,
 )
 
 enum class ImportOutcome { ADD, UPDATE, UNCHANGED, RECONCILED }
@@ -38,6 +39,8 @@ class ActualImport(
         titleCasePayees: Boolean = true,
         defaultCleared: Boolean = true,
         reimportDeleted: Boolean = true,
+        strictIdChecking: Boolean = true,
+        updateDates: Boolean = false,
     ): ImportResult {
         val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
         val payeesByName =
@@ -76,7 +79,7 @@ class ActualImport(
                             "imported_payee" to payeeName,
                             "category" to row.category,
                             "cleared" to row.cleared,
-                        ),
+                        ).apply { row.rawSyncedData?.let { put("raw_synced_data", it) } },
                     )
                 var match: Row? = null
                 var fuzzy = emptyList<Row>()
@@ -95,12 +98,16 @@ class ActualImport(
                     fuzzy =
                         db
                             .query(
-                                "SELECT * FROM v_transactions WHERE (imported_id IS NULL OR ? IS NULL) AND date >= ? AND date <= ? AND amount = ? AND account = ?",
-                                importedId,
-                                ActualDates.toInt(ActualDates.addDays(row.date, -7)),
-                                ActualDates.toInt(ActualDates.addDays(row.date, 7)),
-                                trans["amount"] as Long,
-                                accountId,
+                                "SELECT * FROM v_transactions WHERE ${if (strictIdChecking) "(imported_id IS NULL OR ? IS NULL) AND " else ""}date >= ? AND date <= ? AND amount = ? AND account = ?",
+                                *(
+                                    (if (strictIdChecking) listOf<Any?>(importedId) else emptyList()) +
+                                        listOf(
+                                            ActualDates.toInt(ActualDates.addDays(row.date, -7)),
+                                            ActualDates.toInt(ActualDates.addDays(row.date, 7)),
+                                            trans["amount"] as Long,
+                                            accountId,
+                                        )
+                                ).toTypedArray(),
                             ).sortedWith(
                                 compareBy<Row> {
                                     kotlin.math.abs(
@@ -140,7 +147,17 @@ class ActualImport(
                                 "imported_payee" to trans["imported_payee"],
                                 "notes" to (match["notes"] ?: trans["notes"]),
                                 "cleared" to (truthy(match["cleared"]) || truthy(trans["cleared"])),
-                            )
+                            ).apply {
+                                if (match["raw_synced_data"] != null ||
+                                    trans["raw_synced_data"] != null
+                                ) {
+                                    put(
+                                        "raw_synced_data",
+                                        match["raw_synced_data"] ?: trans["raw_synced_data"],
+                                    )
+                                }
+                                if (updateDates) put("date", ActualDates.toInt(trans["date"] as String))
+                            }
                         val existing =
                             mapOf(
                                 "imported_id" to match["imported_id"],
@@ -149,12 +166,21 @@ class ActualImport(
                                 "imported_payee" to match["imported_payee"],
                                 "notes" to match["notes"],
                                 "cleared" to truthy(match["cleared"]),
+                                "raw_synced_data" to match["raw_synced_data"],
+                                "date" to (match["date"] as Number?)?.toLong(),
                             )
                         if (updates.any { (key, value) -> existing[key] != value }) {
                             updated += updates + ("id" to match["id"])
-                            if (truthy(match["is_parent"]) && existing["cleared"] != updates["cleared"]) {
+                            val clearedChanged = existing["cleared"] != updates["cleared"]
+                            val dateChanged = updates.containsKey("date") && existing["date"] != updates["date"]
+                            if (truthy(match["is_parent"]) && (clearedChanged || dateChanged)) {
                                 db.query("SELECT id FROM v_transactions WHERE parent_id = ?", match["id"]).forEach {
-                                    updated += mapOf("id" to it["id"], "cleared" to updates["cleared"])
+                                    updated +=
+                                        buildMap {
+                                            put("id", it["id"])
+                                            if (clearedChanged) put("cleared", updates["cleared"])
+                                            if (dateChanged) put("date", updates["date"])
+                                        }
                                 }
                             }
                             ImportOutcome.UPDATE

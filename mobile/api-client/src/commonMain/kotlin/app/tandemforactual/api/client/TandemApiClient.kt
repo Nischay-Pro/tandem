@@ -349,7 +349,7 @@ class TandemApiClient(
     suspend fun runBudgetBankSync(
         budgetId: String,
         encryptionPassword: String?,
-    ): Unit = call { budget(budgetId, encryptionPassword).sync() }
+    ): Unit = call { budget(budgetId, encryptionPassword).bankSync(today()) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun importBudgetAccountTransactions(
@@ -714,7 +714,7 @@ class TandemApiClient(
             "file-has-reset" -> "file_has_reset"
             "file-has-new-key" -> "file_has_new_key"
             "not-found", "network-failure" -> "address_unreachable"
-            else -> reason.replace('-', '_')
+            else -> if (reason.startsWith("bank-sync-")) "bank_sync_failed" else reason.replace('-', '_')
         }
 }
 

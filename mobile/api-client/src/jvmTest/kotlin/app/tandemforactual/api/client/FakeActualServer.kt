@@ -28,6 +28,7 @@ internal class FakeActualServer {
     val messages: MutableMap<String, MessageEnvelope> = initial.messages.associateByTo(linkedMapOf()) { it.timestamp }
     var merkle = MerkleTrie.fromJson(initial.merkle)
     var password = "test"
+    var bankDownload = """{"status":"ok","data":{}}"""
     var syncFailure: String? = null
     var syncCalls = 0
     var extension = false
@@ -131,6 +132,7 @@ internal class FakeActualServer {
                             ),
                         )
                     }
+                    "/simplefin/transactions" -> respond(bankDownload)
                     else -> error("Unexpected path ${request.url.encodedPath}")
                 }
             },
