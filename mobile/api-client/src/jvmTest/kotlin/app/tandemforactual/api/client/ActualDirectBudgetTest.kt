@@ -17,6 +17,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -43,6 +44,8 @@ class ActualDirectBudgetTest {
             val serverState = SyncProtocol.decodeResponse(fixture.resolve("sync-response.bin").readBytes())
             val path = File.createTempFile("actual-budget", ".sqlite")
             var reset = false
+            var invalidMerkle = false
+            var failure: Exception? = null
 
             fun connect() = ActualDatabase(BundledSQLiteDriver().open(path.path))
             try {
@@ -62,6 +65,8 @@ class ActualDirectBudgetTest {
                             "/sync/download-user-file" -> respond(archive)
                             "/sync/sync" -> {
                                 if (reset) return@MockEngine respond("file-has-reset", HttpStatusCode.Conflict)
+                                failure?.let { throw it }
+                                if (invalidMerkle) return@MockEngine respond(SyncProtocol.encode(SyncResponse(emptyList(), "invalid")))
                                 val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                                 respond(
                                     SyncProtocol.encode(
@@ -114,8 +119,23 @@ class ActualDirectBudgetTest {
                             }
                             assertEquals(checkpoint, repository.readSyncCheckpoint(budget.groupId))
                             assertEquals("file-has-reset", repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            reset = false
+                            invalidMerkle = true
+                            assertFailsWith<Exception> { ActualDirectSyncCoordinator(budget, repository).synchronize(today, false) }
+                            assertEquals("invalid-merkle", repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            invalidMerkle = false
+                            for ((injectedError, code) in listOf(
+                                CancellationException("cancelled in transport") to "sync-cancelled",
+                                IllegalStateException("broken transport") to "direct-sync-failed",
+                            )) {
+                                failure = injectedError
+                                assertFailsWith<Exception> { ActualDirectSyncCoordinator(budget, repository).synchronize(today, false) }
+                                assertEquals(code, repository.readSyncState(budget.groupId)?.lastErrorCode)
+                            }
                         } finally {
                             reset = false
+                            invalidMerkle = false
+                            failure = null
                             cache.closeDatabase()
                         }
                         val changed = oldRecords[1].copy(revision = "changed")
@@ -192,6 +212,8 @@ class ActualDirectBudgetTest {
             } finally {
                 reopened.close()
             }
+            repository.applyFullSnapshot("group", "different-installation", "1", repository.readSyncCheckpoint("group"), emptyList())
+            assertFailsWith<IllegalStateException> { session.reopenBudget("group", repository, now, newId, connect) }
             assertFailsWith<IllegalStateException> {
                 session.openNewBudget("group", "2026-11-21", repository, now, newId) { error("Unexpected install") }
             }

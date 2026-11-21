@@ -15,8 +15,6 @@ import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.FullSnapshotResult
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetSnapshot
-import app.tandemforactual.data.store.RemoteOperationResult
-import app.tandemforactual.data.store.RemoteOperationStatus
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
@@ -142,7 +140,7 @@ class ActualDirectBudget private constructor(
      * Applies a transaction assigned to this budget's direct outbox. The caller must establish ownership of the
      * outbox before switching from the gateway.
      */
-    suspend fun submit(operation: OutboxOperationEntity): RemoteOperationResult {
+    internal suspend fun submit(operation: OutboxOperationEntity): OperationOutcome {
         if (operation.budgetId != groupId || operation.recordType != "transaction") {
             throw BudgetSyncProtocolException("The operation does not belong to this direct transaction outbox")
         }
@@ -153,30 +151,16 @@ class ActualDirectBudget private constructor(
                 "DELETE" -> "delete"
                 else -> throw BudgetSyncProtocolException("This action is unavailable in the direct transaction outbox")
             }
-        val result =
-            submit(
-                operation.operationId,
-                operation.recordId,
-                action,
-                BudgetSyncJson.parseJsonObject(operation.patchJson),
-                operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
-            )
-        return result.toRemoteResult()
+        return submit(
+            operation.operationId,
+            operation.recordId,
+            action,
+            BudgetSyncJson.parseJsonObject(operation.patchJson),
+            operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
+        )
     }
 
-    internal suspend fun findOperation(operationId: String): RemoteOperationResult? =
-        mutex.withLock { operations.find(operationId)?.toRemoteResult() }
-
-    private fun OperationOutcome.toRemoteResult() =
-        RemoteOperationResult(
-            operationId,
-            groupId,
-            transactionId,
-            RemoteOperationStatus.valueOf(status.name),
-            errorCode,
-            conflictType,
-            conflictingFields,
-        )
+    internal suspend fun findOperation(operationId: String): OperationOutcome? = mutex.withLock { operations.find(operationId) }
 
     suspend fun close() = mutex.withLock { db.close() }
 

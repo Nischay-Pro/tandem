@@ -1,12 +1,12 @@
 package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ActualSyncException
+import app.tandemforactual.data.actual.OperationOutcome
+import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.FullSnapshotResult
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
-import app.tandemforactual.data.store.RemoteOperationResult
-import app.tandemforactual.data.store.RemoteOperationStatus
 import app.tandemforactual.data.store.encodeLocalWriteConflictDetails
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -35,7 +35,7 @@ class ActualDirectSyncCoordinator(
             try {
                 repository.recoverInterruptedSyncWrites()
                 var projection = budget.refreshProjection(today)
-                val results = mutableListOf<RemoteOperationResult>()
+                val results = mutableListOf<OperationOutcome>()
                 if (sendQueuedWrites) {
                     for (operation in repository.readPendingWrites(budgetId)) {
                         if (operation.recordType != "transaction" || operation.status != "uncertain") continue
@@ -71,9 +71,9 @@ class ActualDirectSyncCoordinator(
                     fullSnapshotApplied = true,
                     changePagesApplied = 0,
                     changesApplied = 0,
-                    writesCommitted = outcomes.count { it == RemoteOperationStatus.COMMITTED },
-                    writesConflicted = outcomes.count { it == RemoteOperationStatus.CONFLICT },
-                    writesRejected = outcomes.count { it == RemoteOperationStatus.REJECTED },
+                    writesCommitted = outcomes.count { it == OperationStatus.COMMITTED },
+                    writesConflicted = outcomes.count { it == OperationStatus.CONFLICT },
+                    writesRejected = outcomes.count { it == OperationStatus.REJECTED },
                     writesUncertain = 0,
                 )
             } catch (error: Exception) {
@@ -93,23 +93,23 @@ class ActualDirectSyncCoordinator(
         }
 
     private suspend fun finalize(
-        result: RemoteOperationResult,
+        result: OperationOutcome,
         record: RemoteBudgetRecord?,
-    ): RemoteOperationStatus {
+    ): OperationStatus {
         val operationId = result.operationId
         val operation = checkNotNull(repository.findWrite(operationId))
         return when (result.status) {
-            RemoteOperationStatus.COMMITTED -> {
+            OperationStatus.COMMITTED -> {
                 if ((operation.action == "DELETE") != (record == null)) {
                     repository.markWriteConflict(operationId, "transaction-changed-during-sync", record)
-                    RemoteOperationStatus.CONFLICT
+                    OperationStatus.CONFLICT
                 } else {
                     repository.markWriteCommitted(operationId, record)
-                    RemoteOperationStatus.COMMITTED
+                    OperationStatus.COMMITTED
                 }
             }
 
-            RemoteOperationStatus.CONFLICT -> {
+            OperationStatus.CONFLICT -> {
                 val details =
                     encodeLocalWriteConflictDetails(
                         result.errorCode ?: "transaction-conflict",
@@ -117,15 +117,13 @@ class ActualDirectSyncCoordinator(
                         result.conflictingFields,
                     )
                 repository.markWriteConflict(operationId, details, record)
-                RemoteOperationStatus.CONFLICT
+                OperationStatus.CONFLICT
             }
 
-            RemoteOperationStatus.REJECTED -> {
+            OperationStatus.REJECTED -> {
                 repository.markWriteRejected(operationId, result.errorCode ?: "transaction-rejected")
-                RemoteOperationStatus.REJECTED
+                OperationStatus.REJECTED
             }
-
-            else -> error("Unexpected direct operation status ${result.status}")
         }
     }
 }
