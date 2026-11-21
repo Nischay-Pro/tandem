@@ -6,7 +6,7 @@ import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.components.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.components.PeriodStepper
 import org.junit.Rule
 import org.junit.Test
@@ -50,13 +50,13 @@ class LandscapeChromeTest {
 
         composeTestRule
             .onNodeWithContentDescription("Back")
-            .assertWidthIsEqualTo(44.dp)
-            .assertHeightIsEqualTo(44.dp)
+            .assertWidthIsEqualTo(MIN_TOUCH_TARGET)
+            .assertHeightIsEqualTo(MIN_TOUCH_TARGET)
             .performClick()
         composeTestRule
             .onNodeWithContentDescription("Previous month")
-            .assertWidthIsEqualTo(44.dp)
-            .assertHeightIsEqualTo(44.dp)
+            .assertWidthIsEqualTo(MIN_TOUCH_TARGET)
+            .assertHeightIsEqualTo(MIN_TOUCH_TARGET)
 
         assertTrue(backRequested)
     }

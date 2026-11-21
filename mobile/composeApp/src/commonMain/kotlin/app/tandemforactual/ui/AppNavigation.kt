@@ -704,7 +704,7 @@ internal fun BottomNavigation(
 ) {
     val palette = tandemPalette
     val density = LocalDensity.current
-    val labelDensity = Density(density.density, density.fontScale.coerceAtMost(1.3f))
+    val labelDensity = navigationLabelDensity(density)
     val items =
         listOf(
             AppRoute.BUDGET to "Budget",
@@ -886,15 +886,17 @@ internal fun SideNavigationRail(
                 ) {
                     NavigationGlyph(route, tabColor, iconScale)
                 }
-                Text(
-                    label,
-                    color = tabColor,
-                    fontSize = TandemTypography.micro,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                CompositionLocalProvider(LocalDensity provides navigationLabelDensity(LocalDensity.current)) {
+                    Text(
+                        label,
+                        color = tabColor,
+                        fontSize = TandemTypography.micro,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -1018,3 +1020,6 @@ internal fun NavigationGlyph(
         }
     }
 }
+
+/** Navigation labels grow with the system font size up to 130%, so they still fit the tab bar and rail. */
+internal fun navigationLabelDensity(density: Density): Density = Density(density.density, density.fontScale.coerceAtMost(1.3f))
