@@ -103,9 +103,7 @@ internal fun DataHealthScreen(
     val shown = remember { mutableStateMapOf<String, Int>() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        mobileSession.insights.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })?.let {
-            mobileSession.insights.dataHealthCache = state.selectedBudgetId to it
-        }
+        mobileSession.insights.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })
         loading = false
     }
     val issues = cached

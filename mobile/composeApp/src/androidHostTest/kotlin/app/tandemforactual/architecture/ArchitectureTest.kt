@@ -109,6 +109,18 @@ class ArchitectureTest {
     }
 
     @Test
+    fun featuresDoNotWriteSessionState() {
+        val write = Regex("""\bmobileSession(?:\.\w+)+\s*(?:=(?!=)|\+=|-=)""")
+        check(
+            "session-write",
+            files
+                .filter { it.feature() != null }
+                .flatMap { f -> write.findAll(f.text).map { "${f.name} ${it.value.substringBefore('=').trim().trimEnd('+', '-').trim()}" } }
+                .distinct(),
+        )
+    }
+
+    @Test
     fun filesStaySmall() {
         check("size", files.filter { it.text.lines().size > MAX_FILE_LINES }.map { it.name })
     }
