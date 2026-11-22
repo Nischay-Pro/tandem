@@ -81,7 +81,6 @@ private val errorMessages =
         "sign_in_required" to "Sign in to open your budgets.",
         "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
         "invalid_credentials" to "That password doesn’t match this Actual server. Check the password.",
-        "openid_unsupported" to "Sign in with your Actual password. OpenID sign-in isn’t available in Tandem yet.",
         "budget_unavailable" to "This budget isn’t on the Actual server any more.",
         "encrypted_budget" to "Tandem can’t open encrypted budgets yet.",
         "file_has_reset" to "This budget’s sync history was reset in Actual. Remove it from this device and open it again.",
@@ -219,20 +218,44 @@ class TandemApiClient(
             signedIn
         }
 
+    /**
+     * Asks Actual for the provider's sign-in page. Actual sends the browser back to the return address with `/openid-cb?token=`
+     * appended; the address carries [callbackState] so only a sign-in this device started can complete.
+     */
     @Suppress("UNUSED_PARAMETER")
     suspend fun startActualOpenIdSignIn(
         serverUrl: String,
         deviceName: String,
         codeChallenge: String,
         callbackState: String,
-    ): String = throw TandemApiException("openid_unsupported")
+    ): String =
+        sessionMutex.withLock {
+            val client = ActualServerClient(http, parse(serverUrl).toString())
+            call { client.startOpenId("$OPEN_ID_RETURN/$callbackState") }
+        }
 
+    /** Finishes OpenID sign-in with the session token Actual returned, as Actual's own web app does. */
     @Suppress("UNUSED_PARAMETER")
     suspend fun completeActualOpenIdSignIn(
         serverUrl: String,
         code: String,
         codeVerifier: String,
-    ): AuthenticatedDevice = throw TandemApiException("openid_unsupported")
+    ): AuthenticatedDevice =
+        sessionMutex.withLock {
+            closeBudgets()
+            val client = connect(serverUrl)
+            client.token = code
+            if (!call { client.validate() }) throw TandemApiException("invalid_credentials", 401)
+            val files = call { client.listFiles() }
+            val signedIn =
+                AuthenticatedDevice(
+                    deviceId = newId(),
+                    principalId = "actual:${parse(serverUrl).host}",
+                    budgetIds = files.filter { !it.deleted }.mapNotNull { it.groupId },
+                )
+            device = signedIn
+            signedIn
+        }
 
     suspend fun listBudgets(): List<BudgetCatalogItem> =
         sessionMutex.withLock {
@@ -749,3 +772,5 @@ data class BudgetChangeHistory(
     val deviceNode: String,
     val changes: List<ChangeSet>,
 )
+
+const val OPEN_ID_RETURN = "app.tandemforactual://signin/complete"

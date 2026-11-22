@@ -54,7 +54,8 @@ class TandemApiClientTest {
             val stored = checkNotNull(client.exportStoredSession())
             client.forgetSession()
             assertFalse(client.isAuthenticated)
-            val restored = client(files = null)
+            val openIdServer = FakeActualServer()
+            val restored = client(openIdServer, files = null)
             assertEquals(device, restored.restoreStoredSession(stored))
             assertTrue(restored.isAuthenticated)
             assertFailsWith<TandemApiProtocolException> { restored.restoreStoredSession("nope") }
@@ -67,13 +68,14 @@ class TandemApiClientTest {
             assertFalse(restored.refreshLocalServer())
             restored.useExternalServerAfterLocalFailure()
             assertEquals(1, restored.withExclusiveSession { 1 })
+            assertEquals("https://idp.example/authorize", restored.startActualOpenIdSignIn(url, "d", "c", "state"))
+            assertEquals("$OPEN_ID_RETURN/state", openIdServer.openIdReturnUrl)
+            assertEquals("actual:${java.net.URI(url).host}", restored.completeActualOpenIdSignIn(url, "session", "v").principalId)
             assertEquals(
-                "openid_unsupported",
-                assertFailsWith<TandemApiException> { restored.startActualOpenIdSignIn(url, "d", "c", "s") }.errorCode,
-            )
-            assertEquals(
-                "openid_unsupported",
-                assertFailsWith<TandemApiException> { restored.completeActualOpenIdSignIn(url, "c", "v") }.errorCode,
+                "invalid_credentials",
+                assertFailsWith<TandemApiException> {
+                    restored.completeActualOpenIdSignIn(url, "expired", "v")
+                }.errorCode,
             )
             restored.revokeCurrentDevice()
             assertFalse(restored.isAuthenticated)
