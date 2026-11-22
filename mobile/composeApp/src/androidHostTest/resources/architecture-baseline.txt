@@ -137,6 +137,8 @@ function-size RuleEditorSheet.RuleConditionEditor
 function-size RuleEditorSheet.RuleEditorContent
 function-size ScheduleScreens.ScheduleDatePickerDialog
 function-size ScheduleScreens.UpcomingSchedulesScreen
+function-size SessionSignOut.signOutAndClearLocalData
+function-size SessionSync.synchronizeSerialized
 function-size SettingsScreen.SettingsScreen
 function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
@@ -145,8 +147,6 @@ function-size SyncCenterScreen.PendingChangesScreen
 function-size SyncCenterScreen.SyncCenterScreen
 function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
-function-size TandemMobileSession.signOutAndClearLocalData
-function-size TandemMobileSession.synchronizeSerialized
 function-size TandemTheme.TandemTheme
 function-size TransactionActionComponents.TransactionRow
 function-size TransactionConflictResolution.resolve

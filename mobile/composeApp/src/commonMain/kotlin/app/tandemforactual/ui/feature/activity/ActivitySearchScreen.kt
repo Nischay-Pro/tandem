@@ -46,6 +46,7 @@ import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 import app.tandemforactual.ui.core.state.ActivitySearchCache
 import app.tandemforactual.ui.core.state.ActivitySearchResultCache
 import app.tandemforactual.ui.core.state.AppNavigation

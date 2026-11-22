@@ -28,6 +28,7 @@ import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.planning.TrendDirection
 import app.tandemforactual.ui.core.format.platformFormatMonth
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody

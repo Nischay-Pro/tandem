@@ -17,12 +17,9 @@ import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
-import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
-import app.tandemforactual.data.store.BudgetSyncProtocolException
-import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
 import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
@@ -35,11 +32,7 @@ import app.tandemforactual.ui.core.session.activity.ActivityController
 import app.tandemforactual.ui.core.session.banking.BankingController
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
-import app.tandemforactual.ui.core.session.budget.hasPendingTransactionDependency
 import app.tandemforactual.ui.core.session.budget.payeeRecordsWithPendingCreates
-import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
-import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
-import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.conflicts.ConflictController
 import app.tandemforactual.ui.core.session.feedback.BudgetActionRunner
 import app.tandemforactual.ui.core.session.insights.InsightsController
@@ -47,24 +40,14 @@ import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
 import app.tandemforactual.ui.core.session.transactions.TransactionController
 import app.tandemforactual.ui.core.state.AppRouteEntry
-import app.tandemforactual.ui.core.state.PlanningSyncStatus
-import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.feature.reports.ReportsViewModels
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -171,10 +154,10 @@ internal fun budgetActionFeedbackMessage(mobileSession: TandemMobileSession) {
 
 internal class BudgetActionFeedbackState {
     var currentRouteEntry by mutableStateOf<AppRouteEntry?>(null)
-        private set
+        internal set
 
     var feedback by mutableStateOf<BudgetActionFeedback?>(null)
-        private set
+        internal set
 
     fun changeRoute(routeEntry: AppRouteEntry) {
         if (currentRouteEntry == routeEntry) return
@@ -237,7 +220,7 @@ internal interface BudgetMutationQueuePersistence {
 }
 
 internal class LocalBudgetRepositoryMutationQueuePersistence(
-    private val repository: LocalBudgetRepository,
+    internal val repository: LocalBudgetRepository,
 ) : BudgetMutationQueuePersistence {
     override suspend fun read(): LocalBudgetMutationQueueSnapshot = repository.readBudgetMutationQueue()
 
@@ -265,11 +248,11 @@ internal class TandemMobileSession(
     override val apiClient: TandemApiClient,
     database: TandemDatabase?,
     override val nowEpochMillis: () -> Long,
-    private val credentialStore: DeviceCredentialStore? = null,
+    internal val credentialStore: DeviceCredentialStore? = null,
     budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
     override val currentDateIso: () -> String = ::platformTodayIsoDate,
-    private val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
-    private val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
+    internal val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
+    internal val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
 ) : SessionHost {
     /** Bank providers, links and bank sync. */
     val banking =
@@ -314,69 +297,7 @@ internal class TandemMobileSession(
     /** Activity pages and account activity. */
     val activity = ActivityController(this)
 
-    private val mainStorage = database?.let { BudgetStorage(it) }
-    private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
-    private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
-    override val repository: LocalBudgetRepository? get() = storage?.repository
-
-    /** Goals, debts, retirement, reimbursements and the other planning records Actual doesn't hold. */
-    val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
-
-    override val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
-        get() = queuePersistenceOverride ?: storage?.queuePersistence
-    private val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
-    override val preferencesStore: AppPreferencesStore? = database?.let(::AppPreferencesStore)
-    override val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    internal val reportViewModels: ReportsViewModels? get() = storage?.reports
-    override val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
-
-    var databaseGeneration by mutableStateOf(0)
-        private set
-
-    internal val boundEncryptedBudgetId: String? get() = budgetStorage?.budgetId
-
-    internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
-
-    var isUsingLocalServer by mutableStateOf(false)
-        private set
-
-    var serverCapabilities by mutableStateOf<ServerCapabilities?>(null)
-        private set
-
-    private var capabilitiesCheckedAtEpochMs = 0L
-
-    suspend fun refreshServerCapabilities(force: Boolean = false) {
-        if (!force && nowEpochMillis() - capabilitiesCheckedAtEpochMs < CAPABILITIES_REFRESH_MILLIS) return
-        val latest = apiClient.readServerCapabilities() ?: return
-        capabilitiesCheckedAtEpochMs = nowEpochMillis()
-        if (latest != serverCapabilities) {
-            serverCapabilities = latest
-            budgetQueue.budgetReorderRetrySignal += 1
-        }
-    }
-
-    override fun missingServerFeature(kind: BudgetReorderKind): String? = missingServerFeature(kind, serverCapabilities)
-
-    var localServerError by mutableStateOf<String?>(null)
-        private set
-
-    suspend fun configureLocalServer(url: String?): Boolean {
-        localServerError = null
-        try {
-            apiClient.setLocalServerUrl(url)
-        } catch (_: TandemApiException) {
-            localServerError = "Enter a local address like http://192.168.1.10:19753."
-            isUsingLocalServer = false
-            return false
-        }
-        isUsingLocalServer = !url.isNullOrBlank() && apiClient.refreshLocalServer()
-        return isUsingLocalServer
-    }
-
-    internal fun encryptedStorageMissing(budgetId: String): Boolean =
-        budgetId in encryptedStorageRequired && budgetStorage?.budgetId != budgetId
-
-    private inner class BudgetStorage(
+    internal inner class BudgetStorage(
         val database: TandemDatabase,
         val budgetId: String? = null,
     ) {
@@ -390,206 +311,150 @@ internal class TandemMobileSession(
             )
     }
 
-    internal suspend fun bindEncryptedBudgetDatabase(
-        budgetId: String,
-        database: TandemDatabase?,
-    ) {
-        val previous =
-            synchronizationMutex.withLock {
-                val replaced = budgetStorage
-                budgetStorage = database?.let { BudgetStorage(it, budgetId) }
-                budgetQueue.budgetQueueLoaded = false
-                budgetQueue.budgetReorderQueueState = BudgetReorderQueueState()
-                databaseGeneration += 1
-                replaced
-            }
-        if (previous != null && previous.budgetId != null) {
-            sessionScope.launch {
-                delay(ENCRYPTED_DATABASE_CLOSE_DELAY_MILLIS)
-                runCatching { previous.database.closeDatabase() }
-            }
-        }
-        loadLocalRecords(budgetId)
-    }
+    internal val mainStorage = database?.let { BudgetStorage(it) }
+    internal var budgetStorage by mutableStateOf<BudgetStorage?>(null)
+    internal val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
+    override val repository: LocalBudgetRepository? get() = storage?.repository
 
-    internal suspend fun unbindEncryptedBudgetDatabase() {
-        val budgetId = budgetStorage?.budgetId ?: return
-        scheduleActionEncryptionPasswords.remove(budgetId)
-        bindEncryptedBudgetDatabase(budgetId, null)
-    }
+    /** Goals, debts, retirement, reimbursements and the other planning records Actual doesn't hold. */
+    val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
 
-    internal fun synchronizeInBackground(
-        budgetId: String,
-        encryptionPassword: String,
-    ) {
-        sessionScope.launch { synchronize(budgetId = budgetId, encryptionPassword = encryptionPassword) }
-    }
+    override val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
+        get() = queuePersistenceOverride ?: storage?.queuePersistence
+    internal val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
+    override val preferencesStore: AppPreferencesStore? = database?.let(::AppPreferencesStore)
+    override val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    internal val reportViewModels: ReportsViewModels? get() = storage?.reports
+    override val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
 
-    internal fun forgetEncryptionPasswords() {
-        scheduleActionEncryptionPasswords.clear()
-    }
+    var databaseGeneration by mutableStateOf(0)
+        internal set
 
-    internal suspend fun removeBudgetFromDevice(
-        budgetId: String,
-        vault: EncryptedBudgetVault?,
-    ): String? {
-        val unsynced =
-            budgetQueue.pendingBudgetMutationCount(budgetId) > 0 ||
-                repository?.readPendingWrites(budgetId).orEmpty().any { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
-        if (unsynced) return "Sync or resolve this budget’s changes before removing it from this device."
-        if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
-        mainStorage?.repository?.removeBudget(budgetId)
-        apiClient.removeBudget(budgetId)
-        vault?.delete(budgetId)
-        cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
-        loadLocalRecords(budgetId)
-        return null
-    }
+    internal val boundEncryptedBudgetId: String? get() = budgetStorage?.budgetId
 
-    /**
-     * Recovers from a reset in Actual: the device's copy and any edits it could not send are kept as a backup, and the
-     * budget is downloaded fresh. Returns how many unsent edits the backup holds.
-     */
-    internal suspend fun downloadBudgetAgain(
-        budgetId: String,
-        vault: EncryptedBudgetVault?,
-    ): Int {
-        val unsent =
-            budgetQueue.pendingBudgetMutationCount(budgetId) +
-                repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
-        if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
-        apiClient.retireBudget(budgetId)
-        mainStorage?.repository?.removeBudget(budgetId)
-        vault?.delete(budgetId)
-        cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
-        loadLocalRecords(budgetId)
-        loadBudgets()
-        return unsent
-    }
+    internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
 
-    internal suspend fun mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =
-        mainStorage?.repository?.budgetWrites(budgetId).orEmpty()
+    var isUsingLocalServer by mutableStateOf(false)
+        internal set
 
-    internal suspend fun removeBudgetFromMainStorage(budgetId: String) {
-        mainStorage?.repository?.removeBudget(budgetId)
-    }
+    var serverCapabilities by mutableStateOf<ServerCapabilities?>(null)
+        internal set
+
+    internal var capabilitiesCheckedAtEpochMs = 0L
+
+    override fun missingServerFeature(kind: BudgetReorderKind): String? = missingServerFeature(kind, serverCapabilities)
+
+    var localServerError by mutableStateOf<String?>(null)
+        internal set
 
     override var authenticatedDevice by mutableStateOf<AuthenticatedDevice?>(null)
-        private set
+        internal set
 
     var budgets by mutableStateOf<List<BudgetCatalogItem>>(emptyList())
-        private set
+        internal set
 
     var cachedBudgets by mutableStateOf<List<BudgetCatalogItem>>(emptyList())
-        private set
+        internal set
 
     var budgetCatalogLoaded by mutableStateOf(false)
-        private set
+        internal set
 
     var budgetCatalogVersion by mutableStateOf(0)
-        private set
+        internal set
 
     override var isServerReachable by mutableStateOf(false)
-        private set
+        internal set
 
     override fun markServerReachable(reachable: Boolean) {
         isServerReachable = reachable
     }
 
     var hasCachedSnapshot by mutableStateOf(false)
-        private set
+        internal set
 
     var cachedSnapshotBudgetId by mutableStateOf("")
-        private set
+        internal set
 
     var isSigningIn by mutableStateOf(false)
-        private set
+        internal set
 
     var signInError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var actualLoginMethods by mutableStateOf<ActualLoginMethods?>(null)
-        private set
+        internal set
 
     var isLoadingLoginMethods by mutableStateOf(false)
-        private set
+        internal set
 
     var credentialStorageError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var deviceRevocationError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var signOutError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var signOutNotice by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     override var isSigningOut by mutableStateOf(false)
-        private set
+        internal set
 
     var isRevokingDevice by mutableStateOf(false)
-        private set
+        internal set
 
     var isCredentialStored by mutableStateOf(false)
-        private set
+        internal set
 
     var isRestoringStoredSession by mutableStateOf(false)
-        private set
+        internal set
 
     var isLoadingBudgets by mutableStateOf(false)
-        private set
+        internal set
 
     var budgetError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
-    private var syncPresentation by mutableStateOf(SyncPresentationState())
-    private val synchronizationMutex = Mutex()
+    internal var syncPresentation by mutableStateOf(SyncPresentationState())
+    internal val synchronizationMutex = Mutex()
 
     override val isSyncing: Boolean get() = syncPresentation.isSyncing
 
     var syncComplete by mutableStateOf(false)
-        private set
+        internal set
 
     override val syncError: String? get() = syncPresentation.error
 
-    suspend fun recentPayeeIds(budgetId: String): List<String> =
-        runCatching { repository?.recentPayeeIds(budgetId, RECENT_PAYEE_COUNT) }.getOrNull().orEmpty()
-
     val syncRecovery: SyncRecovery get() = syncRecovery(syncPresentation.errorCode, syncPresentation.errorStatus)
 
-    suspend fun budgetMonthBody(
-        budgetId: String,
-        monthId: String,
-    ): String? = repository?.findRecord(budgetId, "budget-month", monthId)?.let { it.localJson ?: it.remoteJson }
-
     var budgetPasswordRejection by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var syncedTransactionCount by mutableStateOf(0)
     var cachedTransactionCount by mutableStateOf(0)
-        private set
+        internal set
 
     override var pendingWrites by mutableStateOf<List<OutboxOperationEntity>>(emptyList())
-        private set
+        internal set
 
     override fun replacePendingWrites(writes: List<OutboxOperationEntity>) {
         pendingWrites = writes
     }
 
     var conflictRecordsByRecordId by mutableStateOf<Map<String, BudgetRecordEntity>>(emptyMap())
-        private set
+        internal set
 
     override var isSavingTransaction by mutableStateOf(false)
-        private set
+        internal set
 
     override fun markSavingTransaction(saving: Boolean) {
         isSavingTransaction = saving
     }
 
     override var transactionWriteMessage by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     override fun reportTransactionWriteMessage(message: String?) {
         transactionWriteMessage = message
@@ -613,7 +478,7 @@ internal class TandemMobileSession(
         }
     }
 
-    private var readOnlyMode = false
+    internal var readOnlyMode = false
 
     fun setReadOnlyMode(enabled: Boolean) {
         readOnlyMode = enabled
@@ -631,563 +496,64 @@ internal class TandemMobileSession(
     }
 
     var lastSyncSummary by mutableStateOf<BudgetSyncSummary?>(null)
-        private set
+        internal set
 
     var localSyncState by mutableStateOf<BudgetSyncStateEntity?>(null)
-        private set
-
-    /** Whether the observed records all belong to this budget, so its screens can show without filling in piece by piece. */
-    fun hasLoadedBudget(budgetId: String): Boolean =
-        localSyncState?.budgetId == budgetId &&
-            listOf(accountRecords, categoryRecords, transactionRecords, scheduleRecords).all { records ->
-                records.all {
-                    it.budgetId ==
-                        budgetId
-                }
-            }
+        internal set
 
     var budgetDisplaySettings by mutableStateOf<BudgetDisplaySettings?>(null)
-        private set
+        internal set
 
     var budgetDisplaySettingsBudgetId by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     var activitySearchRecords by mutableStateOf<List<SearchableBudgetTransaction>>(emptyList())
-        private set
+        internal set
 
     var activitySearchRecordsBudgetId by mutableStateOf("")
-        private set
+        internal set
 
     override var payeeRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     override fun replacePayeeRecords(records: List<BudgetRecordEntity>) {
         payeeRecords = records
     }
 
     override var categoryRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     override var categoryGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     var budgetMonthIds by mutableStateOf<List<String>>(emptyList())
-        private set
+        internal set
 
     var selectedBudgetMonthRecord by mutableStateOf<BudgetRecordEntity?>(null)
-        private set
+        internal set
 
     var isLoadingSelectedBudgetMonth by mutableStateOf(true)
-        private set
+        internal set
 
-    private var selectedBudgetMonthObservationKey by mutableStateOf("")
+    internal var selectedBudgetMonthObservationKey by mutableStateOf("")
 
     override var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     var accountGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     var scheduleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     override var ruleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
-        private set
+        internal set
 
     override val isAuthenticated: Boolean
         get() = apiClient.isAuthenticated
-
-    suspend fun restoreStoredSession(): String? {
-        val store = credentialStore ?: return null
-        if (isRestoringStoredSession) return null
-        isRestoringStoredSession = true
-        try {
-            credentialStorageError = null
-            val storedSession =
-                try {
-                    withContext(Dispatchers.Default) { store.read() }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    credentialStorageError = "Couldn’t access this device’s saved sign-in. Try again or sign in again."
-                    return null
-                } ?: return null
-
-            val restoredDevice =
-                try {
-                    apiClient.restoreStoredSession(storedSession)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    apiClient.forgetSession()
-                    authenticatedDevice = null
-                    budgets = emptyList()
-                    credentialStorageError = "This device’s saved access no longer works. Sign in again."
-                    clearStoredCredential()
-                    return null
-                }
-            if (!acceptAuthenticatedIdentity(restoredDevice, previousSession = null, restoringSavedSession = true)) {
-                credentialStorageError = signInError
-                return null
-            }
-            isCredentialStored = true
-            loadCachedBudgets()
-            return apiClient.currentServerUrl.takeIf { apiClient.isAuthenticated }
-        } finally {
-            isRestoringStoredSession = false
-        }
-    }
-
-    suspend fun forgetDevice() {
-        if (authenticatedDevice == null || isRevokingDevice) return
-        deviceRevocationError = null
-        isRevokingDevice = true
-        try {
-            try {
-                apiClient.revokeCurrentDevice()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: TandemApiException) {
-                if (error.httpStatus != 401 && error.httpStatus != 404) {
-                    deviceRevocationError = "Check your connection and try again."
-                    return
-                }
-            } catch (_: Exception) {
-                deviceRevocationError = "Check your connection and try again."
-                return
-            }
-            clearDeviceSession()
-        } finally {
-            isRevokingDevice = false
-        }
-    }
-
-    suspend fun forgetDeviceLocally() {
-        if (authenticatedDevice == null || isRevokingDevice) return
-        deviceRevocationError = null
-        clearDeviceSession()
-    }
-
-    suspend fun signOutAndClearLocalData(): Boolean {
-        if (isSigningOut) return false
-        isSigningOut = true
-        signOutError = null
-        signOutNotice = null
-        var cacheTablesCleared = false
-        try {
-            if (isSyncing || isSavingTransaction || isPerformingBudgetAction || isLoadingBudgets) {
-                signOutError = "Wait for the current sync or change to finish before signing out."
-                return false
-            }
-            if (!budgetQueue.restoreBudgetReorderQueue()) {
-                signOutError = "Couldn’t verify pending changes. Try again before signing out."
-                return false
-            }
-            if (budgetQueue.budgetReorderQueue.moves.isNotEmpty()) {
-                signOutError = "Sync or resolve pending changes before signing out."
-                return false
-            }
-            if (repository?.hasUnresolvedWrites() == true) {
-                signOutError = "Sync or resolve pending changes before signing out."
-                return false
-            }
-            cacheTablesCleared = repository == null
-            val store = credentialStore
-            val storedCredential =
-                try {
-                    store?.let { withContext(Dispatchers.Default) { it.read() } }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    signOutError = "Couldn’t check this device’s saved sign-in. Try again."
-                    return false
-                }
-            var deviceRevoked = false
-            if (apiClient.isAuthenticated) {
-                try {
-                    revokeCurrentDeviceForSignOut()
-                    deviceRevoked = true
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: TandemApiException) {
-                    if (error.httpStatus == 401 || error.httpStatus == 404) {
-                        deviceRevoked = true
-                    } else {
-                        signOutNotice = signOutRevocationNotice(error.httpStatus)
-                    }
-                } catch (_: Exception) {
-                    signOutNotice = signOutRevocationNotice(httpStatus = null)
-                }
-            }
-
-            suspend fun restoreSavedCredential(): Boolean {
-                if (store == null || storedCredential == null) {
-                    isCredentialStored = false
-                    return true
-                }
-                return try {
-                    withContext(NonCancellable + Dispatchers.Default) {
-                        store.write(storedCredential)
-                    }
-                    isCredentialStored = true
-                    credentialStorageError = null
-                    true
-                } catch (_: Exception) {
-                    isCredentialStored = false
-                    credentialStorageError = "Couldn’t restore this device’s saved sign-in."
-                    false
-                }
-            }
-
-            try {
-                if (store != null) withContext(Dispatchers.Default) { store.clear() }
-                isCredentialStored = false
-                credentialStorageError = null
-            } catch (error: CancellationException) {
-                withContext(NonCancellable) { restoreSavedCredential() }
-                throw error
-            } catch (_: Exception) {
-                val restored = restoreSavedCredential()
-                signOutError =
-                    if (storedCredential != null && !restored) {
-                        "Couldn’t remove or restore this device’s saved sign-in. Your cached budgets are still here."
-                    } else {
-                        "Couldn’t remove this device’s saved access. Try again."
-                    }
-                return false
-            }
-
-            suspend fun reportLocalPurgeFailure() {
-                val restored = restoreSavedCredential()
-                signOutError =
-                    when {
-                        cacheTablesCleared && storedCredential != null && !restored ->
-                            "Cached budgets were cleared, but this device’s saved sign-in couldn’t be restored. Sign in again to continue."
-                        cacheTablesCleared ->
-                            "Cached budgets were cleared, but sign-out couldn’t finish. Try again."
-                        storedCredential != null && !restored ->
-                            "Couldn’t clear this device’s cached budgets or restore its saved sign-in. Your cached budgets are still here; sign in again to continue."
-                        deviceRevoked ->
-                            "Couldn’t clear this device’s cached budgets. They’re still here; the server sign-in was revoked, so sign in again to sync."
-                        storedCredential != null ->
-                            "Couldn’t clear this device’s cached budgets. They’re still here and saved sign-in was restored; try again."
-                        else ->
-                            "Couldn’t clear this device’s cached budgets. They’re still here; try again."
-                    }
-            }
-
-            try {
-                budgetQueue.budgetQueuePersistenceMutex.withLock {
-                    repository?.clearAllLocalData()
-                    cacheTablesCleared = true
-                    preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
-                    preferencesStore?.putValue(BUDGET_CACHE_OWNER_KEY, "")
-                    budgetQueue.budgetReorderQueueState = BudgetReorderQueueState()
-                    budgetQueue.budgetQueueLoaded = true
-                }
-            } catch (error: CancellationException) {
-                withContext(NonCancellable) { reportLocalPurgeFailure() }
-                throw error
-            } catch (_: Exception) {
-                reportLocalPurgeFailure()
-                return false
-            }
-            openIdLoginProofState.clear()
-            apiClient.forgetSession()
-            authenticatedDevice = null
-            budgets = emptyList()
-            cachedBudgets = emptyList()
-            budgetCatalogLoaded = false
-            budgetCatalogVersion += 1
-            isServerReachable = false
-            hasCachedSnapshot = false
-            cachedSnapshotBudgetId = ""
-            isCredentialStored = false
-            credentialStorageError = null
-            deviceRevocationError = null
-            budgetError = null
-            isLoadingBudgets = false
-            localSyncState = null
-            budgetDisplaySettings = null
-            budgetDisplaySettingsBudgetId = null
-            transactionRecords = emptyList()
-            activity.reset()
-            activitySearchRecords = emptyList()
-            activitySearchRecordsBudgetId = ""
-            payeeRecords = emptyList()
-            categoryRecords = emptyList()
-            categoryGroupRecords = emptyList()
-            budgetMonthIds = emptyList()
-            selectedBudgetMonthRecord = null
-            isLoadingSelectedBudgetMonth = false
-            selectedBudgetMonthObservationKey = ""
-            accountRecords = emptyList()
-            accountGroupRecords = emptyList()
-            scheduleRecords = emptyList()
-            ruleRecords = emptyList()
-            pendingWrites = emptyList()
-            conflictRecordsByRecordId = emptyMap()
-            cachedTransactionCount = 0
-            syncedTransactionCount = 0
-            conflicts.reset()
-            transactionWriteMessage = null
-            syncComplete = false
-            lastSyncSummary = null
-            syncPresentation = SyncPresentationState()
-            return true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            signOutError =
-                if (cacheTablesCleared) {
-                    "Cached budgets were cleared, but sign-out couldn’t finish. Try again."
-                } else {
-                    "Couldn’t clear this device’s cached budgets. Try again."
-                }
-            return false
-        } finally {
-            isSigningOut = false
-        }
-    }
-
-    suspend fun loadActualLoginMethods(serverUrl: String) {
-        actualLoginMethods = null
-        isLoadingLoginMethods = true
-        signInError = null
-        try {
-            actualLoginMethods = apiClient.readActualLoginMethods(serverUrl)
-            isServerReachable = true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: TandemApiException) {
-            isServerReachable = error.indicatesTandemReachable()
-            signInError =
-                error.userFacingMessage(
-                    "Couldn’t check sign-in options. Check the address and try again.",
-                    ApiFailureContext.SIGN_IN,
-                )
-        } catch (_: Exception) {
-            isServerReachable = false
-            signInError =
-                apiFailureMessage(
-                    "network-error",
-                    null,
-                    ApiFailureContext.SIGN_IN,
-                    "Couldn’t check sign-in options. Check the address and try again.",
-                )
-        } finally {
-            isLoadingLoginMethods = false
-        }
-    }
-
-    fun clearActualLoginMethodState() {
-        actualLoginMethods = null
-        signInError = null
-        isLoadingLoginMethods = false
-        credentialStorageError = null
-    }
-
-    suspend fun signInWithPassword(
-        serverUrl: String,
-        password: String,
-        deviceName: String,
-    ): Boolean {
-        signInError = null
-        signOutNotice = null
-        deviceRevocationError = null
-        isSigningIn = true
-        cachedBudgets = emptyList()
-        openIdLoginProofState.clear()
-        val previousSession = apiClient.exportStoredSession()
-        return try {
-            val signedInDevice = apiClient.signInWithPassword(serverUrl, password, deviceName)
-            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return false
-            isServerReachable = true
-            persistCurrentSession()
-            loadBudgets()
-            budgetQueue.retryQueuedBudgetReorders()
-            true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: TandemApiException) {
-            isServerReachable = error.indicatesTandemReachable()
-            signInError =
-                error.userFacingMessage(
-                    "Couldn’t sign in. Check the address and try again.",
-                    ApiFailureContext.SIGN_IN,
-                )
-            restorePreviousSessionAfterSignIn(previousSession)
-            false
-        } catch (_: Exception) {
-            isServerReachable = false
-            signInError =
-                apiFailureMessage(
-                    "network-error",
-                    null,
-                    ApiFailureContext.SIGN_IN,
-                    "Couldn’t sign in. Check the address and try again.",
-                )
-            restorePreviousSessionAfterSignIn(previousSession)
-            false
-        } finally {
-            isSigningIn = false
-            if (apiClient.isAuthenticated) loadCachedBudgets()
-        }
-    }
-
-    suspend fun startActualOpenIdSignIn(
-        serverUrl: String,
-        deviceName: String,
-    ): String? {
-        signInError = null
-        signOutNotice = null
-        isSigningIn = true
-        openIdLoginProofState.clear()
-        var redirectReady = false
-        try {
-            val requestProof = openIdLoginProofState.begin(serverUrl)
-            scheduleOpenIdProofExpiry()
-            val redirect =
-                apiClient.startActualOpenIdSignIn(
-                    serverUrl,
-                    deviceName,
-                    requestProof.codeChallenge,
-                    requestProof.callbackState,
-                )
-            redirectReady = true
-            return redirect
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: TandemApiException) {
-            isServerReachable = error.indicatesTandemReachable()
-            signInError = error.userFacingMessage("Tandem couldn’t start sign-in. Check the server address.", ApiFailureContext.SIGN_IN)
-        } catch (_: Exception) {
-            isServerReachable = false
-            signInError =
-                apiFailureMessage(
-                    "network-error",
-                    null,
-                    ApiFailureContext.SIGN_IN,
-                    "Tandem couldn’t start sign-in. Check the server address.",
-                )
-        } finally {
-            isSigningIn = false
-            if (!redirectReady) openIdLoginProofState.clear()
-        }
-        return null
-    }
-
-    fun reportSignInError(message: String) {
-        signInError = message
-    }
-
-    fun cancelActualOpenIdSignIn() {
-        openIdLoginProofState.clear()
-    }
-
-    fun scheduleOpenIdProofExpiry() {
-        val remainingTtlMillis = openIdLoginProofState.remainingTtlMillis()
-        if (remainingTtlMillis > 0) {
-            sessionScope.launch {
-                delay(remainingTtlMillis)
-                openIdLoginProofState.expireIfNeeded()
-            }
-        }
-    }
-
-    suspend fun completeActualOpenIdSignIn(
-        serverUrl: String,
-        code: String,
-        callbackState: String,
-    ): Boolean {
-        signInError = null
-        deviceRevocationError = null
-        isSigningIn = true
-        val previousSession = apiClient.exportStoredSession()
-        val codeVerifier = openIdLoginProofState.takeVerifierForCallback(serverUrl, callbackState)
-        if (codeVerifier == null) {
-            signInError = "This sign-in is no longer active. Start sign-in again."
-            isSigningIn = false
-            return false
-        }
-        cachedBudgets = emptyList()
-        return try {
-            val signedInDevice = apiClient.completeActualOpenIdSignIn(serverUrl, code, codeVerifier)
-            openIdLoginProofState.clear()
-            if (!acceptAuthenticatedIdentity(signedInDevice, previousSession)) return false
-            isServerReachable = true
-            persistCurrentSession()
-            loadBudgets()
-            budgetQueue.retryQueuedBudgetReorders()
-            true
-        } catch (error: CancellationException) {
-            openIdLoginProofState.clear()
-            throw error
-        } catch (error: TandemApiException) {
-            isServerReachable = error.indicatesTandemReachable()
-            signInError =
-                error.userFacingMessage(
-                    "Tandem couldn’t finish sign-in. Check the server address.",
-                    ApiFailureContext.SIGN_IN,
-                )
-            restorePreviousSessionAfterSignIn(previousSession)
-            false
-        } catch (_: Exception) {
-            isServerReachable = false
-            signInError =
-                apiFailureMessage(
-                    "network-error",
-                    null,
-                    ApiFailureContext.SIGN_IN,
-                    "Tandem couldn’t finish sign-in. Check the server address.",
-                )
-            restorePreviousSessionAfterSignIn(previousSession)
-            false
-        } finally {
-            isSigningIn = false
-            openIdLoginProofState.clear()
-            if (apiClient.isAuthenticated) loadCachedBudgets()
-        }
-    }
-
-    suspend fun loadBudgets() {
-        budgetError = null
-        isLoadingBudgets = true
-        try {
-            budgets = apiClient.listBudgets()
-            budgetCatalogLoaded = true
-            budgetCatalogVersion += 1
-            isServerReachable = true
-            budgetQueue.retryQueuedBudgetReorders()
-            schedules.retryQueuedScheduleActions()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: TandemApiException) {
-            isServerReachable = error.indicatesTandemReachable()
-            budgetError = error.userFacingMessage("Tandem couldn’t load your budgets. Check the connection.")
-            if (error.errorCode == "invalid_device_credential") {
-                apiClient.forgetSession()
-                authenticatedDevice = null
-                budgets = emptyList()
-                credentialStorageError = "Your saved sign-in is no longer active. Sign in again."
-                clearStoredCredential()
-            }
-        } catch (error: Exception) {
-            isServerReachable = false
-            budgetError =
-                apiFailureMessage(
-                    "network-error",
-                    null,
-                    ApiFailureContext.SIGN_IN,
-                    "Tandem couldn’t load your budgets. Check the server address.",
-                )
-        } finally {
-            isLoadingBudgets = false
-        }
-    }
 
     override suspend fun synchronize(
         budgetId: String,
@@ -1208,171 +574,7 @@ internal class TandemMobileSession(
             )
         }
 
-    private suspend fun synchronizeSerialized(
-        budgetId: String,
-        encryptionPassword: String?,
-        sendQueuedWrites: Boolean,
-        reconcileUncertainOperationId: String?,
-        retryQueuedBudgetMutations: Boolean,
-        background: Boolean,
-    ): BudgetSyncSummary? {
-        if (isSigningOut) return null
-        if (encryptedStorageMissing(budgetId)) return null
-
-        fun present(next: SyncPresentationState) {
-            if (!background || (next.error == null && !next.isSyncing && syncPresentation.error != null)) {
-                syncPresentation = next
-            }
-        }
-        if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
-        if (!isCurrentIdentityCacheOwner()) {
-            present(
-                syncPresentation.failed(
-                    "These changes belong to another server or account. Sign in there before syncing them.",
-                    IDENTITY_MISMATCH_ERROR_CODE,
-                ),
-            )
-            return null
-        }
-        val budgetQueueRestored = budgetQueue.restoreBudgetReorderQueue()
-        if (budgetQueueRestored && retryQueuedBudgetMutations && !encryptionPassword.isNullOrBlank()) {
-            budgetQueue.retryQueuedBudgetReorders(budgetId, encryptionPassword)
-        }
-        if (!background) {
-            syncComplete = false
-            syncedTransactionCount = 0
-            lastSyncSummary = null
-        }
-        val coordinator = syncCoordinator
-        val localRepository = repository
-        if (coordinator == null || localRepository == null) {
-            present(syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
-            return null
-        }
-
-        // Keep an earlier error visible while retrying; clear it only when the retry succeeds.
-        present(syncPresentation.begin())
-        try {
-            val summary =
-                apiClient.withExclusiveSession {
-                    val sendWrites = sendQueuedWrites && !budgetQueue.hasPendingTransactionDependency(budgetId)
-                    withContext(Dispatchers.Default) {
-                        coordinator.synchronize(budgetId, encryptionPassword, sendWrites, reconcileUncertainOperationId)
-                    }
-                }
-            isServerReachable = true
-            refreshServerCapabilities()
-            schedules.retryQueuedScheduleActions()
-            lastSyncSummary = summary
-            loadLocalRecords(budgetId)
-            syncedTransactionCount =
-                localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            syncComplete = true
-            budgetPasswordRejection = null
-            present(syncPresentation.succeeded())
-            if (budgetQueueRestored) {
-                budgetQueue.budgetReorderQueue = budgetQueue.budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
-                if (retryQueuedBudgetMutations) budgetQueue.retryQueuedBudgetReorders(budgetId, encryptionPassword)
-            }
-            planning.sync(budgetId)
-            return summary
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: BudgetSyncRemoteException) {
-            isServerReachable = error.indicatesTandemReachable()
-            budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
-            present(
-                syncPresentation.failed(
-                    apiFailureMessage(
-                        errorCode = error.errorCode,
-                        httpStatus = error.httpStatus,
-                        context = ApiFailureContext.SYNC,
-                        fallback = "Tandem couldn’t sync this budget. Try again shortly.",
-                    ),
-                    error.errorCode,
-                    error.httpStatus,
-                ),
-            )
-            return null
-        } catch (error: TandemApiException) {
-            isServerReachable = error.errorCode != "address_unreachable"
-            budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
-            present(
-                syncPresentation.failed(
-                    apiFailureMessage(
-                        error.errorCode,
-                        error.httpStatus,
-                        ApiFailureContext.SYNC,
-                        "Tandem couldn’t sync this budget. Try again shortly.",
-                    ),
-                    error.errorCode,
-                    error.httpStatus,
-                ),
-            )
-            return null
-        } catch (error: BudgetSyncProtocolException) {
-            isServerReachable = true
-            present(syncPresentation.failed("Tandem couldn’t read this budget. Try syncing again."))
-            return null
-        } catch (error: Exception) {
-            isServerReachable = false
-            if (apiClient.isUsingLocalServer) {
-                apiClient.useExternalServerAfterLocalFailure()
-                isUsingLocalServer = false
-            }
-            present(
-                syncPresentation.failed(
-                    apiFailureMessage(
-                        errorCode = "network-error",
-                        httpStatus = null,
-                        context = ApiFailureContext.SYNC,
-                        fallback = "Tandem couldn’t sync this budget. Your saved copy is still available.",
-                    ),
-                ),
-            )
-            return null
-        } finally {
-            if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
-        }
-    }
-
     val canEditRules: Boolean get() = serverCapabilities?.supports("rule-edit") == true
-
-    /** Each budget's sync state on this device; an encrypted budget that isn't open keeps its state locked. */
-    suspend fun budgetSyncOverview(openBudgetId: String): List<BudgetSyncOverview> {
-        val main = mainStorage?.repository
-        return budgets.map { budget ->
-            val open = budget.budgetId == openBudgetId
-            val writes = if (open) pendingWrites else main?.readPendingWrites(budget.budgetId).orEmpty()
-            val sync = if (open) localSyncState else main?.readSyncState(budget.budgetId)
-            BudgetSyncOverview(
-                budgetId = budget.budgetId,
-                name = budget.name,
-                open = open,
-                locked = budget.isEncrypted && !open,
-                lastSyncedAtEpochMs = sync?.lastSyncedAtEpochMs,
-                failed = sync?.lastErrorCode != null,
-                waiting = writes.count { it.status == "queued" || it.status == "sending" },
-                needsReview = writes.count { it.status == "uncertain" || it.status == "conflict" || it.status == "rejected" },
-            )
-        }
-    }
-
-    /** Sends unconfirmed edits again, then retries bank links that failed and planning sync that's waiting. */
-    suspend fun retryFailedWork(
-        budgetId: String,
-        encryptionPassword: String?,
-    ) {
-        if (refuseWriteInReadOnlyMode()) return
-        val localRepository = repository ?: return
-        pendingWrites
-            .filter { it.budgetId == budgetId && it.status == "uncertain" && it.recordType == "transaction" }
-            .forEach { runCatching { localRepository.retryUncertainWrite(it.operationId) } }
-        synchronize(budgetId, encryptionPassword)
-        loadLocalRecords(budgetId)
-        if (banking.bankLinks.any { it.failure != null }) banking.runBankSync(budgetId, encryptionPassword)
-        if (planning.syncStatus == PlanningSyncStatus.WAITING) planning.sync(budgetId)
-    }
 
     override suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
@@ -1399,209 +601,6 @@ internal class TandemMobileSession(
         pendingWrites = localRepository.readPendingWrites(budgetId)
         conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
         activity.refreshActivityTransactionPages(budgetId)
-    }
-
-    private suspend fun findConflictRecords(
-        budgetId: String,
-        writes: List<OutboxOperationEntity>,
-    ): Map<String, BudgetRecordEntity> {
-        val localRepository = repository ?: return emptyMap()
-        val records = mutableMapOf<String, BudgetRecordEntity>()
-        writes.filter { it.status == "conflict" }.forEach { operation ->
-            localRepository.findRecord(budgetId, operation.recordType, operation.recordId)?.let { record ->
-                records[operation.recordId] = record
-            }
-        }
-        return records
-    }
-
-    fun observeAccountActivityRecords(
-        budgetId: String,
-        accountId: String,
-        limit: Int = 100,
-        offset: Int = 0,
-    ): Flow<List<BudgetRecordEntity>>? = repository?.observeRecentTransactionsForAccount(budgetId, accountId, limit, offset)
-
-    fun observeClearedAccountBalance(
-        budgetId: String,
-        accountId: String,
-    ): Flow<Long>? = repository?.observeClearedAccountBalance(budgetId, accountId)
-
-    suspend fun observeLocalRecords(budgetId: String) {
-        val localRepository = repository ?: return
-        if (!isCurrentIdentityCacheOwner()) {
-            clearCachedBudgetPresentation()
-            return
-        }
-        cachedSnapshotBudgetId = budgetId
-        hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
-        budgetDisplaySettingsBudgetId = budgetId
-        budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
-        coroutineScope {
-            launch {
-                localRepository.observeRecentRecords(budgetId, "transaction", 50).collect { transactionRecords = it }
-            }
-            launch {
-                localRepository.observeVisibleRecordCount(budgetId, "transaction").collect {
-                    cachedTransactionCount = it.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                }
-            }
-            launch { localRepository.observeRecords(budgetId, "account").collect { accountRecords = it } }
-            launch { localRepository.observeRecords(budgetId, "account-group").collect { accountGroupRecords = it } }
-            launch { localRepository.observeRecords(budgetId, "schedule").collect { scheduleRecords = it } }
-            launch { localRepository.observeRecords(budgetId, "rule").collect { ruleRecords = it } }
-            launch {
-                localRepository
-                    .observeRecords(
-                        budgetId,
-                        "payee",
-                    ).collect { payeeRecords = budgetQueue.payeeRecordsWithPendingCreates(budgetId, it) }
-            }
-            launch { localRepository.observeRecords(budgetId, "category").collect { categoryRecords = it } }
-            launch { localRepository.observeRecords(budgetId, "category-group").collect { categoryGroupRecords = it } }
-            launch { localRepository.observeRecordIds(budgetId, "budget-month").collect { budgetMonthIds = it } }
-            launch {
-                localRepository.observePendingWrites(budgetId).collect { writes ->
-                    pendingWrites = writes
-                    conflictRecordsByRecordId = findConflictRecords(budgetId, writes)
-                }
-            }
-            launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
-            with(planning) { observe(budgetId) }
-        }
-    }
-
-    suspend fun observeSelectedBudgetMonth(
-        budgetId: String,
-        monthId: String,
-    ) {
-        val observationKey = "$budgetId/$monthId"
-        selectedBudgetMonthObservationKey = observationKey
-        selectedBudgetMonthRecord = null
-        isLoadingSelectedBudgetMonth = true
-        val localRepository = repository
-        if (localRepository == null || budgetId.isBlank() || monthId.isBlank() || !isCurrentIdentityCacheOwner()) {
-            isLoadingSelectedBudgetMonth = false
-            return
-        }
-        localRepository.observeRecord(budgetId, "budget-month", monthId).collect { record ->
-            if (selectedBudgetMonthObservationKey == observationKey) {
-                selectedBudgetMonthRecord = record
-                isLoadingSelectedBudgetMonth = false
-            }
-        }
-    }
-
-    suspend fun observeActivitySearchRecords(budgetId: String) {
-        val localRepository = repository
-        if (localRepository == null || budgetId.isBlank()) {
-            activitySearchRecords = emptyList()
-            activitySearchRecordsBudgetId = budgetId
-            return
-        }
-        if (!isCurrentIdentityCacheOwner()) {
-            activitySearchRecords = emptyList()
-            activitySearchRecordsBudgetId = budgetId
-            return
-        }
-        if (activitySearchRecordsBudgetId != budgetId) {
-            activitySearchRecords = emptyList()
-            activitySearchRecordsBudgetId = budgetId
-        }
-        localRepository.observeSearchableTransactions(budgetId).collect { records ->
-            if (records != activitySearchRecords) activitySearchRecords = records
-        }
-    }
-
-    suspend fun hasCachedBudgetSnapshot(budgetId: String): Boolean =
-        budgetId.isNotBlank() &&
-            budgetId == budgetId.trim() &&
-            isCurrentIdentityCacheOwner() &&
-            repository?.hasCachedSnapshot(budgetId) == true
-
-    suspend fun loadCachedBudgets(): List<BudgetCatalogItem> {
-        val localRepository = repository ?: return emptyList()
-        if (isSigningIn || !isCurrentIdentityCacheOwner()) {
-            cachedBudgets = emptyList()
-            return emptyList()
-        }
-        val cached =
-            localRepository.findCachedBudgetIds().map { budgetId ->
-                val currencyCode = localRepository.readBudgetDisplaySettings(budgetId)?.currencyCode
-                BudgetCatalogItem(
-                    budgetId = budgetId,
-                    name = currencyCode?.let { "Saved budget · $it" } ?: "Saved budget",
-                    isEncrypted = false,
-                )
-            }
-        cachedBudgets = cached
-        return cached
-    }
-
-    /** Saves local cache ownership before any sync can expose another account's records. */
-    internal suspend fun acceptAuthenticatedIdentity(
-        device: AuthenticatedDevice,
-        previousSession: String?,
-        restoringSavedSession: Boolean = false,
-    ): Boolean {
-        authenticatedDevice = device
-        val store = preferencesStore ?: return true
-        val serverUrl = apiClient.currentServerUrl
-        if (serverUrl.isNullOrBlank() || !apiClient.isAuthenticated) {
-            restorePreviousSessionAfterSignIn(previousSession)
-            signInError = "Couldn’t verify this sign-in. Try again."
-            return false
-        }
-        if (!budgetQueue.restoreBudgetReorderQueue()) {
-            restorePreviousSessionAfterSignIn(previousSession)
-            signInError = "Couldn’t check pending changes. Try again before switching accounts."
-            return false
-        }
-
-        val owner = budgetCacheOwner(serverUrl, device.principalId)
-        val savedPreferences = store.read()
-        val savedOwner = savedPreferences[BUDGET_CACHE_OWNER_KEY]?.takeIf(String::isNotBlank)
-        val hasAnyLocalBudgetData = repository?.hasAnyLocalBudgetData() == true
-        val hasPendingBudgetChanges = budgetQueue.budgetReorderQueue.moves.isNotEmpty()
-        val hasUnresolvedWrites = repository?.hasUnresolvedWrites() == true
-        val changingOwner = savedOwner != null && savedOwner != owner
-        val ownerUnknownWithLocalData =
-            !restoringSavedSession &&
-                savedOwner == null &&
-                (hasAnyLocalBudgetData || hasPendingBudgetChanges || hasUnresolvedWrites)
-
-        if ((changingOwner || ownerUnknownWithLocalData) && (hasPendingBudgetChanges || hasUnresolvedWrites)) {
-            restorePreviousSessionAfterSignIn(previousSession)
-            signInError =
-                "Pending changes belong to another server or account. Sign in there and sync or resolve them before switching."
-            return false
-        }
-
-        if (changingOwner || ownerUnknownWithLocalData) {
-            budgetQueue.budgetQueuePersistenceMutex.withLock {
-                budgetQueue.budgetReorderQueueState = BudgetReorderQueueState()
-                budgetQueue.budgetQueueLoaded = true
-                repository?.clearAllLocalData()
-                store.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
-            }
-            clearCachedBudgetPresentation()
-        }
-        store.putValue(BUDGET_CACHE_OWNER_KEY, owner)
-        return true
-    }
-
-    private suspend fun restorePreviousSessionAfterSignIn(previousSession: String?) {
-        if (previousSession.isNullOrBlank()) {
-            apiClient.forgetSession()
-            authenticatedDevice = null
-            return
-        }
-        try {
-            authenticatedDevice = apiClient.restoreStoredSession(previousSession)
-        } catch (_: Exception) {
-            apiClient.forgetSession()
-            authenticatedDevice = null
-        }
     }
 
     override suspend fun isCurrentIdentityCacheOwner(): Boolean {
@@ -1645,44 +644,6 @@ internal class TandemMobileSession(
         conflictRecordsByRecordId = emptyMap()
         cachedTransactionCount = 0
         syncedTransactionCount = 0
-    }
-
-    private suspend fun persistCurrentSession() {
-        val store = credentialStore ?: return
-        val storedSession = apiClient.exportStoredSession() ?: return
-        credentialStorageError = null
-        try {
-            withContext(Dispatchers.Default) { store.write(storedSession) }
-            isCredentialStored = true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            isCredentialStored = false
-            credentialStorageError = "This sign-in will end when the app closes because saved access is unavailable."
-        }
-    }
-
-    private suspend fun clearStoredCredential() {
-        val store = credentialStore ?: return
-        try {
-            withContext(Dispatchers.Default) { store.clear() }
-            isCredentialStored = false
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            credentialStorageError = "Couldn’t remove this device’s saved access."
-        }
-    }
-
-    private suspend fun clearDeviceSession() {
-        openIdLoginProofState.clear()
-        apiClient.forgetSession()
-        authenticatedDevice = null
-        budgets = emptyList()
-        budgetCatalogLoaded = false
-        isServerReachable = false
-        budgetError = null
-        clearStoredCredential()
     }
 }
 

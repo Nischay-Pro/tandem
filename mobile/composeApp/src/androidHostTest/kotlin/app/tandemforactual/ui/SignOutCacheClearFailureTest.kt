@@ -1,5 +1,4 @@
 package app.tandemforactual.ui
-
 import android.content.Context
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
@@ -13,6 +12,8 @@ import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.restoreStoredSession
+import app.tandemforactual.ui.core.session.signOutAndClearLocalData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
