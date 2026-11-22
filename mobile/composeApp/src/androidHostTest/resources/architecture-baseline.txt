@@ -64,7 +64,6 @@ cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
 function-size AccountEdits.markTransactionsReconciled
-function-size AccountOptionsScreen.AccountOptionsScreen
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size ActivityScreen.ActivityScreen
