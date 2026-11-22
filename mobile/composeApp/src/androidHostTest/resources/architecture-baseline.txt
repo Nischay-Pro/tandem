@@ -94,7 +94,6 @@ function-size CategoryGroupScreen.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
-function-size ConflictReviewScreen.ConflictReviewScreen
 function-size CurrencyScreens.ExchangeRatesScreen
 function-size CustomReportScreen.CustomReportScreen
 function-size CustomReportScreen.ReportControls
@@ -185,7 +184,6 @@ size BudgetReorderQueue
 size BudgetScreen
 size CategoryDetailScreen
 size CategoryGroupScreen
-size ConflictReviewScreen
 size CustomReportScreen
 size LiveBudgetModels
 size PersonalizeScreen
