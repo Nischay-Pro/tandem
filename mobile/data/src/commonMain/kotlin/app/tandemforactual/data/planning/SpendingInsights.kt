@@ -73,7 +73,7 @@ object SpendingInsights {
         val earlier = historyMonths(entries, monthId, baseline.months)
         val current = totals(byMonth[monthId].orEmpty())
         val history = earlier.map { totals(byMonth[it].orEmpty()) }
-        val ids = (current.keys + history.flatMap { it.keys }).toSortedSet()
+        val ids = (current.keys + history.flatMap { it.keys }).toSet().sorted()
         val trends =
             ids
                 .map { id -> trend(id, current[id] ?: 0, average(history.map { it[id] ?: 0 })) }
