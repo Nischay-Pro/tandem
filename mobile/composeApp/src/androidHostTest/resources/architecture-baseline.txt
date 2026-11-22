@@ -89,8 +89,6 @@ function-size BudgetReorderQueue.complete
 function-size BudgetReorderQueue.enqueue
 function-size BudgetReorderQueue.failHead
 function-size BudgetRulesScreen.BudgetRulesScreen
-function-size BudgetScreen.BudgetCategoryCard
-function-size BudgetScreen.BudgetScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
 function-size CategoryDetailScreen.CategoryDetailScreen
 function-size CategoryGroupScreen.CategoryGroupScreen
@@ -188,7 +186,6 @@ size AppModels
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
-size BudgetScreen
 size CategoryDetailScreen
 size CategoryGroupScreen
 size ConflictReviewScreen
