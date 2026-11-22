@@ -36,7 +36,11 @@ import app.tandemforactual.data.planning.PlanningSync
 import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.data.regions.global.bank.BrowserLink
+import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -261,6 +265,9 @@ private class LocalBudgetRepositoryMutationQueuePersistence(
     ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
 }
 
+private const val BANK_LINK_TIMEOUT_MILLIS = 10L * 60 * 1000
+private const val BANK_LINK_POLL_MILLIS = 3_000L
+
 /** One budget's row in the Sync Center. */
 internal data class BudgetSyncOverview(
     val budgetId: String,
@@ -397,6 +404,37 @@ internal class TandemMobileSession(
         }
 
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
+
+    suspend fun loadBankInstitutions(
+        provider: BrowserBankProvider,
+        country: String,
+    ): List<BankInstitution> = apiClient.bankInstitutions(provider, country)
+
+    suspend fun startBankLink(
+        provider: BrowserBankProvider,
+        institution: BankInstitution,
+    ): BrowserLink = apiClient.startBankLink(provider, institution)
+
+    /** Asks the server until the bank sign-in finishes, fails, or ten minutes pass; a dropped request just asks again. */
+    suspend fun awaitBankLink(
+        provider: BrowserBankProvider,
+        handle: String,
+    ): BrowserLinkStatus {
+        val deadline = nowEpochMillis() + BANK_LINK_TIMEOUT_MILLIS
+        while (nowEpochMillis() < deadline) {
+            val status =
+                try {
+                    apiClient.bankLinkStatus(provider, handle)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    BrowserLinkStatus.Pending
+                }
+            if (status != BrowserLinkStatus.Pending) return status
+            delay(BANK_LINK_POLL_MILLIS)
+        }
+        return BrowserLinkStatus.Failed("timeout")
+    }
 
     /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
     var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())

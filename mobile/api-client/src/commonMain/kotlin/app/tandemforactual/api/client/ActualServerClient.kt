@@ -4,9 +4,14 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncRequest
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
+import app.tandemforactual.data.regions.global.bank.BankRequest
+import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.data.regions.global.bank.BrowserLink
+import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -195,6 +200,47 @@ class ActualServerClient(
         val provider = BankProviders.forSource(account.source)
         return bankPost(provider.transactionsRoute, provider.transactionsRequest(account).toString(), fileId)
     }
+
+    /** A country's banks the provider can link, through its bank-list route. */
+    suspend fun bankInstitutions(
+        provider: BrowserBankProvider,
+        country: String,
+    ): List<BankInstitution> {
+        val response = browserPost(provider.institutionsRequest(country))
+        val data = response["data"] ?: JsonObject(emptyMap())
+        (data as? JsonObject)?.let { failure ->
+            failure.text("error_code")?.let { throw ActualServerException("bank-sync-${it.lowercase()}") }
+            failure.text("error")?.let { throw ActualServerException("bank-link-failed") }
+        }
+        return provider.parseInstitutions(data, country)
+    }
+
+    /** Starts a bank sign-in; the bank sends the person back to this server, which finishes the link. */
+    suspend fun startBankLink(
+        provider: BrowserBankProvider,
+        institution: BankInstitution,
+    ): BrowserLink {
+        val response = browserPost(provider.startRequest(institution, base))
+        return provider.parseStart(response) ?: throw ActualServerException(
+            (response["data"] as? JsonObject)?.text("error_code")?.let { "bank-sync-${it.lowercase()}" } ?: "bank-link-failed",
+        )
+    }
+
+    suspend fun bankLinkStatus(
+        provider: BrowserBankProvider,
+        handle: String,
+    ): BrowserLinkStatus = provider.parseStatus(browserPost(provider.statusRequest(handle)), handle)
+
+    /** Sends the server's own address as the origin, which GoCardless uses to build the page the bank returns to. */
+    private suspend fun browserPost(request: BankRequest): JsonObject =
+        json(
+            http.post("$base/${request.route}") {
+                auth()
+                header("Origin", Url(base).let { "${it.protocol.name}://${it.hostWithPortIfSpecified}" })
+                contentType(ContentType.Application.Json)
+                setBody(request.body.toString())
+            },
+        )
 
     private suspend fun bankPost(
         route: String,

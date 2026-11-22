@@ -13,8 +13,12 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
+import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.data.regions.global.bank.BrowserLink
+import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -426,6 +430,22 @@ class TandemApiClient(
             val client = requireServer()
             call { if (client.bankConfigured(provider)) client.bankAccounts(provider) else null }
         }
+
+    suspend fun bankInstitutions(
+        provider: BrowserBankProvider,
+        country: String,
+    ): List<BankInstitution> = sessionMutex.withLock { requireServer().let { client -> call { client.bankInstitutions(provider, country) } } }
+
+    suspend fun startBankLink(
+        provider: BrowserBankProvider,
+        institution: BankInstitution,
+    ): BrowserLink = sessionMutex.withLock { requireServer().let { client -> call { client.startBankLink(provider, institution) } } }
+
+    /** Asked without the session lock, since Enable Banking holds the request open until the bank answers. */
+    suspend fun bankLinkStatus(
+        provider: BrowserBankProvider,
+        handle: String,
+    ): BrowserLinkStatus = requireServer().let { client -> call { client.bankLinkStatus(provider, handle) } }
 
     suspend fun budgetLinkedAccounts(
         budgetId: String,

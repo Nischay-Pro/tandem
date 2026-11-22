@@ -24,6 +24,7 @@ import app.tandemforactual.data.regions.global.bank.BankLinkMethod
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
+import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -78,11 +79,26 @@ internal fun BankConnectionsScreen(
     var linking by remember { mutableStateOf<Pair<BankProvider, BankProviderAccount>?>(null) }
     var managing by remember { mutableStateOf<LinkedAccount?>(null) }
     var relinkFor by remember { mutableStateOf<LinkedAccount?>(null) }
+    var browserProvider by remember { mutableStateOf<BrowserBankProvider?>(null) }
     LaunchedEffect(state.selectedBudgetId, reload) {
         runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, password) }
     }
 
+    fun linkTo(
+        target: LinkedAccount,
+        provider: BankProvider,
+        providerAccount: BankProviderAccount,
+    ) {
+        scope.launch {
+            if (mobileSession.linkBankAccount(state.selectedBudgetId, target.id, provider, providerAccount, password)) reload++
+        }
+    }
+
     fun loadAccounts(provider: BankProvider) {
+        if (provider is BrowserBankProvider) {
+            browserProvider = provider
+            return
+        }
         providerStates[provider.source] = ProviderState.Loading
         scope.launch {
             providerStates[provider.source] =
@@ -156,18 +172,7 @@ internal fun BankConnectionsScreen(
                         linking = provider to providerAccount
                     } else {
                         relinkFor = null
-                        scope.launch {
-                            if (mobileSession.linkBankAccount(
-                                    state.selectedBudgetId,
-                                    target.id,
-                                    provider,
-                                    providerAccount,
-                                    password,
-                                )
-                            ) {
-                                reload++
-                            }
-                        }
+                        linkTo(target, provider, providerAccount)
                     }
                 }
             }
@@ -179,14 +184,20 @@ internal fun BankConnectionsScreen(
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 TandemModalHeader(managed?.name.orEmpty(), onClose = { managing = null }, leadingIcon = Lucide.Landmark)
                 managed?.failure?.let {
+                    val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
                     Text(
-                        "The bank said: ${it.replace('_', ' ')}. Reconnect it in Actual’s web app, or link a different account.",
+                        "Last sync failed because ${bankFailureLabel(it)}. " +
+                            if (browser) "Sign in at the bank again to reconnect it." else "Reconnect it in Actual’s web app, or link a different account.",
                         color = palette.negative,
                         fontSize = TandemTypography.compactBody,
                     )
                 }
                 ListRow(
-                    "Link to a different bank account",
+                    if (managed != null && BankProviders.forSource(managed.source) is BrowserBankProvider) {
+                        "Sign in at the bank again"
+                    } else {
+                        "Link to a different bank account"
+                    },
                     "Keeps this budget account and its history",
                     leading = RowLeading.Icon(Lucide.Link),
                     onClick = {
@@ -210,6 +221,23 @@ internal fun BankConnectionsScreen(
                     },
                 )
             }
+        }
+    }
+    BankBrowserLinkSheet(
+        browserProvider,
+        mobileSession,
+        onDismiss = {
+            browserProvider = null
+            relinkFor = null
+        },
+    ) { provider, providerAccount ->
+        browserProvider = null
+        val target = relinkFor
+        if (target == null) {
+            linking = provider to providerAccount
+        } else {
+            relinkFor = null
+            linkTo(target, provider, providerAccount)
         }
     }
     val target = linking
@@ -263,18 +291,19 @@ private fun ProviderCard(
     SectionCard(
         provider.displayName,
         when {
-            browser -> "Sign in to your bank from Actual’s web app to link these, then sync here."
+            browser -> "Sign in at your bank in the browser, then choose which accounts to link."
             providerState is ProviderState.NotSetUp -> "Not set up on your Actual server yet. Add it in Actual’s settings."
             providerState is ProviderState.Failed -> providerState.message
             else -> "Accounts your Actual server can see"
         },
         when {
-            browser || providerState is ProviderState.Ready -> null
+            browser -> if (relinking) "Sign in again" else "Link a bank"
+            providerState is ProviderState.Ready -> null
             providerState is ProviderState.Loading -> "Loading…"
             providerState is ProviderState.Idle -> "Show accounts"
             else -> "Check again"
         },
-        onClick = if (browser || providerState is ProviderState.Ready || providerState is ProviderState.Loading) null else onLoad,
+        onClick = if (!browser && (providerState is ProviderState.Ready || providerState is ProviderState.Loading)) null else onLoad,
     ) {
         if (providerState is ProviderState.Ready) {
             if (providerState.accounts.isEmpty()) {
