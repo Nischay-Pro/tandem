@@ -62,16 +62,11 @@ internal fun BudgetChooserScreen(
     onPrepareBudgetUnlock: (BudgetCatalogItem) -> Unit,
     onOpenSelectedBudget: (BudgetCatalogItem) -> Unit,
 ) {
-    val cachedCatalog =
-        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
-            cachedBudgetsWithLocalSnapshots(
-                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
-                mobileSession.cachedBudgets,
-            )
-        }
+    val cachedCatalog = rememberCachedCatalog(state, mobileSession)
     val selectableBudgets =
         budgetChoicesForSelection(mobileSession.budgets, cachedCatalog, mobileSession.budgetCatalogLoaded)
     val usingCachedCatalog = !mobileSession.budgetCatalogLoaded && cachedCatalog.isNotEmpty()
+    val showSavedOnly = usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())
     val hasCachedOnlyBudgets = cachedCatalog.any { cached -> mobileSession.budgets.none { it.budgetId == cached.budgetId } }
     var chooserSelectedBudgetId by rememberSaveable(state.selectedBudgetId) { mutableStateOf(state.selectedBudgetId) }
     LaunchedEffect(selectableBudgets, state.selectedBudgetId) {
@@ -99,74 +94,17 @@ internal fun BudgetChooserScreen(
     OnboardingLayout(
         content = {
             SetupStepHeader(step = 3, navigation = navigation)
-            SetupHeadline(
-                if (usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty())) {
-                    stringResource(Res.string.setup_choose_a_saved_budget)
-                } else {
-                    stringResource(Res.string.setup_choose_a_budget)
-                },
-                if (usingCachedCatalog) {
-                    stringResource(Res.string.setup_select_the_budget_saved_on)
-                } else if (hasCachedOnlyBudgets) {
-                    stringResource(Res.string.setup_choose_a_server_budget_or)
-                } else {
-                    stringResource(Res.string.setup_select_the_actual_budget_to)
-                },
-            )
+            BudgetChooserHeadline(showSavedOnly, usingCachedCatalog, hasCachedOnlyBudgets)
             LabelText(stringResource(Res.string.setup_available_budgets))
-            when {
-                usingCachedCatalog || (mobileSession.budgets.isEmpty() && cachedCatalog.isNotEmpty()) -> {
-                    selectableBudgets.forEach { budget ->
-                        ChoiceRow(
-                            budget.name,
-                            if (budget.isEncrypted) {
-                                stringResource(
-                                    Res.string.setup_encrypted_budget_saved_on_this,
-                                )
-                            } else {
-                                stringResource(Res.string.setup_saved_on_this_device)
-                            },
-                            selected = chooserSelectedBudgetId == budget.budgetId,
-                        ) { chooseBudget(budget) }
-                    }
-                }
-                selectableBudgets.isNotEmpty() -> {
-                    selectableBudgets.forEach { budget ->
-                        val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
-                        val detail =
-                            when {
-                                !isOnServer && budget.isEncrypted -> stringResource(Res.string.setup_encrypted_budget_saved_on_this)
-                                !isOnServer -> stringResource(Res.string.setup_saved_on_this_device)
-                                budget.isEncrypted -> stringResource(Res.string.setup_encrypted_actual_budget)
-                                else -> stringResource(Res.string.setup_available_on_this_server)
-                            }
-                        ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { chooseBudget(budget) }
-                    }
-                }
-                mobileSession.isLoadingBudgets -> BodyText(stringResource(Res.string.setup_loading_budgets))
-                mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
-                    mobileSession.budgetError?.let { error ->
-                        InlineMessage(error, InlineMessageKind.ERROR)
-                    }
-                        ?: EmptyState(
-                            stringResource(Res.string.setup_no_budgets_available),
-                            stringResource(Res.string.setup_ask_the_budget_owner_to),
-                        )
-                    SecondaryButton(stringResource(Res.string.setup_try_again), onClick = onRefreshBudgets)
-                }
-                mobileSession.budgets.isEmpty() -> {
-                    SurfaceCard {
-                        Column(
-                            Modifier.padding(TandemSpacing.large),
-                            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        ) {
-                            LabelText(stringResource(Res.string.setup_sign_in_first))
-                            BodyText(stringResource(Res.string.setup_connect_this_device_to_your))
-                        }
-                    }
-                    SecondaryButton(stringResource(Res.string.setup_sign_in)) { navigation.open(AppRoute.SIGN_IN) }
-                }
-            }
+            BudgetChoices(
+                mobileSession,
+                selectableBudgets,
+                showSavedOnly,
+                chooserSelectedBudgetId,
+                onChoose = ::chooseBudget,
+                onRefreshBudgets = onRefreshBudgets,
+                onSignIn = { navigation.open(AppRoute.SIGN_IN) },
+            )
             mobileSession.budgetError?.takeIf { selectableBudgets.isNotEmpty() }?.let { error ->
                 InlineMessage(error, InlineMessageKind.ERROR)
             }
@@ -184,4 +122,105 @@ internal fun BudgetChooserScreen(
             )
         },
     )
+}
+
+@Composable
+private fun rememberCachedCatalog(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): List<BudgetCatalogItem> =
+    remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
+        cachedBudgetsWithLocalSnapshots(
+            decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
+            mobileSession.cachedBudgets,
+        )
+    }
+
+/** Whether to choose a saved budget or one from the server, and why. */
+@Composable
+private fun BudgetChooserHeadline(
+    showSavedOnly: Boolean,
+    usingCachedCatalog: Boolean,
+    hasCachedOnlyBudgets: Boolean,
+) {
+    SetupHeadline(
+        if (showSavedOnly) {
+            stringResource(Res.string.setup_choose_a_saved_budget)
+        } else {
+            stringResource(Res.string.setup_choose_a_budget)
+        },
+        if (usingCachedCatalog) {
+            stringResource(Res.string.setup_select_the_budget_saved_on)
+        } else if (hasCachedOnlyBudgets) {
+            stringResource(Res.string.setup_choose_a_server_budget_or)
+        } else {
+            stringResource(Res.string.setup_select_the_actual_budget_to)
+        },
+    )
+}
+
+/** The budgets to choose from, or why there are none yet. */
+@Composable
+private fun BudgetChoices(
+    mobileSession: TandemMobileSession,
+    selectableBudgets: List<BudgetCatalogItem>,
+    showSavedOnly: Boolean,
+    chooserSelectedBudgetId: String,
+    onChoose: (BudgetCatalogItem) -> Unit,
+    onRefreshBudgets: () -> Unit,
+    onSignIn: () -> Unit,
+) {
+    when {
+        showSavedOnly -> {
+            selectableBudgets.forEach { budget ->
+                ChoiceRow(
+                    budget.name,
+                    if (budget.isEncrypted) {
+                        stringResource(
+                            Res.string.setup_encrypted_budget_saved_on_this,
+                        )
+                    } else {
+                        stringResource(Res.string.setup_saved_on_this_device)
+                    },
+                    selected = chooserSelectedBudgetId == budget.budgetId,
+                ) { onChoose(budget) }
+            }
+        }
+        selectableBudgets.isNotEmpty() -> {
+            selectableBudgets.forEach { budget ->
+                val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
+                val detail =
+                    when {
+                        !isOnServer && budget.isEncrypted -> stringResource(Res.string.setup_encrypted_budget_saved_on_this)
+                        !isOnServer -> stringResource(Res.string.setup_saved_on_this_device)
+                        budget.isEncrypted -> stringResource(Res.string.setup_encrypted_actual_budget)
+                        else -> stringResource(Res.string.setup_available_on_this_server)
+                    }
+                ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { onChoose(budget) }
+            }
+        }
+        mobileSession.isLoadingBudgets -> BodyText(stringResource(Res.string.setup_loading_budgets))
+        mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
+            mobileSession.budgetError?.let { error ->
+                InlineMessage(error, InlineMessageKind.ERROR)
+            }
+                ?: EmptyState(
+                    stringResource(Res.string.setup_no_budgets_available),
+                    stringResource(Res.string.setup_ask_the_budget_owner_to),
+                )
+            SecondaryButton(stringResource(Res.string.setup_try_again), onClick = onRefreshBudgets)
+        }
+        mobileSession.budgets.isEmpty() -> {
+            SurfaceCard {
+                Column(
+                    Modifier.padding(TandemSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                ) {
+                    LabelText(stringResource(Res.string.setup_sign_in_first))
+                    BodyText(stringResource(Res.string.setup_connect_this_device_to_your))
+                }
+            }
+            SecondaryButton(stringResource(Res.string.setup_sign_in), onClick = onSignIn)
+        }
+    }
 }

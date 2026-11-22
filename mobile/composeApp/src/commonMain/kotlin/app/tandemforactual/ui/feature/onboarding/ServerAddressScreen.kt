@@ -106,42 +106,9 @@ internal fun ServerAddressScreen(
                         },
                 ),
             )
-            AnimatedReveal(visible = suggestions.isNotEmpty()) {
-                SurfaceCard {
-                    suggestions.forEachIndexed { index, suggestion ->
-                        if (index > 0) DividerLine()
-                        ListRow(
-                            suggestion.address,
-                            suggestion.detail,
-                            leading = RowLeading.Icon(if (suggestion.recent) Lucide.History else Lucide.Globe),
-                            options = ListRowOptions(dense = true),
-                            onClick = { state.serverUrl = suggestion.address },
-                        )
-                    }
-                }
-            }
+            ServerAddressSuggestions(suggestions) { state.serverUrl = it }
             InfoBubble(stringResource(Res.string.setup_tandem_checks_for_the_actual))
-            if (serverAddressMayBeInsecure(completedAddress)) {
-                val palette = tandemPalette
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(palette.warning.copy(alpha = 0.12f))
-                        .border(1.dp, palette.warning.copy(alpha = 0.38f), RoundedCornerShape(TandemShapes.medium))
-                        .padding(TandemSpacing.large),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
-                    Text(
-                        stringResource(Res.string.setup_use_https_to_protect_budget),
-                        color = palette.text,
-                        fontSize = TandemTypography.compactBody,
-                        lineHeight = TandemTypography.bodyLineHeight,
-                    )
-                }
-            }
+            if (serverAddressMayBeInsecure(completedAddress)) InsecureAddressWarning()
         },
         actions = {
             SetupPrimaryButton(stringResource(Res.string.setup_continue), modifier = Modifier.fillMaxWidth(), enabled = canContinue) {
@@ -149,4 +116,50 @@ internal fun ServerAddressScreen(
             }
         },
     )
+}
+
+/** Recent and suggested server addresses matching what's typed. */
+@Composable
+private fun ServerAddressSuggestions(
+    suggestions: List<ServerAddressSuggestion>,
+    onPick: (String) -> Unit,
+) {
+    AnimatedReveal(visible = suggestions.isNotEmpty()) {
+        SurfaceCard {
+            suggestions.forEachIndexed { index, suggestion ->
+                if (index > 0) DividerLine()
+                ListRow(
+                    suggestion.address,
+                    suggestion.detail,
+                    leading = RowLeading.Icon(if (suggestion.recent) Lucide.History else Lucide.Globe),
+                    options = ListRowOptions(dense = true),
+                    onClick = { onPick(suggestion.address) },
+                )
+            }
+        }
+    }
+}
+
+/** A warning that a plain-HTTP address doesn't protect budget data. */
+@Composable
+private fun InsecureAddressWarning() {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(TandemShapes.medium))
+            .background(palette.warning.copy(alpha = 0.12f))
+            .border(1.dp, palette.warning.copy(alpha = 0.38f), RoundedCornerShape(TandemShapes.medium))
+            .padding(TandemSpacing.large),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Lucide.CircleAlert, contentDescription = null, modifier = Modifier.size(23.dp), tint = palette.warning)
+        Text(
+            stringResource(Res.string.setup_use_https_to_protect_budget),
+            color = palette.text,
+            fontSize = TandemTypography.compactBody,
+            lineHeight = TandemTypography.bodyLineHeight,
+        )
+    }
 }
