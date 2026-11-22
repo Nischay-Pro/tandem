@@ -89,7 +89,6 @@ function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
 function-size FirstSyncScreen.FirstSyncScreen
 function-size GoalTimelineScreen.GoalTimelineScreen
-function-size HouseholdScreen.HouseholdScreen
 function-size InsightScreens.MonthlyReviewScreen
 function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
 function-size LiveBudgetModels.liveBudgetMonthSummary
