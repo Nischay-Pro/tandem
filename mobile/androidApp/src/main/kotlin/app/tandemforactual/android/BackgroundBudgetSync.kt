@@ -1,6 +1,12 @@
 package app.tandemforactual.android
 
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
+import app.tandemforactual.data.store.AlertKind
+import app.tandemforactual.data.store.NotificationPolicy
+import app.tandemforactual.data.store.largeTransactionAlert
+import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.data.store.overspendingAlert
 import app.tandemforactual.ui.SyncNetwork
 import android.content.Context
@@ -94,17 +100,32 @@ class BackgroundBudgetSyncWorker(
             val summary = sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
-            if (backgroundAlertEnabled(preferences["conflictReviewAlerts"])) {
+            val policy = NotificationPolicy.read(preferences)
+            val minute = LocalTime.now().let { it.hour * 60 + it.minute }
+            if (policy.allows(AlertKind.NEEDS_REVIEW, minute)) {
                 BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
             }
-            if (backgroundAlertEnabled(preferences["rejectedEditAlerts"])) {
+            if (policy.allows(AlertKind.REJECTED_EDIT, minute)) {
                 BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
             }
-            if (backgroundAlertEnabled(preferences["overspendingAlerts"])) {
+            if (policy.allows(AlertKind.OVERSPENDING, minute)) {
                 BudgetSystemNotifications.overspending(
                     applicationContext,
                     overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
                 )
+            }
+            val store = AppPreferencesStore(database)
+            val today = LocalDate.now().toString()
+            val format = currencyFormatter(repository, budgetId)
+            if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
+                upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let {
+                    BudgetSystemNotifications.post(applicationContext, it)
+                }
+            }
+            if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
+                largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let {
+                    BudgetSystemNotifications.post(applicationContext, it)
+                }
             }
             BudgetWidget.refresh(applicationContext)
             Result.success()
@@ -115,31 +136,31 @@ class BackgroundBudgetSyncWorker(
                 BackgroundSyncFailureAction.PAIR_AGAIN -> {
                     apiClient?.let { client -> runCatching { client.forgetSession() } }
                     runCatching { credentialStore.clear() }
-                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
+                    if (syncFailureAlertAllowed(notificationPreferences)) {
                         BudgetSystemNotifications.signInRequired(applicationContext)
                     }
                     Result.success()
                 }
                 BackgroundSyncFailureAction.RETRY -> {
-                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
+                    if (syncFailureAlertAllowed(notificationPreferences)) {
                         BudgetSystemNotifications.syncFailed(applicationContext)
                     }
                     Result.retry()
                 }
                 BackgroundSyncFailureAction.FINISH -> {
-                    if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
+                    if (syncFailureAlertAllowed(notificationPreferences)) {
                         BudgetSystemNotifications.syncFailed(applicationContext)
                     }
                     Result.success()
                 }
             }
         } catch (error: BudgetSyncRemoteException) {
-            if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
+            if (syncFailureAlertAllowed(notificationPreferences)) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
             error.httpStatus.toWorkResult()
         } catch (_: Exception) {
-            if (backgroundAlertEnabled(notificationPreferences?.get("syncReminders"))) {
+            if (syncFailureAlertAllowed(notificationPreferences)) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
             Result.retry()
@@ -149,6 +170,19 @@ class BackgroundBudgetSyncWorker(
     }
 }
 
+private suspend fun currencyFormatter(
+    repository: LocalBudgetRepository,
+    budgetId: String,
+): (Long) -> String {
+    val settings = repository.readBudgetDisplaySettings(budgetId)
+    val format =
+        java.text.NumberFormat.getCurrencyInstance().apply {
+            settings?.currencyCode?.let { code -> runCatching { currency = java.util.Currency.getInstance(code) } }
+        }
+    val digits = settings?.currencyFractionDigits ?: 2
+    return { minor -> format.format(java.math.BigDecimal.valueOf(minor, digits)) }
+}
+
 internal enum class BackgroundSyncFailureAction {
     PAIR_AGAIN,
     RETRY,
@@ -156,6 +190,9 @@ internal enum class BackgroundSyncFailureAction {
 }
 
 internal fun backgroundAlertEnabled(preference: String?): Boolean = preference != "false"
+
+private fun syncFailureAlertAllowed(preferences: Map<String, String>?): Boolean =
+    NotificationPolicy.read(preferences.orEmpty()).allows(AlertKind.SYNC_FAILURE, LocalTime.now().let { it.hour * 60 + it.minute })
 
 internal fun TandemApiException.backgroundSyncFailureAction(): BackgroundSyncFailureAction {
     if (errorCode == "invalid_device_credential") return BackgroundSyncFailureAction.PAIR_AGAIN

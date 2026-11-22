@@ -36,6 +36,7 @@ internal fun TandemTaskSheet(
     onDismissed: () -> Unit,
     fullScreen: Boolean = false,
     dismissOnBackPress: Boolean = true,
+    secure: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val visibleState = remember { MutableTransitionState(false) }
@@ -57,7 +58,7 @@ internal fun TandemTaskSheet(
         Dialog(
             onDismissRequest = onDismissRequest,
             properties =
-                edgeToEdgeDialogProperties(dismissOnBackPress),
+                edgeToEdgeDialogProperties(dismissOnBackPress, secure),
         ) {
             Box(
                 Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
@@ -82,5 +83,11 @@ internal fun TandemTaskSheet(
     }
 }
 
-/** Dialog properties that let the sheet draw behind the system bars and the keyboard, so it can pad for them itself. */
-internal expect fun edgeToEdgeDialogProperties(dismissOnBackPress: Boolean): DialogProperties
+/**
+ * Dialog properties that let the sheet draw behind the system bars and the keyboard, so it can pad for them itself. A
+ * [secure] sheet shows a secret, so it's kept out of screenshots and screen recordings where the platform allows.
+ */
+internal expect fun edgeToEdgeDialogProperties(
+    dismissOnBackPress: Boolean,
+    secure: Boolean = false,
+): DialogProperties

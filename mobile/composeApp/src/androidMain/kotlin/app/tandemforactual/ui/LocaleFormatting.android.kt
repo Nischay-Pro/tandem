@@ -180,6 +180,16 @@ internal actual fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Lon
 internal actual fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Long): String =
     DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date(epochMilliseconds))
 
+internal actual fun platformFormatTimeOfDay(minuteOfDay: Int): String =
+    DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, minuteOfDay / 60)
+            set(Calendar.MINUTE, minuteOfDay % 60)
+        }.time,
+    )
+
+internal actual fun platformMinuteOfDay(): Int = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
+
 internal actual fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(epochMilliseconds))
 

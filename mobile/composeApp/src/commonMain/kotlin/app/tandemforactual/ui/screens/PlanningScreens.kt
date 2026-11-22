@@ -214,7 +214,7 @@ internal fun SavingsGoalSheet(
     var choosingCategory by remember { mutableStateOf(false) }
     var error by remember(visible) { mutableStateOf<String?>(null) }
     val categories = month?.groups.orEmpty().flatMap { it.categories }
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}, secure = true) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader(if (goal == null) "New savings goal" else "Savings goal", onClose = onDismiss)

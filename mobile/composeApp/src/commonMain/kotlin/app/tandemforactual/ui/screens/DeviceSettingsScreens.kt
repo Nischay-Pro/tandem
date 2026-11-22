@@ -2,7 +2,13 @@
 
 package app.tandemforactual.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.FilterPills
+import app.tandemforactual.data.store.QuietHours
 import app.tandemforactual.ui.components.FieldErrorMessage
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -353,41 +361,98 @@ internal fun NotificationsScreen(
                 }
             }
         }
-        SectionCard("Phone notifications") {
-            ToggleRow(
-                "Sync reminders",
-                "When background sync fails",
-                state.syncReminders,
-            ) {
-                state.syncReminders = it
+        val askOnEnable: (Boolean) -> Unit = { on ->
+            if (on && notificationPermissionEnabled == false) onRequestNotificationPermission?.invoke()
+        }
+        SectionCard("Sync and safety") {
+            ToggleRow("Sync reminders", "When background sync fails", state.syncReminders) { state.syncReminders = it }
+            DividerLine()
+            ToggleRow("Needs review alerts", "When a change needs review", state.conflictReviewAlerts) {
+                state.conflictReviewAlerts = it
             }
             DividerLine()
-            ToggleRow(
-                "Needs review alerts",
-                "When a change needs review",
-                state.conflictReviewAlerts,
-            ) {
-                state.conflictReviewAlerts =
-                    it
-            }
-            DividerLine()
-            ToggleRow(
-                "Rejected edit alerts",
-                "When Actual rejects an edit",
-                state.rejectedEditAlerts,
-            ) {
+            ToggleRow("Rejected edit alerts", "When Actual rejects an edit", state.rejectedEditAlerts) {
                 state.rejectedEditAlerts = it
             }
             DividerLine()
-            ToggleRow(
-                "Overspending alerts",
-                "When a category goes over budget this month",
-                state.overspendingAlerts,
-            ) {
-                state.overspendingAlerts = it
+            ToggleRow("Bank sync failures", "When a linked account can’t sync with its bank", state.bankSyncAlerts) {
+                state.bankSyncAlerts = it
             }
         }
+        SectionCard("Money") {
+            ToggleRow(
+                "Upcoming bills",
+                "From your schedules, ${billLeadLabel(state.billLeadDays)}",
+                state.upcomingBillAlerts,
+            ) {
+                state.upcomingBillAlerts = it
+                askOnEnable(it)
+            }
+            RevealedOption(state.upcomingBillAlerts) {
+                FilterPills(listOf(1, 3, 7).map { it to billLeadLabel(it) }, state.billLeadDays, { state.billLeadDays = it })
+            }
+            DividerLine()
+            ToggleRow("Overspending alerts", "When a category goes over budget this month", state.overspendingAlerts) {
+                state.overspendingAlerts = it
+            }
+            DividerLine()
+            ToggleRow(
+                "Large transactions",
+                "Spending of ${state.formatCurrency(state.largeTransactionMinor)} or more",
+                state.largeTransactionAlerts,
+            ) {
+                state.largeTransactionAlerts = it
+                askOnEnable(it)
+            }
+            RevealedOption(state.largeTransactionAlerts) {
+                FilterPills(
+                    LARGE_TRANSACTION_STEPS.map { it to state.formatCurrency(it) },
+                    state.largeTransactionMinor,
+                    { state.largeTransactionMinor = it },
+                )
+            }
+        }
+        val quiet = QuietHours.parse(state.quietHours)
+        SectionCard("Quiet hours") {
+            ToggleRow(
+                "Quiet hours",
+                quiet?.let { "Silent ${quietHoursLabel(it)}" } ?: "Notifications can arrive at any time",
+                quiet != null,
+            ) { state.quietHours = if (it) QUIET_HOURS_PRESETS.first().encode() else "" }
+            RevealedOption(quiet != null) {
+                FilterPills(QUIET_HOURS_PRESETS.map { it to quietHoursLabel(it) }, quiet ?: QUIET_HOURS_PRESETS.first(), {
+                    state.quietHours = it.encode()
+                })
+            }
+        }
+        if (state.privacyModeEnabled) InfoBubble("Hide amounts is on, so notifications leave amounts out.")
         InfoBubble("In-app banners always show, even when phone notifications are off.")
+    }
+}
+
+private val LARGE_TRANSACTION_STEPS = listOf(10_000L, 25_000L, 50_000L, 100_000L)
+
+private val QUIET_HOURS_PRESETS = listOf(QuietHours(22 * 60, 7 * 60), QuietHours(23 * 60, 6 * 60), QuietHours(21 * 60, 8 * 60))
+
+private fun billLeadLabel(days: Int): String = if (days == 1) "1 day ahead" else "$days days ahead"
+
+internal fun quietHoursLabel(hours: QuietHours): String =
+    "${platformFormatTimeOfDay(hours.startMinute)} – ${platformFormatTimeOfDay(hours.endMinute)}"
+
+@Composable
+private fun RevealedOption(
+    visible: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val reduceMotion = tandemReduceMotion
+    AnimatedVisibility(
+        visible,
+        enter = fadeIn(tandemMotionSpec(reduceMotion, TandemMotion.CONTROL_MILLIS)) + expandVertically(tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
+        exit = fadeOut(tandemMotionSpec(reduceMotion, TandemMotion.CONTROL_MILLIS)) + shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
+    ) {
+        Box(Modifier.fillMaxWidth().padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = TandemSpacing.medium)) {
+            content()
+        }
     }
 }
 

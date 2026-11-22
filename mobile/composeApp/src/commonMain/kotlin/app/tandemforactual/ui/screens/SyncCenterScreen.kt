@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -161,6 +162,23 @@ internal fun SyncCenterScreen(
 
     val scope = rememberCoroutineScope()
     val vault = LocalEncryptedBudgetVault.current
+    val retryable =
+        transactionsNeedingReview.count { it.status == "uncertain" } + mobileSession.bankLinks.count { it.failure != null } +
+            (if (mobileSession.planningSyncStatus == PlanningSyncStatus.WAITING) 1 else 0)
+    val conflictCount = transactionsNeedingReview.count { it.status == "conflict" }
+    var retrying by remember { mutableStateOf(false) }
+    val budgetOverview by produceState(
+        emptyList<BudgetSyncOverview>(),
+        mobileSession.budgets,
+        mobileSession.pendingWrites,
+        mobileSession.localSyncState,
+        state.selectedBudgetId,
+    ) { value = mobileSession.budgetSyncOverview(state.selectedBudgetId) }
+    LaunchedEffect(state.selectedBudgetId, mobileSession.isAuthenticated) {
+        if (mobileSession.isAuthenticated) {
+            runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() }) }
+        }
+    }
     PageLazyColumn {
         val capabilities = mobileSession.serverCapabilities
         if (capabilities?.clientUpdateRequired == true) {
@@ -180,17 +198,6 @@ internal fun SyncCenterScreen(
                     tandemPalette.warning,
                     "Update your Tandem server",
                     "Some changes wait on this device until your server is updated. They sync automatically after that.",
-                    onClick = null,
-                )
-            }
-        }
-        planningSyncDetail(mobileSession.planningSyncStatus)?.let { (title, detail) ->
-            item(key = "sync-center-planning") {
-                SyncNoticeCard(
-                    if (mobileSession.planningSyncStatus == PlanningSyncStatus.SYNCED) Lucide.CloudCheck else Lucide.CloudAlert,
-                    if (mobileSession.planningSyncStatus == PlanningSyncStatus.SYNCED) tandemPalette.positive else tandemPalette.warning,
-                    title,
-                    detail,
                     onClick = null,
                 )
             }
@@ -297,6 +304,39 @@ internal fun SyncCenterScreen(
             }
         }
 
+        if (retryable > 0 || conflictCount > 0) {
+            item(key = "sync-center-actions") {
+                SyncCenterActions(
+                    retryableCount = retryable,
+                    conflictCount = conflictCount,
+                    busy = retrying || mobileSession.isSyncing,
+                    onRetry = {
+                        retrying = true
+                        scope.launch {
+                            try {
+                                mobileSession.retryFailedWork(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })
+                            } finally {
+                                retrying = false
+                            }
+                        }
+                    },
+                    onResolve = { navigation.open(AppRoute.CONFLICT_INBOX) },
+                )
+            }
+        }
+        if (budgetOverview.size > 1) {
+            item(key = "sync-center-budgets") {
+                SyncCenterBudgets(budgetOverview, mobileSession) { navigation.open(AppRoute.SWITCH_BUDGET) }
+            }
+        }
+        if (mobileSession.bankLinks.isNotEmpty()) {
+            item(key = "sync-center-bank-links") {
+                SyncCenterBankLinks(mobileSession) { navigation.open(AppRoute.BANK_CONNECTIONS) }
+            }
+        }
+        item(key = "sync-center-services") {
+            SyncCenterServices(mobileSession) { navigation.open(AppRoute.SETTINGS) }
+        }
         item(key = "sync-center-history") { DeviceWriteHistory(state, mobileSession) }
         item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
     }

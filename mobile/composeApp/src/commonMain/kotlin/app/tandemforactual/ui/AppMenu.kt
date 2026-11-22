@@ -368,6 +368,7 @@ internal fun appMenuItems(
                 ) { open(AppRoute.CONFLICT_INBOX) },
             )
         }
+        add(AppMenuItem(Lucide.CloudSync, "Sync Center", "Sync, bank links and fixes") { open(AppRoute.SYNC_CENTER) })
         if (!advanced) add(AppMenuItem(Lucide.WalletCards, "Accounts") { open(AppRoute.ACCOUNTS) })
         add(AppMenuItem(Lucide.Landmark, "Bank connections", "Link and sync") { open(AppRoute.BANK_CONNECTIONS) })
         add(AppMenuItem(Lucide.FileUp, "Import a statement", "CSV, OFX, QIF") { open(AppRoute.ACCOUNTS) })
