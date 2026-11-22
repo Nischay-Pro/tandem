@@ -2,6 +2,17 @@ package app.tandemforactual.ui.feature.activity
 
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.formatMonth
+import app.tandemforactual.ui.core.search.ActivitySearchDateQuery
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
+import app.tandemforactual.ui.core.search.hasExplicitActivitySearchDatePrefix
+import app.tandemforactual.ui.core.search.isActivitySearchMonthId
+import app.tandemforactual.ui.core.search.parseActivitySearchAmount
+import app.tandemforactual.ui.core.search.parseActivitySearchDatePrefixes
+import app.tandemforactual.ui.core.search.parseActivitySearchDateQuery
+import app.tandemforactual.ui.core.search.searchDateMonthId
+import app.tandemforactual.ui.core.search.stripActivitySearchDatePrefix
 
 internal fun activitySearchSuggestions(
     query: String,

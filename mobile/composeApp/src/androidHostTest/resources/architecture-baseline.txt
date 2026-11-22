@@ -16,7 +16,6 @@ cross-feature BudgetRulesScreen -> activity
 cross-feature BudgetScreen -> schedules
 cross-feature BudgetScreen -> transactions
 cross-feature BudgetUnlockScreen -> auth
-cross-feature CategoryDetailScreenParts -> activity
 cross-feature CategoryDetailScreenParts -> reports
 cross-feature CategoryGroupScreen -> accounts
 cross-feature CurrencyScreens -> accounts
@@ -61,13 +60,10 @@ function-size data:ActualTransactionOperations.change
 function-size data:BudgetSyncCoordinator.applySnapshot
 function-size data:LocalBudgetRepository.replaceBudgetMutationQueue
 function-size data:PlanningSync.sync
-layering ActivitySearchCache -> feature.activity
 layering AppState -> app
-layering AppState -> feature.activity
 layering AppState -> feature.reports
 layering DragReorderUpdate -> feature.budget
 layering IosDeviceAuthenticator -> feature.auth
-layering MerchantIcons -> feature.activity
 layering RouteNavigation -> app
 layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app

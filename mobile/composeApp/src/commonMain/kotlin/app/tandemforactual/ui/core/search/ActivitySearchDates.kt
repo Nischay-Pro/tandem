@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.activity
+package app.tandemforactual.ui.core.search
 
 import app.tandemforactual.ui.core.format.CalendarDate
 import app.tandemforactual.ui.core.format.formatDate

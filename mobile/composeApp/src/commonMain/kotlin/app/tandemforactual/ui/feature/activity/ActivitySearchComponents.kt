@@ -34,6 +34,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes

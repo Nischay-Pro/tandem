@@ -4,11 +4,11 @@ package app.tandemforactual.ui.feature.budget
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.reportMonthLabel
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.feature.activity.ActivitySearchField
-import app.tandemforactual.ui.feature.activity.ActivitySearchFilter
 import app.tandemforactual.ui.feature.reports.ReportWindow
 
 internal fun openCategoryActivity(

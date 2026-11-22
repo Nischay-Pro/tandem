@@ -2,12 +2,12 @@
 
 package app.tandemforactual.ui.core.state
 import androidx.compose.foundation.layout.size
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.design.icons.MerchantAliasMatcher
 import app.tandemforactual.ui.design.icons.accountIssuerSlugs
 import app.tandemforactual.ui.design.icons.supplementaryAccountIssuerAliases
 import app.tandemforactual.ui.design.icons.supplementaryMerchantAliases
-import app.tandemforactual.ui.feature.activity.ActivitySearchFilter
-import app.tandemforactual.ui.feature.activity.ActivitySearchRecord
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.allDrawableResources
 import kotlinx.serialization.json.Json

@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.activity
+package app.tandemforactual.ui.core.search
 
 internal enum class ActivitySearchField {
     ANY_CONTAINS,

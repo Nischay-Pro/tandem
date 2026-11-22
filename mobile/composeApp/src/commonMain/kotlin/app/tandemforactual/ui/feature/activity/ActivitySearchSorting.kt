@@ -1,6 +1,12 @@
 package app.tandemforactual.ui.feature.activity
 
 import app.tandemforactual.ui.core.format.formatMonth
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
+import app.tandemforactual.ui.core.search.ActivitySortOrder
+import app.tandemforactual.ui.core.search.daysInSearchMonth
+import app.tandemforactual.ui.core.search.isActivitySearchMonthId
 import app.tandemforactual.ui.core.state.TransactionItem
 
 internal fun recentActivitySearchMonthFilters(records: List<ActivitySearchRecord>): List<ActivitySearchFilter> =

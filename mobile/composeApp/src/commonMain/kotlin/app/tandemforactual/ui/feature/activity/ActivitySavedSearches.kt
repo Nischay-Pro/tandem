@@ -1,5 +1,7 @@
 package app.tandemforactual.ui.feature.activity
 
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
