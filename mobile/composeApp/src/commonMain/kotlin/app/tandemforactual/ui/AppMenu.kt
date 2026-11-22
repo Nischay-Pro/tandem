@@ -49,6 +49,7 @@ import app.tandemforactual.ui.components.TandemIconButton
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarCheck
 import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.ChevronRight
@@ -384,6 +385,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
+        add(AppMenuItem(Lucide.ChartBar, "Custom reports", "Build and save your own") { open(AppRoute.CUSTOM_REPORTS) })
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
         add(AppMenuItem(Lucide.TrendingUp, "Spending trends", "Compared with past months") { open(AppRoute.SPENDING_TRENDS) })
         add(AppMenuItem(Lucide.Gauge, "Spending forecast", "Where this month lands") { open(AppRoute.SPENDING_FORECAST) })

@@ -104,6 +104,8 @@ internal class AppState {
     var pendingScheduleToOpenId by mutableStateOf<String?>(null)
     var categoryEditRequested by mutableStateOf(false)
     var selectedTransactionRecordId by mutableStateOf("")
+    var selectedCustomReportId by mutableStateOf("")
+    var selectedCustomReportName by mutableStateOf("")
     var selectedTransactionAccountId by mutableStateOf("")
     var selectedTransactionPayeeId by mutableStateOf("")
     var selectedTransactionCategoryId by mutableStateOf("")
