@@ -124,28 +124,19 @@ internal class TransactionConflictResolution(
             }
 
             val replacementId = newOperationId()
-            val action =
-                if (confirmedOperation.action == LocalWriteAction.DELETE.name) {
-                    LocalWriteAction.DELETE
-                } else {
-                    LocalWriteAction.UPDATE
-                }
+            val action = replacementAction(confirmedOperation)
             val rebased = patch?.let { JsonObject(base + it) }
             store.enqueueWrite(
-                LocalWriteRequest(
-                    operationId = replacementId,
-                    idempotencyKey = replacementId,
-                    budgetId = budgetId,
-                    recordType = confirmedOperation.recordType,
-                    recordId = confirmedOperation.recordId,
-                    action = action,
-                    baseRevision = revision,
-                    baseSnapshotJson = baseJson,
-                    patchJson = if (action == LocalWriteAction.DELETE) "{}" else checkNotNull(patch).toString(),
-                    optimisticJson = rebased?.toString(),
-                    createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection = rebased?.toProjection(),
-                    supersedesConflictOperationId = operationId,
+                replacementWriteRequest(
+                    replacementId,
+                    budgetId,
+                    operationId,
+                    confirmedOperation,
+                    action,
+                    revision,
+                    baseJson,
+                    patch,
+                    rebased,
                 ),
             )
             replacementOperationId = replacementId
@@ -155,19 +146,59 @@ internal class TransactionConflictResolution(
         } catch (error: CancellationException) {
             throw error
         } catch (error: InvalidLocalWriteException) {
-            return if (error.message?.contains("cached transaction has changed", ignoreCase = true) == true) {
-                "Actual changed again. Review the latest version before choosing."
-            } else {
-                "Tandem couldn’t save this choice. Your original edit remains on this device. Try again."
-            }
+            return invalidWriteMessage(error)
         } catch (_: Exception) {
-            return if (replacementOperationId == null) {
-                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
-            } else {
-                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
-            }
+            return unconfirmedChoiceMessage(replacementOperationId)
         }
     }
+
+    private fun invalidWriteMessage(error: InvalidLocalWriteException): String =
+        if (error.message?.contains("cached transaction has changed", ignoreCase = true) == true) {
+            "Actual changed again. Review the latest version before choosing."
+        } else {
+            "Tandem couldn’t save this choice. Your original edit remains on this device. Try again."
+        }
+
+    private fun unconfirmedChoiceMessage(replacementOperationId: String?): String =
+        if (replacementOperationId == null) {
+            "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+        } else {
+            "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+        }
+
+    private fun replacementAction(confirmedOperation: OutboxOperationEntity): LocalWriteAction =
+        if (confirmedOperation.action == LocalWriteAction.DELETE.name) {
+            LocalWriteAction.DELETE
+        } else {
+            LocalWriteAction.UPDATE
+        }
+
+    private fun replacementWriteRequest(
+        replacementId: String,
+        budgetId: String,
+        operationId: String,
+        confirmedOperation: OutboxOperationEntity,
+        action: LocalWriteAction,
+        revision: String,
+        baseJson: String,
+        patch: JsonObject?,
+        rebased: JsonObject?,
+    ): LocalWriteRequest =
+        LocalWriteRequest(
+            operationId = replacementId,
+            idempotencyKey = replacementId,
+            budgetId = budgetId,
+            recordType = confirmedOperation.recordType,
+            recordId = confirmedOperation.recordId,
+            action = action,
+            baseRevision = revision,
+            baseSnapshotJson = baseJson,
+            patchJson = if (action == LocalWriteAction.DELETE) "{}" else checkNotNull(patch).toString(),
+            optimisticJson = rebased?.toString(),
+            createdAtEpochMs = nowEpochMillis(),
+            optimisticProjection = rebased?.toProjection(),
+            supersedesConflictOperationId = operationId,
+        )
 
     private fun conflictResolutionMessage(
         resolvedWrite: OutboxOperationEntity?,

@@ -80,7 +80,6 @@ function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
 function-size ChangeHistoryScreen.ChangeHistoryScreen
-function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
 function-size CurrencyScreens.ExchangeRatesScreen
 function-size CustomReportScreen.CustomReportScreen
@@ -140,12 +139,8 @@ function-size StatementImportDialog.StatementImportDialog
 function-size TandemThemeScreen.TandemTheme
 function-size TextFieldCard.TextFieldCard
 function-size TransactionActionComponents.TransactionRow
-function-size TransactionConflictResolution.resolve
-function-size TransactionCreate.createTransaction
-function-size TransactionDelete.deleteTransaction
 function-size TransactionDetailScreen.TransactionDetailScreen
 function-size TransactionSelectorScreens.TransactionDatePickerDialog
-function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
 function-size WhatIfScreen.WhatIfScreen
 layering ActivitySearchCache -> feature.activity

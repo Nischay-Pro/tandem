@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.ui.core.session.ApiFailureContext
 import app.tandemforactual.ui.core.session.ConflictResolutionFeedback
 import app.tandemforactual.ui.core.session.SessionHost
@@ -138,66 +139,7 @@ internal class ConflictController(
                 uncertainWriteCheckErrorOperationId = operationId
                 return
             }
-            val coordinator = host.syncCoordinator
-            if (coordinator == null || !host.isCurrentIdentityCacheOwner()) {
-                uncertainWriteCheckError =
-                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Sign in to the server and try again."
-                uncertainWriteCheckErrorOperationId = operationId
-                checkedWriteOperation = operation
-                checkedWriteOperationId = operationId
-                return
-            }
-            host.markSavingTransaction(true)
-            try {
-                val result =
-                    host.apiClient.withExclusiveSession {
-                        coordinator.discardUncertainWrite(
-                            budgetId,
-                            operationId,
-                        )
-                    }
-                if (result.status == app.tandemforactual.data.store.RemoteOperationStatus.REJECTED &&
-                    result.errorCode == "discarded-by-user"
-                ) {
-                    host.loadLocalRecords(budgetId)
-                    checkedWriteOperation = localRepository.findWrite(operationId)
-                    checkedWriteOperationId = operationId
-                    host.reportTransactionWriteMessage(discardedPendingWriteMessage("uncertain"))
-                    return
-                }
-
-                val summary =
-                    host.synchronize(
-                        budgetId = budgetId,
-                        encryptionPassword = encryptionPassword,
-                        sendQueuedWrites = false,
-                        reconcileUncertainOperationId = operationId,
-                    )
-                checkedWriteOperation = localRepository.findWrite(operationId)
-                checkedWriteOperationId = operationId
-                if (checkedWriteOperation?.status == "uncertain") {
-                    uncertainWriteCheckError =
-                        if (summary == null) {
-                            "Tandem couldn’t confirm that this edit was removed. " +
-                                "It remains on this device. Check the connection and try again."
-                        } else {
-                            "Tandem still can’t confirm whether Actual saved this edit. " +
-                                "It remains on this device. Check status before removing it."
-                        }
-                    uncertainWriteCheckErrorOperationId = operationId
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                checkedWriteOperation = localRepository.findWrite(operationId)
-                checkedWriteOperationId = operationId
-                uncertainWriteCheckError =
-                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Check the connection and try again."
-                uncertainWriteCheckErrorOperationId = operationId
-                host.loadLocalRecords(budgetId)
-            } finally {
-                host.markSavingTransaction(false)
-            }
+            discardUncertainTransactionWrite(budgetId, operationId, encryptionPassword, localRepository, operation)
             return
         }
         if (operation?.recordType == "budget-mutation" && !host.budgetQueue.restoreBudgetReorderQueue()) {
@@ -211,6 +153,75 @@ internal class ConflictController(
         }
         host.loadLocalRecords(budgetId)
         host.reportTransactionWriteMessage(discardedPendingWriteMessage(operation?.status))
+    }
+
+    private suspend fun discardUncertainTransactionWrite(
+        budgetId: String,
+        operationId: String,
+        encryptionPassword: String?,
+        localRepository: LocalBudgetRepository,
+        operation: OutboxOperationEntity,
+    ) {
+        val coordinator = host.syncCoordinator
+        if (coordinator == null || !host.isCurrentIdentityCacheOwner()) {
+            uncertainWriteCheckError =
+                "Tandem couldn’t confirm that this edit was removed. It remains on this device. Sign in to the server and try again."
+            uncertainWriteCheckErrorOperationId = operationId
+            checkedWriteOperation = operation
+            checkedWriteOperationId = operationId
+            return
+        }
+        host.markSavingTransaction(true)
+        try {
+            val result =
+                host.apiClient.withExclusiveSession {
+                    coordinator.discardUncertainWrite(
+                        budgetId,
+                        operationId,
+                    )
+                }
+            if (result.status == app.tandemforactual.data.store.RemoteOperationStatus.REJECTED &&
+                result.errorCode == "discarded-by-user"
+            ) {
+                host.loadLocalRecords(budgetId)
+                checkedWriteOperation = localRepository.findWrite(operationId)
+                checkedWriteOperationId = operationId
+                host.reportTransactionWriteMessage(discardedPendingWriteMessage("uncertain"))
+                return
+            }
+
+            val summary =
+                host.synchronize(
+                    budgetId = budgetId,
+                    encryptionPassword = encryptionPassword,
+                    sendQueuedWrites = false,
+                    reconcileUncertainOperationId = operationId,
+                )
+            checkedWriteOperation = localRepository.findWrite(operationId)
+            checkedWriteOperationId = operationId
+            if (checkedWriteOperation?.status == "uncertain") {
+                uncertainWriteCheckError =
+                    if (summary == null) {
+                        "Tandem couldn’t confirm that this edit was removed. " +
+                            "It remains on this device. Check the connection and try again."
+                    } else {
+                        "Tandem still can’t confirm whether Actual saved this edit. " +
+                            "It remains on this device. Check status before removing it."
+                    }
+                uncertainWriteCheckErrorOperationId = operationId
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            checkedWriteOperation = localRepository.findWrite(operationId)
+            checkedWriteOperationId = operationId
+            uncertainWriteCheckError =
+                "Tandem couldn’t confirm that this edit was removed. It remains on this device. Check the connection and try again."
+            uncertainWriteCheckErrorOperationId = operationId
+            host.loadLocalRecords(budgetId)
+        } finally {
+            host.markSavingTransaction(false)
+        }
     }
 
     suspend fun retryUncertainWrite(

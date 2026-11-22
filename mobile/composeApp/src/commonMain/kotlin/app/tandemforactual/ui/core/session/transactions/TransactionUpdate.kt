@@ -2,7 +2,9 @@ package app.tandemforactual.ui.core.session.transactions
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalOperationConflictException
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
@@ -53,19 +55,7 @@ internal suspend fun TransactionController.updateTransaction(
         host.reportTransactionWriteMessage("Sign in to the server and account that own this budget before editing a transaction.")
         return false
     }
-    val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
-    if (enteredAmount == null) {
-        host.reportTransactionWriteMessage(transactionAmountInputError(amountText, displaySettings))
-        return false
-    }
-    if (enteredAmount < 0) {
-        host.reportTransactionWriteMessage("Enter a positive amount.")
-        return false
-    }
-    if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
-        host.reportTransactionWriteMessage("Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}.")
-        return false
-    }
+    val enteredAmount = parseEditedTransactionAmount(amountText, displaySettings) ?: return false
     val dateValidation =
         if (updateDetails) {
             validateTransactionDate(date.orEmpty(), host.currentDateIso(), confirmedFutureDate)
@@ -106,6 +96,46 @@ internal suspend fun TransactionController.updateTransaction(
         return false
     }
     val requestedAccountId = if (updateDetails) accountId?.takeIf(String::isNotBlank) else null
+    if (!validateEditedTransactionAccount(updateDetails, requestedAccountId)) return false
+    if (!validateEditedTransactionPayee(updateDetails, payeeId, transactionType, requestedAccountId)) return false
+    val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" }
+    if (updateDetails && requestedCategoryId != null && host.categoryRecords.none { it.recordId == requestedCategoryId }) {
+        host.reportTransactionWriteMessage("Choose a category from this budget before saving.")
+        return false
+    }
+    val signedAmount = signedEditAmount(transactionType, enteredAmount, originalAmountMinor)
+    val details = editDetails(updateDetails, requestedAccountId, payeeId, requestedCategoryId, requestedDate)
+    val patch = buildTransactionEditPatch(base, signedAmount, current.amountMinor, notes, details)
+    if (patch.isEmpty()) {
+        return resolveNoOpTransactionEdit(localRepository, budgetId, pendingForRecord, editingLocalCreate)
+    }
+    return saveTransactionEdit(localRepository, budgetId, transactionId, base, patch, editingLocalCreate, revision, baseJson)
+}
+
+private fun TransactionController.parseEditedTransactionAmount(
+    amountText: String,
+    displaySettings: BudgetDisplaySettings?,
+): Long? {
+    val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
+    if (enteredAmount == null) {
+        host.reportTransactionWriteMessage(transactionAmountInputError(amountText, displaySettings))
+        return null
+    }
+    if (enteredAmount < 0) {
+        host.reportTransactionWriteMessage("Enter a positive amount.")
+        return null
+    }
+    if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
+        host.reportTransactionWriteMessage("Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}.")
+        return null
+    }
+    return enteredAmount
+}
+
+private fun TransactionController.validateEditedTransactionAccount(
+    updateDetails: Boolean,
+    requestedAccountId: String?,
+): Boolean {
     if (updateDetails && requestedAccountId == null) {
         host.reportTransactionWriteMessage("Choose an account from this budget before saving.")
         return false
@@ -122,6 +152,15 @@ internal suspend fun TransactionController.updateTransaction(
             return false
         }
     }
+    return true
+}
+
+private fun TransactionController.validateEditedTransactionPayee(
+    updateDetails: Boolean,
+    payeeId: String?,
+    transactionType: String,
+    requestedAccountId: String?,
+): Boolean {
     if (updateDetails && payeeId != null && host.payeeRecords.none { it.recordId == payeeId }) {
         host.reportTransactionWriteMessage("Choose an existing payee or clear the payee field.")
         return false
@@ -143,55 +182,55 @@ internal suspend fun TransactionController.updateTransaction(
         host.reportTransactionWriteMessage("Choose Transfer as the transaction type for this payee.")
         return false
     }
-    val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" }
-    if (updateDetails && requestedCategoryId != null && host.categoryRecords.none { it.recordId == requestedCategoryId }) {
-        host.reportTransactionWriteMessage("Choose a category from this budget before saving.")
-        return false
-    }
-    val signedAmount =
-        when (transactionType) {
-            "Income" -> enteredAmount
-            "Transfer" -> if (originalAmountMinor >= 0L) enteredAmount else -enteredAmount
-            else -> -enteredAmount
-        }
-    val patch =
-        buildTransactionEditPatch(
-            base = base,
-            signedAmount = signedAmount,
-            fallbackCurrentAmount = current.amountMinor,
-            notes = notes,
-            details =
-                if (updateDetails) {
-                    TransactionEditDetails(
-                        accountId = checkNotNull(requestedAccountId),
-                        payeeId = payeeId,
-                        categoryId = requestedCategoryId,
-                        date = checkNotNull(requestedDate),
-                    )
-                } else {
-                    null
-                },
-        )
-    if (patch.isEmpty()) {
-        val queuedEditId = queuedTransactionEditToDiscardForNoOp(pendingForRecord, editingLocalCreate)
-        if (queuedEditId != null) {
-            try {
-                localRepository.discardWrite(queuedEditId)
-                host.loadLocalRecords(budgetId)
-                host.reportTransactionWriteMessage("Your transaction matches Actual. Removed the waiting edit.")
-                return true
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                host.reportTransactionWriteMessage("This transaction started syncing. Check Pending Changes before changing it.")
-                host.loadLocalRecords(budgetId)
-                return false
-            }
-        }
-        host.reportTransactionWriteMessage("There are no transaction changes to save.")
-        return false
+    return true
+}
+
+private fun signedEditAmount(
+    transactionType: String,
+    enteredAmount: Long,
+    originalAmountMinor: Long,
+): Long =
+    when (transactionType) {
+        "Income" -> enteredAmount
+        "Transfer" -> if (originalAmountMinor >= 0L) enteredAmount else -enteredAmount
+        else -> -enteredAmount
     }
 
+private suspend fun TransactionController.resolveNoOpTransactionEdit(
+    localRepository: LocalBudgetRepository,
+    budgetId: String,
+    pendingForRecord: List<OutboxOperationEntity>,
+    editingLocalCreate: Boolean,
+): Boolean {
+    val queuedEditId = queuedTransactionEditToDiscardForNoOp(pendingForRecord, editingLocalCreate)
+    if (queuedEditId != null) {
+        try {
+            localRepository.discardWrite(queuedEditId)
+            host.loadLocalRecords(budgetId)
+            host.reportTransactionWriteMessage("Your transaction matches Actual. Removed the waiting edit.")
+            return true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            host.reportTransactionWriteMessage("This transaction started syncing. Check Pending Changes before changing it.")
+            host.loadLocalRecords(budgetId)
+            return false
+        }
+    }
+    host.reportTransactionWriteMessage("There are no transaction changes to save.")
+    return false
+}
+
+private suspend fun TransactionController.saveTransactionEdit(
+    localRepository: LocalBudgetRepository,
+    budgetId: String,
+    transactionId: String,
+    base: JsonObject,
+    patch: JsonObject,
+    editingLocalCreate: Boolean,
+    revision: String?,
+    baseJson: String,
+): Boolean {
     host.markSavingTransaction(true)
     try {
         val patchJson = JsonObject(patch)
@@ -235,3 +274,21 @@ internal suspend fun TransactionController.updateTransaction(
         host.markSavingTransaction(false)
     }
 }
+
+private fun editDetails(
+    updateDetails: Boolean,
+    requestedAccountId: String?,
+    payeeId: String?,
+    requestedCategoryId: String?,
+    requestedDate: String?,
+): TransactionEditDetails? =
+    if (updateDetails) {
+        TransactionEditDetails(
+            accountId = checkNotNull(requestedAccountId),
+            payeeId = payeeId,
+            categoryId = requestedCategoryId,
+            date = checkNotNull(requestedDate),
+        )
+    } else {
+        null
+    }
