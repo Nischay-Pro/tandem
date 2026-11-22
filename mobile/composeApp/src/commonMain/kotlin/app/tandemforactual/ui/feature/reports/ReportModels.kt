@@ -34,19 +34,6 @@ internal enum class ReportPeriodMode {
     RANGE,
 }
 
-internal enum class ReportRangePreset(
-    val label: String,
-    val monthCount: Int?,
-) {
-    LAST_3_MONTHS("Last 3 months", 3),
-    LAST_6_MONTHS("Last 6 months", 6),
-    LAST_12_MONTHS("Last 12 months", 12),
-    LAST_3_YEARS("Last 3 years", 36),
-    YEAR_TO_DATE("Year to date", null),
-    LAST_YEAR("Last year", null),
-    ALL_TIME("All time", null),
-}
-
 internal fun roundedReportAxisValues(
     minimum: Double,
     maximum: Double,
@@ -73,17 +60,6 @@ internal fun roundedReportAxisValues(
     val last = ceil(high / step) * step
     val tickCount = ((last - first) / step).toInt() + 1
     return (0 until tickCount).map { index -> (last - index * step).toLong() }
-}
-
-internal data class ReportWindow(
-    val startDate: String,
-    val throughDate: String,
-    val startMonthId: String,
-    val endMonthId: String,
-    val monthIds: List<String>,
-    val allDates: Boolean = false,
-) {
-    val monthCount: Int get() = monthIds.size
 }
 
 internal data class CategorySpendingPoint(
@@ -133,18 +109,6 @@ internal data class BudgetedSpentPoint(
     val spentMinor: Long,
 ) {
     val isOverBudget: Boolean get() = spentMinor > budgetedMinor
-}
-
-internal data class NetWorthPoint(
-    val monthId: String,
-    val month: String,
-    val allAccountsAssetsMinor: Long,
-    val allAccountsDebtsMinor: Long,
-    val onBudgetAssetsMinor: Long,
-    val onBudgetDebtsMinor: Long,
-) {
-    val allAccountsMinor: Long get() = allAccountsAssetsMinor - allAccountsDebtsMinor
-    val onBudgetMinor: Long get() = onBudgetAssetsMinor - onBudgetDebtsMinor
 }
 
 internal fun categoryPercentage(

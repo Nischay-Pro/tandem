@@ -14,18 +14,6 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 
-internal data class LiveAccountSummary(
-    val id: String,
-    val name: String,
-    val balanceMinor: Long?,
-    val type: String?,
-    val offBudget: Boolean,
-    val closed: Boolean = false,
-    val accountGroupId: String? = null,
-    val accountGroupName: String? = null,
-    val sortOrder: Double? = null,
-)
-
 internal data class LiveCategorySummary(
     val id: String,
     val name: String,
@@ -41,17 +29,6 @@ internal data class PendingCategorySummary(
     val category: LiveCategorySummary,
 )
 
-internal data class LiveCategoryGroupSummary(
-    val id: String,
-    val name: String,
-    val categories: List<LiveCategorySummary>,
-    val isIncome: Boolean = false,
-) {
-    val assignedMinor: Long get() = categories.sumOf { it.assignedMinor }
-    val activityMinor: Long get() = categories.sumOf { it.activityMinor }
-    val balanceMinor: Long get() = categories.sumOf { it.balanceMinor }
-}
-
 internal data class LiveBudgetMonthSummary(
     val toBudgetMinor: Long?,
     val incomeAvailableMinor: Long?,
@@ -60,20 +37,6 @@ internal data class LiveBudgetMonthSummary(
     val groups: List<LiveCategoryGroupSummary>,
     val heldForNextMonthMinor: Long? = null,
     val heldForNextMonthPending: Boolean = false,
-)
-
-internal data class LiveScheduleSummary(
-    val id: String,
-    val name: String,
-    val nextDate: String,
-    val dateValueJson: String,
-    val accountId: String?,
-    val accountName: String?,
-    val payeeId: String?,
-    val amountMinor: Long?,
-    val amountRangeMinor: Pair<Long, Long>?,
-    val amountOp: String,
-    val canSkip: Boolean,
 )
 
 internal fun BudgetRecordEntity.recordBody(): JsonObject? {

@@ -167,14 +167,15 @@ function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
 function-size UpcomingSchedulesScreen.UpcomingSchedulesScreen
 function-size WhatIfScreen.WhatIfScreen
-layering AppModels -> app
-layering AppModels -> feature.activity
+layering ActivitySearchCache -> feature.activity
 layering AppState -> app
 layering AppState -> feature.activity
 layering AppState -> feature.reports
 layering AppState -> feature.transactions
 layering DragReorderUpdate -> feature.budget
 layering IosDeviceAuthenticator -> feature.auth
+layering MerchantIcons -> feature.activity
+layering RouteNavigation -> app
 layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
@@ -184,7 +185,6 @@ size AccountsScreen
 size ActivitySearch
 size ActivitySearchScreen
 size AppHeader
-size AppModels
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
