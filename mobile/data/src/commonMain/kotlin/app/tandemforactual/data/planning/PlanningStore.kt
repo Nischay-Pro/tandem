@@ -105,6 +105,27 @@ class PlanningStore(
 
     suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
 
+    fun accountCurrencies(): Flow<List<AccountCurrency>> =
+        observe(AccountCurrency.TYPE).map { list -> list.map { (_, body) -> AccountCurrency.fromJson(body) } }
+
+    /** A blank currency clears it, so the account goes back to the budget's own currency. */
+    suspend fun save(currency: AccountCurrency) =
+        if (currency.currency.isBlank()) {
+            delete(currency.id, AccountCurrency.TYPE)
+        } else {
+            put(currency.id, AccountCurrency.TYPE, currency.toJson())
+        }
+
+    fun exchangeRates(): Flow<List<ExchangeRate>> = observe(ExchangeRate.TYPE).map { list -> list.map { (_, body) -> ExchangeRate.fromJson(body) } }
+
+    suspend fun save(rate: ExchangeRate) = put(rate.id, ExchangeRate.TYPE, rate.toJson())
+
+    suspend fun deleteExchangeRate(rate: ExchangeRate) = delete(rate.id, ExchangeRate.TYPE)
+
+    fun deviceNames(): Flow<List<DeviceName>> = observe(DeviceName.TYPE).map { list -> list.map { (_, body) -> DeviceName.fromJson(body) } }
+
+    suspend fun save(name: DeviceName) = put(name.id, DeviceName.TYPE, name.toJson())
+
     companion object {
         const val SCHEMA_VERSION = 1
     }

@@ -211,10 +211,11 @@ internal fun SavingsGoalSheet(
     var target by remember(goal, visible) { mutableStateOf(goal?.targetMinor?.let { formatAmount(it, settings) }.orEmpty()) }
     var date by remember(goal, visible) { mutableStateOf(goal?.targetDate.orEmpty()) }
     var categoryId by remember(goal, visible) { mutableStateOf(goal?.categoryId) }
+    var keepPrivate by remember(goal, visible) { mutableStateOf(goal?.shared == false) }
     var choosingCategory by remember { mutableStateOf(false) }
     var error by remember(visible) { mutableStateOf<String?>(null) }
     val categories = month?.groups.orEmpty().flatMap { it.categories }
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}, secure = true) {
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader(if (goal == null) "New savings goal" else "Savings goal", onClose = onDismiss)
@@ -226,6 +227,7 @@ internal fun SavingsGoalSheet(
                     categories.firstOrNull { it.id == categoryId }?.name ?: "None",
                     onClick = { choosingCategory = true },
                 )
+                ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     if (goal != null) {
@@ -249,6 +251,7 @@ internal fun SavingsGoalSheet(
                                     currency = settings?.currencyCode.orEmpty(),
                                     targetDate = date.ifBlank { null },
                                     categoryId = categoryId,
+                                    shared = !keepPrivate,
                                 ),
                             )
                         }
@@ -289,6 +292,7 @@ internal fun DebtTermsSheet(
     var dueDay by remember(account) { mutableStateOf(terms?.dueDay?.toString().orEmpty()) }
     var kind by remember(account) { mutableStateOf(terms?.kind ?: DebtKind.UNSPECIFIED) }
     var paysInFull by remember(account) { mutableStateOf(terms?.paysInFull == true) }
+    var keepPrivate by remember(account) { mutableStateOf(terms?.shared == false) }
     var error by remember(account) { mutableStateOf<String?>(null) }
     TandemTaskSheet(visible = account != null, onDismissRequest = onDismiss, onDismissed = {}) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
@@ -298,7 +302,7 @@ internal fun DebtTermsSheet(
             ) {
                 TandemModalHeader(account?.name.orEmpty(), onClose = onDismiss)
                 Text(
-                    "Used only on this device to estimate payoff. Leave anything you don’t know blank.",
+                    "Used to estimate payoff. Leave anything you don’t know blank.",
                     color = palette.muted,
                     fontSize = TandemTypography.compactBody,
                 )
@@ -322,6 +326,7 @@ internal fun DebtTermsSheet(
                     { dueDay = it.filter(Char::isDigit).take(2) },
                     TextFieldOptions(placeholder = "12"),
                 )
+                ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                     val rate = apr.takeIf { it.isNotBlank() }?.let(::parseRateBasisPoints)
@@ -344,6 +349,7 @@ internal fun DebtTermsSheet(
                                 day,
                                 kind = kind,
                                 paysInFull = kind == DebtKind.CARD && paysInFull,
+                                shared = !keepPrivate,
                             ),
                         )
                     }
@@ -413,7 +419,7 @@ internal fun RecoveryKeySheet(
     val palette = tandemPalette
     var entered by remember(visible) { mutableStateOf("") }
     var error by remember(visible) { mutableStateOf<String?>(null) }
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}, secure = true) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader("Planning recovery key", onClose = onDismiss)

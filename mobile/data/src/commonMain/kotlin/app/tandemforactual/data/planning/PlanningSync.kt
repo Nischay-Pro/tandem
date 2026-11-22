@@ -1,5 +1,8 @@
 package app.tandemforactual.data.planning
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+
 /** A sealed record as extension sync stores it. */
 data class RemotePlanningRecord(
     val recordId: String,
@@ -59,7 +62,8 @@ data class PlanningSyncResult(
 
 /**
  * Exchanges one budget's sealed planning records with extension sync. Local edits go up as the next server revision; if
- * another device got there first, the edit is re-based on the newest revision so the latest writer wins. The cursor only
+ * another device got there first, the edit is re-based on the newest revision so the latest writer wins. A record marked
+ * private stays on this device; one that was shared before goes up as a deletion so other devices drop it. The cursor only
  * advances after received records are stored, and a failure leaves local edits pending for the next attempt.
  */
 class PlanningSync(
@@ -106,6 +110,13 @@ class PlanningSync(
                     PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, record.revision),
                 )
             var base = record.syncedRevision.takeIf { it > 0 }
+            val private =
+                !record.deleted &&
+                    runCatching { isPrivate(Json.parseToJsonElement(plaintext.decodeToString()).jsonObject) }.getOrDefault(false)
+            if (private && base == null) {
+                dao.upsert(record.copy(pendingUpload = false))
+                continue
+            }
             var attempts = 0
             while (attempts++ < 2) {
                 val revision = (base ?: 0) + 1
@@ -121,9 +132,9 @@ class PlanningSync(
                         record.schemaVersion,
                         revision,
                         base,
-                        record.deleted,
+                        record.deleted || private,
                         iv,
-                        sealed,
+                        if (private) cipher.seal(ByteArray(0), PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision)).second else sealed,
                     )
                 if (result is RemoteWrite.Stored) {
                     dao.upsert(

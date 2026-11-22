@@ -52,6 +52,7 @@ import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Coins
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
@@ -75,6 +76,7 @@ import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.TrendingDown
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wand
+import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.X
 
 /** One destination in the menu, with an optional short hint on the right such as a count. */
@@ -395,6 +397,8 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
+        add(AppMenuItem(Lucide.Users, "Household", "Share this budget") { open(AppRoute.HOUSEHOLD) })
+        add(AppMenuItem(Lucide.Coins, "Currencies", "Accounts in other currencies") { open(AppRoute.EXCHANGE_RATES) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
         add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
         add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))
