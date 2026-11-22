@@ -162,7 +162,6 @@ function-size TransactionDetailScreen.TransactionDetailScreen
 function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
-function-size UpcomingSchedulesScreen.UpcomingSchedulesScreen
 function-size WhatIfScreen.WhatIfScreen
 layering ActivitySearchCache -> feature.activity
 layering AppState -> app
@@ -200,4 +199,3 @@ size SyncCenterScreen
 size SyncCenterScreenParts
 size TandemApp
 size TandemMobileSession
-size UpcomingSchedulesScreen
