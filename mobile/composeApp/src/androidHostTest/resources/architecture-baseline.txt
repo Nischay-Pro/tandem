@@ -149,14 +149,12 @@ function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
 function-size WhatIfScreen.WhatIfScreen
 function-size androidApp:BackgroundBudgetSync.doWork
-function-size data:ActualBudgetEdits.setOrders
 function-size data:ActualBudgetReader.read
 function-size data:ActualImport.reconcile
 function-size data:ActualRuleEngine.eval
 function-size data:ActualScheduleEdits.edit
 function-size data:ActualTransactionOperations.change
 function-size data:BudgetSyncCoordinator.applySnapshot
-function-size data:LocalBudgetRepository.replaceBudgetMutationQueue
 function-size data:PlanningSync.sync
 layering ActivitySearchCache -> feature.activity
 layering AppState -> app
@@ -185,10 +183,8 @@ size StatementImport
 size SyncCenterScreenParts
 size TandemMobileSession
 size api-client:TandemApiClient
-size data:ActualBudgetEdits
 size data:ActualRuleEngine
 size data:ActualScheduleEdits
 size data:ActualTransactionOperations
 size data:BudgetSyncCoordinator
 size data:Daos
-size data:LocalBudgetRepository
