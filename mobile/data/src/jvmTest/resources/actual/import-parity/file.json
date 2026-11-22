@@ -1,0 +1,16 @@
+{
+  "deleted": 0,
+  "fileId": "4b95c86f-7fef-4c31-9e99-32be49bf39f9",
+  "groupId": "c84b3555-a0eb-4d25-bda5-9dd5aec9896a",
+  "name": "Import-parity-fixture",
+  "encryptKeyId": null,
+  "owner": "6ade1129-af29-410e-916c-e32c44d4ce29",
+  "usersWithAccess": [
+    {
+      "userId": "6ade1129-af29-410e-916c-e32c44d4ce29",
+      "displayName": "",
+      "userName": "",
+      "owner": true
+    }
+  ]
+}

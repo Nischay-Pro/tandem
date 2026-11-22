@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncRequest
 import app.tandemforactual.data.actual.SyncResponse
@@ -173,6 +174,60 @@ class ActualServerClient(
             }
         if (!response.status.isSuccess()) throw failure(response)
         return response.bodyAsBytes()
+    }
+
+    /** Asks the Actual server for an account's transactions from its bank provider; the server holds the provider secrets. */
+    suspend fun bankTransactions(
+        account: LinkedAccount,
+        fileId: String,
+    ): JsonObject {
+        val (path, body) =
+            when (account.source) {
+                "simpleFin" ->
+                    "simplefin" to
+                        buildJsonObject {
+                            put("accountId", account.providerAccountId)
+                            put("startDate", account.startDate)
+                        }
+                "pluggyai" ->
+                    "pluggyai" to
+                        buildJsonObject {
+                            put("accountId", account.providerAccountId)
+                            put("startDate", account.startDate)
+                        }
+                "akahu" ->
+                    "akahu" to
+                        buildJsonObject {
+                            put("accountId", account.providerAccountId)
+                            put("startDate", account.startDate)
+                        }
+                "enableBanking" ->
+                    "enablebanking" to
+                        buildJsonObject {
+                            put("accountId", account.providerAccountId)
+                            put("startDate", account.startDate)
+                            put("aspspName", account.bankName)
+                        }
+                else ->
+                    "gocardless" to
+                        buildJsonObject {
+                            put("requisitionId", account.bankId)
+                            put("accountId", account.providerAccountId)
+                            put("startDate", account.startDate)
+                            put("includeBalance", true)
+                        }
+            }
+        val data =
+            json(
+                http.post("$base/$path/transactions") {
+                    auth()
+                    header("x-actual-file-id", fileId)
+                    contentType(ContentType.Application.Json)
+                    setBody(body.toString())
+                },
+            ).getValue("data").jsonObject
+        (data["error_code"] as? JsonPrimitive)?.let { throw ActualServerException("bank-sync-${it.content.lowercase()}") }
+        return data
     }
 
     suspend fun keyInfo(fileId: String): ActualKeyInfo {

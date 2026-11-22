@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.ActualBankSync
 import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualBudgetReader
@@ -23,8 +24,8 @@ import kotlinx.serialization.json.JsonObject
 /** Owns one local budget connection and serializes edits with CRDT synchronization. */
 class ActualDirectBudget private constructor(
     private val db: ActualDatabase,
-    server: ActualServerClient,
-    fileId: String,
+    private val server: ActualServerClient,
+    private val fileId: String,
     val groupId: String,
     now: () -> Long,
     newId: () -> String,
@@ -32,6 +33,7 @@ class ActualDirectBudget private constructor(
     key: ActualBudgetKey?,
 ) {
     private val mutex = Mutex()
+    internal val keySecret: ByteArray? = key?.secret
 
     init {
         if (downloaded) {
@@ -121,6 +123,38 @@ class ActualDirectBudget private constructor(
     }
 
     suspend fun transactionRecord(id: String) = locked { reader.transactionRecord(id) }
+
+    /** Downloads each bank-linked account through the Actual server and reconciles it, as Actual's bank sync does. */
+    suspend fun bankSync(today: String): Int {
+        sync()
+        val accounts = locked { ActualBankSync(writer, { today }).linkedAccounts() }
+        var changed = 0
+        for (account in accounts) {
+            val download = server.bankTransactions(account, fileId)
+            locked {
+                val result = ActualBankSync(writer, { today }).apply(account, download)
+                changed += result.added.size + result.updated.size
+            }
+        }
+        sync()
+        return changed
+    }
+
+    /** Which of these statement ids the account already holds, so an import can say how many rows are new. */
+    suspend fun importedIds(
+        accountId: String,
+        ids: List<String>,
+    ): Set<String> =
+        locked {
+            ids.chunked(500).flatMapTo(HashSet()) { chunk ->
+                db
+                    .query(
+                        "SELECT imported_id FROM v_transactions WHERE account = ? AND imported_id IN (${chunk.joinToString { "?" }})",
+                        accountId,
+                        *chunk.toTypedArray(),
+                    ).map { it["imported_id"] as String }
+            }
+        }
 
     /** Applies a budget edit against freshly synced state, then uploads it, as the gateway's maintenance routes did. */
     suspend fun <T> edit(

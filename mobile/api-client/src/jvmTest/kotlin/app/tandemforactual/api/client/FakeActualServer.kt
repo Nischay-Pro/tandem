@@ -28,8 +28,10 @@ internal class FakeActualServer {
     val messages: MutableMap<String, MessageEnvelope> = initial.messages.associateByTo(linkedMapOf()) { it.timestamp }
     var merkle = MerkleTrie.fromJson(initial.merkle)
     var password = "test"
+    var bankDownload = """{"status":"ok","data":{}}"""
     var syncFailure: String? = null
     var syncCalls = 0
+    var extension = false
     val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
     private val sealedArchive = budgetKey.encrypt(archive)
     private val lockedMessages = linkedMapOf<String, MessageEnvelope>()
@@ -51,6 +53,14 @@ internal class FakeActualServer {
         HttpClient(
             MockEngine { request ->
                 when (request.url.encodedPath) {
+                    "/extension/v1/capabilities" ->
+                        if (extension) {
+                            respond(
+                                """{"apiVersion":1,"features":["planning-records"]}""",
+                            )
+                        } else {
+                            respond("", HttpStatusCode.NotFound)
+                        }
                     "/account/needs-bootstrap" -> respond("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""")
                     "/account/login-methods" ->
                         respond(
@@ -122,6 +132,7 @@ internal class FakeActualServer {
                             ),
                         )
                     }
+                    "/simplefin/transactions" -> respond(bankDownload)
                     else -> error("Unexpected path ${request.url.encodedPath}")
                 }
             },

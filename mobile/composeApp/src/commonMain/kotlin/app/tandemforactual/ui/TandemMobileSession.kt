@@ -22,6 +22,12 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.PlanningCipher
+import app.tandemforactual.data.planning.PlanningKeyMismatchException
+import app.tandemforactual.data.planning.PlanningStore
+import app.tandemforactual.data.planning.PlanningSync
+import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -260,6 +266,83 @@ internal class TandemMobileSession(
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
     private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
     private val repository: LocalBudgetRepository? get() = storage?.repository
+    internal var planningKeyring = PlanningKeyring(null)
+    var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
+        private set
+    var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
+        private set
+
+    private fun planningStore(budgetId: String): PlanningStore? =
+        storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, { planningKeyring.cipherFor(budgetId) }, nowEpochMillis) }
+
+    var planningSyncStatus by mutableStateOf(PlanningSyncStatus.OFF)
+        private set
+
+    /**
+     * Shares planning records through extension sync when the server runs it. It never blocks budget sync: any failure
+     * leaves the records on this device to try again next time.
+     */
+    suspend fun syncPlanning(budgetId: String) {
+        val dao = storage?.database?.planningRecordDao() ?: return
+        val transport = apiClient.planningTransport(budgetId)
+        if (transport == null) {
+            planningSyncStatus = PlanningSyncStatus.OFF
+            return
+        }
+        planningSyncStatus =
+            try {
+                withContext(Dispatchers.Default) {
+                    val keyring = planningKeyring
+                    val sync = PlanningSync(dao, budgetId, transport)
+                    val local = keyring.key(budgetId)
+                    val shared = sync.agreeOnKey(local, apiClient.budgetSecret(budgetId) ?: keyring.recoveryKey(budgetId))
+                    if (!shared.contentEquals(local)) {
+                        keyring.replaceKey(budgetId, shared)
+                        sync.rekey(PlanningCipher(local), PlanningCipher(shared))
+                    }
+                    val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId))
+                    keyring.setCursor(budgetId, result.cursor)
+                }
+                PlanningSyncStatus.SYNCED
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: PlanningKeyMismatchException) {
+                PlanningSyncStatus.NEEDS_RECOVERY_KEY
+            } catch (_: Exception) {
+                PlanningSyncStatus.WAITING
+            }
+    }
+
+    /** Uses the recovery key from another device, then tries planning sync again. */
+    suspend fun useRecoveryKey(
+        budgetId: String,
+        key: ByteArray,
+    ) {
+        planningKeyring.setRecoveryKey(budgetId, key)
+        syncPlanning(budgetId)
+    }
+
+    suspend fun saveSavingsGoal(
+        budgetId: String,
+        goal: SavingsGoal,
+    ) {
+        planningStore(budgetId)?.save(goal)
+    }
+
+    suspend fun deleteSavingsGoal(
+        budgetId: String,
+        goalId: String,
+    ) {
+        planningStore(budgetId)?.delete(goalId, SavingsGoal.TYPE)
+    }
+
+    suspend fun saveDebtTerms(
+        budgetId: String,
+        terms: DebtTerms,
+    ) {
+        planningStore(budgetId)?.save(terms)
+    }
+
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
         get() = queuePersistenceOverride ?: storage?.queuePersistence
     private val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
@@ -1570,7 +1653,12 @@ internal class TandemMobileSession(
                 )
             }
         if (queued) {
-            setBudgetActionMessage("Saved on this device. It will sync when Tandem is available.", InlineMessageKind.INFO)
+            if (!isServerReachable) {
+                setBudgetActionMessage(
+                    "Saved on this device. It will sync when Actual is reachable.",
+                    InlineMessageKind.INFO,
+                )
+            }
             retryQueuedBudgetReorders(budgetId, encryptionPassword)
         }
         return queued
@@ -3342,6 +3430,7 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
                 if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
             }
+            syncPlanning(budgetId)
             return summary
         } catch (error: CancellationException) {
             throw error
@@ -3361,9 +3450,25 @@ internal class TandemMobileSession(
                 ),
             )
             return null
+        } catch (error: TandemApiException) {
+            isServerReachable = error.errorCode != "address_unreachable"
+            budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
+            present(
+                syncPresentation.failed(
+                    apiFailureMessage(
+                        error.errorCode,
+                        error.httpStatus,
+                        ApiFailureContext.SYNC,
+                        "Tandem couldn’t sync this budget. Try again shortly.",
+                    ),
+                    error.errorCode,
+                    error.httpStatus,
+                ),
+            )
+            return null
         } catch (error: BudgetSyncProtocolException) {
             isServerReachable = true
-            present(syncPresentation.failed("Tandem couldn’t read this budget. Check the Tandem API address and try again."))
+            present(syncPresentation.failed("Tandem couldn’t read this budget. Try syncing again."))
             return null
         } catch (error: Exception) {
             isServerReachable = false
@@ -3790,7 +3895,13 @@ internal class TandemMobileSession(
             }
         if (!queued) return null
         payeeRecords = payeeRecordsWithPendingCreates(budgetId, payeeRecords)
-        setBudgetActionMessage("Saved on this device. It will sync when Tandem is available.", InlineMessageKind.INFO, messageOwner)
+        if (!isServerReachable) {
+            setBudgetActionMessage(
+                "Saved on this device. It will sync when Actual is reachable.",
+                InlineMessageKind.INFO,
+                messageOwner,
+            )
+        }
         retryQueuedBudgetReorders()
         return localPayeeId
     }
@@ -5420,6 +5531,10 @@ internal class TandemMobileSession(
                 }
             }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
+            planningStore(budgetId)?.let { planning ->
+                launch { planning.savingsGoals().collect { savingsGoals = it } }
+                launch { planning.debtTerms().collect { debtTerms = it } }
+            }
         }
     }
 

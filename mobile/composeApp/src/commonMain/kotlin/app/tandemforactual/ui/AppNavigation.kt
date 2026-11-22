@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -542,6 +543,10 @@ internal fun AppHeader(
                     )
                 }
                 else -> {
+                    if (route == AppRoute.HOME) {
+                        AdvancedModeSwitch(state)
+                        Spacer(Modifier.width(TandemSpacing.small))
+                    }
                     if (route.isTab()) MainCloudStatusButton(syncStatus, pendingWriteStatuses, onSync)
                     if (route.isTransactionForm()) TandemModalCloseButton(onClick = onBack)
                 }
@@ -840,6 +845,9 @@ internal fun SideNavigationRail(
     selected: AppRoute,
     selectTab: (AppRoute) -> Unit,
     modifier: Modifier = Modifier,
+    layouts: List<WorkspaceLayout> = emptyList(),
+    layout: WorkspaceLayout = WorkspaceLayout.SINGLE,
+    onLayout: (WorkspaceLayout) -> Unit = {},
 ) {
     val palette = tandemPalette
     val items =
@@ -903,6 +911,63 @@ internal fun SideNavigationRail(
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        if (layouts.size > 1) WorkspaceLayoutButton(layouts, layout, onLayout)
+    }
+}
+
+@Composable
+private fun WorkspaceLayoutButton(
+    layouts: List<WorkspaceLayout>,
+    layout: WorkspaceLayout,
+    onLayout: (WorkspaceLayout) -> Unit,
+) {
+    val palette = tandemPalette
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (layout != WorkspaceLayout.SINGLE) palette.accentSurface else Color.Transparent)
+                .clickable(onClickLabel = "Choose how many screens to show") { expanded = true }
+                .semantics { contentDescription = "Screen layout: ${layout.label}" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                layout.icon,
+                null,
+                tint =
+                    if (layout !=
+                        WorkspaceLayout.SINGLE
+                    ) {
+                        palette.accent
+                    } else {
+                        palette.muted
+                    },
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        androidx.compose.material.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(palette.surface),
+        ) {
+            layouts.forEach { option ->
+                androidx.compose.material.DropdownMenuItem(onClick = {
+                    expanded = false
+                    onLayout(option)
+                }) {
+                    Icon(option.icon, null, tint = if (option == layout) palette.accent else palette.muted, modifier = Modifier.size(20.dp))
+                    Text(
+                        option.label,
+                        color = if (option == layout) palette.accent else palette.text,
+                        fontSize = TandemTypography.compactBody,
+                        fontWeight = if (option == layout) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.padding(start = TandemSpacing.small),
                     )
                 }
             }

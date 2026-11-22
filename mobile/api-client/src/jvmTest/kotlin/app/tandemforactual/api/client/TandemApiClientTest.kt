@@ -95,6 +95,14 @@ class TandemApiClientTest {
             assertEquals("budget_password_required", assertFailsWith<TandemApiException> { client.budget("locked") }.errorCode)
             assertEquals("budget_password_incorrect", assertFailsWith<TandemApiException> { client.budget("locked", "nope") }.errorCode)
             val locked = client.budget("locked", "secret")
+            assertEquals(32, client.budgetSecret("locked")?.size)
+            assertNull(client.budgetSecret("group"))
+            assertNull(client.planningTransport("locked"))
+            server.extension = true
+            val planning = client(server, TempBudgetFiles())
+            assertNull(planning.planningTransport("group"))
+            planning.signInWithPassword(url, "test", "Phone")
+            assertTrue(planning.planningTransport("group") is ExtensionSyncClient)
             locked.sync()
             client.createBudgetPayee("locked", "Sealed", "secret")
             assertTrue(locked.snapshot("2026-11-21").records.any { it.type == "payee" && it.body["name"] == JsonPrimitive("Sealed") })
@@ -266,8 +274,26 @@ class TandemApiClientTest {
             assertFailsWith<TandemApiException> { client.manageBudgetSchedule("group", schedule.id, "explode", null, null) }
             client.manageBudgetSchedule("group", schedule.id, "delete", null, null)
             client.runBudgetBankSync("group", null)
-            assertFailsWith<TandemApiException> { client.importBudgetAccountTransactions("group", checking, emptyList(), null) }
-            assertFailsWith<TandemApiException> { client.previewBudgetAccountStatementImport("group", checking, emptyList(), null) }
+            client.edit("group") { it.linkBankAccount(checking, "simpleFin", "SF-1", "org", "Credit Union") }
+            server.bankDownload =
+                """{"status":"ok","data":{"transactions":{"all":[{"transactionId":"sf-1","booked":true,""" +
+                """"date":"2026-11-19","payeeName":"Gym",""" +
+                """"transactionAmount":{"amount":"-45.50"}}]},"startingBalance":100000}}"""
+            client.runBudgetBankSync("group", null)
+            assertEquals(
+                setOf("sf-1"),
+                client.previewBudgetAccountStatementImport("group", checking, listOf("sf-1"), null).existingImportedIds,
+            )
+            server.bankDownload = """{"status":"ok","data":{"error_type":"ITEM_ERROR","error_code":"ITEM_LOGIN_REQUIRED"}}"""
+            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+            val statement = listOf(StatementImportItem("2026-11-20", -1_234, "corner shop", "first", "stmt-1"))
+            assertEquals(0, client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1"), null).existingImportedIds.size)
+            assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
+            assertEquals(
+                setOf("stmt-1"),
+                client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1", "stmt-2"), null).existingImportedIds,
+            )
+            assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(server.messages.size > 300)
 

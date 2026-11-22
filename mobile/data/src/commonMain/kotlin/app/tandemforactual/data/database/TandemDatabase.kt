@@ -16,14 +16,17 @@ import androidx.sqlite.SQLiteConnection
         BudgetSyncStateEntity::class,
         AppPreferenceEntity::class,
         OutboxOperationEntity::class,
+        app.tandemforactual.data.planning.PlanningRecordEntity::class,
     ],
-    version = 6,
+    version = 8,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = BudgetRecordDisplayMetadataMigration::class),
         AutoMigration(from = 3, to = 4, spec = BudgetRecordSearchMetadataMigration::class),
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6, spec = BudgetRecordParentMetadataMigration::class),
+        AutoMigration(from = 6, to = 7),
+        AutoMigration(from = 7, to = 8),
     ],
     exportSchema = true,
 )
@@ -38,6 +41,8 @@ abstract class TandemDatabase : RoomDatabase() {
     abstract fun budgetSyncStateDao(): BudgetSyncStateDao
 
     abstract fun appPreferenceDao(): AppPreferenceDao
+
+    abstract fun planningRecordDao(): app.tandemforactual.data.planning.PlanningRecordDao
 }
 
 class BudgetRecordDisplayMetadataMigration : AutoMigrationSpec {

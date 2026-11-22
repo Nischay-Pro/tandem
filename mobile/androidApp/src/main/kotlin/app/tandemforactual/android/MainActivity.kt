@@ -128,6 +128,7 @@ class MainActivity : FragmentActivity() {
       }
       TandemApp(
         actualBudgetFiles = remember { app.tandemforactual.data.database.AndroidActualBudgetFiles(applicationContext) },
+        planningKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, "planning_keys") },
         deviceName =
           Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",

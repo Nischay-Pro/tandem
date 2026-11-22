@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncRequest
 import app.tandemforactual.data.actual.SyncResponse
@@ -8,6 +9,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
+import io.ktor.http.content.TextContent
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -92,6 +94,35 @@ class ActualServerClientTest {
                 assertEquals(ActualKeyInfo("key", "salt", "test"), client.keyInfo("file"))
                 assertEquals("{}", client.sync(SyncRequest(emptyList(), "file", "group", "", "since")).merkle)
             }
+        }
+
+    @Test
+    fun asksTheActualServerForEachBankProvider() =
+        runBlocking {
+            val seen = mutableListOf<String>()
+            HttpClient(
+                MockEngine { request ->
+                    assertEquals("file", request.headers["x-actual-file-id"])
+                    seen += request.url.encodedPath + " " + (request.body as TextContent).text
+                    respond("""{"status":"ok","data":{"transactions":{"all":[]}}}""")
+                },
+            ).use { http ->
+                val client = ActualServerClient(http, "https://budget.example")
+                client.token = "session"
+                for (source in listOf("simpleFin", "pluggyai", "akahu", "enableBanking", "goCardless")) {
+                    client.bankTransactions(LinkedAccount("a", "A", source, "P1", "req", "Bank", "2026-11-01"), "file")
+                }
+            }
+            assertEquals(
+                listOf(
+                    """/simplefin/transactions {"accountId":"P1","startDate":"2026-11-01"}""",
+                    """/pluggyai/transactions {"accountId":"P1","startDate":"2026-11-01"}""",
+                    """/akahu/transactions {"accountId":"P1","startDate":"2026-11-01"}""",
+                    """/enablebanking/transactions {"accountId":"P1","startDate":"2026-11-01","aspspName":"Bank"}""",
+                    """/gocardless/transactions {"requisitionId":"req","accountId":"P1","startDate":"2026-11-01","includeBalance":true}""",
+                ),
+                seen,
+            )
         }
 
     @Test

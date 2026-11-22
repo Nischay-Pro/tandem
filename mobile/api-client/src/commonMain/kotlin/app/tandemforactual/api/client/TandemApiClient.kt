@@ -4,6 +4,7 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
+import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
@@ -127,6 +128,7 @@ class TandemApiClient(
     private var serverUrl: String? = null
     private var device: AuthenticatedDevice? = null
     private val budgetPasswords = mutableMapOf<String, String>()
+    private var extensionAvailable: Boolean? = null
     private val openBudgets = mutableMapOf<String, ActualDirectBudget>()
 
     val isAuthenticated: Boolean get() = server?.token != null
@@ -246,6 +248,7 @@ class TandemApiClient(
             serverUrl = null
             device = null
             budgetPasswords.clear()
+            extensionAvailable = null
         }
     }
 
@@ -314,6 +317,16 @@ class TandemApiClient(
         }
     }
 
+    /** Planning sync for a budget when this server runs Tandem's extension service, otherwise null. */
+    suspend fun planningTransport(budgetId: String): ExtensionSyncClient? {
+        val url = serverUrl ?: return null
+        if (extensionAvailable == null) extensionAvailable = ExtensionSyncClient.available(http, url)
+        return if (extensionAvailable == true) ExtensionSyncClient(http, url, budgetId) { server?.token } else null
+    }
+
+    /** The Actual key of an open encrypted budget, used to wrap its planning key. */
+    fun budgetSecret(budgetId: String): ByteArray? = openBudgets[budgetId]?.keySecret
+
     /** Sets the device's copy aside as a dated backup, for when Actual reset the budget's sync history. */
     suspend fun retireBudget(budgetId: String) {
         budgetMutex.withLock {
@@ -336,7 +349,7 @@ class TandemApiClient(
     suspend fun runBudgetBankSync(
         budgetId: String,
         encryptionPassword: String?,
-    ): Unit = call { budget(budgetId, encryptionPassword).sync() }
+    ): Unit = call { budget(budgetId, encryptionPassword).bankSync(today()) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun importBudgetAccountTransactions(
@@ -345,7 +358,16 @@ class TandemApiClient(
         transactions: List<StatementImportItem>,
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
-    ): StatementImportSummary = throw TandemApiException("not_supported")
+    ): StatementImportSummary {
+        val result =
+            edit(budgetId, encryptionPassword) { edits ->
+                edits.importTransactions(
+                    accountId,
+                    transactions.map { ImportRow(it.date, it.amountMinor, it.payeeName, it.notes, it.importedId) },
+                )
+            }
+        return StatementImportSummary(result.added.size, result.updated.size, 0)
+    }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun previewBudgetAccountStatementImport(
@@ -353,7 +375,7 @@ class TandemApiClient(
         accountId: String,
         importedIds: List<String>,
         encryptionPassword: String?,
-    ): StatementImportPreview = throw TandemApiException("not_supported")
+    ): StatementImportPreview = StatementImportPreview(call { budget(budgetId, encryptionPassword).importedIds(accountId, importedIds) })
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetAccount(
@@ -692,7 +714,7 @@ class TandemApiClient(
             "file-has-reset" -> "file_has_reset"
             "file-has-new-key" -> "file_has_new_key"
             "not-found", "network-failure" -> "address_unreachable"
-            else -> reason.replace('-', '_')
+            else -> if (reason.startsWith("bank-sync-")) "bank_sync_failed" else reason.replace('-', '_')
         }
 }
 

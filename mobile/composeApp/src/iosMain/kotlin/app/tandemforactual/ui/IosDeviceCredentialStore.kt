@@ -96,7 +96,9 @@ internal class IosDeviceCredentialStore(
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private class SecurityIosKeychainClient : IosKeychainClient {
+internal class SecurityIosKeychainClient(
+    private val account: String = KEYCHAIN_ACCOUNT,
+) : IosKeychainClient {
     override fun read(): IosKeychainReadResult =
         memScoped {
             val result = alloc<CFTypeRefVar>()
@@ -140,7 +142,7 @@ private class SecurityIosKeychainClient : IosKeychainClient {
         if (includeIdentity) {
             query.setObject(kSecClassGenericPassword.asNSString(), forKey = kSecClass.asNSString())
             query.setObject(NSString.create(KEYCHAIN_SERVICE), forKey = kSecAttrService.asNSString())
-            query.setObject(NSString.create(KEYCHAIN_ACCOUNT), forKey = kSecAttrAccount.asNSString())
+            query.setObject(NSString.create(account), forKey = kSecAttrAccount.asNSString())
         }
         if (includeReadResult) {
             query.setObject(NSNumber.numberWithBool(true), forKey = kSecReturnData.asNSString())

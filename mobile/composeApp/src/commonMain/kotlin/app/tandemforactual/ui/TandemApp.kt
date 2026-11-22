@@ -132,6 +132,7 @@ fun TandemApp(
     windowHinge: StateFlow<WindowHinge?> = MutableStateFlow(null),
     screenshotScript: ScreenshotScript? = null,
     actualBudgetFiles: ActualBudgetFiles? = null,
+    planningKeyStore: DeviceCredentialStore? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -160,7 +161,7 @@ fun TandemApp(
                 nowEpochMillis,
                 deviceCredentialStore,
                 openIdLoginProofState = openIdLoginProofState,
-            )
+            ).apply { planningKeyring = PlanningKeyring(planningKeyStore) }
         }
     LaunchedEffect(mobileSession) {
         if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
@@ -1728,6 +1729,22 @@ fun TandemApp(
                 transactionSheetActive -> transactionSheetBaseEntry?.route ?: route
                 else -> route
             }
+        val workspaceLayout =
+            if (useRail && state.selectedBudgetId.isNotBlank()) {
+                with(
+                    LocalDensity.current,
+                ) { state.workspace.effective(windowSize.width.toDp().value - 80f, windowSize.height.toDp().value) }
+            } else {
+                WorkspaceLayout.SINGLE
+            }
+        val workspaceTabs = navigationRoutes(state.interfaceMode)
+        val workspaceActive =
+            workspaceLayout != WorkspaceLayout.SINGLE &&
+                backStack.all { it.route.isTab() } &&
+                route in workspaceTabs &&
+                !transactionSheetActive &&
+                backGestureProgress == 0f
+        val workspacePanes = state.workspace.panesFor(workspaceLayout.paneCount, route, workspaceTabs)
         val showRail =
             useRail &&
                 tabShellRoute != null &&
@@ -1759,8 +1776,29 @@ fun TandemApp(
             if (showRail) {
                 SideNavigationRail(
                     selected = requireNotNull(tabShellRoute),
-                    selectTab = navigation.selectTab,
+                    selectTab = { tab ->
+                        if (workspaceActive && tab !in workspacePanes) {
+                            state.workspace = state.workspace.place(tab, workspacePanes.indexOf(route), workspacePanes)
+                            selectTabRoot(tab)
+                        } else if (workspaceActive) {
+                            selectTabRoot(tab)
+                        } else {
+                            navigation.selectTab(tab)
+                        }
+                    },
                     modifier = Modifier.align(Alignment.CenterStart),
+                    layouts =
+                        if (state.selectedBudgetId.isNotBlank()) {
+                            with(LocalDensity.current) {
+                                val width = windowSize.width.toDp().value - 80f
+                                val height = windowSize.height.toDp().value
+                                WorkspaceLayout.entries.filter { it.fits(width, height) }
+                            }
+                        } else {
+                            emptyList()
+                        },
+                    layout = workspaceLayout,
+                    onLayout = { layout -> state.workspace = Workspace(layout, workspacePanes) },
                 )
             }
             Column(
@@ -1768,7 +1806,7 @@ fun TandemApp(
                     .fillMaxSize()
                     .padding(start = if (showRail) 80.dp else 0.dp),
             ) {
-                if (shouldRenderRouteHeader(route, tabShellRoute != null)) {
+                if (!workspaceActive && shouldRenderRouteHeader(route, tabShellRoute != null)) {
                     AnimatedContent(
                         targetState = shellHeaderRoute,
                         transitionSpec = {
@@ -1811,89 +1849,109 @@ fun TandemApp(
                             .tandemEdgeBackGesture(backStack.size > 1 && !transactionSheetActive, handleBack, updateBackGesture),
                 ) {
                     val routeBackground = appBackgroundBrush(state.backgroundStyle, palette)
-                    if (!transactionSheetActive &&
-                        backGestureProgress > 0f &&
-                        backPreviewRoute != null &&
-                        backPreviewRoute != routeEntry
-                    ) {
-                        val direction = backGestureDirection
-                        renderRoute(
-                            backPreviewRoute!!,
-                            Modifier
-                                .fillMaxSize()
-                                .clearAndSetSemantics {}
-                                .graphicsLayer {
-                                    val progress = backGestureProgress
-                                    translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
-                                    alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
-                                }.background(routeBackground),
-                            false,
-                            !stationaryTabShell,
-                        )
-                    }
-                    val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
-                    val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
-                    AnimatedContent(
-                        targetState = backgroundRouteEntry,
-                        modifier = Modifier.fillMaxSize().clipToBounds(),
-                        transitionSpec = {
-                            when {
-                                reduceMotion ||
-                                    skipNextRouteTransition ||
-                                    initialState.route == AppRoute.STARTUP ||
-                                    targetState.route == AppRoute.STARTUP ->
-                                    EnterTransition.None togetherWith ExitTransition.None
-                                initialState.route.isTab() && targetState.route.isTab() ->
-                                    (
-                                        fadeIn(
-                                            tween(
-                                                TandemMotion.TAB_TRANSITION_MILLIS,
-                                                delayMillis = TandemMotion.TAB_EXIT_MILLIS,
-                                                easing = TandemMotion.emphasizedEasing,
-                                            ),
-                                        ) +
-                                            scaleIn(
+                    if (workspaceActive) {
+                        WorkspacePanes(workspaceLayout, workspacePanes, route, onFocus = {
+                            if (it !=
+                                route
+                            ) {
+                                selectTabRoot(it)
+                            }
+                        }) { paneRoute ->
+                            renderHeader(paneRoute)
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                renderRoute(
+                                    if (paneRoute == route) routeEntry else AppRouteEntry(paneRoute, -1L - paneRoute.ordinal),
+                                    Modifier.fillMaxSize(),
+                                    true,
+                                    false,
+                                )
+                            }
+                        }
+                    } else {
+                        if (!transactionSheetActive &&
+                            backGestureProgress > 0f &&
+                            backPreviewRoute != null &&
+                            backPreviewRoute != routeEntry
+                        ) {
+                            val direction = backGestureDirection
+                            renderRoute(
+                                backPreviewRoute!!,
+                                Modifier
+                                    .fillMaxSize()
+                                    .clearAndSetSemantics {}
+                                    .graphicsLayer {
+                                        val progress = backGestureProgress
+                                        translationX = -direction * size.width * TandemMotion.ROUTE_PARALLAX * (1f - progress)
+                                        alpha = TandemMotion.ROUTE_COVERED_ALPHA + (1f - TandemMotion.ROUTE_COVERED_ALPHA) * progress
+                                    }.background(routeBackground),
+                                false,
+                                !stationaryTabShell,
+                            )
+                        }
+                        val routeSlideSpec = tween<IntOffset>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                        val routeFadeSpec = tween<Float>(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
+                        AnimatedContent(
+                            targetState = backgroundRouteEntry,
+                            modifier = Modifier.fillMaxSize().clipToBounds(),
+                            transitionSpec = {
+                                when {
+                                    reduceMotion ||
+                                        skipNextRouteTransition ||
+                                        initialState.route == AppRoute.STARTUP ||
+                                        targetState.route == AppRoute.STARTUP ->
+                                        EnterTransition.None togetherWith ExitTransition.None
+                                    initialState.route.isTab() && targetState.route.isTab() ->
+                                        (
+                                            fadeIn(
                                                 tween(
                                                     TandemMotion.TAB_TRANSITION_MILLIS,
                                                     delayMillis = TandemMotion.TAB_EXIT_MILLIS,
                                                     easing = TandemMotion.emphasizedEasing,
                                                 ),
-                                                initialScale = 0.97f,
-                                            )
-                                    ) togetherWith
-                                        fadeOut(
-                                            tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
-                                        ) using null
-                                routeTransitionDirection > 0f ->
-                                    slideInHorizontally(routeSlideSpec) { it } togetherWith
+                                            ) +
+                                                scaleIn(
+                                                    tween(
+                                                        TandemMotion.TAB_TRANSITION_MILLIS,
+                                                        delayMillis = TandemMotion.TAB_EXIT_MILLIS,
+                                                        easing = TandemMotion.emphasizedEasing,
+                                                    ),
+                                                    initialScale = 0.97f,
+                                                )
+                                        ) togetherWith
+                                            fadeOut(
+                                                tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
+                                            ) using null
+                                    routeTransitionDirection > 0f ->
+                                        slideInHorizontally(routeSlideSpec) { it } togetherWith
+                                            (
+                                                slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                    fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                            ) using null
+                                    routeTransitionDirection < 0f ->
                                         (
-                                            slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
-                                                fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
-                                        ) using null
-                                routeTransitionDirection < 0f ->
-                                    (
-                                        (
-                                            slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
-                                                fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
-                                        ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
-                                    ).apply { targetContentZIndex = -1f }
-                                else -> EnterTransition.None togetherWith ExitTransition.None
-                            }
-                        },
-                        label = "tandem-screen-transition",
-                    ) { visibleEntry ->
-                        renderRoute(
-                            if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
-                                        translationX = backGestureProgress * size.width * backGestureDirection
-                                    }
-                                }.background(routeBackground),
-                            true,
-                            !stationaryTabShell,
-                        )
+                                            (
+                                                slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
+                                                    fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
+                                            ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
+                                        ).apply { targetContentZIndex = -1f }
+                                    else -> EnterTransition.None togetherWith ExitTransition.None
+                                }
+                            },
+                            label = "tandem-screen-transition",
+                        ) { visibleEntry ->
+                            renderRoute(
+                                if (transactionSheetActive) backgroundRouteEntry else visibleEntry,
+                                Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        if (visibleEntry == backGestureOutgoingEntry && backGestureProgress > 0f) {
+                                            translationX = backGestureProgress * size.width * backGestureDirection
+                                        }
+                                    }.background(routeBackground),
+                                true,
+                                !stationaryTabShell,
+                            )
+                        }
                     }
                 }
                 if (tabShellRoute != null && !useRail) {

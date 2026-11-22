@@ -121,6 +121,7 @@ internal fun ScreenContent(
                 liveBudgetMonth,
                 liveSchedules,
                 liveActivityTransactions,
+                onSyncNow,
             )
         AppRoute.BUDGET ->
             BudgetScreen(
@@ -610,7 +611,7 @@ internal fun ScreenContent(
                 )
             }
         }
-        AppRoute.SETTINGS -> SettingsScreen(state, navigation)
+        AppRoute.SETTINGS -> SettingsScreen(state, navigation, mobileSession)
         AppRoute.APPEARANCE -> AppearanceScreen(state)
         AppRoute.BUDGET_PREFERENCES -> BudgetPreferencesScreen(state, mobileSession)
         AppRoute.SYNC_PREFERENCES ->

@@ -3,12 +3,13 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.components.DividerLine
@@ -63,22 +64,25 @@ internal fun HomeScreen(
     month: LiveBudgetMonthSummary?,
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
+    onSyncNow: () -> Unit = {},
 ) {
-    val data = remember(accounts, month, schedules, transactions) { homeData(accounts, month, schedules, transactions) }
+    val data =
+        remember(accounts, month, schedules, transactions, mobileSession.savingsGoals) {
+            homeData(accounts, month, schedules, transactions).copy(savingsGoalCount = mobileSession.savingsGoals.size)
+        }
+    val editors = rememberPlanningEditors(state, mobileSession, month)
     val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
     val settings = mobileSession.budgetDisplaySettings
     val money: @Composable (Long) -> Unit = { amount ->
         PrivacyAmountText(formatCurrency(amount, settings), state.privacyModeEnabled, color = tandemPalette.muted)
     }
-    PageLazyColumn {
-        item(key = "home-header") {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AdvancedModeSwitch(state)
-                if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
+    PageLazyColumn(
+        isRefreshing = mobileSession.isSyncing,
+        onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
+    ) {
+        if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
+            item(key = "home-header") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TandemIconButton(Lucide.Settings, stringResource(Res.string.nav_settings)) { navigation.selectTab(AppRoute.SETTINGS) }
                 }
             }
@@ -93,7 +97,7 @@ internal fun HomeScreen(
         plan.prominent.forEach { entry ->
             item(
                 key = "home-${entry.module.name}",
-            ) { HomeEntryCard(entry, state, navigation, accounts, month, schedules, transactions, settings, money) }
+            ) { HomeEntryCard(entry, state, mobileSession, editors, navigation, accounts, month, schedules, transactions, settings, money) }
         }
         if (plan.more.isNotEmpty()) {
             item(key = "home-more-title") {
@@ -107,7 +111,21 @@ internal fun HomeScreen(
             plan.more.forEach { entry ->
                 item(
                     key = "home-more-${entry.module.name}",
-                ) { HomeEntryCard(entry, state, navigation, accounts, month, schedules, transactions, settings, money) }
+                ) {
+                    HomeEntryCard(
+                        entry,
+                        state,
+                        mobileSession,
+                        editors,
+                        navigation,
+                        accounts,
+                        month,
+                        schedules,
+                        transactions,
+                        settings,
+                        money,
+                    )
+                }
             }
         }
     }
@@ -117,6 +135,8 @@ internal fun HomeScreen(
 private fun HomeEntryCard(
     entry: HomeEntry,
     state: AppState,
+    mobileSession: TandemMobileSession,
+    editors: PlanningEditors,
     navigation: AppNavigation,
     accounts: List<LiveAccountSummary>,
     month: LiveBudgetMonthSummary?,
@@ -127,15 +147,19 @@ private fun HomeEntryCard(
 ) {
     val module = entry.module
     if (entry is HomeEntry.Setup) {
-        SurfaceCard {
-            Text(
-                stringResource(module.title()),
-                color = tandemPalette.text,
-                fontSize = TandemTypography.body,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(stringResource(module.detail()), color = tandemPalette.muted, fontSize = TandemTypography.caption)
-            SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) { navigation.open(module.setupRoute()) }
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                Text(
+                    stringResource(module.title()),
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.body,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(stringResource(module.detail()), color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                SecondaryButton(stringResource(Res.string.home_set_up), Modifier.fillMaxWidth()) {
+                    if (module == HomeModule.SAVINGS_GOALS) editors.editGoal(null) else navigation.selectTab(module.setupRoute())
+                }
+            }
         }
         return
     }
@@ -185,10 +209,16 @@ private fun HomeEntryCard(
                     if (index > 0) DividerLine()
                     ListRow(
                         category.name,
-                        "Left ${formatCurrency(
-                            category.balanceMinor,
-                            settings,
-                        )}".takeUnless { state.privacyModeEnabled },
+                        if (category.balanceMinor <
+                            0
+                        ) {
+                            "Over by ${formatCurrency(-category.balanceMinor, settings)}"
+                        } else {
+                            "Left ${formatCurrency(
+                                category.balanceMinor,
+                                settings,
+                            )}".takeUnless { state.privacyModeEnabled }
+                        },
                         trailingContent = {
                             money(-category.activityMinor)
                         },
@@ -231,10 +261,17 @@ private fun HomeEntryCard(
                     options = ListRowOptions(showChevron = false),
                 )
             }
-        HomeModule.ACCOUNTS, HomeModule.DEBT_OVERVIEW, HomeModule.NET_WORTH -> {
+        HomeModule.DEBT_OVERVIEW ->
+            DebtOverviewCard(
+                open.filter { (it.balanceMinor ?: 0) < 0 },
+                mobileSession.debtTerms,
+                settings,
+                state.privacyModeEnabled,
+                money,
+            ) { editors.debtAccount = it }
+        HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> {
             val shown =
                 when (module) {
-                    HomeModule.DEBT_OVERVIEW -> open.filter { (it.balanceMinor ?: 0) < 0 }
                     HomeModule.NET_WORTH -> emptyList()
                     else -> open.filterNot { it.offBudget }.take(4)
                 }
@@ -274,13 +311,18 @@ private fun HomeEntryCard(
                     }, onClick = { openTransaction(state, navigation, item, isLive = true) })
                 }
             }
-        HomeModule.SAVINGS_GOALS -> Unit
+        HomeModule.SAVINGS_GOALS ->
+            SavingsGoalsCard(
+                mobileSession.savingsGoals,
+                month,
+                accounts,
+                settings,
+                platformTodayIsoDate(),
+                state.privacyModeEnabled,
+                editors::editGoal,
+            )
     }
 }
 
-/** Where a module's skippable setup lives. */
-internal fun HomeModule.setupRoute(): AppRoute =
-    when (this) {
-        HomeModule.DEBT_OVERVIEW -> AppRoute.ACCOUNTS
-        else -> AppRoute.BUDGET
-    }
+/** Where a module's skippable setup lives when it isn't a sheet on Home. */
+internal fun HomeModule.setupRoute(): AppRoute = if (this == HomeModule.DEBT_OVERVIEW) AppRoute.ACCOUNTS else AppRoute.BUDGET

@@ -136,6 +136,7 @@ internal class AppState {
     var selectedTransactionIsTransfer by mutableStateOf(false)
     var conflictChoice by mutableStateOf("")
     var backgroundStyle by mutableStateOf("Solid surface")
+    var workspace by mutableStateOf(Workspace())
     var homeLayout by mutableStateOf("Comfortable")
     var budgetShowProgressBars by mutableStateOf(false)
     var privacyModeEnabled by mutableStateOf(false)
@@ -255,6 +256,7 @@ internal class AppState {
             "theme" to theme.name,
             "accent" to accent.name,
             "backgroundStyle" to backgroundStyle,
+            "workspace" to workspace.encode(),
             "homeLayout" to homeLayout,
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
@@ -303,6 +305,7 @@ internal class AppState {
         theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
         backgroundStyle = saved["backgroundStyle"] ?: backgroundStyle
+        workspace = saved["workspace"]?.let(Workspace::decode) ?: workspace
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
@@ -416,6 +419,7 @@ internal class AppState {
                         "selectedTransactionIsLive" to state.selectedTransactionIsLive,
                         "conflictChoice" to state.conflictChoice,
                         "backgroundStyle" to state.backgroundStyle,
+                        "workspace" to state.workspace.encode(),
                         "homeLayout" to state.homeLayout,
                         "budgetShowProgressBars" to state.budgetShowProgressBars,
                         "privacyModeEnabled" to state.privacyModeEnabled,
@@ -499,6 +503,7 @@ internal class AppState {
                         selectedTransactionIsLive = saved["selectedTransactionIsLive"] as? Boolean ?: selectedTransactionIsLive
                         conflictChoice = saved["conflictChoice"] as? String ?: conflictChoice
                         backgroundStyle = saved["backgroundStyle"] as? String ?: backgroundStyle
+                        workspace = (saved["workspace"] as? String)?.let(Workspace::decode) ?: workspace
                         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] as? String ?: homeLayout)
                         budgetShowProgressBars = saved["budgetShowProgressBars"] as? Boolean ?: budgetShowProgressBars
                         privacyModeEnabled = saved["privacyModeEnabled"] as? Boolean ?: privacyModeEnabled
