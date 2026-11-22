@@ -27,8 +27,11 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.planning.AccountCurrency
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.DeviceName
+import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningSettings
@@ -38,8 +41,12 @@ import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.data.regions.global.bank.BrowserLink
+import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -263,6 +270,9 @@ private class LocalBudgetRepositoryMutationQueuePersistence(
     ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
 }
 
+private const val BANK_LINK_TIMEOUT_MILLIS = 10L * 60 * 1000
+private const val BANK_LINK_POLL_MILLIS = 3_000L
+
 /** One budget's row in the Sync Center. */
 internal data class BudgetSyncOverview(
     val budgetId: String,
@@ -298,6 +308,45 @@ internal class TandemMobileSession(
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var planningSettings by mutableStateOf(PlanningSettings())
+    var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
+        private set
+    var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    suspend fun saveAccountCurrency(
+        budgetId: String,
+        accountId: String,
+        currency: String,
+    ) {
+        planningStore(budgetId)?.save(AccountCurrency(accountId, currency))
+    }
+
+    suspend fun saveExchangeRate(
+        budgetId: String,
+        rate: ExchangeRate,
+    ) {
+        planningStore(budgetId)?.save(rate)
+    }
+
+    suspend fun deleteExchangeRate(
+        budgetId: String,
+        rate: ExchangeRate,
+    ) {
+        planningStore(budgetId)?.deleteExchangeRate(rate)
+    }
+
+    /** Names this device's Actual node, so change history on every device can say which device made an edit. */
+    suspend fun nameDevice(
+        budgetId: String,
+        node: String,
+        name: String,
+    ) {
+        if (node.isBlank() || name.isBlank()) return
+        planningStore(budgetId)?.save(DeviceName(node, name.trim().take(40)))
+    }
+
     var customReports by mutableStateOf<List<CustomReport>>(emptyList())
         private set
     var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
@@ -403,6 +452,37 @@ internal class TandemMobileSession(
         }
 
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
+
+    suspend fun loadBankInstitutions(
+        provider: BrowserBankProvider,
+        country: String,
+    ): List<BankInstitution> = apiClient.bankInstitutions(provider, country)
+
+    suspend fun startBankLink(
+        provider: BrowserBankProvider,
+        institution: BankInstitution,
+    ): BrowserLink = apiClient.startBankLink(provider, institution)
+
+    /** Asks the server until the bank sign-in finishes, fails, or ten minutes pass; a dropped request just asks again. */
+    suspend fun awaitBankLink(
+        provider: BrowserBankProvider,
+        handle: String,
+    ): BrowserLinkStatus {
+        val deadline = nowEpochMillis() + BANK_LINK_TIMEOUT_MILLIS
+        while (nowEpochMillis() < deadline) {
+            val status =
+                try {
+                    apiClient.bankLinkStatus(provider, handle)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    BrowserLinkStatus.Pending
+                }
+            if (status != BrowserLinkStatus.Pending) return status
+            delay(BANK_LINK_POLL_MILLIS)
+        }
+        return BrowserLinkStatus.Failed("timeout")
+    }
 
     /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
     var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
@@ -5787,6 +5867,13 @@ internal class TandemMobileSession(
                 launch { planning.retirementProfiles().collect { retirementProfiles = it } }
                 launch { planning.reimbursements().collect { reimbursements = it } }
                 launch { planning.settings().collect { planningSettings = it } }
+                launch {
+                    planning.accountCurrencies().collect { list ->
+                        accountCurrencies = list.associate { it.accountId to it.currency }
+                    }
+                }
+                launch { planning.exchangeRates().collect { exchangeRates = it } }
+                launch { planning.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
                 launch { planning.customReports().collect { customReports = it } }
                 launch { planning.savedSearches().collect { savedSearches = it } }
             }

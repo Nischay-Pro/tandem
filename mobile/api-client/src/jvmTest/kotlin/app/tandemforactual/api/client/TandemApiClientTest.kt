@@ -3,7 +3,12 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.regions.eu.bank.enablebanking.EnableBanking
+import app.tandemforactual.data.regions.eu.bank.gocardless.GoCardless
+import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.global.bank.BrowserLink
+import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -360,6 +365,40 @@ class TandemApiClientTest {
             reopened.signInWithPassword(url, "test", "Phone")
             files.open("group")!!.apply { execute("DROP TABLE tandem_direct_sync") }.close()
             assertFailsWith<Exception> { reopened.budget("group") }
+        }
+
+    @Test
+    fun linksBanksThroughTheBrowser(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = client(server, TempBudgetFiles())
+            client.signInWithPassword(url, "test", "Phone")
+            server.bankRoutes["/gocardless/get-banks"] = """{"status":"ok","data":[{"id":"BANK_X","name":"Bank X"}]}"""
+            val bank = client.bankInstitutions(GoCardless, "GB").single()
+            assertEquals(BankInstitution("BANK_X", "Bank X", "GB"), bank)
+            server.bankRoutes["/gocardless/create-web-token"] = """{"status":"ok","data":{"link":"https://bank/x","requisitionId":"req"}}"""
+            assertEquals(BrowserLink("https://bank/x", "req"), client.startBankLink(GoCardless, bank))
+            assertEquals("https://budget.example", server.lastOrigin)
+            server.bankRoutes["/gocardless/get-accounts"] = """{"status":"ok","requisitionStatus":"CR"}"""
+            assertEquals(BrowserLinkStatus.Pending, client.bankLinkStatus(GoCardless, "req"))
+
+            server.bankRoutes["/gocardless/get-banks"] = """{"status":"ok","data":{"error_code":"GOCARDLESS_NOT_CONFIGURED"}}"""
+            assertEquals(
+                "bank_sync_failed",
+                assertFailsWith<TandemApiException> { client.bankInstitutions(GoCardless, "GB") }.errorCode,
+            )
+            server.bankRoutes["/enablebanking/aspsps"] = """{"status":"ok","data":{"error":"bad"}}"""
+            assertFailsWith<TandemApiException> { client.bankInstitutions(EnableBanking, "FI") }
+            server.bankRoutes["/enablebanking/aspsps"] = """{"status":"ok","data":{"aspsps":[{"name":"Nordea","country":"FI"}]}}"""
+            assertEquals("Nordea", client.bankInstitutions(EnableBanking, "FI").single().id)
+            server.bankRoutes["/enablebanking/aspsps"] = """{"status":"ok"}"""
+            assertTrue(client.bankInstitutions(EnableBanking, "FI").isEmpty())
+            server.bankRoutes["/enablebanking/start-auth"] = """{"status":"ok","data":{"error_code":"INVALID_INPUT"}}"""
+            assertFailsWith<TandemApiException> { client.startBankLink(EnableBanking, bank) }
+            server.bankRoutes["/enablebanking/start-auth"] = """{"status":"ok","data":{"error":"nope"}}"""
+            assertFailsWith<TandemApiException> { client.startBankLink(EnableBanking, bank) }
+            server.bankRoutes["/enablebanking/start-auth"] = """{"status":"ok"}"""
+            assertFailsWith<TandemApiException> { client.startBankLink(EnableBanking, bank) }
         }
 
     @Test

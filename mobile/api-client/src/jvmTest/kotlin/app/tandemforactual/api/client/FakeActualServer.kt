@@ -36,6 +36,8 @@ internal class FakeActualServer {
             """"org":{"name":"Credit Union","domain":"cu.example"}},{"id":"SF-10","name":"Plain","org":{"id":"org-1"}},""" +
             """{"name":"Bare"}]}}"""
     var syncFailure: String? = null
+    val bankRoutes = mutableMapOf<String, String>()
+    var lastOrigin: String? = null
     var syncCalls = 0
     var extension = false
     val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
@@ -58,6 +60,10 @@ internal class FakeActualServer {
     val http =
         HttpClient(
             MockEngine { request ->
+                bankRoutes[request.url.encodedPath]?.let { body ->
+                    lastOrigin = request.headers["Origin"]
+                    return@MockEngine respond(body)
+                }
                 when (request.url.encodedPath) {
                     "/extension/v1/capabilities" ->
                         if (extension) {

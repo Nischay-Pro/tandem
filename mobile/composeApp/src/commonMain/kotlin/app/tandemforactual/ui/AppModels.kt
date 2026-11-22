@@ -204,6 +204,8 @@ internal enum class AppRoute(
     CUSTOM_REPORTS("Custom reports"),
     CUSTOM_REPORT("Report"),
     EXPORT("Export & backup"),
+    EXCHANGE_RATES("Currencies"),
+    HOUSEHOLD("Household"),
 }
 
 internal enum class MainCloudStatus {

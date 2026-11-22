@@ -72,6 +72,7 @@ import app.tandemforactual.ui.model.liveAccountGroupLabel
 import app.tandemforactual.ui.model.recordName
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ChartNoAxesCombined
+import com.composables.icons.lucide.Coins
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.HandCoins
@@ -613,6 +614,8 @@ internal fun AccountsScreen(
             orderedLiveAccounts,
             state.budgetDisplaySettings,
             mobileSession.localSyncState?.lastSyncedAtEpochMs,
+            mobileSession.accountCurrencies,
+            mobileSession.exchangeRates,
         ) {
             if (isLiveBudget) {
                 val groupedAccounts =
@@ -627,14 +630,20 @@ internal fun AccountsScreen(
                         ).map { (groupName, accounts) ->
                             AccountListGroupUi(
                                 groupName,
-                                state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
+                                state.formatConverted(mobileSession.convertedBalance(state, accounts.map { it.id to it.balanceMinor })),
                                 accounts.map { account ->
                                     AccountListItemUi(
                                         account.id,
                                         account.name,
                                         accountListTypeLabel(account.type),
                                         accountListSubtitle(account, mobileSession.localSyncState?.lastSyncedAtEpochMs),
-                                        account.balanceMinor?.let(state::formatCurrency) ?: "Unavailable",
+                                        account.balanceMinor?.let {
+                                            state.formatAccountMoney(
+                                                it,
+                                                mobileSession.accountCurrencies[account.id],
+                                            )
+                                        }
+                                            ?: "Unavailable",
                                         account.offBudget,
                                         account.closed,
                                         account.type ?: account.accountGroupName,
@@ -663,7 +672,7 @@ internal fun AccountsScreen(
                 null
             } else {
                 group.copy(
-                    total = state.formatCurrency(accounts.sumOf { it.balanceMinor ?: 0L }),
+                    total = state.formatConverted(mobileSession.convertedBalance(state, accounts.map { it.id to it.balanceMinor })),
                     accounts = accounts,
                 )
             }
@@ -684,6 +693,33 @@ internal fun AccountsScreen(
                     onValueChange = { accountSearchQuery = it },
                     onClear = { accountSearchQuery = "" },
                 )
+            }
+        }
+        val hasForeignAccounts =
+            orderedLiveAccounts.any {
+                !it.closed &&
+                    mobileSession.accountCurrencies[it.id]?.let { code -> code != state.budgetCurrencyCode } == true
+            }
+        if (!closedOnly && hasForeignAccounts) {
+            item(key = "account-net-worth") {
+                val total =
+                    mobileSession.convertedBalance(
+                        state,
+                        orderedLiveAccounts.filter { !it.closed }.map { it.id to it.balanceMinor },
+                    )
+                SurfaceCard {
+                    ListRow(
+                        "Net worth",
+                        if (total.missingRates.isEmpty()) {
+                            "Approximate, in ${state.budgetCurrencyCode} with your exchange rates"
+                        } else {
+                            "Leaves out ${total.missingRates.sorted().joinToString()} until you add a rate"
+                        },
+                        state.formatConverted(total),
+                        leading = RowLeading.Icon(Lucide.Coins),
+                        onClick = { navigation.open(AppRoute.EXCHANGE_RATES) },
+                    )
+                }
             }
         }
         if (!closedOnly) {
