@@ -24,9 +24,9 @@ HEADLINE_SIZE = re.compile(r"\bTandemTypography\.setupHeadline\b(?!LineHeight)")
 HEADLINE_FILE = UI_ROOT / "design/templates/ContentTemplates.kt"
 RAW_SETTINGS_SPACING = re.compile(r"\.(?:padding|spacedBy)\([^)]*\b\d+(?:\.\d+)?\.dp\b", re.DOTALL)
 SHARED_SETTINGS_SPACING_FILES = (
-    UI_ROOT / "feature/settings/SettingsScreen.kt",
-    UI_ROOT / "design/templates/SettingsRowTemplates.kt",
-    UI_ROOT / "design/rows/Rows.kt",
+    UI_ROOT / "feature/settings/AppearanceScreen.kt",
+    UI_ROOT / "design/templates/SettingRowLayout.kt",
+    UI_ROOT / "design/rows/ListRow.kt",
 )
 LAYOUT_CONTRACTS = {
     UI_ROOT / "design/theme/TandemTheme.kt": (
@@ -35,7 +35,7 @@ LAYOUT_CONTRACTS = {
         re.compile(r"listRowHorizontalInset\s*=\s*TandemSpacing\.large"),
         re.compile(r"listRowVerticalInset\s*=\s*TandemSpacing\.small"),
     ),
-    UI_ROOT / "design/rows/Rows.kt": (
+    UI_ROOT / "design/rows/ListRow.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*rowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"TandemLayout\.listRowVerticalInset"),
@@ -47,25 +47,25 @@ LAYOUT_CONTRACTS = {
         re.compile(r"\.background\(palette\.raised\)"),
         re.compile(r"padding\(horizontal\s*=\s*TandemSpacing\.medium,\s*vertical\s*=\s*TandemSpacing\.extraSmall\)"),
     ),
-    UI_ROOT / "feature/settings/SettingsScreen.kt": (
+    UI_ROOT / "feature/settings/AppearanceScreen.kt": (
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "design/templates/SettingsRowTemplates.kt": (
+    UI_ROOT / "design/templates/SettingRowLayout.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "feature/accounts/AccountListScreens.kt": (
+    UI_ROOT / "feature/accounts/AccountSummaryCard.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "feature/budget/CategoryDetailScreen.kt": (
+    UI_ROOT / "feature/budget/components/CategoryThisMonthSection.kt": (
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
