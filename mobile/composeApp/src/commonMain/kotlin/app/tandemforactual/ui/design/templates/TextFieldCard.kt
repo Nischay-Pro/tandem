@@ -62,20 +62,7 @@ internal fun TextFieldCard(
                     KeyboardOptions.Default
                 },
             keyboardActions = options.keyboardActions ?: KeyboardActions.Default,
-            visualTransformation =
-                when {
-                    options.isSecret && secretRevealed -> VisualTransformation.None
-                    options.isSecret -> PasswordVisualTransformation()
-                    !options.currencySymbol.isNullOrBlank() ->
-                        currencySymbolTransformation(
-                            options.currencySymbol,
-                            options.currencySymbolAfter,
-                            options.currencySymbolSpace,
-                            options.amountFractionDigits ?: 0,
-                        )
-                    options.amountFractionDigits != null -> amountFractionTransformation(options.amountFractionDigits)
-                    else -> VisualTransformation.None
-                },
+            visualTransformation = textFieldVisualTransformation(options, secretRevealed),
             textStyle =
                 TextStyle(
                     color = palette.text,
@@ -91,38 +78,69 @@ internal fun TextFieldCard(
                     .onFocusChanged { focusState -> options.onFocusedChange?.invoke(focusState.isFocused) }
                     .semantics { contentDescription = label },
             decorationBox = { innerTextField ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    options.leadingIcon?.let { icon ->
-                        Icon(
-                            icon,
-                            contentDescription = options.leadingIconDescription,
-                            modifier = Modifier.padding(end = TandemSpacing.small).size(18.dp),
-                            tint = options.leadingIconTint ?: palette.muted,
-                        )
-                    }
-                    Box(Modifier.weight(1f)) {
-                        if (value.isEmpty() && options.placeholder.isNotEmpty()) {
-                            Text(
-                                options.placeholder,
-                                modifier = Modifier.fillMaxWidth(),
-                                color = palette.muted,
-                                fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
-                                textAlign = options.textAlign,
-                            )
-                        }
-                        innerTextField()
-                    }
-                    if (options.isSecret) {
-                        TandemIconButton(
-                            if (secretRevealed) Lucide.EyeOff else Lucide.Eye,
-                            if (secretRevealed) "Hide password" else "Show password",
-                            sizeDp = 32,
-                            iconSizeDp = 18,
-                            tint = palette.muted,
-                        ) { secretRevealed = !secretRevealed }
-                    }
-                }
+                TextFieldDecoration(value, options, secretRevealed, { secretRevealed = !secretRevealed }, innerTextField)
             },
         )
+    }
+}
+
+private fun textFieldVisualTransformation(
+    options: TextFieldOptions,
+    secretRevealed: Boolean,
+): VisualTransformation =
+    when {
+        options.isSecret && secretRevealed -> VisualTransformation.None
+        options.isSecret -> PasswordVisualTransformation()
+        !options.currencySymbol.isNullOrBlank() ->
+            currencySymbolTransformation(
+                options.currencySymbol,
+                options.currencySymbolAfter,
+                options.currencySymbolSpace,
+                options.amountFractionDigits ?: 0,
+            )
+        options.amountFractionDigits != null -> amountFractionTransformation(options.amountFractionDigits)
+        else -> VisualTransformation.None
+    }
+
+/** Leading icon, placeholder, input and secret toggle around a text field. */
+@Composable
+private fun TextFieldDecoration(
+    value: String,
+    options: TextFieldOptions,
+    secretRevealed: Boolean,
+    onToggleSecret: () -> Unit,
+    innerTextField: @Composable () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        options.leadingIcon?.let { icon ->
+            Icon(
+                icon,
+                contentDescription = options.leadingIconDescription,
+                modifier = Modifier.padding(end = TandemSpacing.small).size(18.dp),
+                tint = options.leadingIconTint ?: palette.muted,
+            )
+        }
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty() && options.placeholder.isNotEmpty()) {
+                Text(
+                    options.placeholder,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = palette.muted,
+                    fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
+                    textAlign = options.textAlign,
+                )
+            }
+            innerTextField()
+        }
+        if (options.isSecret) {
+            TandemIconButton(
+                if (secretRevealed) Lucide.EyeOff else Lucide.Eye,
+                if (secretRevealed) "Hide password" else "Show password",
+                sizeDp = 32,
+                iconSizeDp = 18,
+                tint = palette.muted,
+            ) { onToggleSecret() }
+        }
     }
 }

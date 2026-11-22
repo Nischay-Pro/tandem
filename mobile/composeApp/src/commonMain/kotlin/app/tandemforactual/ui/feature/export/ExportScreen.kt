@@ -102,15 +102,7 @@ internal fun ExportScreen(
                     icon = Lucide.FileDown,
                     loading = exporting,
                 ) {
-                    val (from, to) =
-                        when (range) {
-                            ExportRange.MONTH ->
-                                "${state.selectedMonthId}-01" to
-                                    ActualDates.addDays("${state.selectedMonthId}-01", 40).take(7).let { ActualDates.addDays("$it-01", -1) }
-                            ExportRange.YEAR -> "$year-01-01" to "$year-12-31"
-                            ExportRange.LAST_YEAR -> "${year - 1}-01-01" to "${year - 1}-12-31"
-                            ExportRange.ALL -> "1900-01-01" to "2999-12-31"
-                        }
+                    val (from, to) = exportRangeDates(range, state.selectedMonthId, year)
                     exporting = true
                     scope.launch {
                         val csv =
@@ -124,40 +116,65 @@ internal fun ExportScreen(
                         if (csv == null) {
                             message = "Couldn’t export. Open the budget and try again." to InlineMessageKind.ERROR
                         } else {
-                            val name =
-                                state.selectedBudget
-                                    .ifBlank { "budget" }
-                                    .replace(Regex("[^A-Za-z0-9]+"), "-")
-                                    .trim('-')
-                                    .lowercase()
+                            val name = exportFileStem(state.selectedBudget)
                             share("$name-${range.name.lowercase().replace('_', '-')}.csv", "text/csv", csv)
                         }
                     }
                 }
             }
         }
-        SectionCard("Planning data", "Goals, debt details, reimbursements, reports and saved searches live outside Actual") {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                Text(
-                    "The backup is plain JSON, not encrypted. Keep it somewhere private.",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.label,
-                )
-                TandemActionButton("Back up", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), icon = Lucide.Share2) {
-                    share("tandem-planning-$today.json", "application/json", planningBackup(mobileSession))
-                }
-                TandemActionButton(
-                    "Restore a backup",
-                    TandemActionButtonTone.NEUTRAL,
-                    Modifier.fillMaxWidth(),
-                    icon = Lucide.ArchiveRestore,
-                ) {
-                    restorePicker()
-                }
-            }
+        PlanningBackupSection(
+            onBackup = { share("tandem-planning-$today.json", "application/json", planningBackup(mobileSession)) },
+            onRestore = { restorePicker() },
+        )
+    }
+}
+
+/** Back up or restore the planning data Actual doesn't hold. */
+@Composable
+private fun PlanningBackupSection(
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
+) {
+    SectionCard("Planning data", "Goals, debt details, reimbursements, reports and saved searches live outside Actual") {
+        Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+            Text(
+                "The backup is plain JSON, not encrypted. Keep it somewhere private.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+            )
+            TandemActionButton("Back up", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), icon = Lucide.Share2, onClick = onBackup)
+            TandemActionButton(
+                "Restore a backup",
+                TandemActionButtonTone.NEUTRAL,
+                Modifier.fillMaxWidth(),
+                icon = Lucide.ArchiveRestore,
+                onClick = onRestore,
+            )
         }
     }
 }
+
+private fun exportRangeDates(
+    range: ExportRange,
+    selectedMonthId: String,
+    year: Int,
+): Pair<String, String> =
+    when (range) {
+        ExportRange.MONTH ->
+            "$selectedMonthId-01" to
+                ActualDates.addDays("$selectedMonthId-01", 40).take(7).let { ActualDates.addDays("$it-01", -1) }
+        ExportRange.YEAR -> "$year-01-01" to "$year-12-31"
+        ExportRange.LAST_YEAR -> "${year - 1}-01-01" to "${year - 1}-12-31"
+        ExportRange.ALL -> "1900-01-01" to "2999-12-31"
+    }
+
+private fun exportFileStem(budgetName: String): String =
+    budgetName
+        .ifBlank { "budget" }
+        .replace(Regex("[^A-Za-z0-9]+"), "-")
+        .trim('-')
+        .lowercase()
 
 private fun planningBackup(session: TandemMobileSession): String {
     val records =

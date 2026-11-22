@@ -28,6 +28,7 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
+import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
@@ -156,23 +157,7 @@ internal fun MonthlyReviewScreen(
     val top = categories.filter { it.activityMinor < 0 }.sortedBy { it.activityMinor }.take(6)
     val overspent = categories.filter { it.balanceMinor < 0 }
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text("${state.selectedMonth} in review", color = palette.muted, fontSize = TandemTypography.body)
-            Text(
-                if (income >=
-                    spent
-                ) {
-                    "Saved ${state.formatCurrency(income - spent)}"
-                } else {
-                    "Spent ${state.formatCurrency(spent - income)} more than earned"
-                },
-                color = palette.text,
-                fontSize = TandemTypography.heroTitle,
-                lineHeight = TandemTypography.headingLineHeight * 1.2f,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-        }
+        MonthReviewHeadline(state, income, spent)
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             StatTile(
                 "Money in",
@@ -188,53 +173,7 @@ internal fun MonthlyReviewScreen(
             )
         }
         if (top.isNotEmpty()) {
-            SectionCard("Where it went", "Spending by category against what you budgeted") {
-                val largest = -top.first().activityMinor
-                top.forEachIndexed { index, category ->
-                    if (index > 0) DividerLine()
-                    val used = -category.activityMinor
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Row {
-                            Text(category.name, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
-                            Text(
-                                state.formatCurrency(used),
-                                color = palette.text,
-                                fontSize = TandemTypography.body,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(TandemShapes.pill))
-                                .background(palette.raised),
-                        ) {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth((used.toFloat() / largest).coerceIn(0.02f, 1f))
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(TandemShapes.pill))
-                                    .background(if (category.balanceMinor < 0) palette.negative else palette.accent),
-                            )
-                        }
-                        Text(
-                            if (category.assignedMinor >
-                                0
-                            ) {
-                                "${state.formatCurrency(category.assignedMinor)} budgeted"
-                            } else {
-                                "Nothing budgeted"
-                            },
-                            color = palette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                }
-            }
+            WhereItWentSection(state, top)
         }
         if (overspent.isNotEmpty()) {
             InlineMessage(
@@ -262,6 +201,89 @@ internal fun MonthlyReviewScreen(
                 "Nothing recorded this month yet",
                 "Transactions for ${state.selectedMonth} will be summarized here.",
             )
+        }
+    }
+}
+
+/** The month's name and whether it saved or overspent overall. */
+@Composable
+private fun MonthReviewHeadline(
+    state: AppState,
+    income: Long,
+    spent: Long,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text("${state.selectedMonth} in review", color = palette.muted, fontSize = TandemTypography.body)
+        Text(
+            if (income >=
+                spent
+            ) {
+                "Saved ${state.formatCurrency(income - spent)}"
+            } else {
+                "Spent ${state.formatCurrency(spent - income)} more than earned"
+            },
+            color = palette.text,
+            fontSize = TandemTypography.heroTitle,
+            lineHeight = TandemTypography.headingLineHeight * 1.2f,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+    }
+}
+
+/** The top spending categories, each with a bar against the largest. */
+@Composable
+private fun WhereItWentSection(
+    state: AppState,
+    top: List<LiveCategorySummary>,
+) {
+    val palette = tandemPalette
+    SectionCard("Where it went", "Spending by category against what you budgeted") {
+        val largest = -top.first().activityMinor
+        top.forEachIndexed { index, category ->
+            if (index > 0) DividerLine()
+            val used = -category.activityMinor
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row {
+                    Text(category.name, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
+                    Text(
+                        state.formatCurrency(used),
+                        color = palette.text,
+                        fontSize = TandemTypography.body,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(TandemShapes.pill))
+                        .background(palette.raised),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth((used.toFloat() / largest).coerceIn(0.02f, 1f))
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(TandemShapes.pill))
+                            .background(if (category.balanceMinor < 0) palette.negative else palette.accent),
+                    )
+                }
+                Text(
+                    if (category.assignedMinor >
+                        0
+                    ) {
+                        "${state.formatCurrency(category.assignedMinor)} budgeted"
+                    } else {
+                        "Nothing budgeted"
+                    },
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+            }
         }
     }
 }

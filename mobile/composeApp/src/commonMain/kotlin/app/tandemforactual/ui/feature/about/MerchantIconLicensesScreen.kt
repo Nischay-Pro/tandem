@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -29,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.MerchantIconCatalog
+import app.tandemforactual.ui.core.state.MerchantIconNotice
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -73,33 +75,7 @@ internal fun MerchantIconLicensesScreen(
             contentPadding = PaddingValues(bottom = TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
-            item(key = "project") {
-                SectionCard("Tandem") {
-                    ListRow(
-                        "Tandem for Actual",
-                        "This app",
-                        "AGPL-3.0",
-                        leading = RowLeading.Icon(Lucide.Info),
-                        options = ListRowOptions(showChevron = false),
-                    )
-                }
-            }
-            if (libraries.isNotEmpty()) {
-                item(key = "libraries") {
-                    SectionCard("Open-source libraries", "${libraries.size} used directly by the app") {
-                        libraries.forEachIndexed { index, library ->
-                            if (index > 0) DividerLine()
-                            ListRow(
-                                library.name,
-                                library.purpose,
-                                library.license,
-                                leading = RowLeading.Icon(Lucide.Package),
-                                options = ListRowOptions(showChevron = false),
-                            )
-                        }
-                    }
-                }
-            }
+            libraryItems(libraries)
             item(key = "icons-heading") {
                 Text(
                     when {
@@ -116,58 +92,98 @@ internal fun MerchantIconLicensesScreen(
                 item(key = "empty") { EmptyState("Nothing matches", "Try another search.") }
             }
             items(filteredNotices, key = { it.resourceName }) { notice ->
-                SurfaceCard(
-                    modifier =
-                        Modifier.animateItem(
-                            fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-                            placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
-                            fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-                        ),
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Image(
-                                painter = painterResource(notice.resource),
-                                contentDescription = null,
-                                modifier = Modifier.size(34.dp),
-                                contentScale = ContentScale.Fit,
-                            )
-                            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                                Text(
-                                    notice.title,
-                                    color = tandemPalette.text,
-                                    fontSize = TandemTypography.body,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    notice.license.replace("Fair Use", "fair use", ignoreCase = true),
-                                    color = tandemPalette.muted,
-                                    fontSize = TandemTypography.label,
-                                )
-                            }
-                        }
-                        Text(
-                            "Registry source: ${notice.registryUrl}",
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.micro,
-                            lineHeight = TandemTypography.tightLineHeight,
-                            modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
-                        )
-                        if (notice.brandUrl.isNotBlank()) {
-                            Text(
-                                "Brand site: ${notice.brandUrl}",
-                                color = tandemPalette.muted,
-                                fontSize = TandemTypography.micro,
-                                lineHeight = TandemTypography.tightLineHeight,
-                            )
-                        }
-                    }
+                MerchantIconNoticeCard(
+                    notice,
+                    Modifier.animateItem(
+                        fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                        placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+                        fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/** One bundled merchant icon with its license and sources. */
+@Composable
+private fun MerchantIconNoticeCard(
+    notice: MerchantIconNotice,
+    modifier: Modifier,
+) {
+    SurfaceCard(modifier = modifier) {
+        Column(
+            Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    painter = painterResource(notice.resource),
+                    contentDescription = null,
+                    modifier = Modifier.size(34.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                    Text(
+                        notice.title,
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.body,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        notice.license.replace("Fair Use", "fair use", ignoreCase = true),
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.label,
+                    )
+                }
+            }
+            Text(
+                "Registry source: ${notice.registryUrl}",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.micro,
+                lineHeight = TandemTypography.tightLineHeight,
+                modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
+            )
+            if (notice.brandUrl.isNotBlank()) {
+                Text(
+                    "Brand site: ${notice.brandUrl}",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.micro,
+                    lineHeight = TandemTypography.tightLineHeight,
+                )
+            }
+        }
+    }
+}
+
+/** The app's own license and the open-source libraries it uses. */
+private fun LazyListScope.libraryItems(libraries: List<OpenSourceLibrary>) {
+    item(key = "project") {
+        SectionCard("Tandem") {
+            ListRow(
+                "Tandem for Actual",
+                "This app",
+                "AGPL-3.0",
+                leading = RowLeading.Icon(Lucide.Info),
+                options = ListRowOptions(showChevron = false),
+            )
+        }
+    }
+    if (libraries.isNotEmpty()) {
+        item(key = "libraries") {
+            SectionCard("Open-source libraries", "${libraries.size} used directly by the app") {
+                libraries.forEachIndexed { index, library ->
+                    if (index > 0) DividerLine()
+                    ListRow(
+                        library.name,
+                        library.purpose,
+                        library.license,
+                        leading = RowLeading.Icon(Lucide.Package),
+                        options = ListRowOptions(showChevron = false),
+                    )
                 }
             }
         }

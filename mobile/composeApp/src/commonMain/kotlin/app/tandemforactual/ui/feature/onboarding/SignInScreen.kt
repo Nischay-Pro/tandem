@@ -84,7 +84,6 @@ internal fun SignInScreen(
             mobileSession.loadActualLoginMethods(state.serverUrl)
         }
     }
-    val keyboard = LocalSoftwareKeyboardController.current
     val loginMethods = mobileSession.actualLoginMethods
     val passwordActive =
         loginMethods?.availableLoginMethods?.any { it.method == "password" && it.active } ?: (loginMethods?.loginMethod == "password")
@@ -93,167 +92,206 @@ internal fun SignInScreen(
     OnboardingLayout(
         verticalSpacing = TandemSpacing.medium,
         content = {
-            val palette = tandemPalette
             SetupStepHeader(step = 2, navigation = navigation)
             SetupHeadline(stringResource(Res.string.setup_welcome_back), stringResource(Res.string.setup_sign_in_with_your_existing))
+            SignInServerRow(state, navigation)
+            if (serverAddressIsValid(state.serverUrl)) SignInTransportWarning(state.serverUrl)
+            if (loginMethods != null && mobileSession.signInError == null) ServerReachableNote()
+            SignInOptions(state, mobileSession, passwordActive, openIdActive)
+        },
+        actions = { SignInActions(state, mobileSession, navigation, passwordActive, openIdActive, onSignIn, onStartOpenIdSignIn) },
+    )
+}
+
+/** The server being signed in to, with a link to change it. */
+@Composable
+private fun SignInServerRow(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            LabelText(stringResource(Res.string.setup_server_2))
+            Text(
+                state.serverUrl.takeIf { serverAddressIsValid(it) } ?: stringResource(Res.string.setup_not_set),
+                color = palette.text,
+                fontSize = TandemTypography.compactBody,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (serverAddressIsValid(state.serverUrl)) {
+            Text(
+                stringResource(Res.string.setup_change),
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(TandemShapes.small))
+                        .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.setup_change_server_address)) {
+                            navigation.open(AppRoute.SERVER_ADDRESS)
+                        }.padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
+                color = palette.accent,
+                fontSize = TandemTypography.label,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/** Confirms the server answered and its sign-in options are known. */
+@Composable
+private fun ServerReachableNote() {
+    val palette = tandemPalette
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.positive)
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(
+                stringResource(Res.string.setup_server_is_reachable),
+                color = palette.text,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                stringResource(Res.string.setup_connection_verified),
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+            )
+        }
+    }
+}
+
+/** The password field or a note about how this server signs people in. */
+@Composable
+private fun SignInOptions(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    passwordActive: Boolean,
+    openIdActive: Boolean,
+) {
+    val palette = tandemPalette
+    when {
+        !serverAddressIsValid(state.serverUrl) -> {
+            InlineMessage(stringResource(Res.string.setup_add_your_actual_budget_server), InlineMessageKind.INFO)
+        }
+        mobileSession.isLoadingLoginMethods || (mobileSession.actualLoginMethods == null && mobileSession.signInError == null) -> {
             Row(
-                Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                    LabelText(stringResource(Res.string.setup_server_2))
-                    Text(
-                        state.serverUrl.takeIf { serverAddressIsValid(it) } ?: stringResource(Res.string.setup_not_set),
-                        color = palette.text,
-                        fontSize = TandemTypography.compactBody,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (serverAddressIsValid(state.serverUrl)) {
-                    Text(
-                        stringResource(Res.string.setup_change),
-                        modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(TandemShapes.small))
-                                .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.setup_change_server_address)) {
-                                    navigation.open(AppRoute.SERVER_ADDRESS)
-                                }.padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
-                        color = palette.accent,
-                        fontSize = TandemTypography.label,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            if (serverAddressIsValid(state.serverUrl)) SignInTransportWarning(state.serverUrl)
-            if (loginMethods != null && mobileSession.signInError == null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.positive)
-                    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                        Text(
-                            stringResource(Res.string.setup_server_is_reachable),
-                            color = palette.text,
-                            fontSize = TandemTypography.compactBody,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            stringResource(Res.string.setup_connection_verified),
-                            color = palette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                }
-            }
-            when {
-                !serverAddressIsValid(state.serverUrl) -> {
-                    InlineMessage(stringResource(Res.string.setup_add_your_actual_budget_server), InlineMessageKind.INFO)
-                }
-                mobileSession.isLoadingLoginMethods || (mobileSession.actualLoginMethods == null && mobileSession.signInError == null) -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        TandemLoadingIndicator(Modifier.size(18.dp), color = palette.accent, strokeWidth = 2.dp)
-                        Text(
-                            stringResource(Res.string.setup_checking_sign_in_options),
-                            color = palette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                }
-                mobileSession.actualLoginMethods?.bootstrapped == false -> {
-                    InlineMessage(stringResource(Res.string.setup_create_a_budget_in_actual), InlineMessageKind.INFO)
-                }
-                mobileSession.actualLoginMethods != null -> {
-                    if (passwordActive) {
-                        TextFieldCard(
-                            stringResource(Res.string.setup_actual_password),
-                            state.actualPassword,
-                            { state.actualPassword = it },
-                            TextFieldOptions(placeholder = stringResource(Res.string.setup_password), isSecret = true),
-                        )
-                        Text(
-                            stringResource(Res.string.setup_your_password_is_only_used),
-                            color = palette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                    mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-                    mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
-                    if (!passwordActive && !openIdActive) {
-                        InlineMessage(
-                            stringResource(Res.string.setup_tandem_can_t_use_this),
-                            InlineMessageKind.INFO,
-                        )
-                    }
-                }
-                mobileSession.signInError != null ->
-                    InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
-                else ->
-                    InlineMessage(
-                        stringResource(Res.string.setup_tandem_can_t_use_this),
-                        InlineMessageKind.INFO,
-                    )
-            }
-        },
-        actions = {
-            if (!serverAddressIsValid(state.serverUrl)) {
-                SetupPrimaryButton(stringResource(Res.string.setup_set_server_address), modifier = Modifier.fillMaxWidth()) {
-                    navigation.open(AppRoute.SERVER_ADDRESS)
-                }
-            }
-            if (serverAddressIsValid(state.serverUrl) && passwordActive) {
-                SetupPrimaryButton(
-                    if (mobileSession.isSigningIn) {
-                        stringResource(
-                            Res.string.setup_signing_in,
-                        )
-                    } else {
-                        stringResource(Res.string.setup_sign_in)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
-                    loading = mobileSession.isSigningIn,
-                    onClick = {
-                        keyboard?.hide()
-                        onSignIn()
-                    },
+                TandemLoadingIndicator(Modifier.size(18.dp), color = palette.accent, strokeWidth = 2.dp)
+                Text(
+                    stringResource(Res.string.setup_checking_sign_in_options),
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
                 )
             }
-            if (serverAddressIsValid(state.serverUrl) && openIdActive) {
-                if (passwordActive) {
-                    SecondaryButton(
-                        if (mobileSession.isSigningIn) {
-                            stringResource(
-                                Res.string.setup_opening_sign_in,
-                            )
-                        } else {
-                            stringResource(Res.string.setup_continue_with_openid)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !mobileSession.isSigningIn,
-                        onClick = onStartOpenIdSignIn,
+        }
+        mobileSession.actualLoginMethods?.bootstrapped == false -> {
+            InlineMessage(stringResource(Res.string.setup_create_a_budget_in_actual), InlineMessageKind.INFO)
+        }
+        mobileSession.actualLoginMethods != null -> {
+            if (passwordActive) {
+                TextFieldCard(
+                    stringResource(Res.string.setup_actual_password),
+                    state.actualPassword,
+                    { state.actualPassword = it },
+                    TextFieldOptions(placeholder = stringResource(Res.string.setup_password), isSecret = true),
+                )
+                Text(
+                    stringResource(Res.string.setup_your_password_is_only_used),
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+            }
+            mobileSession.signInError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+            mobileSession.credentialStorageError?.let { error -> InlineMessage(error, InlineMessageKind.ERROR) }
+            if (!passwordActive && !openIdActive) {
+                InlineMessage(
+                    stringResource(Res.string.setup_tandem_can_t_use_this),
+                    InlineMessageKind.INFO,
+                )
+            }
+        }
+        mobileSession.signInError != null ->
+            InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
+        else ->
+            InlineMessage(
+                stringResource(Res.string.setup_tandem_can_t_use_this),
+                InlineMessageKind.INFO,
+            )
+    }
+}
+
+/** Sign in with a password or OpenID, or set the server address first. */
+@Composable
+private fun SignInActions(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    passwordActive: Boolean,
+    openIdActive: Boolean,
+    onSignIn: () -> Unit,
+    onStartOpenIdSignIn: () -> Unit,
+) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    if (!serverAddressIsValid(state.serverUrl)) {
+        SetupPrimaryButton(stringResource(Res.string.setup_set_server_address), modifier = Modifier.fillMaxWidth()) {
+            navigation.open(AppRoute.SERVER_ADDRESS)
+        }
+    }
+    if (serverAddressIsValid(state.serverUrl) && passwordActive) {
+        SetupPrimaryButton(
+            if (mobileSession.isSigningIn) {
+                stringResource(
+                    Res.string.setup_signing_in,
+                )
+            } else {
+                stringResource(Res.string.setup_sign_in)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !mobileSession.isSigningIn && state.actualPassword.isNotBlank(),
+            loading = mobileSession.isSigningIn,
+            onClick = {
+                keyboard?.hide()
+                onSignIn()
+            },
+        )
+    }
+    if (serverAddressIsValid(state.serverUrl) && openIdActive) {
+        if (passwordActive) {
+            SecondaryButton(
+                if (mobileSession.isSigningIn) {
+                    stringResource(
+                        Res.string.setup_opening_sign_in,
                     )
                 } else {
-                    SetupPrimaryButton(
-                        if (mobileSession.isSigningIn) {
-                            stringResource(
-                                Res.string.setup_opening_sign_in,
-                            )
-                        } else {
-                            stringResource(Res.string.setup_continue_with_openid)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !mobileSession.isSigningIn,
-                        loading = mobileSession.isSigningIn,
-                        onClick = onStartOpenIdSignIn,
+                    stringResource(Res.string.setup_continue_with_openid)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !mobileSession.isSigningIn,
+                onClick = onStartOpenIdSignIn,
+            )
+        } else {
+            SetupPrimaryButton(
+                if (mobileSession.isSigningIn) {
+                    stringResource(
+                        Res.string.setup_opening_sign_in,
                     )
-                }
-            }
-        },
-    )
+                } else {
+                    stringResource(Res.string.setup_continue_with_openid)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !mobileSession.isSigningIn,
+                loading = mobileSession.isSigningIn,
+                onClick = onStartOpenIdSignIn,
+            )
+        }
+    }
 }

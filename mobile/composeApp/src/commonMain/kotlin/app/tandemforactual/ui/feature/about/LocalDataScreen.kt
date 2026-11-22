@@ -39,6 +39,7 @@ import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -48,8 +49,6 @@ internal fun LocalDataScreen(
     navigation: AppNavigation,
 ) {
     val scope = rememberCoroutineScope()
-    val vault = LocalEncryptedBudgetVault.current
-    val authenticator = LocalDeviceAuthenticator.current
     var confirmRemove by rememberSaveable { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
     var removeError by remember { mutableStateOf<String?>(null) }
@@ -82,33 +81,7 @@ internal fun LocalDataScreen(
             formatInteger(recordCount),
             if (hasSelectedBudget) "Available offline" else null,
         )
-        SectionCard("On this device", syncStatus, animateDetail = true) {
-            ListRow(
-                "Transactions",
-                trailing = formatInteger(mobileSession.cachedTransactionCount),
-            )
-            DividerLine()
-            ListRow("Accounts", trailing = formatInteger(mobileSession.accountRecords.size))
-            DividerLine()
-            ListRow(
-                "Pending changes",
-                leading = RowLeading.Icon(Lucide.CloudSync),
-                trailing = formatInteger(queuedCount),
-            )
-            DividerLine()
-            ListRow(
-                "Needs review",
-                "Changes waiting for your decision",
-                formatInteger(conflictCount),
-                leading = RowLeading.Icon(Lucide.CloudAlert),
-            )
-            AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
-                Column {
-                    DividerLine()
-                    ListRow("Other changes needing attention", "Review locally", formatInteger(attentionCount))
-                }
-            }
-        }
+        LocalDataDeviceSection(mobileSession, syncStatus, queuedCount, conflictCount, attentionCount)
         if (hasSelectedBudget) {
             SectionCard("Storage") {
                 ListRow(
@@ -129,43 +102,107 @@ internal fun LocalDataScreen(
         if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")
     }
     if (confirmRemove) {
-        val budgetName = state.selectedBudget.ifBlank { "this budget" }
-        DestructiveConfirmationDialog(
-            title = "Remove $budgetName from this device?",
-            message =
-                "Tandem deletes the copy saved on this device, including any saved password for it. " +
-                    "You can download it again from your server. Your budget in Actual isn’t changed.",
-            confirmLabel = "Remove",
-            dismissLabel = "Cancel",
-            enabled = !removing,
-            onDismissRequest = { if (!removing) confirmRemove = false },
-            onConfirm = {
-                removing = true
-                scope.launch {
-                    val budgetId = state.selectedBudgetId
-                    val error = mobileSession.removeBudgetFromDevice(budgetId, vault)
-                    removing = false
-                    confirmRemove = false
-                    if (error != null) {
-                        removeError = error
-                        return@launch
-                    }
-                    authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
-                    authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
-                    state.cachedBudgetCatalogJson =
-                        encodeCachedBudgetCatalog(
-                            decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot {
-                                it.budgetId ==
-                                    budgetId
-                            },
-                        )
-                    state.encryptedPassword = ""
-                    state.selectedBudget = ""
-                    state.selectedBudgetId = ""
-                    state.selectedBudgetEncrypted = false
-                    navigation.reset(AppRoute.BUDGET_CHOOSER)
-                }
-            },
+        RemoveBudgetFromDeviceDialog(
+            state,
+            mobileSession,
+            navigation,
+            scope,
+            removing = removing,
+            onRemovingChange = { removing = it },
+            onDismiss = { confirmRemove = false },
+            onError = { removeError = it },
         )
     }
+}
+
+/** Counts of what this device holds for the open budget. */
+@Composable
+private fun LocalDataDeviceSection(
+    mobileSession: TandemMobileSession,
+    syncStatus: String,
+    queuedCount: Int,
+    conflictCount: Int,
+    attentionCount: Int,
+) {
+    SectionCard("On this device", syncStatus, animateDetail = true) {
+        ListRow(
+            "Transactions",
+            trailing = formatInteger(mobileSession.cachedTransactionCount),
+        )
+        DividerLine()
+        ListRow("Accounts", trailing = formatInteger(mobileSession.accountRecords.size))
+        DividerLine()
+        ListRow(
+            "Pending changes",
+            leading = RowLeading.Icon(Lucide.CloudSync),
+            trailing = formatInteger(queuedCount),
+        )
+        DividerLine()
+        ListRow(
+            "Needs review",
+            "Changes waiting for your decision",
+            formatInteger(conflictCount),
+            leading = RowLeading.Icon(Lucide.CloudAlert),
+        )
+        AnimatedReveal(visible = attentionCount > 0, animateHeight = false) {
+            Column {
+                DividerLine()
+                ListRow("Other changes needing attention", "Review locally", formatInteger(attentionCount))
+            }
+        }
+    }
+}
+
+/** Confirms removing the open budget's local copy, then removes it and returns to the budget chooser. */
+@Composable
+private fun RemoveBudgetFromDeviceDialog(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    scope: CoroutineScope,
+    removing: Boolean,
+    onRemovingChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onError: (String) -> Unit,
+) {
+    val vault = LocalEncryptedBudgetVault.current
+    val authenticator = LocalDeviceAuthenticator.current
+    val budgetName = state.selectedBudget.ifBlank { "this budget" }
+    DestructiveConfirmationDialog(
+        title = "Remove $budgetName from this device?",
+        message =
+            "Tandem deletes the copy saved on this device, including any saved password for it. " +
+                "You can download it again from your server. Your budget in Actual isn’t changed.",
+        confirmLabel = "Remove",
+        dismissLabel = "Cancel",
+        enabled = !removing,
+        onDismissRequest = { if (!removing) onDismiss() },
+        onConfirm = {
+            onRemovingChange(true)
+            scope.launch {
+                val budgetId = state.selectedBudgetId
+                val error = mobileSession.removeBudgetFromDevice(budgetId, vault)
+                onRemovingChange(false)
+                onDismiss()
+                if (error != null) {
+                    onError(error)
+                    return@launch
+                }
+                authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
+                authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
+                state.cachedBudgetCatalogJson =
+                    encodeCachedBudgetCatalog(
+                        decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot {
+                            it.budgetId ==
+                                budgetId
+                        },
+                    )
+                state.encryptedPassword = ""
+                state.selectedBudget = ""
+                state.selectedBudgetId = ""
+                state.selectedBudgetEncrypted = false
+                navigation.reset(AppRoute.BUDGET_CHOOSER)
+            }
+        },
+    )
 }

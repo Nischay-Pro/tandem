@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.pendingDeviceChangeNotice
 import app.tandemforactual.ui.core.session.signOutAndClearLocalData
@@ -53,76 +54,8 @@ internal fun ServerDeviceScreen(
     val scope = rememberCoroutineScope()
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
-        SectionCard("Server") {
-            ListRow(
-                "Server URL",
-                state.serverUrl,
-                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
-                leading = RowLeading.Icon(Lucide.Server),
-                options =
-                    ListRowOptions(
-                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
-                    ),
-                onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
-            )
-            DividerLine()
-            ListRow(
-                "Local address",
-                state.localServerUrl.ifBlank { "Optional · faster on your home network" },
-                when {
-                    state.localServerUrl.isBlank() -> null
-                    mobileSession.isUsingLocalServer -> "In use"
-                    else -> "Not in use"
-                },
-                leading = RowLeading.Icon(Lucide.House),
-                options =
-                    ListRowOptions(
-                        trailingColor = if (mobileSession.isUsingLocalServer) tandemPalette.positive else tandemPalette.muted,
-                    ),
-                onClick = { navigation.open(AppRoute.LOCAL_SERVER_ADDRESS) },
-            )
-            DividerLine()
-            ListRow(
-                "Connection status",
-                if (mobileSession.isServerReachable) "Server is reachable" else "Server can’t be reached",
-                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
-                leading = RowLeading.Icon(Lucide.Wifi),
-                options =
-                    ListRowOptions(
-                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
-                    ),
-            )
-        }
-        SectionCard(
-            "This device",
-            when {
-                device == null -> "No device is signed in"
-                else -> null
-            },
-        ) {
-            ListRow(
-                "Device name",
-                if (device != null) deviceName else "Not signed in",
-                leading = RowLeading.Icon(Lucide.Smartphone),
-            )
-            DividerLine()
-            ListRow(
-                "Budgets this device can open",
-                if (device == null) "Not signed in" else "${device.budgetIds.size} available",
-                leading = RowLeading.Icon(Lucide.FolderKey),
-            )
-            DividerLine()
-            ListRow(
-                "Saved sign-in",
-                if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
-                when {
-                    mobileSession.isCredentialStored -> "Saved"
-                    device != null -> "Active"
-                    else -> "None"
-                },
-                leading = RowLeading.Icon(Lucide.KeyRound),
-            )
-        }
+        ServerSection(state, mobileSession, navigation)
+        ThisDeviceSection(mobileSession, device, deviceName)
         InfoBubble("Passwords are used to sign in and aren’t saved on this device.")
         if (mobileSession.signOutError != null) {
             InfoBubble(mobileSession.signOutError.orEmpty())
@@ -131,42 +64,169 @@ internal fun ServerDeviceScreen(
             AttentionBanner("Couldn’t unlink this device", message, "Try again", onForgetDevice)
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
-        SectionCard("Unlink", "Your budgets in Actual are never changed.") {
-            when {
-                device == null ->
-                    ListRow(
-                        "Sign in to this server",
-                        "Link this device to Tandem again",
-                        leading = RowLeading.Icon(Lucide.LogIn),
-                        onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
-                    )
-                mobileSession.deviceRevocationError != null ->
-                    ListRow(
-                        "Unlink on this device only",
-                        "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
-                        leading = RowLeading.Icon(Lucide.LogOut),
-                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
-                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "local" },
-                    )
-                else ->
-                    ListRow(
-                        if (mobileSession.isRevokingDevice) "Unlinking…" else "Unlink this device",
-                        "Signs out. Budgets and unsynced edits stay on this device for when you link again.",
-                        leading = RowLeading.Icon(Lucide.LogOut),
-                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
-                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "server" },
-                    )
-            }
-            DividerLine()
-            ListRow(
-                if (mobileSession.isSigningOut) "Erasing…" else "Unlink and erase data",
-                "Signs out and deletes every saved budget from this device. Edits must be synced first.",
-                leading = RowLeading.Icon(Lucide.Trash2),
-                options = ListRowOptions(muted = mobileSession.isSigningOut, trailingColor = tandemPalette.negative),
-                onClick = { if (!mobileSession.isSigningOut) confirmation = "signout" },
-            )
-        }
+        UnlinkSection(mobileSession, device, navigation) { confirmation = it }
     }
+    ServerDeviceConfirmation(
+        confirmation,
+        mobileSession,
+        onDismiss = { confirmation = "" },
+        onSignOut = {
+            scope.launch {
+                if (mobileSession.signOutAndClearLocalData()) {
+                    encryptedBudgetVault?.deleteAll()
+                    state.clearBudgetSession()
+                    navigation.reset(AppRoute.WELCOME)
+                }
+            }
+        },
+        onForgetDevice = onForgetDevice,
+        onForgetDeviceLocally = onForgetDeviceLocally,
+    )
+}
+
+/** The server address, the optional local address and whether the server answers. */
+@Composable
+private fun ServerSection(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+) {
+    SectionCard("Server") {
+        ListRow(
+            "Server URL",
+            state.serverUrl,
+            if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+            leading = RowLeading.Icon(Lucide.Server),
+            options =
+                ListRowOptions(
+                    trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                ),
+            onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+        )
+        DividerLine()
+        ListRow(
+            "Local address",
+            state.localServerUrl.ifBlank { "Optional · faster on your home network" },
+            when {
+                state.localServerUrl.isBlank() -> null
+                mobileSession.isUsingLocalServer -> "In use"
+                else -> "Not in use"
+            },
+            leading = RowLeading.Icon(Lucide.House),
+            options =
+                ListRowOptions(
+                    trailingColor = if (mobileSession.isUsingLocalServer) tandemPalette.positive else tandemPalette.muted,
+                ),
+            onClick = { navigation.open(AppRoute.LOCAL_SERVER_ADDRESS) },
+        )
+        DividerLine()
+        ListRow(
+            "Connection status",
+            if (mobileSession.isServerReachable) "Server is reachable" else "Server can’t be reached",
+            if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+            leading = RowLeading.Icon(Lucide.Wifi),
+            options =
+                ListRowOptions(
+                    trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                ),
+        )
+    }
+}
+
+/** This device's name, the budgets it can open and how its sign-in is kept. */
+@Composable
+private fun ThisDeviceSection(
+    mobileSession: TandemMobileSession,
+    device: AuthenticatedDevice?,
+    deviceName: String,
+) {
+    SectionCard(
+        "This device",
+        when {
+            device == null -> "No device is signed in"
+            else -> null
+        },
+    ) {
+        ListRow(
+            "Device name",
+            if (device != null) deviceName else "Not signed in",
+            leading = RowLeading.Icon(Lucide.Smartphone),
+        )
+        DividerLine()
+        ListRow(
+            "Budgets this device can open",
+            if (device == null) "Not signed in" else "${device.budgetIds.size} available",
+            leading = RowLeading.Icon(Lucide.FolderKey),
+        )
+        DividerLine()
+        ListRow(
+            "Saved sign-in",
+            if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
+            when {
+                mobileSession.isCredentialStored -> "Saved"
+                device != null -> "Active"
+                else -> "None"
+            },
+            leading = RowLeading.Icon(Lucide.KeyRound),
+        )
+    }
+}
+
+/** Sign in again, unlink, or unlink and erase this device's data. */
+@Composable
+private fun UnlinkSection(
+    mobileSession: TandemMobileSession,
+    device: AuthenticatedDevice?,
+    navigation: AppNavigation,
+    onConfirm: (String) -> Unit,
+) {
+    SectionCard("Unlink", "Your budgets in Actual are never changed.") {
+        when {
+            device == null ->
+                ListRow(
+                    "Sign in to this server",
+                    "Link this device to Tandem again",
+                    leading = RowLeading.Icon(Lucide.LogIn),
+                    onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+                )
+            mobileSession.deviceRevocationError != null ->
+                ListRow(
+                    "Unlink on this device only",
+                    "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
+                    leading = RowLeading.Icon(Lucide.LogOut),
+                    options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                    onClick = { if (!mobileSession.isRevokingDevice) onConfirm("local") },
+                )
+            else ->
+                ListRow(
+                    if (mobileSession.isRevokingDevice) "Unlinking…" else "Unlink this device",
+                    "Signs out. Budgets and unsynced edits stay on this device for when you link again.",
+                    leading = RowLeading.Icon(Lucide.LogOut),
+                    options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                    onClick = { if (!mobileSession.isRevokingDevice) onConfirm("server") },
+                )
+        }
+        DividerLine()
+        ListRow(
+            if (mobileSession.isSigningOut) "Erasing…" else "Unlink and erase data",
+            "Signs out and deletes every saved budget from this device. Edits must be synced first.",
+            leading = RowLeading.Icon(Lucide.Trash2),
+            options = ListRowOptions(muted = mobileSession.isSigningOut, trailingColor = tandemPalette.negative),
+            onClick = { if (!mobileSession.isSigningOut) onConfirm("signout") },
+        )
+    }
+}
+
+/** The confirmation dialog for whichever unlink option was chosen. */
+@Composable
+private fun ServerDeviceConfirmation(
+    confirmation: String,
+    mobileSession: TandemMobileSession,
+    onDismiss: () -> Unit,
+    onSignOut: () -> Unit,
+    onForgetDevice: () -> Unit,
+    onForgetDeviceLocally: () -> Unit,
+) {
     when (confirmation) {
         "signout" ->
             DestructiveConfirmationDialog(
@@ -176,16 +236,10 @@ internal fun ServerDeviceScreen(
                 confirmLabel = "Unlink and erase",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isSigningOut,
-                onDismissRequest = { if (!mobileSession.isSigningOut) confirmation = "" },
+                onDismissRequest = { if (!mobileSession.isSigningOut) onDismiss() },
                 onConfirm = {
-                    confirmation = ""
-                    scope.launch {
-                        if (mobileSession.signOutAndClearLocalData()) {
-                            encryptedBudgetVault?.deleteAll()
-                            state.clearBudgetSession()
-                            navigation.reset(AppRoute.WELCOME)
-                        }
-                    }
+                    onDismiss()
+                    onSignOut()
                 },
             )
         "server" ->
@@ -196,9 +250,9 @@ internal fun ServerDeviceScreen(
                 confirmLabel = "Unlink",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
-                onDismissRequest = { if (!mobileSession.isRevokingDevice) confirmation = "" },
+                onDismissRequest = { if (!mobileSession.isRevokingDevice) onDismiss() },
                 onConfirm = {
-                    confirmation = ""
+                    onDismiss()
                     onForgetDevice()
                 },
             )
@@ -209,9 +263,9 @@ internal fun ServerDeviceScreen(
                     "This clears the sign-in saved on this device. The server keeps it linked until you unlink it from another signed-in device. ${pendingDeviceChangeNotice()}",
                 confirmLabel = "Unlink here",
                 dismissLabel = "Cancel",
-                onDismissRequest = { confirmation = "" },
+                onDismissRequest = onDismiss,
                 onConfirm = {
-                    confirmation = ""
+                    onDismiss()
                     onForgetDeviceLocally()
                 },
             )

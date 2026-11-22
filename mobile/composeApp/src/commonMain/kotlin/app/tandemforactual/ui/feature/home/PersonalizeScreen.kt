@@ -5,7 +5,6 @@ package app.tandemforactual.ui.feature.home
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,8 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,7 +43,6 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.FinancialGoal
-import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.recommendedEmphasis
 import app.tandemforactual.ui.design.buttons.TandemBackButton
 import app.tandemforactual.ui.design.templates.OnboardingLayout
@@ -70,28 +65,16 @@ import app.tandemforactual.ui.generated.resources.emphasis_recommended
 import app.tandemforactual.ui.generated.resources.emphasis_title
 import app.tandemforactual.ui.generated.resources.goals_detail
 import app.tandemforactual.ui.generated.resources.goals_title
-import app.tandemforactual.ui.generated.resources.mode_advanced
-import app.tandemforactual.ui.generated.resources.mode_advanced_detail
-import app.tandemforactual.ui.generated.resources.mode_advanced_short
-import app.tandemforactual.ui.generated.resources.mode_detail
-import app.tandemforactual.ui.generated.resources.mode_minimal
-import app.tandemforactual.ui.generated.resources.mode_minimal_detail
-import app.tandemforactual.ui.generated.resources.mode_minimal_short
-import app.tandemforactual.ui.generated.resources.mode_title
 import app.tandemforactual.ui.generated.resources.personalize_continue
 import app.tandemforactual.ui.generated.resources.personalize_detail
 import app.tandemforactual.ui.generated.resources.personalize_finish
 import app.tandemforactual.ui.generated.resources.personalize_just_connect
 import app.tandemforactual.ui.generated.resources.personalize_progress
 import app.tandemforactual.ui.generated.resources.personalize_title
-import app.tandemforactual.ui.generated.resources.tools_add_short
-import app.tandemforactual.ui.generated.resources.tools_added_short
 import app.tandemforactual.ui.generated.resources.tools_detail
 import app.tandemforactual.ui.generated.resources.tools_title
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PlugZap
-import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Sparkles
 import org.jetbrains.compose.resources.stringResource
 
@@ -156,10 +139,11 @@ internal fun PersonalizeScreen(
 /** After personalization, setup ends on Home; from Settings it returns to where it started. */
 private fun finishPersonalizing(navigation: AppNavigation) = navigation.reset(AppRoute.HOME)
 
-private enum class PersonalizeStep { DECIDE, GOALS, EMPHASIS, MODE, TOOLS }
+internal enum class PersonalizeStep { DECIDE, GOALS, EMPHASIS, MODE, TOOLS }
 
+/** Progress, back button, headline and primary action shared by every personalization step. */
 @Composable
-private fun StepScaffold(
+internal fun StepScaffold(
     step: PersonalizeStep,
     onBack: () -> Unit,
     title: String,
@@ -201,109 +185,6 @@ private fun StepScaffold(
         },
         actions = { SetupPrimaryButton(primaryLabel, modifier = Modifier.fillMaxWidth(), onClick = onPrimary) },
     )
-}
-
-/** A large tappable card; a check badge for multi-select, a filled ring for single choices. */
-@Composable
-private fun ChoiceCard(
-    title: String,
-    detail: String?,
-    selected: Boolean,
-    multiSelect: Boolean,
-    icon: ImageVector? = null,
-    badge: String? = null,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    val shape = RoundedCornerShape(TandemShapes.large)
-    val motion = tandemMotionSpec<androidx.compose.ui.graphics.Color>(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
-    val background by animateColorAsState(if (selected) palette.accentSurface else palette.surface, motion, label = "choice-bg")
-    val border by animateColorAsState(if (selected) palette.accent else palette.border, motion, label = "choice-border")
-    val selection =
-        if (multiSelect) {
-            Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
-        } else {
-            Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-        }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(background)
-            .border(if (selected) 1.5.dp else 1.dp, border, shape)
-            .then(selection)
-            .padding(horizontal = TandemSpacing.medium, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        if (icon != null) {
-            Box(
-                Modifier
-                    .size(
-                        40.dp,
-                    ).clip(
-                        RoundedCornerShape(TandemShapes.control),
-                    ).background(if (selected) palette.accent.copy(alpha = 0.18f) else palette.raised),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (selected) palette.accent else palette.muted,
-                )
-            }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                Text(title, color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
-                if (badge != null) {
-                    Text(
-                        badge,
-                        Modifier
-                            .clip(
-                                CircleShape,
-                            ).background(palette.accent.copy(alpha = 0.16f))
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        color = palette.accent,
-                        fontSize = TandemTypography.micro,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            if (detail != null) Text(detail, color = palette.muted, fontSize = TandemTypography.compactBody)
-        }
-        SelectionMark(selected, multiSelect)
-    }
-}
-
-@Composable
-private fun SelectionMark(
-    selected: Boolean,
-    multiSelect: Boolean,
-) {
-    val palette = tandemPalette
-    val scale by animateFloatAsState(
-        if (selected) 1f else 0f,
-        tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-        label = "choice-mark",
-    )
-    val shape = if (multiSelect) RoundedCornerShape(TandemShapes.small) else CircleShape
-    Box(
-        Modifier.size(24.dp).clip(shape).border(1.5.dp, if (selected) palette.accent else palette.border, shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(24.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }.clip(shape)
-                .background(palette.accent),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = palette.accentContent) }
-    }
 }
 
 @Composable
@@ -416,136 +297,6 @@ private fun EmphasisStep(
 }
 
 @Composable
-private fun ModeStep(
-    state: AppState,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-) {
-    val palette = tandemPalette
-    StepScaffold(
-        PersonalizeStep.MODE,
-        onBack,
-        stringResource(Res.string.mode_title),
-        stringResource(Res.string.mode_detail),
-        stringResource(Res.string.personalize_continue),
-        onPrimary = onNext,
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            InterfaceMode.entries.forEach { mode ->
-                ModePreviewCard(mode, state.interfaceMode == mode, Modifier.weight(1f)) { state.interfaceMode = mode }
-            }
-        }
-        AnimatedContent(state.interfaceMode, transitionSpec = {
-            fadeIn(tween(TandemMotion.CONTROL_MILLIS)) togetherWith fadeOut(tween(90))
-        }, label = "mode-detail") { mode ->
-            Text(
-                stringResource(if (mode == InterfaceMode.MINIMAL) Res.string.mode_minimal_detail else Res.string.mode_advanced_detail),
-                Modifier.padding(top = TandemSpacing.extraSmall),
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
-    }
-}
-
-/** A small drawing of each layout: a few large blocks for Minimal, a denser grid with a sidebar for Advanced. */
-@Composable
-private fun ModePreviewCard(
-    mode: InterfaceMode,
-    selected: Boolean,
-    modifier: Modifier,
-    onSelect: () -> Unit,
-) {
-    val palette = tandemPalette
-    val shape = RoundedCornerShape(TandemShapes.large)
-    val motion = tandemMotionSpec<androidx.compose.ui.graphics.Color>(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
-    val border by animateColorAsState(if (selected) palette.accent else palette.border, motion, label = "mode-border")
-    val block by animateColorAsState(if (selected) palette.accent.copy(alpha = 0.32f) else palette.raised, motion, label = "mode-block")
-    Column(
-        modifier
-            .clip(shape)
-            .background(if (selected) palette.accentSurface else palette.surface)
-            .border(if (selected) 1.5.dp else 1.dp, border, shape)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-            .padding(TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(
-                    112.dp,
-                ).clip(RoundedCornerShape(TandemShapes.control))
-                .background(palette.background)
-                .padding(10.dp),
-        ) {
-            if (mode == InterfaceMode.MINIMAL) {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth(0.55f)
-                            .height(8.dp)
-                            .clip(CircleShape)
-                            .background(block),
-                    )
-                    repeat(3) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(22.dp)
-                                .clip(RoundedCornerShape(TandemShapes.small))
-                                .background(block),
-                        )
-                    }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) { repeat(5) { Box(Modifier.size(10.dp).clip(CircleShape).background(block)) } }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        repeat(4) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(18.dp)
-                                        .clip(RoundedCornerShape(TandemShapes.small))
-                                        .background(block),
-                                )
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(18.dp)
-                                        .clip(RoundedCornerShape(TandemShapes.small))
-                                        .background(block),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(if (mode == InterfaceMode.MINIMAL) Res.string.mode_minimal else Res.string.mode_advanced),
-                    color = palette.text,
-                    fontSize = TandemTypography.action,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    stringResource(if (mode == InterfaceMode.MINIMAL) Res.string.mode_minimal_short else Res.string.mode_advanced_short),
-                    color = palette.muted,
-                    fontSize = TandemTypography.caption,
-                )
-            }
-            SelectionMark(selected, multiSelect = false)
-        }
-    }
-}
-
-@Composable
 private fun ToolsStep(
     state: AppState,
     onBack: () -> Unit,
@@ -603,26 +354,5 @@ private fun ToolsStep(
                 AddChip(added)
             }
         }
-    }
-}
-
-@Composable
-private fun AddChip(added: Boolean) {
-    val palette = tandemPalette
-    val motion = tandemMotionSpec<androidx.compose.ui.graphics.Color>(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
-    val background by animateColorAsState(if (added) palette.accent else palette.raised, motion, label = "add-chip-bg")
-    val content by animateColorAsState(if (added) palette.accentContent else palette.text, motion, label = "add-chip-content")
-    Row(
-        Modifier.clip(CircleShape).background(background).padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Icon(if (added) Lucide.Check else Lucide.Plus, contentDescription = null, modifier = Modifier.size(14.dp), tint = content)
-        Text(
-            stringResource(if (added) Res.string.tools_added_short else Res.string.tools_add_short),
-            color = content,
-            fontSize = TandemTypography.label,
-            fontWeight = FontWeight.SemiBold,
-        )
     }
 }

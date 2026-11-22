@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -110,27 +111,7 @@ internal fun DataHealthScreen(
     val palette = tandemPalette
     PageLazyColumn(isRefreshing = loading && issues != null && reload > 0, onRefresh = { reload++ }) {
         val found = issues
-        item(key = "summary") {
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text(
-                    if (loading && found != null) "Checking again…" else state.selectedBudget,
-                    color = palette.muted,
-                    fontSize = TandemTypography.body,
-                )
-                Text(
-                    when {
-                        found == null && loading -> "Checking…"
-                        found == null -> "Couldn’t check"
-                        found.isEmpty() -> "All clear"
-                        else -> "${found.sumOf { it.rows.size }} things to look at"
-                    },
-                    color = palette.text,
-                    fontSize = TandemTypography.heroTitle,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = tandemAlloFamily(),
-                )
-            }
-        }
+        item(key = "summary") { DataHealthSummary(state.selectedBudget, found, loading) }
         when {
             found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
             found == null ->
@@ -152,29 +133,79 @@ internal fun DataHealthScreen(
             item(key = issue.kind.name) {
                 val open = issue.kind.name in expanded
                 val limit = shown[issue.kind.name] ?: PAGE
-                SectionCard(issue.kind.title(issue.rows.size), issue.kind.detail(), if (open) "Hide" else "Show", onClick = {
-                    expanded = if (open) expanded - issue.kind.name else expanded + issue.kind.name
-                }) {
-                    AnimatedReveal(visible = open) {
-                        Column {
-                            issue.rows.take(limit).forEachIndexed { index, row ->
-                                if (index > 0) DividerLine()
-                                HealthRowItem(issue.kind, row, state, liveTransactions.firstOrNull { it.recordId == row.id }) { item ->
-                                    openTransaction(state, navigation, item, isLive = true)
-                                }
-                            }
-                            if (issue.rows.size > limit) {
-                                DividerLine()
-                                ListRow(
-                                    "Show ${minOf(PAGE, issue.rows.size - limit)} more",
-                                    "${issue.rows.size - limit} not shown",
-                                    leading = RowLeading.Icon(Lucide.ChevronDown),
-                                    options = ListRowOptions(showChevron = false, dense = true),
-                                    onClick = { shown[issue.kind.name] = limit + PAGE },
-                                )
-                            }
-                        }
+                HealthIssueCard(
+                    issue,
+                    open = open,
+                    limit = limit,
+                    onToggle = { expanded = if (open) expanded - issue.kind.name else expanded + issue.kind.name },
+                    onShowMore = { shown[issue.kind.name] = limit + PAGE },
+                    state = state,
+                    liveTransactions = liveTransactions,
+                ) { item -> openTransaction(state, navigation, item, isLive = true) }
+            }
+        }
+    }
+}
+
+/** The budget name and how many things the checkup found. */
+@Composable
+private fun DataHealthSummary(
+    budgetName: String,
+    found: List<HealthIssue>?,
+    loading: Boolean,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text(
+            if (loading && found != null) "Checking again…" else budgetName,
+            color = palette.muted,
+            fontSize = TandemTypography.body,
+        )
+        Text(
+            when {
+                found == null && loading -> "Checking…"
+                found == null -> "Couldn’t check"
+                found.isEmpty() -> "All clear"
+                else -> "${found.sumOf { it.rows.size }} things to look at"
+            },
+            color = palette.text,
+            fontSize = TandemTypography.heroTitle,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+    }
+}
+
+/** One kind of issue, expandable to its rows a page at a time. */
+@Composable
+private fun HealthIssueCard(
+    issue: HealthIssue,
+    open: Boolean,
+    limit: Int,
+    onToggle: () -> Unit,
+    onShowMore: () -> Unit,
+    state: AppState,
+    liveTransactions: List<TransactionItem>,
+    onOpen: (TransactionItem) -> Unit,
+) {
+    SectionCard(issue.kind.title(issue.rows.size), issue.kind.detail(), if (open) "Hide" else "Show", onClick = onToggle) {
+        AnimatedReveal(visible = open) {
+            Column {
+                issue.rows.take(limit).forEachIndexed { index, row ->
+                    if (index > 0) DividerLine()
+                    HealthRowItem(issue.kind, row, state, liveTransactions.firstOrNull { it.recordId == row.id }) { item ->
+                        onOpen(item)
                     }
+                }
+                if (issue.rows.size > limit) {
+                    DividerLine()
+                    ListRow(
+                        "Show ${minOf(PAGE, issue.rows.size - limit)} more",
+                        "${issue.rows.size - limit} not shown",
+                        leading = RowLeading.Icon(Lucide.ChevronDown),
+                        options = ListRowOptions(showChevron = false, dense = true),
+                        onClick = onShowMore,
+                    )
                 }
             }
         }

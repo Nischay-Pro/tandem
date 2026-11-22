@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -186,32 +187,7 @@ private fun SectionCardLayout(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        Text(
-                            title,
-                            color = palette.text,
-                            fontSize = TandemTypography.body,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                        )
-                        if (detail != null) {
-                            if (animateDetail) {
-                                AnimatedStatusText(
-                                    detail,
-                                    palette.muted,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 3,
-                                )
-                            } else {
-                                Text(
-                                    detail,
-                                    color = palette.muted,
-                                    fontSize = TandemTypography.caption,
-                                    maxLines = 3,
-                                )
-                            }
-                        }
-                    }
+                    SectionTitleText(title, detail, animateDetail)
                     if (actionContent != null) {
                         actionContent()
                     } else if (action != null) {
@@ -223,27 +199,7 @@ private fun SectionCardLayout(
                             maxLines = 2,
                         )
                     }
-                    if (collapse != null) {
-                        val arrowRotation by
-                            animateFloatAsState(
-                                targetValue = if (!collapse.expanded) -90f else 0f,
-                                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-                                label = "section-chevron-$title",
-                            )
-                        Icon(
-                            imageVector = Lucide.ChevronDown,
-                            contentDescription = if (!collapse.expanded) "Expand $title" else "Collapse $title",
-                            modifier =
-                                Modifier
-                                    .padding(start = TandemSpacing.extraSmall)
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .clickable(role = Role.Button, onClick = collapse.onToggle)
-                                    .padding(TandemSpacing.small)
-                                    .graphicsLayer { rotationZ = arrowRotation },
-                            tint = palette.muted,
-                        )
-                    }
+                    if (collapse != null) SectionCollapseChevron(title, collapse)
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border.copy(alpha = 0.75f)))
             }
@@ -260,4 +216,68 @@ private fun SectionCardLayout(
             }
         }
     }
+}
+
+/** Title and optional detail of a section card header. */
+@Composable
+private fun RowScope.SectionTitleText(
+    title: String,
+    detail: String?,
+    animateDetail: Boolean,
+) {
+    val palette = tandemPalette
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text(
+            title,
+            color = palette.text,
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+        )
+        if (detail != null) {
+            if (animateDetail) {
+                AnimatedStatusText(
+                    detail,
+                    palette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 3,
+                )
+            } else {
+                Text(
+                    detail,
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 3,
+                )
+            }
+        }
+    }
+}
+
+/** Rotating chevron that toggles a collapsible section. */
+@Composable
+private fun SectionCollapseChevron(
+    title: String,
+    collapse: SectionCollapse,
+) {
+    val palette = tandemPalette
+    val arrowRotation by
+        animateFloatAsState(
+            targetValue = if (!collapse.expanded) -90f else 0f,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+            label = "section-chevron-$title",
+        )
+    Icon(
+        imageVector = Lucide.ChevronDown,
+        contentDescription = if (!collapse.expanded) "Expand $title" else "Collapse $title",
+        modifier =
+            Modifier
+                .padding(start = TandemSpacing.extraSmall)
+                .size(36.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = collapse.onToggle)
+                .padding(TandemSpacing.small)
+                .graphicsLayer { rotationZ = arrowRotation },
+        tint = palette.muted,
+    )
 }
