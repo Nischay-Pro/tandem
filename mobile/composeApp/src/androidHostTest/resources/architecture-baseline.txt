@@ -74,7 +74,6 @@ function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetMutationReviewScreen.BudgetMutationReviewScreen
-function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetScreen.BudgetCategoryCard
 function-size BudgetScreen.BudgetScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
@@ -100,7 +99,6 @@ function-size ListRow.ListRow
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
-function-size ManagePayeesScreen.ManagePayeesScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
@@ -113,8 +111,6 @@ function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
 function-size Rows.SectionCardLayout
-function-size RuleEditorSheet.RuleConditionEditor
-function-size RuleEditorSheet.RuleEditorContent
 function-size ScheduleDatePickerDialog.ScheduleDatePickerDialog
 function-size SecurityScreen.SecurityScreen
 function-size ServerAddressScreen.ServerAddressScreen
@@ -161,9 +157,7 @@ size CategoryDetailScreen
 size CategoryGroupScreen
 size ConflictReviewScreen
 size LiveBudgetModels
-size ManagePayeesScreen
 size PersonalizeScreen
-size RuleEditorSheet
 size StatementImport
 size SyncCenterScreen
 size SyncCenterScreenParts
