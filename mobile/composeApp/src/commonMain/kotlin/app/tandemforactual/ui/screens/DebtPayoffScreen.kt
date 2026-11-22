@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
+import app.tandemforactual.data.planning.DebtKind
+import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.ui.components.AreaChart
@@ -31,7 +33,6 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
-import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Lucide
 
@@ -49,16 +50,18 @@ internal fun DebtPayoffScreen(
     var strategy by rememberSaveable { mutableStateOf(PayoffStrategy.AVALANCHE) }
     var extra by rememberSaveable { mutableStateOf(10_000L) }
     var scrub by remember { mutableStateOf<Int?>(null) }
-    val debts = liveAccounts.filter { !it.closed && (it.balanceMinor ?: 0) < 0 }
     val terms = mobileSession.debtTerms
+
+    fun termsFor(account: LiveAccountSummary) = terms.firstOrNull { it.accountId == account.id }
+    val debts = liveAccounts.filter { !it.closed && (it.balanceMinor ?: 0) < 0 && termsFor(it)?.kind != DebtKind.NOT_DEBT }
+    val paidInFull = debts.filter { termsFor(it)?.paysInFull == true }
     val ready =
-        debts.mapNotNull { account ->
-            val term = terms.firstOrNull { it.accountId == account.id }
+        debts.filterNot { it in paidInFull }.mapNotNull { account ->
+            val term = termsFor(account)
             val apr = term?.aprBasisPoints
             val minimum = term?.minimumPaymentMinor
             if (apr == null || minimum == null) null else DebtInput(account.id, -(account.balanceMinor ?: 0), apr, minimum)
         }
-    val missing = debts.filter { account -> ready.none { it.id == account.id } }
     val plan = remember(ready, extra, strategy) { PlanningMath.plan(ready, extra, strategy) }
     val other =
         remember(ready, extra, strategy) {
@@ -90,7 +93,7 @@ internal fun DebtPayoffScreen(
         val palette = tandemPalette
         if (ready.isEmpty()) {
             EmptyState("Add your debt details", "Enter each debt’s APR and minimum payment to see when you’ll be debt-free.")
-            NeedsDetails(missing) { editors.debtAccount = it }
+            YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
             return@PageColumn
         }
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -148,14 +151,22 @@ internal fun DebtPayoffScreen(
         if (plan != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 val saved = minimumsOnly?.let { it.totalInterestMinor - plan.totalInterestMinor }
-                StatTile("Interest saved", saved?.let(state::formatCurrency) ?: "—", "vs minimums only", Modifier.weight(1f))
-                val compare = other?.let { plan.totalInterestMinor - it.totalInterestMinor }
                 StatTile(
-                    "Other method",
-                    other?.let { "${it.months} months" } ?: "—",
-                    compare?.let { if (it <= 0) "costs ${state.formatCurrency(-it)} more" else "saves ${state.formatCurrency(it)}" } ?: "",
+                    if (saved != null) "Interest saved" else "Minimums alone",
+                    saved?.let(state::formatCurrency) ?: "Never paid off",
+                    if (saved != null) "vs minimums only" else "They don’t cover the interest",
                     Modifier.weight(1f),
                 )
+                if (ready.size > 1) {
+                    val compare = other?.let { plan.totalInterestMinor - it.totalInterestMinor }
+                    StatTile(
+                        if (strategy == PayoffStrategy.AVALANCHE) "Smallest first" else "Highest APR first",
+                        other?.let { "${it.months} months" } ?: "—",
+                        compare?.let { if (it <= 0) "costs ${state.formatCurrency(-it)} more" else "saves ${state.formatCurrency(it)}" }
+                            ?: "",
+                        Modifier.weight(1f),
+                    )
+                }
             }
             SectionCard(
                 "Payoff order",
@@ -181,7 +192,7 @@ internal fun DebtPayoffScreen(
                 }
             }
         }
-        NeedsDetails(missing) { editors.debtAccount = it }
+        YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
         Text(
             "Estimates use the APR and minimums you entered, compounded monthly. Promotional rates and fees aren’t included.",
             color = palette.muted,
@@ -190,16 +201,59 @@ internal fun DebtPayoffScreen(
     }
 }
 
+/** Every debt with its rate and minimum in view, tap to edit, and what paying only the minimum on a card costs. */
 @Composable
-private fun NeedsDetails(
-    missing: List<LiveAccountSummary>,
+private fun YourDebts(
+    debts: List<LiveAccountSummary>,
+    termsFor: (LiveAccountSummary) -> DebtTerms?,
+    state: AppState,
     onEdit: (LiveAccountSummary) -> Unit,
 ) {
-    if (missing.isEmpty()) return
-    SectionCard("Needs details", "Add the APR and minimum payment to include these") {
-        missing.forEachIndexed { index, account ->
+    SectionCard("Your debts", "Tap one to set its type, APR and minimum") {
+        debts.forEachIndexed { index, account ->
             if (index > 0) DividerLine()
-            ListRow(account.name, "Not in the plan yet", leading = RowLeading.Icon(Lucide.CircleAlert), onClick = { onEdit(account) })
+            val terms = termsFor(account)
+            val owed = -(account.balanceMinor ?: 0)
+            val apr = terms?.aprBasisPoints
+            val minimum = terms?.minimumPaymentMinor
+            val kind =
+                when (terms?.kind) {
+                    DebtKind.CARD -> "Card"
+                    DebtKind.LOAN -> "Loan"
+                    else -> null
+                }
+            val detail =
+                when {
+                    terms?.paysInFull == true -> "Paid in full each month · no interest"
+                    apr != null && minimum != null -> "${formatRateBasisPoints(apr)} APR · ${state.formatCurrency(minimum)} minimum"
+                    apr != null -> "${formatRateBasisPoints(apr)} APR · add the minimum"
+                    else -> "Add the APR and minimum payment"
+                }
+            ListRow(
+                account.name,
+                listOfNotNull(
+                    kind,
+                    detail,
+                ).joinToString(" · "),
+                state.formatCurrency(owed),
+                leading = RowLeading.Icon(Lucide.CreditCard),
+                onClick = {
+                    onEdit(account)
+                },
+            )
+            if (terms?.kind == DebtKind.CARD && terms.paysInFull.not() && apr != null && minimum != null) {
+                val estimate = PlanningMath.payoff(owed, apr, minimum)
+                Text(
+                    estimate?.let {
+                        "Minimum only: ${it.months} months and ${state.formatCurrency(
+                            it.totalInterestMinor,
+                        )} in interest. Paying the full statement each month costs no interest."
+                    } ?: "The minimum doesn’t cover the interest. Paying more than the minimum is the only way down.",
+                    Modifier.padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = TandemSpacing.medium),
+                    color = if (estimate == null) tandemPalette.negative else tandemPalette.muted,
+                    fontSize = TandemTypography.label,
+                )
+            }
         }
     }
 }

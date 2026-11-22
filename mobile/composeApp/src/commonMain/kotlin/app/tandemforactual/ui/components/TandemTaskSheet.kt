@@ -60,10 +60,13 @@ internal fun TandemTaskSheet(
                 DialogProperties(
                     usePlatformDefaultWidth = false,
                     dismissOnBackPress = dismissOnBackPress,
-                    decorFitsSystemWindows = !fullScreen,
+                    decorFitsSystemWindows = false,
                 ),
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Box(
+                Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
                 AnimatedVisibility(
                     modifier = Modifier.fillMaxWidth(),
                     visibleState = visibleState,

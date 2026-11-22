@@ -42,6 +42,26 @@ class PlanningStoreTest {
                     )
                 store.save(profile)
                 store.save(RetirementProfile("us-ira"))
+                val card = DebtTerms("debt-2", "card", kind = DebtKind.CARD, paysInFull = true)
+                store.save(card)
+                assertEquals(card, store.debtTerms().first().first { it.id == "debt-2" })
+                store.put(
+                    "debt-3",
+                    DebtTerms.TYPE,
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("kind", kotlinx.serialization.json.JsonPrimitive("WEIRD"))
+                    },
+                )
+                assertEquals(
+                    DebtKind.UNSPECIFIED,
+                    store
+                        .debtTerms()
+                        .first()
+                        .first { it.id == "debt-3" }
+                        .kind,
+                )
+                store.delete("debt-2", DebtTerms.TYPE)
+                store.delete("debt-3", DebtTerms.TYPE)
                 store.put(
                     "broken",
                     RetirementProfile.TYPE,

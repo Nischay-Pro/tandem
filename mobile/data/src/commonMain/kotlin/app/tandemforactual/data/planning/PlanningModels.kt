@@ -54,6 +54,9 @@ data class SavingsGoal(
     }
 }
 
+/** What an account with a negative balance is: a revolving card, an installment loan, or not a debt at all. */
+enum class DebtKind { UNSPECIFIED, CARD, LOAN, NOT_DEBT }
+
 /**
  * A debt account's terms as the person entered them. An unknown APR or minimum stays unknown, so estimates are only
  * made from what was actually supplied.
@@ -66,6 +69,9 @@ data class DebtTerms(
     val dueDay: Int? = null,
     val promoAprBasisPoints: Int? = null,
     val promoEndsOn: String? = null,
+    val kind: DebtKind = DebtKind.UNSPECIFIED,
+    /** A card whose full statement balance is paid each month, so it never carries interest. */
+    val paysInFull: Boolean = false,
 ) {
     val aprProvenance: Provenance get() = if (aprBasisPoints == null) Provenance.UNKNOWN else Provenance.USER_SUPPLIED
 
@@ -77,6 +83,8 @@ data class DebtTerms(
             "dueDay" to dueDay.json(),
             "promoAprBasisPoints" to promoAprBasisPoints.json(),
             "promoEndsOn" to promoEndsOn.json(),
+            "kind" to (if (kind == DebtKind.UNSPECIFIED) JsonNull else JsonPrimitive(kind.name)),
+            "paysInFull" to (if (paysInFull) JsonPrimitive(true) else JsonNull),
         )
 
     companion object {
@@ -93,6 +101,8 @@ data class DebtTerms(
             dueDay = body.int("dueDay"),
             promoAprBasisPoints = body.int("promoAprBasisPoints"),
             promoEndsOn = body.text("promoEndsOn"),
+            kind = DebtKind.entries.firstOrNull { it.name == body.text("kind") } ?: DebtKind.UNSPECIFIED,
+            paysInFull = body.text("paysInFull") == "true",
         )
     }
 }

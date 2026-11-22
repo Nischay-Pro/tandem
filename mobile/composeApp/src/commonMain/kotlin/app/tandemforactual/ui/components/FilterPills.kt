@@ -56,12 +56,12 @@ private fun FilterPill(
 ) {
     val palette = tandemPalette
     val background by animateColorAsState(
-        if (selected) palette.raised else palette.surface,
+        if (selected) palette.accentSurface else palette.raised,
         tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
         label = "filter-pill",
     )
     val content by animateColorAsState(
-        if (selected) palette.text else palette.muted,
+        if (selected) palette.accent else palette.muted,
         tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
         label = "filter-pill-text",
     )
