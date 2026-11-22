@@ -641,6 +641,7 @@ internal fun ScreenContent(
         AppRoute.RETIREMENT -> RetirementScreen(state, navigation, mobileSession, liveAccounts)
         AppRoute.RETIREMENT_SETUP -> RetirementSetupScreen(state, navigation, mobileSession, liveAccounts)
         AppRoute.RETIREMENT_MATCH -> MatchEditorScreen(state, navigation, mobileSession)
+        AppRoute.WHAT_IF -> WhatIfScreen(state, mobileSession, liveAccounts, liveBudgetMonth, liveTransactions)
         AppRoute.CASH_FLOW -> CashFlowScreen(state, liveAccounts, liveSchedules)
         AppRoute.MONTHLY_REVIEW -> MonthlyReviewScreen(state, liveBudgetMonth, liveTransactions)
         AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)

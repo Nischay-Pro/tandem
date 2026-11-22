@@ -196,6 +196,7 @@ internal enum class AppRoute(
     REIMBURSEMENTS("Reimbursements"),
     RETIREMENT_SETUP("Retirement accounts"),
     RETIREMENT_MATCH("Employer match"),
+    WHAT_IF("What if"),
 }
 
 internal enum class MainCloudStatus {

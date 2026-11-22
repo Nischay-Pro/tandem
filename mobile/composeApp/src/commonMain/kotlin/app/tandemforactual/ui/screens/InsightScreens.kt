@@ -133,32 +133,7 @@ internal fun MonthlyReviewScreen(
     transactions: List<TransactionItem>,
 ) {
     val palette = tandemPalette
-    val startingBalanceCategories =
-        month
-            ?.groups
-            .orEmpty()
-            .filter { it.isIncome }
-            .flatMap { it.categories }
-            .filter { it.name == "Starting Balances" }
-            .map { it.id }
-            .toSet()
-    val monthTransactions =
-        transactions.filter {
-            it.dateIso.startsWith(state.selectedMonthId) &&
-                !it.isTransfer &&
-                it.categoryId !in startingBalanceCategories &&
-                it.payee != "Starting Balance"
-        }
-    val income =
-        month
-            ?.groups
-            .orEmpty()
-            .filter {
-                it.isIncome
-            }.flatMap { it.categories }
-            .filterNot { it.id in startingBalanceCategories }
-            .sumOf { it.activityMinor } +
-            monthTransactions.filter { it.amountMinorUnits > 0 && it.categoryId.isNullOrBlank() }.sumOf { it.amountMinorUnits }
+    val (income, monthTransactions) = monthMoneyIn(state, month, transactions)
     val categories =
         month
             ?.groups
@@ -277,4 +252,33 @@ internal fun MonthlyReviewScreen(
             )
         }
     }
+}
+
+/**
+ * Money in for the selected month: income categories without starting balances, plus deposits that aren't categorized yet,
+ * and the month's transactions used for counts.
+ */
+internal fun monthMoneyIn(
+    state: AppState,
+    month: LiveBudgetMonthSummary?,
+    transactions: List<TransactionItem>,
+): Pair<Long, List<TransactionItem>> {
+    val incomeCategories =
+        month
+            ?.groups
+            .orEmpty()
+            .filter { it.isIncome }
+            .flatMap { it.categories }
+    val startingBalances = incomeCategories.filter { it.name == "Starting Balances" }.map { it.id }.toSet()
+    val monthTransactions =
+        transactions.filter {
+            it.dateIso.startsWith(state.selectedMonthId) &&
+                !it.isTransfer &&
+                it.categoryId !in startingBalances &&
+                it.payee != "Starting Balance"
+        }
+    val income =
+        incomeCategories.filterNot { it.id in startingBalances }.sumOf { it.activityMinor } +
+            monthTransactions.filter { it.amountMinorUnits > 0 && it.categoryId.isNullOrBlank() }.sumOf { it.amountMinorUnits }
+    return income to monthTransactions
 }
