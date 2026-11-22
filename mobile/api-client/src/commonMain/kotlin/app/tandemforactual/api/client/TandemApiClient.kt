@@ -5,20 +5,36 @@ import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.ChangeSet
-import app.tandemforactual.data.actual.HealthIssue
-import app.tandemforactual.data.actual.HealthRow
-import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
-import app.tandemforactual.data.actual.LinkedAccount
-import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.actual.applyBudgetTemplate
+import app.tandemforactual.data.actual.closeAccount
+import app.tandemforactual.data.actual.copyBudgetMonth
+import app.tandemforactual.data.actual.createAccount
+import app.tandemforactual.data.actual.createCategory
+import app.tandemforactual.data.actual.createCategoryGroup
+import app.tandemforactual.data.actual.createPayee
+import app.tandemforactual.data.actual.createRule
+import app.tandemforactual.data.actual.deleteCategory
+import app.tandemforactual.data.actual.deletePayee
+import app.tandemforactual.data.actual.deleteRule
+import app.tandemforactual.data.actual.holdBudgetForNextMonth
+import app.tandemforactual.data.actual.manageCategory
+import app.tandemforactual.data.actual.manageCategoryGroup
+import app.tandemforactual.data.actual.mergePayee
+import app.tandemforactual.data.actual.moveAccount
+import app.tandemforactual.data.actual.moveMoney
+import app.tandemforactual.data.actual.renameAccount
+import app.tandemforactual.data.actual.renameCategory
+import app.tandemforactual.data.actual.renamePayee
+import app.tandemforactual.data.actual.reopenAccount
+import app.tandemforactual.data.actual.resetBudgetHold
+import app.tandemforactual.data.actual.setBudgetAmount
+import app.tandemforactual.data.actual.setBudgetCarryover
+import app.tandemforactual.data.actual.setOrders
+import app.tandemforactual.data.actual.setPayeeDefaultCategory
+import app.tandemforactual.data.actual.updateRule
 import app.tandemforactual.data.database.ActualBudgetFiles
-import app.tandemforactual.data.regions.global.bank.BankInstitution
-import app.tandemforactual.data.regions.global.bank.BankProvider
-import app.tandemforactual.data.regions.global.bank.BankProviderAccount
-import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
-import app.tandemforactual.data.regions.global.bank.BrowserLink
-import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -38,83 +54,6 @@ import kotlinx.serialization.json.put
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
-data class AuthenticatedDevice(
-    val deviceId: String,
-    val principalId: String,
-    val budgetIds: List<String>,
-)
-
-data class BudgetCatalogItem(
-    val budgetId: String,
-    val name: String,
-    val isEncrypted: Boolean,
-)
-
-data class ActualLoginMethodOption(
-    val method: String,
-    val displayName: String,
-    val active: Boolean,
-)
-
-data class ActualLoginMethods(
-    val bootstrapped: Boolean,
-    val loginMethod: String?,
-    val availableLoginMethods: List<ActualLoginMethodOption>,
-)
-
-data class StatementImportItem(
-    val date: String,
-    val amountMinor: Long,
-    val payeeName: String,
-    val notes: String?,
-    val importedId: String,
-)
-
-data class StatementImportSummary(
-    val added: Int,
-    val updated: Int,
-    val errorCount: Int,
-)
-
-data class StatementImportPreview(
-    val existingImportedIds: Set<String>,
-    val serverChecked: Boolean = true,
-) {
-    fun newRowCount(totalRows: Int): Int = (totalRows - existingImportedIds.size).coerceAtLeast(0)
-}
-
-private val errorMessages =
-    mapOf(
-        "address_unreachable" to "Tandem can’t reach an Actual server at this address. Check the server address.",
-        "sign_in_required" to "Sign in to open your budgets.",
-        "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
-        "invalid_credentials" to "That password doesn’t match this Actual server. Check the password.",
-        "budget_unavailable" to "This budget isn’t on the Actual server any more.",
-        "encrypted_budget" to "Tandem can’t open encrypted budgets yet.",
-        "file_has_reset" to "This budget’s sync history was reset in Actual. Remove it from this device and open it again.",
-        "file_has_new_key" to "This budget’s encryption key changed in Actual. Remove it from this device and open it again.",
-        "out_of_sync" to "Tandem and Actual couldn’t agree on this budget’s changes. Try syncing again.",
-        "clock_drift" to "This device’s clock is too far from the server’s. Check the date and time.",
-        "not_supported" to "Use Actual for this until Tandem supports it.",
-        "rule_unsupported" to "A rule uses a formula or template that Tandem can’t run yet. Make this change in Actual.",
-        "invalid_request" to "Tandem couldn’t use those details. Check the form.",
-        "invalid-server-url" to "Enter a server address that starts with https://.",
-    )
-
-class TandemApiException(
-    val errorCode: String,
-    val httpStatus: Int? = null,
-    cause: Throwable? = null,
-    safeMessageOverride: String? = null,
-) : Exception(
-        safeMessageOverride ?: errorMessages[errorCode] ?: "Tandem couldn’t reach Actual. Check your connection and try again.",
-        cause,
-    )
-
-class TandemApiProtocolException(
-    message: String,
-) : IllegalStateException(message)
-
 /**
  * Talks to the user's Actual server directly. Budgets are downloaded into [budgetFiles], synced with Actual's own
  * protocol, and edited on the device with Actual's rules.
@@ -132,7 +71,7 @@ class TandemApiClient(
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val newId: () -> String = { Uuid.random().toString() },
 ) {
-    private val sessionMutex = Mutex()
+    internal val sessionMutex = Mutex()
     private val budgetMutex = Mutex()
     private var server: ActualServerClient? = null
     private var serverUrl: String? = null
@@ -378,133 +317,6 @@ class TandemApiClient(
         val budget = budget(budgetId, password)
         return call { budget.edit(today(), block) }
     }
-
-    suspend fun budgetChangeHistory(
-        budgetId: String,
-        encryptionPassword: String?,
-        limit: Int = 60,
-    ): BudgetChangeHistory =
-        call {
-            val budget = budget(budgetId, encryptionPassword)
-            BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
-        }
-
-    /** Deposits and transfers into each account by calendar year, keyed by account id; the first year shows when saving began. */
-    suspend fun budgetAccountInflows(
-        budgetId: String,
-        accountIds: List<String>,
-        encryptionPassword: String?,
-    ): Map<String, Map<Int, Long>> =
-        call {
-            val budget = budget(budgetId, encryptionPassword)
-            accountIds.associateWith { budget.inflowsByYear(it) }
-        }
-
-    suspend fun exportBudgetTransactions(
-        budgetId: String,
-        from: String,
-        to: String,
-        encryptionPassword: String?,
-    ): String = call { budget(budgetId, encryptionPassword).exportCsv(from, to) }
-
-    suspend fun previewBudgetRule(
-        budgetId: String,
-        rule: JsonObject,
-        encryptionPassword: String?,
-    ): List<HealthRow> = call { budget(budgetId, encryptionPassword).previewRule(rule) }
-
-    suspend fun budgetDataHealth(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): List<HealthIssue> = call { budget(budgetId, encryptionPassword).dataHealth(today()) }
-
-    suspend fun undoBudgetChange(
-        budgetId: String,
-        changeId: String,
-        encryptionPassword: String?,
-    ): UndoResult = call { budget(budgetId, encryptionPassword).undoChange(changeId) }
-
-    /** The provider's accounts, or null when the provider isn't set up on the Actual server. */
-    suspend fun bankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? =
-        sessionMutex.withLock {
-            val client = requireServer()
-            call { if (client.bankConfigured(provider)) client.bankAccounts(provider) else null }
-        }
-
-    suspend fun bankInstitutions(
-        provider: BrowserBankProvider,
-        country: String,
-    ): List<BankInstitution> =
-        sessionMutex.withLock {
-            requireServer().let { client ->
-                call { client.bankInstitutions(provider, country) }
-            }
-        }
-
-    suspend fun startBankLink(
-        provider: BrowserBankProvider,
-        institution: BankInstitution,
-    ): BrowserLink = sessionMutex.withLock { requireServer().let { client -> call { client.startBankLink(provider, institution) } } }
-
-    /** Asked without the session lock, since Enable Banking holds the request open until the bank answers. */
-    suspend fun bankLinkStatus(
-        provider: BrowserBankProvider,
-        handle: String,
-    ): BrowserLinkStatus = requireServer().let { client -> call { client.bankLinkStatus(provider, handle) } }
-
-    suspend fun budgetLinkedAccounts(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): List<LinkedAccount> = call { budget(budgetId, encryptionPassword).linkedAccounts(today()) }
-
-    suspend fun linkBudgetBankAccount(
-        budgetId: String,
-        accountId: String,
-        provider: BankProvider,
-        account: BankProviderAccount,
-        encryptionPassword: String?,
-    ) = edit(
-        budgetId,
-        encryptionPassword,
-    ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
-
-    suspend fun unlinkBudgetBankAccount(
-        budgetId: String,
-        accountId: String,
-        encryptionPassword: String?,
-    ) = edit(budgetId, encryptionPassword) { it.unlinkBankAccount(accountId) }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun runBudgetBankSync(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): Unit = call { budget(budgetId, encryptionPassword).bankSync(today()) }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun importBudgetAccountTransactions(
-        budgetId: String,
-        accountId: String,
-        transactions: List<StatementImportItem>,
-        encryptionPassword: String?,
-        idempotencyKeyOverride: String? = null,
-    ): StatementImportSummary {
-        val result =
-            edit(budgetId, encryptionPassword) { edits ->
-                edits.importTransactions(
-                    accountId,
-                    transactions.map { ImportRow(it.date, it.amountMinor, it.payeeName, it.notes, it.importedId) },
-                )
-            }
-        return StatementImportSummary(result.added.size, result.updated.size, 0)
-    }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun previewBudgetAccountStatementImport(
-        budgetId: String,
-        accountId: String,
-        importedIds: List<String>,
-        encryptionPassword: String?,
-    ): StatementImportPreview = StatementImportPreview(call { budget(budgetId, encryptionPassword).importedIds(accountId, importedIds) })
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetAccount(
@@ -795,7 +607,7 @@ class TandemApiClient(
         }
     }
 
-    private fun requireServer(): ActualServerClient = server?.takeIf { it.token != null } ?: throw TandemApiException("sign_in_required")
+    internal fun requireServer(): ActualServerClient = server?.takeIf { it.token != null } ?: throw TandemApiException("sign_in_required")
 
     private suspend fun fileFor(
         client: ActualServerClient,

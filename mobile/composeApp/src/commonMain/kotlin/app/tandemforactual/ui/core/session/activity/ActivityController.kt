@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.store.findTransactionPage
 import app.tandemforactual.ui.core.session.ACTIVITY_TRANSACTION_PAGE_SIZE
 import app.tandemforactual.ui.core.session.SessionHost
 import app.tandemforactual.ui.core.session.activity.ActivityController

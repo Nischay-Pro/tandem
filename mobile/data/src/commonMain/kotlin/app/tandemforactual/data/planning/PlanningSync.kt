@@ -101,6 +101,12 @@ class PlanningSync(
         cipher: PlanningCipher,
         cursor: Long,
     ): PlanningSyncResult {
+        val uploaded = uploadPending(cipher)
+        val (downloaded, after) = downloadChanges(cursor)
+        return PlanningSyncResult(uploaded, downloaded, after)
+    }
+
+    private suspend fun uploadPending(cipher: PlanningCipher): Int {
         var uploaded = 0
         for (record in dao.pending(budgetId)) {
             val plaintext =
@@ -154,6 +160,10 @@ class PlanningSync(
                 base = (result as RemoteWrite.Conflict).current?.revision
             }
         }
+        return uploaded
+    }
+
+    private suspend fun downloadChanges(cursor: Long): Pair<Int, Long> {
         var after = cursor
         var downloaded = 0
         do {
@@ -180,6 +190,6 @@ class PlanningSync(
             }
             after = page.cursor
         } while (page.hasMore)
-        return PlanningSyncResult(uploaded, downloaded, after)
+        return downloaded to after
     }
 }
