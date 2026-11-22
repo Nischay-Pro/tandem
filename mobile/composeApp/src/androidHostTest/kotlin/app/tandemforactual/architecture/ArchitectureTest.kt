@@ -2,14 +2,10 @@ package app.tandemforactual.architecture
 
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.fail
 
-/**
- * Keeps the feature/core/design structure from eroding. Existing violations live in
- * `architecture-baseline.txt` and may only be removed, never added.
- */
+/** Keeps the feature/core/design structure from eroding. Any violation fails the build; there is no allowlist. */
 class ArchitectureTest {
     private val root = "app.tandemforactual.ui"
     private val files =
@@ -28,17 +24,6 @@ class ArchitectureTest {
         name: String,
     ) = if (module == "composeApp") name else "$module:$name"
 
-    private val baselineFile = File("src/androidHostTest/resources/architecture-baseline.txt")
-
-    private val baseline: Set<String> =
-        baselineFile
-            .takeIf { it.exists() }
-            ?.readLines()
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() && !it.startsWith("#") }
-            ?.toSet()
-            .orEmpty()
-
     private fun KoFileDeclaration.pkg() = packagee?.name.orEmpty()
 
     private fun KoFileDeclaration.feature() =
@@ -50,16 +35,7 @@ class ArchitectureTest {
         rule: String,
         violations: List<String>,
     ) {
-        if (System.getenv("WRITE_ARCH_BASELINE") == "1") {
-            baselineFile.parentFile.mkdirs()
-            baselineFile.appendText(violations.sorted().joinToString("") { "$rule $it\n" })
-            return
-        }
-        val current = violations.map { "$rule $it" }.toSet()
-        val fresh = current.filterNot { it in baseline }
-        if (fresh.isNotEmpty()) fail("New $rule violations:\n" + fresh.joinToString("\n"))
-        val fixed = baseline.filter { it.startsWith("$rule ") && it !in current }
-        if (fixed.isNotEmpty()) fail("Fixed $rule violations; remove them from architecture-baseline.txt:\n" + fixed.joinToString("\n"))
+        if (violations.isNotEmpty()) fail("$rule violations:\n" + violations.sorted().joinToString("\n"))
     }
 
     @Test
