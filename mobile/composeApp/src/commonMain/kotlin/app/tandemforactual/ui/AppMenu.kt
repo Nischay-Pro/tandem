@@ -49,6 +49,7 @@ import app.tandemforactual.ui.components.TandemIconButton
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarCheck
 import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.ChevronRight
@@ -58,7 +59,9 @@ import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.FileDown
 import com.composables.icons.lucide.FileUp
+import com.composables.icons.lucide.Flag
 import com.composables.icons.lucide.FlaskConical
+import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.GitMerge
 import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.History
@@ -383,8 +386,10 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
+        add(AppMenuItem(Lucide.ChartBar, "Custom reports", "Build and save your own") { open(AppRoute.CUSTOM_REPORTS) })
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
         add(AppMenuItem(Lucide.TrendingUp, "Spending trends", "Compared with past months") { open(AppRoute.SPENDING_TRENDS) })
+        add(AppMenuItem(Lucide.Gauge, "Spending forecast", "Where this month lands") { open(AppRoute.SPENDING_FORECAST) })
         add(AppMenuItem(Lucide.FlaskConical, "What if", "Try income and spending changes") { open(AppRoute.WHAT_IF) })
         add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
         add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })
@@ -394,6 +399,7 @@ internal fun appMenuItems(
             },
         )
         add(AppMenuItem(Lucide.PiggyBank, "Retirement & savings", "401(k), IRA, HSA and more") { open(AppRoute.RETIREMENT) })
+        add(AppMenuItem(Lucide.Flag, "Goal timeline", "When each goal is reached") { open(AppRoute.GOAL_TIMELINE) })
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })

@@ -343,6 +343,7 @@ internal fun AppHeader(
                 app.tandemforactual.ui.reports.ReportKind.entries
                     .firstOrNull { it.name == state.selectedReportKindName }
                     ?.title ?: route.title
+            AppRoute.CUSTOM_REPORT -> state.selectedCustomReportName.ifBlank { "New report" }
             else -> route.title
         }
     if (route == AppRoute.BUDGET) {

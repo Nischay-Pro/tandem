@@ -199,6 +199,10 @@ internal enum class AppRoute(
     RETIREMENT_MATCH("Employer match"),
     WHAT_IF("What if"),
     SPENDING_TRENDS("Spending trends"),
+    SPENDING_FORECAST("Spending forecast"),
+    GOAL_TIMELINE("Goal timeline"),
+    CUSTOM_REPORTS("Custom reports"),
+    CUSTOM_REPORT("Report"),
     EXPORT("Export & backup"),
 }
 

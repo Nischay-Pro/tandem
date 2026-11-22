@@ -98,6 +98,7 @@ import app.tandemforactual.ui.reports.reportMonthRangeLabel
 import app.tandemforactual.ui.reports.roundedReportAxisValues
 import app.tandemforactual.ui.reports.shiftReportMonthId
 import app.tandemforactual.ui.reports.spendingOverTimeSummary
+import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.ChartColumnIncreasing
 import com.composables.icons.lucide.ChartNoAxesCombined
@@ -106,6 +107,7 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CreditCard
+import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TrendingUp
@@ -181,11 +183,26 @@ internal fun ReportsScreen(
         }
         item(key = "reports-more") {
             SurfaceCard {
+                val saved = mobileSession.customReports.size
+                ListRow(
+                    "Custom reports",
+                    if (saved == 0) "Build your own by category, payee or account" else "$saved saved",
+                    leading = RowLeading.Icon(Lucide.ChartBar),
+                    onClick = { onOpenInsight(AppRoute.CUSTOM_REPORTS) },
+                )
+                DividerLine()
                 ListRow(
                     "Spending trends",
                     "Each category against past months",
                     leading = RowLeading.Icon(Lucide.TrendingUp),
                     onClick = { onOpenInsight(AppRoute.SPENDING_TRENDS) },
+                )
+                DividerLine()
+                ListRow(
+                    "Spending forecast",
+                    "Where this month is heading",
+                    leading = RowLeading.Icon(Lucide.Gauge),
+                    onClick = { onOpenInsight(AppRoute.SPENDING_FORECAST) },
                 )
             }
         }

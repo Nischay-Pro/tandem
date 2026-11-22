@@ -59,6 +59,7 @@ import com.composables.icons.lucide.X
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -73,11 +74,15 @@ internal fun ActivitySearchScreen(
     val scope = rememberCoroutineScope()
     val todayIso = platformTodayIsoDate()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
-    val savedSearches =
-        remember(state.savedActivitySearchesJson, state.selectedBudgetId) {
-            decodeSavedActivitySearches(state.savedActivitySearchesJson)
-                .filter { it.budgetId == state.selectedBudgetId }
+    val savedSearches = mobileSession.savedSearches
+    LaunchedEffect(state.selectedBudgetId, state.savedActivitySearchesJson, mobileSession.databaseGeneration) {
+        val legacy = decodeSavedActivitySearches(state.savedActivitySearchesJson)
+        val moving = legacy.filter { it.budgetId == state.selectedBudgetId }
+        if (moving.isEmpty() || state.selectedBudgetId.isBlank()) return@LaunchedEffect
+        if (moving.all { mobileSession.saveSearch(state.selectedBudgetId, it.toSavedSearch(newSavedSearchId())) }) {
+            state.savedActivitySearchesJson = encodeSavedActivitySearches(legacy - moving.toSet())
         }
+    }
     var showSaveSearchDialog by rememberSaveable { mutableStateOf(false) }
     var savedSearchNameDraft by rememberSaveable { mutableStateOf("") }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -329,7 +334,7 @@ internal fun ActivitySearchScreen(
                         SurfaceCard(onClick = {
                             search = savedSearch.query
                             state.activitySearchQuery = savedSearch.query
-                            state.activitySearchFilters = savedSearch.filters
+                            state.activitySearchFilters = savedSearch.activityFilters()
                         }) {
                             Row(
                                 Modifier.widthIn(min = 132.dp, max = 220.dp).padding(start = TandemSpacing.medium),
@@ -345,7 +350,7 @@ internal fun ActivitySearchScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        "${savedSearch.filters.size} filters",
+                                        savedSearch.summary(),
                                         color = tandemPalette.muted,
                                         fontSize = TandemTypography.caption,
                                         maxLines = 1,
@@ -357,10 +362,7 @@ internal fun ActivitySearchScreen(
                                     sizeDp = 36,
                                     iconSizeDp = 16,
                                 ) {
-                                    state.savedActivitySearchesJson =
-                                        encodeSavedActivitySearches(
-                                            decodeSavedActivitySearches(state.savedActivitySearchesJson) - savedSearch,
-                                        )
+                                    scope.launch { mobileSession.deleteSavedSearch(state.selectedBudgetId, savedSearch.id) }
                                 }
                             }
                         }
@@ -635,18 +637,10 @@ internal fun ActivitySearchScreen(
                         modifier = Modifier.weight(1f),
                         enabled = savedSearchNameDraft.isNotBlank(),
                         onClick = {
-                            val entry =
-                                SavedActivitySearch(
-                                    budgetId = state.selectedBudgetId,
-                                    name = savedSearchNameDraft.trim(),
-                                    query = search,
-                                    filters = filters,
-                                )
-                            val updated =
-                                decodeSavedActivitySearches(state.savedActivitySearchesJson)
-                                    .filterNot { it.budgetId == entry.budgetId && it.name.equals(entry.name, ignoreCase = true) } +
-                                    entry
-                            state.savedActivitySearchesJson = encodeSavedActivitySearches(updated)
+                            val name = savedSearchNameDraft.trim()
+                            val id = savedSearches.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id ?: newSavedSearchId()
+                            val entry = SavedActivitySearch(state.selectedBudgetId, name, search, filters).toSavedSearch(id)
+                            scope.launch { mobileSession.saveSearch(state.selectedBudgetId, entry) }
                             showSaveSearchDialog = false
                         },
                     )
