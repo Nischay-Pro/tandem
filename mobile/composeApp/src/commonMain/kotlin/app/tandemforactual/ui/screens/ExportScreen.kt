@@ -21,6 +21,7 @@ import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningSettings
 import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.ui.components.FilterPills
 import app.tandemforactual.ui.components.InlineMessage
@@ -126,7 +127,7 @@ internal fun ExportScreen(
                 }
             }
         }
-        SectionCard("Planning data", "Goals, debt details, reimbursements and reports live outside Actual") {
+        SectionCard("Planning data", "Goals, debt details, reimbursements, reports and saved searches live outside Actual") {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 Text(
                     "The backup is plain JSON, not encrypted. Keep it somewhere private.",
@@ -156,6 +157,7 @@ private fun planningBackup(session: TandemMobileSession): String {
             session.retirementProfiles.map { Triple(it.planId, RetirementProfile.TYPE, it.toJson()) } +
             session.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
             session.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
+            session.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planningSettings.toJson()))
     return buildJsonObject {
         put("format", BACKUP_FORMAT)
