@@ -12,11 +12,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
 import app.tandemforactual.data.planning.DebtKind
+import app.tandemforactual.data.planning.DebtPlan
+import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.GoalInput
 import app.tandemforactual.data.planning.GoalSplit
 import app.tandemforactual.data.planning.GoalTimeline
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
+import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformFormatMonth
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
@@ -69,24 +72,7 @@ internal fun WhatIfScreen(
     val spare = leftover.coerceAtLeast(0)
     val debtExtra = spare * toDebt / 100
     val goalExtra = spare - debtExtra
-    val debts =
-        liveAccounts.mapNotNull { account ->
-            val terms = mobileSession.planning.debtTerms.firstOrNull { it.accountId == account.id }
-            val owed = -(account.balanceMinor ?: 0)
-            val apr = terms?.aprBasisPoints
-            val minimum = terms?.minimumPaymentMinor
-            if (account.closed ||
-                owed <= 0 ||
-                terms?.kind == DebtKind.NOT_DEBT ||
-                terms?.paysInFull == true ||
-                apr == null ||
-                minimum == null
-            ) {
-                null
-            } else {
-                DebtInput(account.id, owed, apr, minimum)
-            }
-        }
+    val debts = whatIfDebts(liveAccounts, mobileSession.planning.debtTerms)
     val goals = mobileSession.planning.savingsGoals
     val today = platformTodayIsoDate()
 
@@ -98,96 +84,173 @@ internal fun WhatIfScreen(
     val basePlan = PlanningMath.plan(debts, 0, PayoffStrategy.AVALANCHE)
     val newPlan = PlanningMath.plan(debts, debtExtra, PayoffStrategy.AVALANCHE)
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text("Left over each month", color = palette.muted, fontSize = TandemTypography.body)
-            Text(
-                state.formatCurrency(leftover),
-                color = if (leftover < 0) palette.negative else palette.text,
-                fontSize = TandemTypography.heroTitle,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-            Text(
-                "From ${state.selectedMonth}: ${state.formatCurrency(income)} in, ${state.formatCurrency(spending)} out",
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
+        WhatIfSummary(state, leftover, income, spending)
         Text(
             "See how earning or spending a little differently moves your debt-free date and savings goals. Nothing here changes your budget.",
             color = palette.muted,
             fontSize = TandemTypography.compactBody,
         )
-        val steps = listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L)
-
-        fun stepLabel(it: Long) =
-            if (it ==
-                0L
-            ) {
-                "No change"
-            } else {
-                (if (it > 0) "+" else "−") + state.formatCurrency(kotlin.math.abs(it)).replace(Regex("[.,]00$"), "")
-            }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            Text("If I earned each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
-            FilterPills(steps.map { it to stepLabel(it) }, incomeChange, { incomeChange = it })
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            Text("If I spent each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
-            FilterPills(steps.map { it to stepLabel(it) }, spendingChange, { spendingChange = it })
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            Text("And put what’s left toward", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
-            FilterPills(
-                listOf(100 to "All to debt", 75 to "Mostly debt", 50 to "Half and half", 25 to "Mostly goals", 0 to "All to goals"),
-                toDebt,
-                { toDebt = it },
-            )
-        }
-        if (debts.isNotEmpty()) {
-            SectionCard("Debt", "${state.formatCurrency(debtExtra)} extra a month") {
-                ListRow(
-                    "Debt-free",
-                    basePlan?.let { "Now: ${monthLabel(it.months)}" } ?: "Now: not with minimums alone",
-                    newPlan?.let { monthLabel(it.months) } ?: "Not yet",
-                    leading = RowLeading.Icon(Lucide.CreditCard),
-                    options = ListRowOptions(showChevron = false),
-                )
-                if (basePlan != null && newPlan != null && basePlan.totalInterestMinor > newPlan.totalInterestMinor) {
-                    DividerLine()
-                    ListRow(
-                        "Interest saved",
-                        null,
-                        state.formatCurrency(basePlan.totalInterestMinor - newPlan.totalInterestMinor),
-                        leading = RowLeading.None,
-                        options = ListRowOptions(showChevron = false),
-                    )
-                }
-            }
-        }
-        if (goals.isNotEmpty()) {
-            val remaining = goals.map { (it.targetMinor - (it.saved(month, liveAccounts) ?: 0)).coerceAtLeast(0) }
-            val timeline = GoalTimeline.plan(goals.mapIndexed { i, goal -> GoalInput(goal.id, remaining[i]) }, goalExtra, GoalSplit.EVEN)
-            SectionCard("Savings goals", "${state.formatCurrency(goalExtra)} a month shared between them") {
-                goals.forEachIndexed { index, goal ->
-                    if (index > 0) DividerLine()
-                    val months = timeline.goals[index].reachedMonth
-                    ListRow(
-                        goal.name,
-                        "${state.formatCurrency(remaining[index])} to go",
-                        when (months) {
-                            null -> "Not yet"
-                            0 -> "Reached"
-                            else -> monthLabel(months)
-                        },
-                        leading = RowLeading.Icon(Lucide.PiggyBank),
-                        options = ListRowOptions(showChevron = false),
-                    )
-                }
-            }
-        }
+        WhatIfControls(
+            state = state,
+            incomeChange = incomeChange,
+            spendingChange = spendingChange,
+            toDebt = toDebt,
+            onIncomeChange = { incomeChange = it },
+            onSpendingChange = { spendingChange = it },
+            onToDebtChange = { toDebt = it },
+        )
+        if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, ::monthLabel)
+        if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, ::monthLabel)
         if (debts.isEmpty() && goals.isEmpty()) {
             EmptyState("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
+        }
+    }
+}
+
+private fun whatIfDebts(
+    liveAccounts: List<LiveAccountSummary>,
+    debtTerms: List<DebtTerms>,
+): List<DebtInput> =
+    liveAccounts.mapNotNull { account ->
+        val terms = debtTerms.firstOrNull { it.accountId == account.id }
+        val owed = -(account.balanceMinor ?: 0)
+        val apr = terms?.aprBasisPoints
+        val minimum = terms?.minimumPaymentMinor
+        if (account.closed ||
+            owed <= 0 ||
+            terms?.kind == DebtKind.NOT_DEBT ||
+            terms?.paysInFull == true ||
+            apr == null ||
+            minimum == null
+        ) {
+            null
+        } else {
+            DebtInput(account.id, owed, apr, minimum)
+        }
+    }
+
+/** What is left over each month after the changes, and this month's money in and out. */
+@Composable
+private fun WhatIfSummary(
+    state: AppState,
+    leftover: Long,
+    income: Long,
+    spending: Long,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text("Left over each month", color = palette.muted, fontSize = TandemTypography.body)
+        Text(
+            state.formatCurrency(leftover),
+            color = if (leftover < 0) palette.negative else palette.text,
+            fontSize = TandemTypography.heroTitle,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+        Text(
+            "From ${state.selectedMonth}: ${state.formatCurrency(income)} in, ${state.formatCurrency(spending)} out",
+            color = palette.muted,
+            fontSize = TandemTypography.compactBody,
+        )
+    }
+}
+
+/** The income, spending and debt-or-goals split choices. */
+@Composable
+private fun WhatIfControls(
+    state: AppState,
+    incomeChange: Long,
+    spendingChange: Long,
+    toDebt: Int,
+    onIncomeChange: (Long) -> Unit,
+    onSpendingChange: (Long) -> Unit,
+    onToDebtChange: (Int) -> Unit,
+) {
+    val palette = tandemPalette
+    val steps = listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L)
+
+    fun stepLabel(it: Long) =
+        if (it ==
+            0L
+        ) {
+            "No change"
+        } else {
+            (if (it > 0) "+" else "−") + state.formatCurrency(kotlin.math.abs(it)).replace(Regex("[.,]00$"), "")
+        }
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Text("If I earned each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
+        FilterPills(steps.map { it to stepLabel(it) }, incomeChange, onIncomeChange)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Text("If I spent each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
+        FilterPills(steps.map { it to stepLabel(it) }, spendingChange, onSpendingChange)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Text("And put what’s left toward", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
+        FilterPills(
+            listOf(100 to "All to debt", 75 to "Mostly debt", 50 to "Half and half", 25 to "Mostly goals", 0 to "All to goals"),
+            toDebt,
+            onToDebtChange,
+        )
+    }
+}
+
+/** The debt-free date now and with the extra payment, plus the interest saved. */
+@Composable
+private fun WhatIfDebtCard(
+    state: AppState,
+    debtExtra: Long,
+    basePlan: DebtPlan?,
+    newPlan: DebtPlan?,
+    monthLabel: (Int) -> String,
+) {
+    SectionCard("Debt", "${state.formatCurrency(debtExtra)} extra a month") {
+        ListRow(
+            "Debt-free",
+            basePlan?.let { "Now: ${monthLabel(it.months)}" } ?: "Now: not with minimums alone",
+            newPlan?.let { monthLabel(it.months) } ?: "Not yet",
+            leading = RowLeading.Icon(Lucide.CreditCard),
+            options = ListRowOptions(showChevron = false),
+        )
+        if (basePlan != null && newPlan != null && basePlan.totalInterestMinor > newPlan.totalInterestMinor) {
+            DividerLine()
+            ListRow(
+                "Interest saved",
+                null,
+                state.formatCurrency(basePlan.totalInterestMinor - newPlan.totalInterestMinor),
+                leading = RowLeading.None,
+                options = ListRowOptions(showChevron = false),
+            )
+        }
+    }
+}
+
+/** When each savings goal is reached with the leftover shared between them. */
+@Composable
+private fun WhatIfGoalsCard(
+    state: AppState,
+    goals: List<SavingsGoal>,
+    goalExtra: Long,
+    saved: (SavingsGoal) -> Long?,
+    monthLabel: (Int) -> String,
+) {
+    val remaining = goals.map { (it.targetMinor - (saved(it) ?: 0)).coerceAtLeast(0) }
+    val timeline = GoalTimeline.plan(goals.mapIndexed { i, goal -> GoalInput(goal.id, remaining[i]) }, goalExtra, GoalSplit.EVEN)
+    SectionCard("Savings goals", "${state.formatCurrency(goalExtra)} a month shared between them") {
+        goals.forEachIndexed { index, goal ->
+            if (index > 0) DividerLine()
+            val months = timeline.goals[index].reachedMonth
+            ListRow(
+                goal.name,
+                "${state.formatCurrency(remaining[index])} to go",
+                when (months) {
+                    null -> "Not yet"
+                    0 -> "Reached"
+                    else -> monthLabel(months)
+                },
+                leading = RowLeading.Icon(Lucide.PiggyBank),
+                options = ListRowOptions(showChevron = false),
+            )
         }
     }
 }

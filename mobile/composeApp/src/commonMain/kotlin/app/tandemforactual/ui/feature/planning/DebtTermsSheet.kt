@@ -69,18 +69,7 @@ internal fun DebtTermsSheet(
                     color = palette.muted,
                     fontSize = TandemTypography.compactBody,
                 )
-                FilterPills(
-                    listOf(DebtKind.CARD to "Credit card", DebtKind.LOAN to "Loan", DebtKind.NOT_DEBT to "Not a debt"),
-                    kind,
-                    { kind = it },
-                )
-                if (kind == DebtKind.CARD) {
-                    FilterPills(
-                        listOf(false to "I carry a balance", true to "I pay it in full each month"),
-                        paysInFull,
-                        { paysInFull = it },
-                    )
-                }
+                DebtKindPills(kind, paysInFull, { kind = it }, { paysInFull = it })
                 TextFieldCard("APR (%)", apr, { apr = it.take(6) }, TextFieldOptions(placeholder = "19.99"))
                 TextFieldCard("Minimum payment", minimum, { minimum = it }, settings.amountOptions())
                 TextFieldCard(
@@ -119,5 +108,27 @@ internal fun DebtTermsSheet(
                 }
             }
         }
+    }
+}
+
+/** Whether the account is a card, a loan or not a debt, and for cards whether it is paid in full. */
+@Composable
+private fun DebtKindPills(
+    kind: DebtKind,
+    paysInFull: Boolean,
+    onKindChange: (DebtKind) -> Unit,
+    onPaysInFullChange: (Boolean) -> Unit,
+) {
+    FilterPills(
+        listOf(DebtKind.CARD to "Credit card", DebtKind.LOAN to "Loan", DebtKind.NOT_DEBT to "Not a debt"),
+        kind,
+        onKindChange,
+    )
+    if (kind == DebtKind.CARD) {
+        FilterPills(
+            listOf(false to "I carry a balance", true to "I pay it in full each month"),
+            paysInFull,
+            onPaysInFullChange,
+        )
     }
 }

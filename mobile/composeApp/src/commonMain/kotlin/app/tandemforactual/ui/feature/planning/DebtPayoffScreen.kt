@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
 import app.tandemforactual.data.planning.DebtKind
+import app.tandemforactual.data.planning.DebtPlan
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
@@ -76,17 +77,7 @@ internal fun DebtPayoffScreen(
     val plan = remember(ready, extra, strategy) { PlanningMath.plan(ready, extra, strategy) }
     val other =
         remember(ready, extra, strategy) {
-            PlanningMath.plan(
-                ready,
-                extra,
-                if (strategy ==
-                    PayoffStrategy.AVALANCHE
-                ) {
-                    PayoffStrategy.SNOWBALL
-                } else {
-                    PayoffStrategy.AVALANCHE
-                },
-            )
+            PlanningMath.plan(ready, extra, if (strategy == PayoffStrategy.AVALANCHE) PayoffStrategy.SNOWBALL else PayoffStrategy.AVALANCHE)
         }
     val minimumsOnly = remember(ready) { PlanningMath.plan(ready, 0, strategy) }
     val today = platformTodayIsoDate()
@@ -107,101 +98,12 @@ internal fun DebtPayoffScreen(
             YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
             return@PageColumn
         }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            val point = scrub?.let { plan?.balances?.getOrNull(it) }
-            Text(
-                if (point != null) "Owed after ${monthLabel(scrub!! + 1)}" else "Debt-free by",
-                color = palette.muted,
-                fontSize = TandemTypography.body,
-            )
-            Text(
-                when {
-                    point != null -> state.formatCurrency(point)
-                    plan == null -> "Not with these payments"
-                    plan.months == 0 -> "Already debt-free"
-                    else -> monthLabel(plan.months)
-                },
-                color = palette.text,
-                fontSize = TandemTypography.heroTitle,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-            Text(
-                when {
-                    plan == null -> "The payments don’t cover the interest. Add more each month."
-                    else -> "${plan.months} months · ${state.formatCurrency(plan.totalInterestMinor)} interest"
-                },
-                color = if (plan == null) palette.negative else palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
-        plan?.let {
-            AreaChart(
-                listOf(
-                    ready.sumOf { d ->
-                        d.balanceMinor
-                    },
-                ) + it.balances,
-                "Total owed each month until debt-free",
-                selected = scrub,
-                onScrub = { i ->
-                    scrub =
-                        i?.minus(1)?.takeIf { s -> s >= 0 }
-                },
-            )
-        }
-        FilterPills(
-            listOf(PayoffStrategy.AVALANCHE to "Highest interest first", PayoffStrategy.SNOWBALL to "Smallest balance first"),
-            strategy,
-            { strategy = it },
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            Text("Extra each month", color = palette.muted, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
-            FilterPills(EXTRA_STEPS.map { it to if (it == 0L) "None" else "+${state.formatCurrency(it)}" }, extra, { extra = it })
-        }
+        DebtPayoffSummary(state, plan, scrub, ::monthLabel)
+        plan?.let { DebtPayoffChart(ready, it, scrub) { i -> scrub = i } }
+        DebtPayoffControls(state, strategy, extra, { strategy = it }, { extra = it })
         if (plan != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                val saved = minimumsOnly?.let { it.totalInterestMinor - plan.totalInterestMinor }
-                StatTile(
-                    if (saved != null) "Interest saved" else "Minimums alone",
-                    saved?.let(state::formatCurrency) ?: "Never paid off",
-                    if (saved != null) "vs minimums only" else "They don’t cover the interest",
-                    Modifier.weight(1f),
-                )
-                if (ready.size > 1) {
-                    val compare = other?.let { plan.totalInterestMinor - it.totalInterestMinor }
-                    StatTile(
-                        if (strategy == PayoffStrategy.AVALANCHE) "Smallest first" else "Highest APR first",
-                        other?.let { "${it.months} months" } ?: "—",
-                        compare?.let { if (it <= 0) "costs ${state.formatCurrency(-it)} more" else "saves ${state.formatCurrency(it)}" }
-                            ?: "",
-                        Modifier.weight(1f),
-                    )
-                }
-            }
-            SectionCard(
-                "Payoff order",
-                if (strategy ==
-                    PayoffStrategy.AVALANCHE
-                ) {
-                    "Extra goes to the highest APR"
-                } else {
-                    "Extra goes to the smallest balance"
-                },
-            ) {
-                plan.order.forEachIndexed { index, id ->
-                    if (index > 0) DividerLine()
-                    val account = debts.first { it.id == id }
-                    val term = terms.first { it.accountId == id }
-                    ListRow(
-                        "${index + 1}. ${account.name}",
-                        "${formatRateBasisPoints(term.aprBasisPoints!!)} APR · ${state.formatCurrency(term.minimumPaymentMinor!!)} minimum",
-                        "Paid off ${monthLabel(plan.payoffMonth.getValue(id))}",
-                        leading = RowLeading.Icon(Lucide.CreditCard),
-                        onClick = { editors.debtAccount = account },
-                    )
-                }
-            }
+            DebtPayoffComparison(state, plan, other, minimumsOnly, ready.size, strategy)
+            PayoffOrderCard(state, plan, strategy, debts, terms, ::monthLabel) { editors.debtAccount = it }
         }
         YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
         Text(
@@ -209,6 +111,149 @@ internal fun DebtPayoffScreen(
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
+    }
+}
+
+/** Total owed each month until every debt is paid off, scrubbable to a month. */
+@Composable
+private fun DebtPayoffChart(
+    ready: List<DebtInput>,
+    plan: DebtPlan,
+    scrub: Int?,
+    onScrub: (Int?) -> Unit,
+) {
+    AreaChart(
+        listOf(ready.sumOf { d -> d.balanceMinor }) + plan.balances,
+        "Total owed each month until debt-free",
+        selected = scrub,
+        onScrub = { i -> onScrub(i?.minus(1)?.takeIf { s -> s >= 0 }) },
+    )
+}
+
+/** The payoff strategy and the extra amount paid each month. */
+@Composable
+private fun DebtPayoffControls(
+    state: AppState,
+    strategy: PayoffStrategy,
+    extra: Long,
+    onStrategyChange: (PayoffStrategy) -> Unit,
+    onExtraChange: (Long) -> Unit,
+) {
+    val palette = tandemPalette
+    FilterPills(
+        listOf(PayoffStrategy.AVALANCHE to "Highest interest first", PayoffStrategy.SNOWBALL to "Smallest balance first"),
+        strategy,
+        onStrategyChange,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Text("Extra each month", color = palette.muted, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold)
+        FilterPills(EXTRA_STEPS.map { it to if (it == 0L) "None" else "+${state.formatCurrency(it)}" }, extra, onExtraChange)
+    }
+}
+
+/** When every debt is paid off, or what is owed at the scrubbed month, with the interest it costs. */
+@Composable
+private fun DebtPayoffSummary(
+    state: AppState,
+    plan: DebtPlan?,
+    scrub: Int?,
+    monthLabel: (Int) -> String,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        val point = scrub?.let { plan?.balances?.getOrNull(it) }
+        Text(
+            if (point != null) "Owed after ${monthLabel(scrub!! + 1)}" else "Debt-free by",
+            color = palette.muted,
+            fontSize = TandemTypography.body,
+        )
+        Text(
+            when {
+                point != null -> state.formatCurrency(point)
+                plan == null -> "Not with these payments"
+                plan.months == 0 -> "Already debt-free"
+                else -> monthLabel(plan.months)
+            },
+            color = palette.text,
+            fontSize = TandemTypography.heroTitle,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+        Text(
+            when {
+                plan == null -> "The payments don’t cover the interest. Add more each month."
+                else -> "${plan.months} months · ${state.formatCurrency(plan.totalInterestMinor)} interest"
+            },
+            color = if (plan == null) palette.negative else palette.muted,
+            fontSize = TandemTypography.compactBody,
+        )
+    }
+}
+
+/** Interest saved against paying minimums only, and how the other strategy compares. */
+@Composable
+private fun DebtPayoffComparison(
+    state: AppState,
+    plan: DebtPlan,
+    other: DebtPlan?,
+    minimumsOnly: DebtPlan?,
+    debtCount: Int,
+    strategy: PayoffStrategy,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        val saved = minimumsOnly?.let { it.totalInterestMinor - plan.totalInterestMinor }
+        StatTile(
+            if (saved != null) "Interest saved" else "Minimums alone",
+            saved?.let(state::formatCurrency) ?: "Never paid off",
+            if (saved != null) "vs minimums only" else "They don’t cover the interest",
+            Modifier.weight(1f),
+        )
+        if (debtCount > 1) {
+            val compare = other?.let { plan.totalInterestMinor - it.totalInterestMinor }
+            StatTile(
+                if (strategy == PayoffStrategy.AVALANCHE) "Smallest first" else "Highest APR first",
+                other?.let { "${it.months} months" } ?: "—",
+                compare?.let { if (it <= 0) "costs ${state.formatCurrency(-it)} more" else "saves ${state.formatCurrency(it)}" }
+                    ?: "",
+                Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** The order debts are paid off in, with each one's rate, minimum and payoff month. */
+@Composable
+private fun PayoffOrderCard(
+    state: AppState,
+    plan: DebtPlan,
+    strategy: PayoffStrategy,
+    debts: List<LiveAccountSummary>,
+    terms: List<DebtTerms>,
+    monthLabel: (Int) -> String,
+    onEdit: (LiveAccountSummary) -> Unit,
+) {
+    SectionCard(
+        "Payoff order",
+        if (strategy ==
+            PayoffStrategy.AVALANCHE
+        ) {
+            "Extra goes to the highest APR"
+        } else {
+            "Extra goes to the smallest balance"
+        },
+    ) {
+        plan.order.forEachIndexed { index, id ->
+            if (index > 0) DividerLine()
+            val account = debts.first { it.id == id }
+            val term = terms.first { it.accountId == id }
+            ListRow(
+                "${index + 1}. ${account.name}",
+                "${formatRateBasisPoints(term.aprBasisPoints!!)} APR · ${state.formatCurrency(term.minimumPaymentMinor!!)} minimum",
+                "Paid off ${monthLabel(plan.payoffMonth.getValue(id))}",
+                leading = RowLeading.Icon(Lucide.CreditCard),
+                onClick = { onEdit(account) },
+            )
+        }
     }
 }
 
