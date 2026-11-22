@@ -146,8 +146,6 @@ function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
 function-size StatementImportDialog.StatementImportDialog
-function-size SyncCenterScreen.SyncCenterScreen
-function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
 function-size TandemThemeScreen.TandemTheme
 function-size TextFieldCard.TextFieldCard
@@ -191,7 +189,6 @@ size ReportModels
 size ReportsScreenParts
 size RuleEditorSheet
 size StatementImport
-size SyncCenterScreen
 size SyncCenterScreenParts
 size TandemApp
 size TandemMobileSession
