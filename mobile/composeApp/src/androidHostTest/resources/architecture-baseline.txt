@@ -63,12 +63,7 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
-function-size AccountDetailScreen.AccountDetailScreen
 function-size AccountEdits.markTransactionsReconciled
-function-size AccountOptionsScreen.AccountOptionsScreen
-function-size AccountReconcileDialog.AccountReconcileDialog
-function-size AccountSummaryCard.AccountSummaryCard
-function-size AccountsScreen.AccountsScreen
 function-size ActivitySearch.activitySearchSuggestions
 function-size AppHeader.AppHeader
 function-size AppLockGate.EncryptedBudgetUnlock
@@ -148,7 +143,6 @@ function-size SignInScreen.SignInScreen
 function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
-function-size StatementImportDialog.StatementImportDialog
 function-size SyncCenterScreen.SyncCenterScreen
 function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
@@ -176,8 +170,6 @@ layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
-size AccountDetailScreen
-size AccountsScreen
 size ActivitySearch
 size AppHeader
 size AppState

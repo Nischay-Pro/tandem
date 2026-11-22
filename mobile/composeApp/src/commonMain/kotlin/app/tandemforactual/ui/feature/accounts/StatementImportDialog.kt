@@ -94,37 +94,10 @@ internal fun StatementImportDialog(
                     .padding(TandemSpacing.large),
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                    Text(
-                        "Import statement",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.sectionTitle,
-                        fontFamily = tandemAlloFamily(),
-                        fontWeight = FontWeight.Bold,
-                    )
-                    TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
-                }
+                StatementImportHeader(busy, onDismiss)
                 ListRow("File", trailing = filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
                 ListRow("Account", trailing = accountName, leading = RowLeading.Icon(Lucide.WalletCards))
-                if (parseResult == null && parseError == null) {
-                    InlineMessage("Reading statement…", InlineMessageKind.INFO)
-                }
-                parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                if (parseResult != null && importPreviewLoading) {
-                    InlineMessage("Checking existing transactions…", InlineMessageKind.INFO)
-                }
-                if (parseResult != null && importPreviewError != null) {
-                    InlineMessage(importPreviewError, InlineMessageKind.ERROR)
-                    TandemActionButton(
-                        "Check again",
-                        TandemActionButtonTone.NEUTRAL,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !busy && !importPreviewLoading,
-                        onClick = onRetryImportPreview,
-                    )
-                }
+                StatementParseStatus(parseResult != null, parseError, importPreviewLoading, importPreviewError, busy, onRetryImportPreview)
                 actionMessage?.let {
                     InlineMessage(it, actionMessageKind)
                 }
@@ -136,78 +109,172 @@ internal fun StatementImportDialog(
                     )
                 }
                 if (csvLayout != null) {
-                    ListRow(
-                        "CSV columns",
-                        trailing = if (showCsvMapping) "Done" else "Change",
-                        leading = RowLeading.None,
-                        options =
-                            ListRowOptions(dense = true),
-                        onClick = if (busy) null else onToggleCsvMapping,
+                    StatementCsvSection(
+                        csvLayout,
+                        csvMapping,
+                        dateOrder,
+                        showCsvMapping,
+                        busy,
+                        onToggleCsvMapping,
+                        onCsvMappingChange,
+                        onDateOrderChange,
                     )
-                    if (showCsvMapping) {
-                        StatementCsvColumnMappingEditor(
-                            layout = csvLayout,
-                            mapping = csvMapping,
-                            dateOrder = dateOrder,
-                            enabled = !busy,
-                            onMappingChange = onCsvMappingChange,
-                            onDateOrderChange = onDateOrderChange,
-                        )
-                    }
                 }
                 parseResult?.let { result ->
-                    ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
-                    importPreview?.let { preview ->
-                        if (preview.serverChecked) {
-                            ListRow(
-                                "New in Actual",
-                                trailing = preview.newRowCount(result.transactions.size).toString(),
-                                leading = RowLeading.None,
-                            )
-                            ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
-                        } else {
-                            InlineMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED, InlineMessageKind.ERROR)
-                        }
-                    }
-                    if (result.skippedRows > 0) {
-                        val skippedCount = statementCount(result.skippedRows, "row")
-                        val skippedMessage =
-                            if (result.skippedRows == 1) {
-                                "Couldn’t read $skippedCount. It will be skipped."
-                            } else {
-                                "Couldn’t read $skippedCount. They will be skipped."
-                            }
-                        val reason = result.firstSkippedReason?.let { " First issue: $it" }.orEmpty()
-                        InlineMessage("$skippedMessage$reason", InlineMessageKind.INFO)
-                    }
-                    Text("Preview", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                    result.transactions.take(5).forEach { transaction ->
-                        ListRow(
-                            "${transaction.date} · ${transaction.payeeName}",
-                            subtitle =
-                                buildList {
-                                    if (importPreview?.existingImportedIds?.contains(transaction.importedId) == true) {
-                                        add("Already in Actual")
-                                    }
-                                    transaction.notes?.let { add(it) }
-                                }.joinToString(" · ").ifBlank { null },
-                            trailing = formatCurrency(transaction.amountMinor, currencyDisplaySettings),
-                            leading = RowLeading.Icon(Lucide.Receipt),
-                        )
-                    }
-                    TandemActionButton(
-                        if (busy) "Importing…" else "Import ${statementCount(result.transactions.size, "transaction")}",
-                        TandemActionButtonTone.PRIMARY,
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Lucide.Check,
-                        enabled = !busy && !state.readOnlyMode && importPreview?.serverChecked == true && !importPreviewLoading,
-                        loading = busy,
-                        onClick = { onImport(result) },
-                    )
+                    StatementImportResult(
+                        state,
+                        result,
+                        importPreview,
+                        importPreviewLoading,
+                        busy,
+                        currencyDisplaySettings,
+                    ) { onImport(result) }
                 }
             }
         }
     }
+}
+
+/** Progress and errors while the statement is read and checked against Actual. */
+@Composable
+private fun StatementParseStatus(
+    parsed: Boolean,
+    parseError: String?,
+    importPreviewLoading: Boolean,
+    importPreviewError: String?,
+    busy: Boolean,
+    onRetryImportPreview: () -> Unit,
+) {
+    if (!parsed && parseError == null) {
+        InlineMessage("Reading statement…", InlineMessageKind.INFO)
+    }
+    parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+    if (parsed && importPreviewLoading) {
+        InlineMessage("Checking existing transactions…", InlineMessageKind.INFO)
+    }
+    if (parsed && importPreviewError != null) {
+        InlineMessage(importPreviewError, InlineMessageKind.ERROR)
+        TandemActionButton(
+            "Check again",
+            TandemActionButtonTone.NEUTRAL,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy && !importPreviewLoading,
+            onClick = onRetryImportPreview,
+        )
+    }
+}
+
+/** The CSV column summary row and, when open, the column mapping editor. */
+@Composable
+private fun StatementCsvSection(
+    csvLayout: StatementCsvLayout,
+    csvMapping: StatementCsvColumnMapping,
+    dateOrder: StatementDateOrder,
+    showCsvMapping: Boolean,
+    busy: Boolean,
+    onToggleCsvMapping: () -> Unit,
+    onCsvMappingChange: (StatementCsvColumnMapping) -> Unit,
+    onDateOrderChange: (StatementDateOrder) -> Unit,
+) {
+    ListRow(
+        "CSV columns",
+        trailing = if (showCsvMapping) "Done" else "Change",
+        leading = RowLeading.None,
+        options =
+            ListRowOptions(dense = true),
+        onClick = if (busy) null else onToggleCsvMapping,
+    )
+    if (showCsvMapping) {
+        StatementCsvColumnMappingEditor(
+            layout = csvLayout,
+            mapping = csvMapping,
+            dateOrder = dateOrder,
+            enabled = !busy,
+            onMappingChange = onCsvMappingChange,
+            onDateOrderChange = onDateOrderChange,
+        )
+    }
+}
+
+/** The import statement title and close button. */
+@Composable
+private fun StatementImportHeader(
+    busy: Boolean,
+    onDismiss: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Icon(Lucide.Receipt, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+        Text(
+            "Import statement",
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.sectionTitle,
+            fontFamily = tandemAlloFamily(),
+            fontWeight = FontWeight.Bold,
+        )
+        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
+    }
+}
+
+/** The parsed statement's counts, skipped rows, a short preview and the import button. */
+@Composable
+private fun StatementImportResult(
+    state: AppState,
+    result: StatementParseResult,
+    importPreview: StatementImportPreview?,
+    importPreviewLoading: Boolean,
+    busy: Boolean,
+    currencyDisplaySettings: BudgetDisplaySettings?,
+    onImport: () -> Unit,
+) {
+    ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
+    importPreview?.let { preview ->
+        if (preview.serverChecked) {
+            ListRow(
+                "New in Actual",
+                trailing = preview.newRowCount(result.transactions.size).toString(),
+                leading = RowLeading.None,
+            )
+            ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
+        } else {
+            InlineMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED, InlineMessageKind.ERROR)
+        }
+    }
+    if (result.skippedRows > 0) {
+        val skippedCount = statementCount(result.skippedRows, "row")
+        val skippedMessage =
+            if (result.skippedRows == 1) {
+                "Couldn’t read $skippedCount. It will be skipped."
+            } else {
+                "Couldn’t read $skippedCount. They will be skipped."
+            }
+        val reason = result.firstSkippedReason?.let { " First issue: $it" }.orEmpty()
+        InlineMessage("$skippedMessage$reason", InlineMessageKind.INFO)
+    }
+    Text("Preview", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+    result.transactions.take(5).forEach { transaction ->
+        ListRow(
+            "${transaction.date} · ${transaction.payeeName}",
+            subtitle =
+                buildList {
+                    if (importPreview?.existingImportedIds?.contains(transaction.importedId) == true) {
+                        add("Already in Actual")
+                    }
+                    transaction.notes?.let { add(it) }
+                }.joinToString(" · ").ifBlank { null },
+            trailing = formatCurrency(transaction.amountMinor, currencyDisplaySettings),
+            leading = RowLeading.Icon(Lucide.Receipt),
+        )
+    }
+    TandemActionButton(
+        if (busy) "Importing…" else "Import ${statementCount(result.transactions.size, "transaction")}",
+        TandemActionButtonTone.PRIMARY,
+        modifier = Modifier.fillMaxWidth(),
+        icon = Lucide.Check,
+        enabled = !busy && !state.readOnlyMode && importPreview?.serverChecked == true && !importPreviewLoading,
+        loading = busy,
+        onClick = onImport,
+    )
 }
 
 @Composable
