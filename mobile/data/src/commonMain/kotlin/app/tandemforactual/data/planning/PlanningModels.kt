@@ -270,6 +270,52 @@ data class RetirementProfile(
     }
 }
 
+/** One saved filter on the Activity search, kept as the field's name so new fields never break older records. */
+data class SavedSearchFilter(
+    val field: String,
+    val value: String,
+    val label: String,
+)
+
+/** A named Activity search: the typed text plus its filters. */
+data class SavedSearch(
+    val id: String,
+    val name: String,
+    val query: String = "",
+    val filters: List<SavedSearchFilter> = emptyList(),
+) {
+    fun toJson(): JsonObject =
+        jsonOf(
+            "name" to JsonPrimitive(name),
+            "query" to JsonPrimitive(query),
+            "filters" to
+                JsonArray(
+                    filters.map {
+                        jsonOf("field" to JsonPrimitive(it.field), "value" to JsonPrimitive(it.value), "label" to JsonPrimitive(it.label))
+                    },
+                ),
+        )
+
+    companion object {
+        const val TYPE = "planning.saved_search"
+
+        fun fromJson(
+            id: String,
+            body: JsonObject,
+        ) = SavedSearch(
+            id = id,
+            name = body.text("name").orEmpty(),
+            query = body.text("query").orEmpty(),
+            filters =
+                (body["filters"] as? JsonArray).orEmpty().mapNotNull { element ->
+                    val filter = element as? JsonObject ?: return@mapNotNull null
+                    val field = filter.text("field") ?: return@mapNotNull null
+                    SavedSearchFilter(field, filter.text("value").orEmpty(), filter.text("label").orEmpty())
+                },
+        )
+    }
+}
+
 private fun matchJson(match: EmployerMatch): JsonObject =
     jsonOf(
         "capMinor" to match.capMinor.json(),
@@ -302,14 +348,14 @@ fun isPrivate(body: JsonObject): Boolean = (body[PRIVATE] as? JsonPrimitive)?.co
 
 private fun privateFlag(shared: Boolean): JsonElement = if (shared) JsonNull else JsonPrimitive(true)
 
-private fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
+internal fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
 
-private fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+internal fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
-private fun Number?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+internal fun Number?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
-private fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
+internal fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
 
-private fun JsonObject.long(name: String) = (this[name] as? JsonPrimitive)?.longOrNull
+internal fun JsonObject.long(name: String) = (this[name] as? JsonPrimitive)?.longOrNull
 
-private fun JsonObject.int(name: String) = this[name]?.jsonPrimitive?.intOrNull
+internal fun JsonObject.int(name: String) = this[name]?.jsonPrimitive?.intOrNull

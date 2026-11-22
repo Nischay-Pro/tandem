@@ -652,6 +652,10 @@ internal fun ScreenContent(
         AppRoute.EXCHANGE_RATES -> ExchangeRatesScreen(state, mobileSession, liveAccounts, navigation)
         AppRoute.HOUSEHOLD -> HouseholdScreen(state, mobileSession, deviceName)
         AppRoute.SPENDING_TRENDS -> SpendingTrendsScreen(state, mobileSession)
+        AppRoute.SPENDING_FORECAST -> SpendingForecastScreen(state, mobileSession, liveBudgetMonth)
+        AppRoute.GOAL_TIMELINE -> GoalTimelineScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
+        AppRoute.CUSTOM_REPORTS -> CustomReportsScreen(state, mobileSession, navigation)
+        AppRoute.CUSTOM_REPORT -> CustomReportScreen(state, mobileSession, navigation)
     }
 }
 

@@ -28,6 +28,7 @@ import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.planning.AccountCurrency
+import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
 import app.tandemforactual.data.planning.ExchangeRate
@@ -38,6 +39,7 @@ import app.tandemforactual.data.planning.PlanningStore
 import app.tandemforactual.data.planning.PlanningSync
 import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
@@ -345,6 +347,11 @@ internal class TandemMobileSession(
         planningStore(budgetId)?.save(DeviceName(node, name.trim().take(40)))
     }
 
+    var customReports by mutableStateOf<List<CustomReport>>(emptyList())
+        private set
+    var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
+        private set
+
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
 
@@ -524,6 +531,32 @@ internal class TandemMobileSession(
         terms: DebtTerms,
     ) {
         planningStore(budgetId)?.save(terms)
+    }
+
+    suspend fun saveCustomReport(
+        budgetId: String,
+        report: CustomReport,
+    ) {
+        planningStore(budgetId)?.save(report)
+    }
+
+    suspend fun deleteCustomReport(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteCustomReport(id)
+    }
+
+    suspend fun saveSearch(
+        budgetId: String,
+        search: SavedSearch,
+    ): Boolean = planningStore(budgetId)?.save(search) != null
+
+    suspend fun deleteSavedSearch(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteSavedSearch(id)
     }
 
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
@@ -5841,6 +5874,8 @@ internal class TandemMobileSession(
                 }
                 launch { planning.exchangeRates().collect { exchangeRates = it } }
                 launch { planning.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
+                launch { planning.customReports().collect { customReports = it } }
+                launch { planning.savedSearches().collect { savedSearches = it } }
             }
         }
     }

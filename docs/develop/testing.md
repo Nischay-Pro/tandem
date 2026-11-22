@@ -47,7 +47,8 @@ disposable database so the store's integration tests can run.
    log and rerun the matching command from the workflow before changing code.
 
 For Markdown-only changes, CI runs the documentation and formatting checks
-and validates the pull request title. Changes that include a file other than
+and validates the pull request title and description (see
+[Pull requests](pull-requests.md)). Changes that include a file other than
 Markdown run the full suite.
 
 ## Install local Git checks

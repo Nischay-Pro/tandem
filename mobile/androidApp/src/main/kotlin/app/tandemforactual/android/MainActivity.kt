@@ -11,9 +11,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
 import app.tandemforactual.ui.QuickActionEvents
-import androidx.core.graphics.drawable.IconCompat
 import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.content.pm.ShortcutInfoCompat
 import app.tandemforactual.ui.SyncNetwork
 import app.tandemforactual.ui.NetworkKind
 import android.net.NetworkCapabilities
@@ -105,7 +103,6 @@ class MainActivity : FragmentActivity() {
     }
     super.onCreate(savedInstanceState)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
-    intent?.dataString?.let { AuthReturnEvents.publish(it) }
     crashReports.install()
     lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { removeStaleSharedFiles() }
     lifecycleScope.launch {
@@ -116,7 +113,7 @@ class MainActivity : FragmentActivity() {
       }
     }
     handleQuickAction(intent)
-    publishQuickAddShortcut()
+    runCatching { ShortcutManagerCompat.removeDynamicShortcuts(this, listOf(LEGACY_QUICK_ADD_SHORTCUT_ID)) }
     notificationPermissionEnabled = hasNotificationPermission()
     BudgetSystemNotifications.initialize(applicationContext)
     val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
@@ -171,7 +168,6 @@ class MainActivity : FragmentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    intent.dataString?.let { AuthReturnEvents.publish(it) }
     handleQuickAction(intent)
   }
 
@@ -196,21 +192,12 @@ class MainActivity : FragmentActivity() {
 
   private fun handleQuickAction(intent: Intent?) {
     when {
+      intent?.action == Intent.ACTION_VIEW ->
+        intent.dataString?.let { link -> if (!QuickActionEvents.openLink(link)) AuthReturnEvents.publish(link) }
       intent?.action == ACTION_ADD_TRANSACTION -> QuickActionEvents.requestAddTransaction()
       intent?.action == Intent.ACTION_SEND && intent.type == "text/plain" ->
         intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let(QuickActionEvents::shareText)
     }
-  }
-
-  private fun publishQuickAddShortcut() {
-    val shortcut =
-      ShortcutInfoCompat
-        .Builder(this, "add-transaction")
-        .setShortLabel("Add transaction")
-        .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_add_transaction))
-        .setIntent(Intent(this, MainActivity::class.java).setAction(ACTION_ADD_TRANSACTION))
-        .build()
-    runCatching { ShortcutManagerCompat.pushDynamicShortcut(this, shortcut) }
   }
 
   private fun requestNotificationPermission() = askForNotifications(openSettingsIfBlocked = false)
@@ -284,6 +271,8 @@ class MainActivity : FragmentActivity() {
 }
 
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
+
+private const val LEGACY_QUICK_ADD_SHORTCUT_ID = "add-transaction"
 
 private const val STALE_SHARED_FILE_MILLIS = 60L * 60 * 1000
 

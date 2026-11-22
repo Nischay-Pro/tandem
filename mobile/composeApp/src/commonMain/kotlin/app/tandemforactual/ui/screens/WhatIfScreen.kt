@@ -13,6 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
 import app.tandemforactual.data.planning.DebtKind
+import app.tandemforactual.data.planning.GoalInput
+import app.tandemforactual.data.planning.GoalSplit
+import app.tandemforactual.data.planning.GoalTimeline
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.ui.components.DividerLine
@@ -151,22 +154,15 @@ internal fun WhatIfScreen(
             }
         }
         if (goals.isNotEmpty()) {
+            val remaining = goals.map { (it.targetMinor - (it.saved(month, liveAccounts) ?: 0)).coerceAtLeast(0) }
+            val timeline = GoalTimeline.plan(goals.mapIndexed { i, goal -> GoalInput(goal.id, remaining[i]) }, goalExtra, GoalSplit.EVEN)
             SectionCard("Savings goals", "${state.formatCurrency(goalExtra)} a month shared between them") {
                 goals.forEachIndexed { index, goal ->
                     if (index > 0) DividerLine()
-                    val remaining = (goal.targetMinor - (goal.saved(month, liveAccounts) ?: 0)).coerceAtLeast(0)
-                    val share = if (goals.isEmpty()) 0 else goalExtra / goals.size
-                    val months =
-                        if (remaining == 0L) {
-                            0
-                        } else if (share > 0) {
-                            ((remaining + share - 1) / share).toInt()
-                        } else {
-                            null
-                        }
+                    val months = timeline.goals[index].reachedMonth
                     ListRow(
                         goal.name,
-                        "${state.formatCurrency(remaining)} to go",
+                        "${state.formatCurrency(remaining[index])} to go",
                         when (months) {
                             null -> "Not yet"
                             0 -> "Reached"

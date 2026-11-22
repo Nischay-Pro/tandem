@@ -13,7 +13,9 @@ struct TandemApp: App {
                 .preferredColorScheme(preferredScheme)
                 .ignoresSafeArea()
                 .onOpenURL { url in
-                    AuthReturnEvents.shared.publish(uri: url.absoluteString)
+                    if !QuickActionEvents.shared.openLink(link: url.absoluteString) {
+                        AuthReturnEvents.shared.publish(uri: url.absoluteString)
+                    }
                 }
         }
     }
