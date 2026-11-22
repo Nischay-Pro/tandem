@@ -85,9 +85,6 @@ function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetMutationReviewScreen.BudgetMutationReviewScreen
-function-size BudgetReorderQueue.complete
-function-size BudgetReorderQueue.enqueue
-function-size BudgetReorderQueue.failHead
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetScreen.BudgetCategoryCard
 function-size BudgetScreen.BudgetScreen
@@ -128,6 +125,9 @@ function-size PageTemplates.PageLazyColumnContent
 function-size PendingChangesScreen.PendingChangesScreen
 function-size PersonalizeScreen.ModePreviewCard
 function-size PrivacyAmountText.PrivacyAmountText
+function-size QueueStateCompletion.complete
+function-size QueueStateEnqueue.enqueue
+function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
 function-size ReportDetailScreen.ReportDetailScreen
 function-size ReportsScreen.ReportCard

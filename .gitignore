@@ -40,3 +40,4 @@ Thumbs.db
 # Process core dumps can contain credentials and financial data
 core
 core.*
+!**/src/**/core/
