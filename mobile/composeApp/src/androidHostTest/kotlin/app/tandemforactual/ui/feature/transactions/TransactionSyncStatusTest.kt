@@ -13,6 +13,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.ui.SyncNoticeCard
+import app.tandemforactual.ui.core.ui.TransactionRow
+import app.tandemforactual.ui.core.ui.transactionSyncNeedsReview
+import app.tandemforactual.ui.core.ui.transactionSyncOperations
+import app.tandemforactual.ui.core.ui.transactionSyncShortLabel
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTheme

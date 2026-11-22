@@ -15,6 +15,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
@@ -23,6 +25,8 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.defaultCategoryRulesByPayee
+import app.tandemforactual.ui.core.ui.ActivitySearchInput
+import app.tandemforactual.ui.core.ui.ScheduleChoiceField
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -31,10 +35,6 @@ import app.tandemforactual.ui.design.rows.ListRowAction
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.PageLazyColumn
-import app.tandemforactual.ui.feature.activity.ActivitySearchField
-import app.tandemforactual.ui.feature.activity.ActivitySearchFilter
-import app.tandemforactual.ui.feature.activity.ActivitySearchInput
-import app.tandemforactual.ui.feature.schedules.ScheduleChoiceField
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil

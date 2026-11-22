@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemIconButton
@@ -35,7 +36,6 @@ import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.activity.ActivitySearchFilter
 import app.tandemforactual.ui.feature.activity.ActivitySearchFilterChip
 import app.tandemforactual.ui.feature.activity.ActivitySearchQuickFilter
 import app.tandemforactual.ui.feature.activity.ActivitySearchSuggestion

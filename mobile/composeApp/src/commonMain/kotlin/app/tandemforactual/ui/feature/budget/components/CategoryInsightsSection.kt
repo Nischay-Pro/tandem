@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -28,7 +29,6 @@ import app.tandemforactual.ui.feature.budget.canQuickAssign
 import app.tandemforactual.ui.feature.budget.categoryPace
 import app.tandemforactual.ui.feature.budget.categoryPaceDetail
 import app.tandemforactual.ui.feature.budget.categorySpendingInMonth
-import app.tandemforactual.ui.feature.budget.daysInMonth
 import app.tandemforactual.ui.feature.budget.lastMonthSpendingDetail
 import app.tandemforactual.ui.feature.budget.previousMonthId
 import com.composables.icons.lucide.Gauge

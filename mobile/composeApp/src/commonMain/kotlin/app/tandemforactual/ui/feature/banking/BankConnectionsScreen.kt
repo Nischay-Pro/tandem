@@ -22,10 +22,12 @@ import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.ui.core.format.bankFailureLabel
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.ui.bankLinkBadge
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -35,7 +37,6 @@ import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
-import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
@@ -43,8 +44,6 @@ import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.sync.bankFailureLabel
-import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
@@ -237,25 +236,6 @@ private fun ProviderCard(
                 )
             }
         }
-    }
-}
-
-private const val STALE_AFTER_MILLIS = 3L * 24 * 60 * 60 * 1000
-
-/** No mark when unlinked; green when synced lately, amber when it hasn’t synced in days, red when its last sync failed. */
-@Composable
-internal fun bankLinkBadge(
-    link: LinkedAccount?,
-    nowMillis: Long,
-): RowBadge? {
-    link ?: return null
-    val palette = tandemPalette
-    val last = link.lastSyncMillis
-    return when {
-        link.failure != null -> RowBadge(null, palette.negative, "Bank sync failed")
-        last == null || nowMillis - last > STALE_AFTER_MILLIS ->
-            RowBadge(Lucide.Clock, palette.warning, "Bank sync is behind")
-        else -> RowBadge(Lucide.Link, palette.positive, "Linked to a bank")
     }
 }
 

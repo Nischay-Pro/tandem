@@ -34,13 +34,13 @@ import app.tandemforactual.ui.app.BottomNavigation
 import app.tandemforactual.ui.app.KeyboardShortcut
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.SideNavigationRail
-import app.tandemforactual.ui.app.Workspace
-import app.tandemforactual.ui.app.WorkspaceLayout
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.app.keyboardShortcut
 import app.tandemforactual.ui.app.navigationRoutes
 import app.tandemforactual.ui.app.showsBottomNavigation
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.Workspace
+import app.tandemforactual.ui.core.state.WorkspaceLayout
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.shouldRenderRouteHeader
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
 import app.tandemforactual.ui.design.theme.TandemMotion

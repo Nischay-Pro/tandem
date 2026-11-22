@@ -2,12 +2,12 @@ package app.tandemforactual.ui.design.icons
 
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.liveAccountSummaries
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.feature.accounts.accountBalanceAccessibilityDescription
 import app.tandemforactual.ui.feature.accounts.accountGroupOrder
 import app.tandemforactual.ui.feature.accounts.accountListSubtitle
 import app.tandemforactual.ui.feature.accounts.accountListTypeLabel
-import app.tandemforactual.ui.feature.accounts.accountTypeIcon
 import app.tandemforactual.ui.feature.accounts.sortAccountsForList
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot

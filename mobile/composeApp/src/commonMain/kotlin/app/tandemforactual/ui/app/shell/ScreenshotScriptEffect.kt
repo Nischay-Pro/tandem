@@ -6,12 +6,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import app.tandemforactual.ui.app.ScreenshotScript
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.loadBudgets
 import app.tandemforactual.ui.core.session.signInWithPassword
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.theme.TandemMotion
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 

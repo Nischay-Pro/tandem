@@ -7,6 +7,9 @@ import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavedSearchFilter
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.search.ActivitySearchField
+import app.tandemforactual.ui.core.search.ActivitySearchFilter
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatTransactionListDate

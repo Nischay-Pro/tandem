@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.InterfaceMode
+import app.tandemforactual.ui.core.state.LocalInterfaceMode
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -181,5 +182,3 @@ internal fun navigationRoutes(mode: InterfaceMode): List<AppRoute> =
         InterfaceMode.MINIMAL -> listOf(AppRoute.HOME, AppRoute.ACTIVITY, AppRoute.BUDGET, AppRoute.SETTINGS)
         InterfaceMode.ADVANCED -> listOf(AppRoute.HOME, AppRoute.ACCOUNTS, AppRoute.ACTIVITY, AppRoute.BUDGET, AppRoute.REPORTS)
     }
-
-internal val LocalInterfaceMode = androidx.compose.runtime.staticCompositionLocalOf { InterfaceMode.MINIMAL }

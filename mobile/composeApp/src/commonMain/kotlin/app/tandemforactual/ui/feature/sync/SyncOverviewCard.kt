@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatMomentAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.SyncRecovery
 import app.tandemforactual.ui.core.session.syncRecovery
+import app.tandemforactual.ui.core.ui.SyncStatusRing
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine

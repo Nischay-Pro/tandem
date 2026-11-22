@@ -7,7 +7,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.UriHandler
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.ui.app.AuthReturnEvents
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.actualOpenIdReturn
 import app.tandemforactual.ui.core.session.cancelActualOpenIdSignIn
@@ -21,6 +20,7 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.BudgetSelectionSnapshot
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
 import app.tandemforactual.ui.feature.onboarding.rememberRecentServerAddress
 import kotlinx.coroutines.CoroutineScope

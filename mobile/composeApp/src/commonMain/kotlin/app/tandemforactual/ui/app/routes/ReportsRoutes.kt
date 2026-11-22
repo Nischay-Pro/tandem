@@ -7,12 +7,12 @@ import app.tandemforactual.ui.app.AppMenuItem
 import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
-import app.tandemforactual.ui.feature.budget.openReportCategoryActivity
+import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.feature.reports.CustomReportScreen
 import app.tandemforactual.ui.feature.reports.CustomReportsScreen
 import app.tandemforactual.ui.feature.reports.ReportDetailScreen
-import app.tandemforactual.ui.feature.reports.ReportKind
 import app.tandemforactual.ui.feature.reports.ReportsScreen
+import app.tandemforactual.ui.feature.reports.openReportCategoryActivity
 import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.Lucide

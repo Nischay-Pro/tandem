@@ -21,13 +21,13 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
+import app.tandemforactual.ui.core.ui.DebtOverviewCard
+import app.tandemforactual.ui.core.ui.SavingsGoalSheet
+import app.tandemforactual.ui.core.ui.SavingsGoalsCard
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.planning.DebtOverviewCard
-import app.tandemforactual.ui.feature.planning.SavingsGoalSheet
-import app.tandemforactual.ui.feature.planning.SavingsGoalsCard
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test

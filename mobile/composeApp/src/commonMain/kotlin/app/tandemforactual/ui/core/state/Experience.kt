@@ -213,3 +213,5 @@ internal fun encodeExperienceSettings(settings: Map<String, ExperienceSettings>)
             )
         },
     ).toString()
+
+internal val LocalInterfaceMode = androidx.compose.runtime.staticCompositionLocalOf { InterfaceMode.MINIMAL }

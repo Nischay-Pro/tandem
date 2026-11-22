@@ -25,10 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.core.format.CalendarDate
-import app.tandemforactual.ui.core.format.formatDate
-import app.tandemforactual.ui.core.format.formatMonth
-import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.SelectorGroup
 import app.tandemforactual.ui.core.state.SelectorItem
@@ -45,7 +41,6 @@ import app.tandemforactual.ui.design.templates.transactionTypeColor
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.budget.daysInMonth
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -206,40 +201,3 @@ internal fun TransactionAccountPickerDialog(
         }
     }
 }
-
-internal fun currentMonthId(): String = platformTodayIsoDate().take(7).takeIf { it.length == 7 } ?: "2026-05"
-
-internal fun currentMonthLabel(): String {
-    val parts = currentMonthId().split('-')
-    val year = parts.getOrNull(0)?.toIntOrNull() ?: 2026
-    val month = parts.getOrNull(1)?.toIntOrNull()?.takeIf { it in 1..12 } ?: 5
-    return formatMonth(year, month)
-}
-
-internal fun parseIsoDate(value: String): Triple<Int, Int, Int>? {
-    val parts = value.split('-')
-    if (parts.size != 3) return null
-    val year = parts[0].toIntOrNull() ?: return null
-    val month = parts[1].toIntOrNull() ?: return null
-    val day = parts[2].toIntOrNull() ?: return null
-    return Triple(year, month, day).takeIf { year > 0 && month in 1..12 && day in 1..daysInMonth(year, month) }
-}
-
-internal fun daysInMonth(
-    year: Int,
-    month: Int,
-): Int =
-    when (month) {
-        2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
-        4, 6, 9, 11 -> 30
-        else -> 31
-    }
-
-internal fun transactionIsoDate(
-    year: Int,
-    month: Int,
-    day: Int,
-): String = "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
-
-internal fun displayTransactionDate(value: String): String =
-    parseIsoDate(value)?.let { (year, month, day) -> formatDate(CalendarDate(year, month, day)) } ?: value

@@ -4,7 +4,7 @@ package app.tandemforactual.ui.core.state
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.store.BudgetDisplaySettings
-import app.tandemforactual.ui.feature.activity.ActivitySearchRecord
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
 
 internal data class ActivitySearchCache(
     val budgetId: String,

@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.AuthenticatedDevice
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.pendingDeviceChangeNotice
 import app.tandemforactual.ui.core.session.signOutAndClearLocalData
@@ -27,7 +28,6 @@ import app.tandemforactual.ui.design.templates.AttentionBanner
 import app.tandemforactual.ui.design.templates.InfoBubble
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
 import com.composables.icons.lucide.FolderKey
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.KeyRound

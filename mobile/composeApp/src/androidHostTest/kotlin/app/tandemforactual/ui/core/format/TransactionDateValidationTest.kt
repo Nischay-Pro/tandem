@@ -1,6 +1,5 @@
 package app.tandemforactual.ui.core.format
 
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

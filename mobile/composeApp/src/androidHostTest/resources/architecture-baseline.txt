@@ -1,74 +1,15 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature AccountDetailScreen -> budget
-cross-feature AccountDetailScreen -> currency
-cross-feature AccountDetailScreen -> transactions
-cross-feature AccountOptionsScreen -> currency
-cross-feature AccountsScreen -> banking
-cross-feature AccountsScreen -> budget
-cross-feature AccountsScreen -> currency
-cross-feature ActivityScreen -> budget
-cross-feature ActivityScreen -> transactions
-cross-feature ActivitySearchScreen -> transactions
-cross-feature AppLockGate -> sync
-cross-feature BankConnectionsScreen -> sync
-cross-feature BudgetChooserScreen -> auth
-cross-feature BudgetRulesScreen -> activity
-cross-feature BudgetScreen -> schedules
-cross-feature BudgetScreen -> transactions
-cross-feature BudgetUnlockScreen -> auth
-cross-feature CategoryDetailScreenParts -> activity
-cross-feature CategoryDetailScreenParts -> reports
-cross-feature CategoryGroupScreen -> accounts
-cross-feature CategoryInsights -> transactions
-cross-feature CurrencyScreens -> accounts
-cross-feature CustomReportScreen -> insights
-cross-feature CustomReportScreens -> insights
-cross-feature CustomReportsScreen -> insights
-cross-feature DataHealthScreen -> transactions
-cross-feature GoalTimelineScreen -> insights
-cross-feature HomeLayoutScreen -> budget
-cross-feature HomeScreen -> planning
-cross-feature HomeScreen -> schedules
-cross-feature HomeScreen -> transactions
-cross-feature InsightScreens -> planning
-cross-feature LocalDataScreen -> auth
-cross-feature ManagePayeesScreen -> activity
-cross-feature ManagePayeesScreen -> schedules
-cross-feature PersonalizeScreen -> onboarding
-cross-feature ReimbursementScreens -> planning
-cross-feature RetirementSetupScreen -> onboarding
-cross-feature RuleChoiceField -> activity
-cross-feature ScheduleDatePickerDialog -> budget
-cross-feature ScheduleDatePickerDialog -> transactions
-cross-feature ScheduleScreens -> rules
-cross-feature SecurityScreen -> auth
-cross-feature ServerDeviceScreen -> auth
-cross-feature SettingsScreen -> planning
-cross-feature SpendingForecastScreen -> budget
-cross-feature SpendingForecastScreen -> reports
-cross-feature SpendingForecastScreen -> transactions
-cross-feature StatementImportDialog -> transactions
-cross-feature SwitchBudgetScreen -> auth
-cross-feature SyncCenterScreen -> auth
-cross-feature SyncCenterScreen -> transactions
-cross-feature SyncCenterSections -> banking
-cross-feature SyncCenterSections -> planning
-cross-feature TransactionDetailScreen -> reimbursements
-cross-feature TransactionSelectorScreens -> budget
-cross-feature TransactionSyncStatus -> sync
-cross-feature UpcomingSchedulesScreen -> rules
-cross-feature UpcomingSchedulesScreen -> transactions
-cross-feature WhatIfScreen -> insights
-layering ActivitySearchCache -> feature.activity
-layering AppState -> app
-layering AppState -> feature.activity
-layering AppState -> feature.reports
-layering AppState -> feature.transactions
-layering DragReorderUpdate -> feature.budget
-layering IosDeviceAuthenticator -> feature.auth
-layering MerchantIcons -> feature.activity
-layering RouteNavigation -> app
-layering TandemMobileSession -> feature.reports
-layering TandemThemeScreen -> app
-layering TransactionDateValidation -> feature.budget
-layering TransactionDateValidation -> feature.transactions
+function-size AppScreenRouter.ScreenContent
+function-size androidApp:BackgroundBudgetSync.doWork
+function-size data:ActualBudgetEdits.setOrders
+function-size data:ActualBudgetReader.read
+function-size data:ActualImport.reconcile
+function-size data:ActualRuleEngine.eval
+function-size data:ActualScheduleEdits.edit
+function-size data:ActualTransactionOperations.change
+function-size data:BudgetSyncCoordinator.applySnapshot
+function-size data:LocalBudgetRepository.replaceBudgetMutationQueue
+function-size data:PlanningSync.sync
+size api-client:TandemApiClient
+size data:ActualBudgetEdits
+size data:LocalBudgetRepository

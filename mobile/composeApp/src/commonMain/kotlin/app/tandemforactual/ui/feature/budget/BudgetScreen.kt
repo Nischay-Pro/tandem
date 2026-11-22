@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.BUDGET_GROUP_ORDER_SCOPE
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.DragReorderState
@@ -39,6 +40,8 @@ import app.tandemforactual.ui.core.state.homeLayout
 import app.tandemforactual.ui.core.state.isBudgetSectionCollapsed
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.toggleBudgetSection
+import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
+import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
@@ -61,9 +64,6 @@ import app.tandemforactual.ui.feature.budget.components.budgetOverviewItems
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetReorderState
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetScreenDialogs
 import app.tandemforactual.ui.feature.budget.components.rememberHoldSheetState
-import app.tandemforactual.ui.feature.schedules.LiveUpcomingBillsCard
-import app.tandemforactual.ui.feature.transactions.TransactionRow
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 

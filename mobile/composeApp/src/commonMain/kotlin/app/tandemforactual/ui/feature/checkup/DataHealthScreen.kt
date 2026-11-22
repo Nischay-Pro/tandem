@@ -22,6 +22,7 @@ import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.ui.core.format.formatCurrency
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
@@ -41,7 +42,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.CircleCheck

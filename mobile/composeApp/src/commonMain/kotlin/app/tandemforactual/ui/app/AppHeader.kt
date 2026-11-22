@@ -31,7 +31,9 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.MainCloudStatus
+import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.design.buttons.TandemBackButton
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalCloseButton
@@ -40,7 +42,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.reports.ReportKind
 import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu

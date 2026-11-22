@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import app.tandemforactual.ui.app.AppHeader
 import app.tandemforactual.ui.app.isLandscapeViewport
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
@@ -22,6 +21,7 @@ import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSystemBars

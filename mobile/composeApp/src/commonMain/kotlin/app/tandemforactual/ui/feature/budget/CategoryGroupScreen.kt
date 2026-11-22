@@ -34,13 +34,13 @@ import app.tandemforactual.ui.core.state.SelectorItem
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
+import app.tandemforactual.ui.core.ui.AccountActionDropdown
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.feature.accounts.AccountActionDropdown
 import app.tandemforactual.ui.feature.budget.components.AddCategoryDialog
 import app.tandemforactual.ui.feature.budget.components.CategoryGroupListContext
 import app.tandemforactual.ui.feature.budget.components.CategoryGroupReorder

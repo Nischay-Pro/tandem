@@ -21,7 +21,7 @@ import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.platformFormatMonth
+import app.tandemforactual.ui.core.format.monthLabel
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
@@ -29,6 +29,8 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.monthMoneyIn
+import app.tandemforactual.ui.core.ui.saved
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -41,7 +43,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.insights.monthMoneyIn
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank
@@ -76,11 +77,6 @@ internal fun WhatIfScreen(
     val goals = mobileSession.planning.savingsGoals
     val today = platformTodayIsoDate()
 
-    fun monthLabel(offset: Int): String {
-        val (y, m) = today.split('-').let { it[0].toInt() to it[1].toInt() }
-        val index = y * 12 + (m - 1) + offset
-        return platformFormatMonth(index / 12, index % 12 + 1, abbreviated = false)
-    }
     val basePlan = PlanningMath.plan(debts, 0, PayoffStrategy.AVALANCHE)
     val newPlan = PlanningMath.plan(debts, debtExtra, PayoffStrategy.AVALANCHE)
     PageColumn(verticalSpacing = TandemSpacing.large) {
@@ -99,8 +95,8 @@ internal fun WhatIfScreen(
             onSpendingChange = { spendingChange = it },
             onToDebtChange = { toDebt = it },
         )
-        if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, ::monthLabel)
-        if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, ::monthLabel)
+        if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, { monthLabel(today, it) })
+        if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, { monthLabel(today, it) })
         if (debts.isEmpty() && goals.isEmpty()) {
             EmptyState("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
         }

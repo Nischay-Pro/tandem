@@ -16,6 +16,7 @@ import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budgetMutationFailureMessage
 import app.tandemforactual.ui.core.session.isRejectedBudgetOrderRequest
+import app.tandemforactual.ui.core.ui.SyncStatusRing
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.LabelText
 import app.tandemforactual.ui.design.theme.TandemSpacing

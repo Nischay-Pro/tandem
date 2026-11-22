@@ -1,6 +1,8 @@
 package app.tandemforactual.ui.app
 
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.Workspace
+import app.tandemforactual.ui.core.state.WorkspaceLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.design.theme.TandemPalette
 import app.tandemforactual.ui.design.theme.TandemShapes
 

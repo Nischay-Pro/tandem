@@ -27,11 +27,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.navigation.openTransaction
+import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
+import app.tandemforactual.ui.core.ui.ActivitySearchInput
+import app.tandemforactual.ui.core.ui.TransactionRow
+import app.tandemforactual.ui.core.ui.TransactionSelectionFloatingBar
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -53,9 +58,6 @@ import app.tandemforactual.ui.feature.activity.components.rememberActivityQuickF
 import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchEvaluation
 import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchIndex
 import app.tandemforactual.ui.feature.activity.components.rememberSaveActivitySearchState
-import app.tandemforactual.ui.feature.transactions.TransactionRow
-import app.tandemforactual.ui.feature.transactions.TransactionSelectionFloatingBar
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import kotlinx.coroutines.launch
 
 @Composable

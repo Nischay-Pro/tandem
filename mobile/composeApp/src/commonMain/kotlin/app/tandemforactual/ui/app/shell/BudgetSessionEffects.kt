@@ -4,13 +4,13 @@ package app.tandemforactual.ui.app.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.forgetEncryptionPasswords
 import app.tandemforactual.ui.core.session.loadBudgets
 import app.tandemforactual.ui.core.session.observeLocalRecords
 import app.tandemforactual.ui.core.session.observeSelectedBudgetMonth
 import app.tandemforactual.ui.core.session.unbindEncryptedBudgetDatabase
 import app.tandemforactual.ui.core.state.AppRoute
-import app.tandemforactual.ui.feature.auth.budgetPasswordSecretId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

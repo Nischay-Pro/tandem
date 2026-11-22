@@ -3,9 +3,9 @@
 package app.tandemforactual.ui.feature.transactions.components
 
 import androidx.compose.runtime.Composable
+import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.design.sheets.AmountConfirmationDialog
 import app.tandemforactual.ui.design.sheets.FutureTransactionDateConfirmationDialog
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 
 /** Asks to confirm a budget-formatted amount or a future date before the transaction is saved. */
 @Composable

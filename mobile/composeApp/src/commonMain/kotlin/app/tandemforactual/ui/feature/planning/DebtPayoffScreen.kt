@@ -1,13 +1,10 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.planning
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
 import app.tandemforactual.data.planning.DebtKind
@@ -25,13 +21,17 @@ import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.platformFormatMonth
+import app.tandemforactual.ui.core.format.monthLabel
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.ui.formatRateBasisPoints
+import app.tandemforactual.ui.core.ui.rememberPlanningEditors
+import app.tandemforactual.ui.core.ui.saved
+import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.inputs.FilterPills
@@ -40,7 +40,6 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
-import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -82,11 +81,6 @@ internal fun DebtPayoffScreen(
     val minimumsOnly = remember(ready) { PlanningMath.plan(ready, 0, strategy) }
     val today = platformTodayIsoDate()
 
-    fun monthLabel(offset: Int): String {
-        val (y, m) = today.split('-').let { it[0].toInt() to it[1].toInt() }
-        val index = y * 12 + (m - 1) + offset
-        return platformFormatMonth(index / 12, index % 12 + 1, abbreviated = false)
-    }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (debts.isEmpty()) {
             EmptyState("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
@@ -98,12 +92,12 @@ internal fun DebtPayoffScreen(
             YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
             return@PageColumn
         }
-        DebtPayoffSummary(state, plan, scrub, ::monthLabel)
+        DebtPayoffSummary(state, plan, scrub, { monthLabel(today, it) })
         plan?.let { DebtPayoffChart(ready, it, scrub) { i -> scrub = i } }
         DebtPayoffControls(state, strategy, extra, { strategy = it }, { extra = it })
         if (plan != null) {
             DebtPayoffComparison(state, plan, other, minimumsOnly, ready.size, strategy)
-            PayoffOrderCard(state, plan, strategy, debts, terms, ::monthLabel) { editors.debtAccount = it }
+            PayoffOrderCard(state, plan, strategy, debts, terms, { monthLabel(today, it) }) { editors.debtAccount = it }
         }
         YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
         Text(
@@ -311,26 +305,5 @@ private fun YourDebts(
                 )
             }
         }
-    }
-}
-
-@Composable
-internal fun StatTile(
-    label: String,
-    value: String,
-    detail: String,
-    modifier: Modifier = Modifier,
-) {
-    val palette = tandemPalette
-    Column(
-        modifier
-            .clip(RoundedCornerShape(TandemShapes.large))
-            .background(palette.surface)
-            .padding(TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-    ) {
-        Text(label, color = palette.muted, fontSize = TandemTypography.label)
-        Text(value, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(detail, Modifier.fillMaxWidth(), color = palette.muted, fontSize = TandemTypography.caption, maxLines = 2)
     }
 }

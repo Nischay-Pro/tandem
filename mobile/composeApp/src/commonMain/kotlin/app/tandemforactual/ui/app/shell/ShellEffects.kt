@@ -14,7 +14,6 @@ import app.tandemforactual.data.store.bankSyncFailureAlert
 import app.tandemforactual.ui.app.QuickAction
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.isBackPreviewStale
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.app.navigationRoutes
 import app.tandemforactual.ui.core.format.parseSharedTransactionText
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
@@ -23,6 +22,7 @@ import app.tandemforactual.ui.core.session.budget.processQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.scheduleOpenIdProofExpiry
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.loadMerchantIconCatalog
 import app.tandemforactual.ui.core.state.loadMerchantIconMatcherPack
 import app.tandemforactual.ui.design.theme.TandemMotion

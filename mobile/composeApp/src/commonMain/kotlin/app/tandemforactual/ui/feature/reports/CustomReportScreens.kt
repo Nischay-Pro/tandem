@@ -8,8 +8,8 @@ import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.ReportFlow
 import app.tandemforactual.data.planning.ReportGrouping
 import app.tandemforactual.data.planning.ReportRange
+import app.tandemforactual.ui.core.state.RecordNames
 import app.tandemforactual.ui.core.state.formatLiveDate
-import app.tandemforactual.ui.feature.insights.RecordNames
 
 internal val ReportRange.label: String
     get() =
