@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.transactions.statement
+package app.tandemforactual.ui.core.importing
 
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.data.store.BudgetDisplaySettings

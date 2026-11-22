@@ -27,7 +27,6 @@ cross-feature ReimbursementScreens -> planning
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
 cross-feature SettingsScreen -> planning
-cross-feature StatementImportDialog -> transactions
 cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning

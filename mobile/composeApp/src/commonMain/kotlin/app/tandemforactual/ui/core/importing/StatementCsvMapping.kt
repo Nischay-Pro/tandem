@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.transactions.statement
+package app.tandemforactual.ui.core.importing
 
 import app.tandemforactual.ui.core.platform.MAX_STATEMENT_IMPORT_CHARS
 import kotlinx.serialization.json.Json

@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.transactions.statement
+package app.tandemforactual.ui.core.importing
 
 internal fun normalizeColumn(value: String): String = value.lowercase().filter(Char::isLetterOrDigit)
 
