@@ -7,6 +7,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +60,7 @@ internal fun TandemTaskSheet(
                 DialogProperties(
                     usePlatformDefaultWidth = false,
                     dismissOnBackPress = dismissOnBackPress,
+                    decorFitsSystemWindows = !fullScreen,
                 ),
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -69,7 +71,7 @@ internal fun TandemTaskSheet(
                     exit = tandemSheetExit(tandemReduceMotion),
                 ) {
                     if (fullScreen) {
-                        Box(Modifier.fillMaxSize().background(tandemPalette.background)) {
+                        Box(Modifier.fillMaxSize().background(tandemPalette.background).safeDrawingPadding()) {
                             content()
                         }
                     } else {

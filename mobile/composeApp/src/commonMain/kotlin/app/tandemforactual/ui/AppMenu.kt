@@ -62,8 +62,10 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.PanelsTopLeft
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.ScanLine
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Store
+import com.composables.icons.lucide.TrendingDown
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wand
 import com.composables.icons.lucide.X
@@ -340,11 +342,13 @@ internal fun appMenuItems(
     readOnly: Boolean,
     open: (AppRoute) -> Unit,
     onAddTransaction: () -> Unit,
+    onScanReceipt: () -> Unit,
     onManageBanks: () -> Unit,
     onFeedback: () -> Unit,
 ): List<AppMenuItem> =
     buildList {
         if (!readOnly) add(AppMenuItem(Lucide.Plus, "Add transaction", onClick = onAddTransaction))
+        if (!readOnly) add(AppMenuItem(Lucide.ScanLine, "Scan a receipt", "Fills in the details", onClick = onScanReceipt))
         if (conflictCount > 0) {
             add(
                 AppMenuItem(
@@ -368,6 +372,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
+        add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
         add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
