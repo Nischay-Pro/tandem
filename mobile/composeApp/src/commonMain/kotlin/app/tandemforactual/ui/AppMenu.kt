@@ -370,6 +370,7 @@ internal fun appMenuItems(
                 ) { open(AppRoute.CONFLICT_INBOX) },
             )
         }
+        add(AppMenuItem(Lucide.CloudSync, "Sync Center", "Sync, bank links and fixes") { open(AppRoute.SYNC_CENTER) })
         if (!advanced) add(AppMenuItem(Lucide.WalletCards, "Accounts") { open(AppRoute.ACCOUNTS) })
         add(AppMenuItem(Lucide.Landmark, "Bank connections", "Link and sync") { open(AppRoute.BANK_CONNECTIONS) })
         add(AppMenuItem(Lucide.FileUp, "Import a statement", "CSV, OFX, QIF") { open(AppRoute.ACCOUNTS) })
@@ -399,6 +400,6 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
-        add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
+        add(AppMenuItem(Lucide.Sparkles, "Personalize Home", "Order and sections") { open(AppRoute.HOME_LAYOUT) })
         add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))
     }

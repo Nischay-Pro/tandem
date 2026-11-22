@@ -69,6 +69,7 @@ private fun createTandemViewController(
             appResumeEvents = syncEvents.appResumeEvents,
             networkRestoredEvents = syncEvents.networkRestoredEvents,
             screenshotScript = remember { iosScreenshotScript() },
+            postLocalAlert = ::postIosLocalAlert,
         )
     }
 }

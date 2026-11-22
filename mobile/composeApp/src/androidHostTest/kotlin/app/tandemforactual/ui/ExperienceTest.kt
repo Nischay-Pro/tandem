@@ -88,4 +88,40 @@ class ExperienceTest {
             decodeExperienceSettings("""{"b":{"goals":["DEBT","LOTTERY"],"pinned":["GONE"]}}""").getValue("b"),
         )
     }
+
+    @Test
+    fun personalizeHomeListsEverySectionInHomesOrderWithTheRestSwitchedOff() {
+        val settings = ExperienceSettings().withGoals(setOf(FinancialGoal.ORGANIZE))
+        val layout = homeLayout(settings)
+        assertEquals(HomeModule.entries.toSet(), layout.map { it.module }.toSet())
+        assertEquals(HomeModule.REVIEW_INBOX, layout.first().module)
+        assertEquals(false, layout.first { it.module == HomeModule.NET_WORTH }.shown)
+        assertEquals(layout.takeWhile { it.shown }.size, layout.count { it.shown })
+    }
+
+    @Test
+    fun anArrangedHomeKeepsItsOrderAndVisibilityAndSurvivesEncoding() {
+        val start = ExperienceSettings().withGoals(setOf(FinancialGoal.ORGANIZE))
+        val layout =
+            listOf(
+                HomeLayoutItem(HomeModule.DEBT_OVERVIEW, true),
+                HomeLayoutItem(HomeModule.RECENT_ACTIVITY, true),
+                HomeLayoutItem(HomeModule.ACCOUNTS, false),
+                HomeLayoutItem(HomeModule.BUDGET_SUMMARY, true),
+            )
+        val arranged = start.withHomeLayout(layout)
+        assertEquals(setOf(HomeModule.ACCOUNTS), arranged.hiddenModules)
+        val plan = planHome(arranged, InterfaceMode.ADVANCED, everything)
+        assertEquals(HomeEntry.Setup(HomeModule.DEBT_OVERVIEW), plan.prominent.first())
+        assertEquals(HomeModule.RECENT_ACTIVITY, plan.prominent[1].module)
+        assertTrue(HomeModule.ACCOUNTS !in plan.modules())
+        assertEquals(layout, homeLayout(arranged).take(4))
+        assertEquals(HomeModule.entries.size, homeLayout(arranged).size)
+        val minimal = planHome(arranged, InterfaceMode.MINIMAL, everything)
+        assertEquals(listOf(HomeModule.RECENT_ACTIVITY, HomeModule.BUDGET_SUMMARY), minimal.modules().take(2))
+        assertEquals(HomeEntry.Setup(HomeModule.DEBT_OVERVIEW), minimal.more.first())
+        val saved = mapOf("b" to arranged)
+        assertEquals(saved, decodeExperienceSettings(encodeExperienceSettings(saved)))
+        assertEquals(homeLayout(start), homeLayout(arranged.withSuggestedHome()))
+    }
 }

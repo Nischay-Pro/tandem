@@ -5,11 +5,15 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
+import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.NotificationPolicy
+import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.overspendingAlert
+import app.tandemforactual.data.store.upcomingBillsAlert
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,7 +79,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         if (preferences["backgroundSyncEnabled"] != "true") {
             return IosBackgroundSyncAlerts(taskSucceeded = true)
         }
-        syncRemindersEnabled = preferences["syncReminders"] != "false"
+        syncRemindersEnabled = NotificationPolicy.read(preferences).allows(AlertKind.SYNC_FAILURE, platformMinuteOfDay())
         conflictAlertsEnabled = preferences["conflictReviewAlerts"] != "false"
         rejectedAlertsEnabled = preferences["rejectedEditAlerts"] != "false"
         overspendingAlertsEnabled = preferences["overspendingAlerts"] != "false"
@@ -109,7 +113,23 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
             } else {
                 null
             }
-        summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
+        val policy = NotificationPolicy.read(preferences)
+        val minute = platformMinuteOfDay()
+        val today = platformTodayIsoDate()
+        val settings = repository.readBudgetDisplaySettings(budgetId)
+        val format = { minor: Long -> formatCurrency(minor, settings) }
+        val store = AppPreferencesStore(database)
+        if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
+            upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+        }
+        if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
+            largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+        }
+        if (policy.quietHours?.contains(minute) == true) {
+            IosBackgroundSyncAlerts(taskSucceeded = true)
+        } else {
+            summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
+        }
     } catch (error: CancellationException) {
         IosBackgroundSyncAlerts(taskSucceeded = false)
     } catch (_: IosCredentialUnavailableBeforeFirstUnlockException) {

@@ -112,6 +112,7 @@ internal fun ScreenContent(
             )
         AppRoute.SETUP_COMPLETE -> SetupCompleteScreen(state, navigation)
         AppRoute.PERSONALIZE -> PersonalizeScreen(state, navigation)
+        AppRoute.HOME_LAYOUT -> HomeLayoutScreen(state, navigation)
         AppRoute.HOME ->
             HomeScreen(
                 state,

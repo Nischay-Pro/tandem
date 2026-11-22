@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.data.store.NotificationPolicy
+import app.tandemforactual.data.store.QuietHours
 import app.tandemforactual.ui.reports.ReportKind
 import app.tandemforactual.ui.reports.ReportPeriodMode
 import app.tandemforactual.ui.reports.ReportRangePreset
@@ -189,6 +191,12 @@ internal class AppState {
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
     var overspendingAlerts by mutableStateOf(true)
+    var bankSyncAlerts by mutableStateOf(true)
+    var upcomingBillAlerts by mutableStateOf(false)
+    var largeTransactionAlerts by mutableStateOf(false)
+    var quietHours by mutableStateOf("")
+    var largeTransactionMinor by mutableStateOf(NotificationPolicy.DEFAULT_LARGE_TRANSACTION_MINOR)
+    var billLeadDays by mutableStateOf(NotificationPolicy.DEFAULT_BILL_LEAD_DAYS)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
@@ -301,6 +309,12 @@ internal class AppState {
             "conflictReviewAlerts" to conflictReviewAlerts.toString(),
             "rejectedEditAlerts" to rejectedEditAlerts.toString(),
             "overspendingAlerts" to overspendingAlerts.toString(),
+            "bankSyncAlerts" to bankSyncAlerts.toString(),
+            "upcomingBillAlerts" to upcomingBillAlerts.toString(),
+            "largeTransactionAlerts" to largeTransactionAlerts.toString(),
+            NotificationPolicy.QUIET_HOURS to quietHours,
+            NotificationPolicy.LARGE_TRANSACTION_MINOR to largeTransactionMinor.toString(),
+            NotificationPolicy.BILL_LEAD_DAYS to billLeadDays.toString(),
         )
 
     fun restorePersistentSettings(saved: Map<String, String>) {
@@ -363,7 +377,17 @@ internal class AppState {
         rejectedEditAlerts =
             saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
         overspendingAlerts = saved["overspendingAlerts"]?.toBooleanStrictOrNull() ?: overspendingAlerts
+        bankSyncAlerts = saved["bankSyncAlerts"]?.toBooleanStrictOrNull() ?: bankSyncAlerts
+        upcomingBillAlerts = saved["upcomingBillAlerts"]?.toBooleanStrictOrNull() ?: upcomingBillAlerts
+        largeTransactionAlerts = saved["largeTransactionAlerts"]?.toBooleanStrictOrNull() ?: largeTransactionAlerts
+        quietHours = saved[NotificationPolicy.QUIET_HOURS]?.takeIf { QuietHours.parse(it) != null } ?: quietHours
+        largeTransactionMinor =
+            saved[NotificationPolicy.LARGE_TRANSACTION_MINOR]?.toLongOrNull()?.takeIf { it > 0 } ?: largeTransactionMinor
+        billLeadDays = saved[NotificationPolicy.BILL_LEAD_DAYS]?.toIntOrNull()?.coerceIn(0, 14) ?: billLeadDays
     }
+
+    /** The phone notification choices as background sync reads them. */
+    val notificationPolicy: NotificationPolicy get() = NotificationPolicy.read(persistentSettings())
 
     companion object {
         val Saver =

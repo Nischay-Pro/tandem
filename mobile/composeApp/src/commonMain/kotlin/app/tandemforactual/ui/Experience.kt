@@ -23,6 +23,8 @@ internal data class ExperienceSettings(
     val personalizationDeferred: Boolean = false,
     val pinnedModules: List<HomeModule> = emptyList(),
     val hiddenModules: Set<HomeModule> = emptySet(),
+    /** The order set in Personalize Home; empty while Home follows the goals. */
+    val moduleOrder: List<HomeModule> = emptyList(),
 ) {
     /** The goal that orders Home: the chosen emphasis, or the only goal picked. */
     val emphasis: FinancialGoal? get() = primaryGoal?.takeIf { it in selectedGoals } ?: selectedGoals.singleOrNull()
@@ -103,8 +105,8 @@ private fun HomeModule.ready(data: HomeData): Boolean =
 
 /**
  * Orders Home deterministically: pinned modules, then the emphasis goal's first module, then the first module of each
- * other chosen goal, then the rest. Modules without data become setup prompts when they need details, and are left out
- * when they would only be empty. Minimal shows at most three prominently.
+ * other chosen goal, then the rest, unless the person arranged Home themselves. Modules without data become setup prompts
+ * when they need details, and are left out when they would only be empty. Minimal shows at most three prominently.
  */
 internal fun planHome(
     settings: ExperienceSettings,
@@ -112,6 +114,34 @@ internal fun planHome(
     data: HomeData,
 ): HomePlan {
     val allowed = HomeModule.entries.filter { (mode == InterfaceMode.ADVANCED || !it.advancedOnly) && it !in settings.hiddenModules }
+    val goals = if (settings.personalizationDeferred) emptySet() else settings.selectedGoals
+    val arranged = settings.moduleOrder.isNotEmpty()
+    val ordered = if (arranged) arrangedOrder(settings).filter { it in allowed } else suggestedOrder(settings, allowed)
+    val entries =
+        ordered.mapNotNull { module ->
+            when {
+                module.ready(data) -> HomeEntry.Ready(module)
+                module.needsSetup && (arranged || module.goals.any { it in goals }) -> HomeEntry.Setup(module)
+                else -> null
+            }
+        }
+    val ready = entries.filterIsInstance<HomeEntry.Ready>()
+    val sorted = if (arranged) entries else ready + entries.filterIsInstance<HomeEntry.Setup>()
+    return if (mode == InterfaceMode.MINIMAL) {
+        val prominent = ready.take(MINIMAL_PROMINENT_MODULES)
+        HomePlan(prominent, sorted - prominent.toSet())
+    } else {
+        HomePlan(sorted, emptyList())
+    }
+}
+
+private fun arrangedOrder(settings: ExperienceSettings): List<HomeModule> =
+    settings.moduleOrder.distinct() + HomeModule.entries.filter { it !in settings.moduleOrder }
+
+private fun suggestedOrder(
+    settings: ExperienceSettings,
+    allowed: List<HomeModule>,
+): List<HomeModule> {
     val goals = if (settings.personalizationDeferred) emptySet() else settings.selectedGoals
     val emphasis = if (settings.personalizationDeferred) null else settings.emphasis
     val ordered = linkedSetOf<HomeModule>()
@@ -126,23 +156,27 @@ internal fun planHome(
         sequence.forEach { goal -> ordered += forGoal(goal) }
         ordered += NEUTRAL_HOME.filter { it in allowed }
     }
-    val entries =
-        ordered.mapNotNull { module ->
-            when {
-                module.ready(data) -> HomeEntry.Ready(module)
-                module.needsSetup && module.goals.any { it in goals } -> HomeEntry.Setup(module)
-                else -> null
-            }
-        }
-    val ready = entries.filterIsInstance<HomeEntry.Ready>()
-    val setup = entries.filterIsInstance<HomeEntry.Setup>()
-    val sorted = ready + setup
-    return if (mode == InterfaceMode.MINIMAL) {
-        HomePlan(ready.take(MINIMAL_PROMINENT_MODULES), ready.drop(MINIMAL_PROMINENT_MODULES) + setup)
-    } else {
-        HomePlan(sorted, emptyList())
-    }
+    return ordered.toList()
 }
+
+internal data class HomeLayoutItem(
+    val module: HomeModule,
+    val shown: Boolean,
+)
+
+/** Every module in Home's order, with the ones Home leaves out switched off, for Personalize Home to edit. */
+internal fun homeLayout(settings: ExperienceSettings): List<HomeLayoutItem> {
+    if (settings.moduleOrder.isNotEmpty()) {
+        return arrangedOrder(settings).map { HomeLayoutItem(it, it !in settings.hiddenModules) }
+    }
+    val shown = suggestedOrder(settings, HomeModule.entries.filter { it !in settings.hiddenModules })
+    return shown.map { HomeLayoutItem(it, true) } + HomeModule.entries.filter { it !in shown }.map { HomeLayoutItem(it, false) }
+}
+
+internal fun ExperienceSettings.withHomeLayout(layout: List<HomeLayoutItem>): ExperienceSettings =
+    copy(moduleOrder = layout.map { it.module }, hiddenModules = layout.filterNot { it.shown }.map { it.module }.toSet())
+
+internal fun ExperienceSettings.withSuggestedHome(): ExperienceSettings = copy(moduleOrder = emptyList(), hiddenModules = emptySet())
 
 /** Per-budget settings, encoded as one preference value. Unknown goals or modules from other versions are skipped. */
 internal fun decodeExperienceSettings(json: String): Map<String, ExperienceSettings> =
@@ -159,6 +193,7 @@ internal fun decodeExperienceSettings(json: String): Map<String, ExperienceSetti
                 personalizationDeferred = (body["deferred"] as? JsonPrimitive)?.booleanOrNull ?: false,
                 pinnedModules = names("pinned").mapNotNull { name -> HomeModule.entries.firstOrNull { it.name == name } },
                 hiddenModules = names("hidden").mapNotNull { name -> HomeModule.entries.firstOrNull { it.name == name } }.toSet(),
+                moduleOrder = names("order").mapNotNull { name -> HomeModule.entries.firstOrNull { it.name == name } },
             )
         }
     }.getOrDefault(emptyMap())
@@ -173,6 +208,7 @@ internal fun encodeExperienceSettings(settings: Map<String, ExperienceSettings>)
                     put("deferred", JsonPrimitive(value.personalizationDeferred))
                     put("pinned", JsonArray(value.pinnedModules.map { JsonPrimitive(it.name) }))
                     put("hidden", JsonArray(value.hiddenModules.sortedBy { it.ordinal }.map { JsonPrimitive(it.name) }))
+                    if (value.moduleOrder.isNotEmpty()) put("order", JsonArray(value.moduleOrder.map { JsonPrimitive(it.name) }))
                 },
             )
         },

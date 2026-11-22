@@ -261,6 +261,18 @@ private class LocalBudgetRepositoryMutationQueuePersistence(
     ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
 }
 
+/** One budget's row in the Sync Center. */
+internal data class BudgetSyncOverview(
+    val budgetId: String,
+    val name: String,
+    val open: Boolean,
+    val locked: Boolean,
+    val lastSyncedAtEpochMs: Long?,
+    val failed: Boolean,
+    val waiting: Int,
+    val needsReview: Int,
+)
+
 /** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
     private val apiClient: TandemApiClient,
@@ -5444,6 +5456,42 @@ internal class TandemMobileSession(
         }
         synchronize(budgetId, encryptionPassword)
         loadLocalRecords(budgetId)
+    }
+
+    /** Each budget's sync state on this device; an encrypted budget that isn't open keeps its state locked. */
+    suspend fun budgetSyncOverview(openBudgetId: String): List<BudgetSyncOverview> {
+        val main = mainStorage?.repository
+        return budgets.map { budget ->
+            val open = budget.budgetId == openBudgetId
+            val writes = if (open) pendingWrites else main?.readPendingWrites(budget.budgetId).orEmpty()
+            val sync = if (open) localSyncState else main?.readSyncState(budget.budgetId)
+            BudgetSyncOverview(
+                budgetId = budget.budgetId,
+                name = budget.name,
+                open = open,
+                locked = budget.isEncrypted && !open,
+                lastSyncedAtEpochMs = sync?.lastSyncedAtEpochMs,
+                failed = sync?.lastErrorCode != null,
+                waiting = writes.count { it.status == "queued" || it.status == "sending" },
+                needsReview = writes.count { it.status == "uncertain" || it.status == "conflict" || it.status == "rejected" },
+            )
+        }
+    }
+
+    /** Sends unconfirmed edits again, then retries bank links that failed and planning sync that's waiting. */
+    suspend fun retryFailedWork(
+        budgetId: String,
+        encryptionPassword: String?,
+    ) {
+        if (refuseWriteInReadOnlyMode()) return
+        val localRepository = repository ?: return
+        pendingWrites
+            .filter { it.budgetId == budgetId && it.status == "uncertain" && it.recordType == "transaction" }
+            .forEach { runCatching { localRepository.retryUncertainWrite(it.operationId) } }
+        synchronize(budgetId, encryptionPassword)
+        loadLocalRecords(budgetId)
+        if (bankLinks.any { it.failure != null }) runBankSync(budgetId, encryptionPassword)
+        if (planningSyncStatus == PlanningSyncStatus.WAITING) syncPlanning(budgetId)
     }
 
     suspend fun checkUncertainWriteStatus(
