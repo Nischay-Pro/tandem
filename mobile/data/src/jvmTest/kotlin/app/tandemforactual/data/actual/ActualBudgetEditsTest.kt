@@ -324,6 +324,20 @@ class ActualBudgetEditsTest {
         f.rejects("Rule does not exist in this budget") { updateRule("missing", rule()) }
         f.rejects("A rule needs conditions") { updateRule(id, rule(conditions = null)) }
         f.rejects("A rule needs actions") { updateRule(id, rule(actions = null)) }
+        val wire =
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(
+                    """{"conditionsOp":"and","conditions":[{"field":"notes","op":"contains","text":"coffee"},""" +
+                        """{"field":"amount","op":"gt","amountMinor":500,"outflow":true}],""" +
+                        """"actions":[{"field":"cleared","op":"set","cleared":true},{"field":"notes","op":"append-notes","text":" #coffee"}]}""",
+                ).jsonObject
+        val fromWire = f.edits.createRule(wire)
+        val stored = f.one("SELECT conditions, actions FROM rules WHERE id = ?", fromWire)!!
+        assertTrue("\"value\":\"coffee\"" in (stored["conditions"] as String))
+        assertTrue("\"outflow\":true" in (stored["conditions"] as String))
+        assertTrue("\"value\":true" in (stored["actions"] as String))
+        assertEquals(RuleWire.toActual(JsonObject(emptyMap())), JsonObject(emptyMap()))
+        assertTrue(f.edits.deleteRule(fromWire))
         assertTrue(f.edits.deleteRule(id))
         val scheduled = f.one("SELECT rule FROM schedules WHERE tombstone = 0")!!["rule"] as String
         assertFalse(f.edits.deleteRule(scheduled))

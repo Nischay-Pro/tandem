@@ -18,6 +18,7 @@ import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
@@ -3631,6 +3632,19 @@ internal class TandemMobileSession(
         records.forEach { (id, type, body) -> store.put(id, type, body) }
         return records.size
     }
+
+    suspend fun previewRule(
+        budgetId: String,
+        rule: kotlinx.serialization.json.JsonObject,
+        encryptionPassword: String?,
+    ): List<HealthRow>? =
+        try {
+            apiClient.previewBudgetRule(budgetId, rule, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
 
     suspend fun loadDataHealth(
         budgetId: String,

@@ -77,9 +77,11 @@ class ActualDataHealth(
     private fun ids(
         sql: String,
         vararg args: Any?,
-    ): List<HealthRow> {
-        val found = db.query(sql, *args).map { it["id"] as String }.distinct()
-        return found.chunked(500).flatMap { chunk ->
+    ): List<HealthRow> = rows(db.query(sql, *args).map { it["id"] as String }.distinct())
+
+    /** Names transactions, accounts or payees by id for display, transactions with their date, amount and account. */
+    fun rows(found: List<String>): List<HealthRow> =
+        found.chunked(500).flatMap { chunk ->
             val marks = chunk.joinToString { "?" }
             db
                 .query(
@@ -98,5 +100,4 @@ class ActualDataHealth(
                     )
                 }
         }
-    }
 }

@@ -6,6 +6,7 @@ import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
 import app.tandemforactual.data.actual.LinkedAccount
@@ -401,6 +402,12 @@ class TandemApiClient(
         to: String,
         encryptionPassword: String?,
     ): String = call { budget(budgetId, encryptionPassword).exportCsv(from, to) }
+
+    suspend fun previewBudgetRule(
+        budgetId: String,
+        rule: JsonObject,
+        encryptionPassword: String?,
+    ): List<HealthRow> = call { budget(budgetId, encryptionPassword).previewRule(rule) }
 
     suspend fun budgetDataHealth(
         budgetId: String,

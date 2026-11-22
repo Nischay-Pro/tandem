@@ -9,12 +9,14 @@ import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.ActualRuleEngine
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
@@ -173,6 +175,9 @@ class ActualDirectBudget private constructor(
     ): String = locked { reader.exportCsv(from, to) }
 
     suspend fun inflowsByYear(accountId: String): Map<Int, Long> = locked { reader.inflowsByYear(accountId) }
+
+    suspend fun previewRule(rule: JsonObject): List<HealthRow> =
+        locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
 
     suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
 

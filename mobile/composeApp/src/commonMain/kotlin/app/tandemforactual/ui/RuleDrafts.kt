@@ -199,6 +199,16 @@ internal fun RuleDraft.toRequestBody(parseAmount: (String) -> Long?): Result<Jso
     )
 }
 
+/** Just the finished conditions, so a preview can run before the rule's actions are filled in. */
+internal fun RuleDraft.toPreviewBody(parseAmount: (String) -> Long?): JsonObject? {
+    val ready = conditions.filter { it.problem(parseAmount) == null }
+    if (ready.isEmpty()) return null
+    return buildJsonObject {
+        put("conditionsOp", if (matchAll) "and" else "or")
+        put("conditions", buildJsonArray { ready.forEach { add(it.toWire(parseAmount)) } })
+    }
+}
+
 private fun RuleConditionDraft.problem(parseAmount: (String) -> Long?): String? {
     val low = signedAmount(amountText, parseAmount)
     val high = signedAmount(amountMaxText, parseAmount)

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -312,6 +313,17 @@ class TandemApiClientTest {
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
+            assertTrue(
+                client
+                    .previewBudgetRule(
+                        "group",
+                        kotlinx.serialization.json.Json
+                            .parseToJsonElement(
+                                """{"conditionsOp":"or","conditions":[{"op":"gt","field":"amount","type":"number","value":-100000000}]}""",
+                            ).jsonObject,
+                        null,
+                    ).isNotEmpty(),
+            )
             assertTrue(client.exportBudgetTransactions("group", "2000-01-01", "2099-12-31", null).startsWith("Date,Account"))
             assertTrue(
                 client

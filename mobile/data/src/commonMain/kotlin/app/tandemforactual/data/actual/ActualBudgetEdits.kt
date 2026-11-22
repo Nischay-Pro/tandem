@@ -4,7 +4,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
@@ -917,33 +916,7 @@ class ActualBudgetEdits(
     private fun loadRules(): List<JsonObject> =
         ActualRules.load(db.query("SELECT * FROM rules WHERE conditions IS NOT NULL AND actions IS NOT NULL AND tombstone = 0"), emptyMap())
 
-    private val internalFields =
-        mapOf(
-            "is_parent" to "isParent",
-            "is_child" to "isChild",
-            "account" to "acct",
-            "imported_id" to "financial_id",
-            "imported_payee" to "imported_description",
-            "transfer_id" to "transferred_id",
-            "payee" to "description",
-        )
-
-    private fun internal(items: JsonArray): String =
-        stringifyJson(
-            JsonArray(
-                items.map { item ->
-                    val obj = item.jsonObject
-                    val field = (obj["field"] as? JsonPrimitive)?.contentOrNull
-                    if (field != null &&
-                        field in internalFields
-                    ) {
-                        JsonObject(obj + ("field" to JsonPrimitive(internalFields.getValue(field))))
-                    } else {
-                        obj
-                    }
-                },
-            ),
-        )
+    private fun internal(items: JsonArray): String = RuleWire.internal(items)
 
     private fun validateRule(
         conditionsOp: String,
@@ -1006,8 +979,9 @@ class ActualBudgetEdits(
             else -> fail("Invalid rule stage: $stage")
         }
 
-    fun createRule(rule: JsonObject): String =
+    fun createRule(wire: JsonObject): String =
         writer.batch {
+            val rule = RuleWire.toActual(wire)
             insertRule(
                 stageOf(rule),
                 rule.value("conditionsOp") as String? ?: "and",
@@ -1018,8 +992,9 @@ class ActualBudgetEdits(
 
     fun updateRule(
         id: String,
-        rule: JsonObject,
+        wire: JsonObject,
     ) = writer.batch {
+        val rule = RuleWire.toActual(wire)
         if (loadRules().none { it.value("id") == id }) fail("Rule does not exist in this budget")
         val conditions = rule["conditions"] as? JsonArray ?: fail("A rule needs conditions")
         val actions = rule["actions"] as? JsonArray ?: fail("A rule needs actions")

@@ -15,6 +15,7 @@ import kotlinx.serialization.json.longOrNull
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ActualRuleEngineTest {
     private fun fixtureDb(): ActualDatabase {
@@ -83,6 +84,37 @@ class ActualRuleEngineTest {
             is JsonArray -> JsonArray(element.map(::normalize))
             else -> element
         }
+
+    @Test
+    fun previewsWhichTransactionsARuleMatches() {
+        val db = fixtureDb()
+        val engine = ActualRuleEngine(db) { error("unused") }
+        val account = db.first("SELECT id FROM accounts WHERE tombstone = 0")!!["id"]
+        db.execute(
+            "INSERT INTO transactions (id, acct, amount, date, isParent, isChild, tombstone, cleared, sort_order) " +
+                "VALUES ('preview-1', ?, -4321, 20261120, 0, 0, 0, 1, 1)",
+            account,
+        )
+        val row = db.first("SELECT id, amount FROM v_transactions WHERE is_parent = 0 ORDER BY date DESC")!!
+        val rule =
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(
+                    """{"conditionsOp":"and","conditions":[{"op":"is","field":"amount","type":"number","value":${row["amount"]}}]}""",
+                ).jsonObject
+        assertTrue(row["id"] in engine.preview(rule))
+        assertEquals(emptyList(), engine.preview(kotlinx.serialization.json.JsonObject(emptyMap())))
+        assertEquals(1, engine.preview(rule, limit = 1).size)
+        val wire =
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(
+                    """{"conditionsOp":"or","conditions":[{"field":"amount","op":"is","amountMinor":-4321},""" +
+                        """{"field":"notes","op":"is","ids":["x"]},""" +
+                        """{"field":"notes","op":"contains","range":{"num1":1,"num2":2},"inflow":true},{"field":"notes","op":"is"}]}""",
+                ).jsonObject
+        assertTrue("preview-1" in engine.preview(wire))
+        val health = ActualDataHealth(db).rows(listOf(row["id"] as String))
+        assertEquals(row["amount"], health.single().amount)
+    }
 
     @Test
     fun rulesMatchActualsOwnEngine() {
