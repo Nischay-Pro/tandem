@@ -104,6 +104,7 @@ class MainActivity : FragmentActivity() {
     super.onCreate(savedInstanceState)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
     crashReports.install()
+    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { removeStaleSharedFiles() }
     lifecycleScope.launch {
       repeatOnLifecycle(Lifecycle.State.STARTED) {
         WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info ->
@@ -152,6 +153,14 @@ class MainActivity : FragmentActivity() {
         windowHinge = windowHinge,
         screenshotScript = screenshotScript(),
       )
+    }
+  }
+
+  /** Exports and receipt photos are shared from the cache; once they're old, nothing still needs to read them. */
+  private fun removeStaleSharedFiles() {
+    val cutoff = System.currentTimeMillis() - STALE_SHARED_FILE_MILLIS
+    listOf("exports", "receipts").forEach { folder ->
+      java.io.File(cacheDir, folder).listFiles()?.filter { it.lastModified() < cutoff }?.forEach { it.delete() }
     }
   }
 
@@ -263,6 +272,8 @@ class MainActivity : FragmentActivity() {
 private const val MAX_SYSTEM_SPLASH_WAIT_MILLIS = 2_500L
 
 private const val LEGACY_QUICK_ADD_SHORTCUT_ID = "add-transaction"
+
+private const val STALE_SHARED_FILE_MILLIS = 60L * 60 * 1000
 
 internal const val ACTION_ADD_TRANSACTION = "app.tandemforactual.action.ADD_TRANSACTION"
 
