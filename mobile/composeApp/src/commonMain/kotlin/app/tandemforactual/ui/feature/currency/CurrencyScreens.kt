@@ -32,6 +32,7 @@ import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
+import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -107,12 +108,10 @@ internal fun ExchangeRatesScreen(
     var picking by remember { mutableStateOf<LiveAccountSummary?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        Text(
+        IntroCard(
             "Actual keeps each budget in one currency. Mark accounts that hold another currency and add a rate, and " +
                 "Tandem shows their balances in their own currency and an approximate total in $budgetCurrency. " +
                 "Actual’s balances never change.",
-            color = palette.muted,
-            fontSize = TandemTypography.compactBody,
         )
         if (foreign.isNotEmpty()) {
             ForeignCurrencySections(state, mobileSession, open, foreign, budgetCurrency) { editing = it }

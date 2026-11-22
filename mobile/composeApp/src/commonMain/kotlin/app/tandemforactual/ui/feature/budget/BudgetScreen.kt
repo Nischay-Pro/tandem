@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.BUDGET_GROUP_ORDER_SCOPE
 import app.tandemforactual.ui.core.session.BudgetReorderKind
@@ -43,7 +44,7 @@ import app.tandemforactual.ui.core.state.toggleBudgetSection
 import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
 import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
@@ -83,7 +84,7 @@ internal fun BudgetScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to view its plan and activity.",
                 actionLabel = "Choose budget",
@@ -315,7 +316,7 @@ private fun LazyListScope.budgetActivityItems(
             Column {
                 CollapsibleSectionCard(
                     "Recent activity",
-                    "${liveTransactions.size} synced transactions",
+                    "${formatInteger(liveTransactions.size)} synced transactions",
                     "See all",
                     onClick = { openRecentActivity(state, navigation) },
                     expanded = recentExpanded,

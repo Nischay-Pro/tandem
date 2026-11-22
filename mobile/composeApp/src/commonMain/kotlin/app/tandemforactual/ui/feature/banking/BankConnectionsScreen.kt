@@ -31,6 +31,7 @@ import app.tandemforactual.ui.core.ui.bankLinkBadge
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
+import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -68,10 +69,8 @@ internal fun BankConnectionsScreen(
     val actions = BankConnectionsActions(ui, scope, state, mobileSession, password)
     val palette = tandemPalette
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        Text(
+        IntroCard(
             "Your Actual server keeps the bank credentials. Link accounts here, then sync them from the device.",
-            color = palette.muted,
-            fontSize = TandemTypography.compactBody,
         )
         LinkedAccountsSection(state, mobileSession, linked, onManage = { ui.managing = it }, onSync = actions::syncLinkedAccounts)
         ui.relinkFor?.let { target ->

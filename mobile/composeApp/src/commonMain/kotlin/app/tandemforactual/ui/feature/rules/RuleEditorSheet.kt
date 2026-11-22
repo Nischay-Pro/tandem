@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.createBudgetRule
@@ -349,7 +350,7 @@ private fun RulePreview(
             0 -> "Matches no transactions yet"
             1 -> "Matches 1 transaction"
             50 -> "Matches 50 or more transactions"
-            else -> "Matches ${found.size} transactions"
+            else -> "Matches ${formatInteger(found.size)} transactions"
         },
         "Newest first, from this budget",
     ) {

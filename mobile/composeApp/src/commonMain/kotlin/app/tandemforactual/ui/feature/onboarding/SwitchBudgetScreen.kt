@@ -17,7 +17,7 @@ import app.tandemforactual.ui.core.state.budgetChoicesForSelection
 import app.tandemforactual.ui.core.state.cachedBudgetsWithLocalSnapshots
 import app.tandemforactual.ui.core.state.decodeCachedBudgetCatalog
 import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -65,7 +65,7 @@ internal fun SwitchBudgetScreen(
             if (mobileSession.isLoadingBudgets) {
                 BodyText(stringResource(Res.string.setup_loading_budgets))
             } else {
-                EmptyState(
+                EmptyStateCard(
                     stringResource(Res.string.setup_no_budgets_available),
                     mobileSession.budgetError ?: stringResource(Res.string.setup_sign_in_to_this_server),
                     actionLabel =

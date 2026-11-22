@@ -30,7 +30,7 @@ import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -116,7 +116,7 @@ internal fun DataHealthScreen(
             found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
             found == null ->
                 item(key = "error") {
-                    EmptyState("Couldn’t check this budget", "Open it while connected to Actual, then pull to try again.")
+                    EmptyStateCard("Couldn’t check this budget", "Open it while connected to Actual, then pull to try again.")
                 }
             found.isEmpty() ->
                 item(key = "clear") {

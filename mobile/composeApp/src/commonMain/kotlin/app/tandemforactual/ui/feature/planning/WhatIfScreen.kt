@@ -31,7 +31,8 @@ import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.monthMoneyIn
 import app.tandemforactual.ui.core.ui.saved
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.cards.IntroCard
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -61,7 +62,7 @@ internal fun WhatIfScreen(
 ) {
     val palette = tandemPalette
     if (month == null) {
-        PageColumn { EmptyState("Open a budget month first", "What-if uses this month’s income and spending as the starting point.") }
+        PageColumn { EmptyStateCard("Open a budget month first", "What-if uses this month’s income and spending as the starting point.") }
         return
     }
     var incomeChange by rememberSaveable { mutableStateOf(0L) }
@@ -80,12 +81,10 @@ internal fun WhatIfScreen(
     val basePlan = PlanningMath.plan(debts, 0, PayoffStrategy.AVALANCHE)
     val newPlan = PlanningMath.plan(debts, debtExtra, PayoffStrategy.AVALANCHE)
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        WhatIfSummary(state, leftover, income, spending)
-        Text(
+        IntroCard(
             "See how earning or spending a little differently moves your debt-free date and savings goals. Nothing here changes your budget.",
-            color = palette.muted,
-            fontSize = TandemTypography.compactBody,
         )
+        WhatIfSummary(state, leftover, income, spending)
         WhatIfControls(
             state = state,
             incomeChange = incomeChange,
@@ -98,7 +97,7 @@ internal fun WhatIfScreen(
         if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, { monthLabel(today, it) })
         if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, { monthLabel(today, it) })
         if (debts.isEmpty() && goals.isEmpty()) {
-            EmptyState("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
+            EmptyStateCard("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
         }
     }
 }

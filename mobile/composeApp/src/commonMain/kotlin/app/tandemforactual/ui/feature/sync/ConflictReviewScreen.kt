@@ -20,7 +20,7 @@ import app.tandemforactual.ui.core.state.formatSignedCurrency
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -38,7 +38,7 @@ internal fun ConflictReviewScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to review pending changes.",
                 actionLabel = "Choose budget",

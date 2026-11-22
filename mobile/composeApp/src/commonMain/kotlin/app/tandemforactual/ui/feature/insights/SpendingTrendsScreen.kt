@@ -26,7 +26,7 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.incomeCategoryIds
 import app.tandemforactual.ui.core.state.rememberBudgetTransactions
 import app.tandemforactual.ui.core.state.rememberRecordNames
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.inputs.FilterPills
@@ -82,8 +82,12 @@ internal fun SpendingTrendsScreen(
         }
         when {
             report.baselineMonths == 0 ->
-                EmptyState("Not enough history yet", "Trends appear once there’s a month of spending before ${state.selectedMonth}.")
-            report.categories.isEmpty() -> EmptyState("No spending to compare", "Nothing was spent in ${state.selectedMonth} or before it.")
+                EmptyStateCard("Not enough history yet", "Trends appear once there’s a month of spending before ${state.selectedMonth}.")
+            report.categories.isEmpty() ->
+                EmptyStateCard(
+                    "No spending to compare",
+                    "Nothing was spent in ${state.selectedMonth} or before it.",
+                )
             else -> {
                 CategoryTrendsSection(state, report, names, baseline, comparedWith)
             }
