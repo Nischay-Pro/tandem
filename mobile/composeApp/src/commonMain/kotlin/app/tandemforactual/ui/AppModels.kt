@@ -151,6 +151,7 @@ internal enum class AppRoute(
     FIRST_SYNC("Preparing budget"),
     SETUP_COMPLETE("Setup complete"),
     PERSONALIZE("Personalize Tandem"),
+    HOME_LAYOUT("Personalize Home"),
     HOME("Home"),
     BUDGET("Budget"),
     CATEGORY_GROUP("Essentials"),

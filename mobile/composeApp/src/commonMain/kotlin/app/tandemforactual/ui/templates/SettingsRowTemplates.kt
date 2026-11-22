@@ -257,6 +257,24 @@ private fun ToggleRowContent(
     leadingIcon: ImageVector?,
     onChange: (Boolean) -> Unit,
 ) {
+    SettingRowLayout(
+        title = title,
+        subtitle = subtitle,
+        enabled = enabled,
+        compactTitle = true,
+        leadingIcon = leadingIcon,
+        interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+    ) {
+        TandemSwitchTrack(checked, enabled)
+    }
+}
+
+/** The switch drawing; the row around it owns the toggle semantics. */
+@Composable
+internal fun TandemSwitchTrack(
+    checked: Boolean,
+    enabled: Boolean = true,
+) {
     val palette = tandemPalette
     val thumbOffset by
         animateDpAsState(
@@ -276,30 +294,21 @@ private fun ToggleRowContent(
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
             label = "toggle-thumb-color",
         )
-    SettingRowLayout(
-        title = title,
-        subtitle = subtitle,
-        enabled = enabled,
-        compactTitle = true,
-        leadingIcon = leadingIcon,
-        interactionModifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+    Box(
+        Modifier
+            .width(42.dp)
+            .height(24.dp)
+            .clip(CircleShape)
+            .background(if (enabled) trackColor else palette.raised)
+            .padding(TandemSpacing.extraSmall),
     ) {
         Box(
             Modifier
-                .width(42.dp)
-                .height(24.dp)
+                .offset(x = thumbOffset)
+                .size(18.dp)
                 .clip(CircleShape)
-                .background(if (enabled) trackColor else palette.raised)
-                .padding(TandemSpacing.extraSmall),
-        ) {
-            Box(
-                Modifier
-                    .offset(x = thumbOffset)
-                    .size(18.dp)
-                    .clip(CircleShape)
-                    .background(if (enabled) thumbColor else palette.muted),
-            )
-        }
+                .background(if (enabled) thumbColor else palette.muted),
+        )
     }
 }
 
