@@ -59,7 +59,6 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
-function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork
 function-size data:ActualBudgetEdits.setOrders
 function-size data:ActualBudgetReader.read
