@@ -1,8 +1,9 @@
 package app.tandemforactual.ui
-
 import app.tandemforactual.api.client.ActualLoginMethodOption
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.loadActualLoginMethods
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond

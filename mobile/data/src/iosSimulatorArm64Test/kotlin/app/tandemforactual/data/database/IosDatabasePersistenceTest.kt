@@ -4,6 +4,9 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.data.store.enqueueWrite
+import app.tandemforactual.data.store.findRecord
+import app.tandemforactual.data.store.readPendingWrites
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals

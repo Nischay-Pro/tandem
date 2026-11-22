@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.platform.IosSyncEventSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

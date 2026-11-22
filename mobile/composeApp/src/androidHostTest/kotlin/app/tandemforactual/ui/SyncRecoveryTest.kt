@@ -1,5 +1,8 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.session.IDENTITY_MISMATCH_ERROR_CODE
+import app.tandemforactual.ui.core.session.SyncRecovery
+import app.tandemforactual.ui.core.session.syncRecovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

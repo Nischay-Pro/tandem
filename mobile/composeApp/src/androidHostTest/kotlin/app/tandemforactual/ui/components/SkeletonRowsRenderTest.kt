@@ -9,10 +9,11 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
-import app.tandemforactual.ui.AccentChoice
-import app.tandemforactual.ui.TandemTheme
-import app.tandemforactual.ui.ThemeMode
-import app.tandemforactual.ui.tandemPalette
+import app.tandemforactual.ui.design.rows.SkeletonRows
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPalette
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner

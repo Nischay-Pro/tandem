@@ -1,7 +1,10 @@
 package app.tandemforactual.ui
 
-import app.tandemforactual.ui.model.LiveCategoryGroupSummary
-import app.tandemforactual.ui.model.LiveCategorySummary
+import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
+import app.tandemforactual.ui.core.state.LiveCategorySummary
+import app.tandemforactual.ui.feature.budget.StillToSpend
+import app.tandemforactual.ui.feature.budget.canQuickAssign
+import app.tandemforactual.ui.feature.budget.stillToSpend
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

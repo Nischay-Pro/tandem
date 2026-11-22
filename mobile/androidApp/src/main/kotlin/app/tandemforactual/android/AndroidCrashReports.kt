@@ -2,8 +2,8 @@ package app.tandemforactual.android
 
 import android.content.Context
 import android.os.Build
-import app.tandemforactual.ui.CrashReports
-import app.tandemforactual.ui.crashReportText
+import app.tandemforactual.ui.core.session.CrashReports
+import app.tandemforactual.ui.core.session.crashReportText
 import java.io.File
 import java.time.Instant
 

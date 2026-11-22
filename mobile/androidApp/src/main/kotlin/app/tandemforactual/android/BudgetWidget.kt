@@ -16,7 +16,7 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetWidgetSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.budgetWidgetSummary
-import app.tandemforactual.ui.formatBudgetCurrency
+import app.tandemforactual.ui.core.format.formatBudgetCurrency
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

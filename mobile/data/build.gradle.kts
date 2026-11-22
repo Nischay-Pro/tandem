@@ -119,6 +119,18 @@ kover {
           "app.tandemforactual.data.store.BudgetSyncRemote",
           "app.tandemforactual.data.store.BudgetSyncRemote\$*",
           "app.tandemforactual.data.store.LocalBudgetRepository$*",
+          "app.tandemforactual.data.store.LocalBudgetLifecycleKt$*",
+          "app.tandemforactual.data.store.LocalBudgetMutationQueueKt$*",
+          "app.tandemforactual.data.store.LocalBudgetObserversKt$*",
+          "app.tandemforactual.data.store.LocalBudgetQueriesKt$*",
+          "app.tandemforactual.data.store.LocalBudgetSnapshotsKt$*",
+          "app.tandemforactual.data.store.LocalChangePagesKt$*",
+          "app.tandemforactual.data.store.LocalRecordSupportKt$*",
+          "app.tandemforactual.data.store.LocalReferenceRemapsKt$*",
+          "app.tandemforactual.data.store.LocalScheduleActionQueueKt$*",
+          "app.tandemforactual.data.store.LocalWriteOutboxKt$*",
+          "app.tandemforactual.data.store.LocalWriteResultsKt$*",
+          "app.tandemforactual.data.store.LocalWriteValidationKt$*",
         )
       }
     }

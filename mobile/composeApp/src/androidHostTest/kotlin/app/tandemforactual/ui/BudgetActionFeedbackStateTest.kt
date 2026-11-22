@@ -1,6 +1,9 @@
 package app.tandemforactual.ui
 
-import app.tandemforactual.ui.components.InlineMessageKind
+import app.tandemforactual.ui.core.session.BudgetActionFeedbackState
+import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.AppRouteEntry
+import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

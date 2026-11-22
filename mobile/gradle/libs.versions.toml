@@ -22,6 +22,7 @@ windowManager = "1.5.0"
 desugarJdkLibs = "2.1.5"
 workManager = "2.12.0"
 junit = "4.13.2"
+konsist = "0.18.1"
 composeIcons = "2.2.1"
 coreSplashScreen = "1.2.0"
 biometric = "1.1.0"
@@ -60,6 +61,7 @@ room3Compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3
 sqliteBundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 sqliteFramework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 cryptographyCore = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography" }
 cryptographyOptimal = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography" }
 coroutinesCore = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

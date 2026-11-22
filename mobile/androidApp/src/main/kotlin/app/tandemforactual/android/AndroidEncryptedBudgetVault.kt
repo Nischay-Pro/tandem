@@ -6,8 +6,8 @@ import androidx.core.content.edit
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
-import app.tandemforactual.ui.EncryptedBudgetVault
-import app.tandemforactual.ui.PendingEncryptedBudget
+import app.tandemforactual.ui.core.session.EncryptedBudgetVault
+import app.tandemforactual.ui.core.session.PendingEncryptedBudget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.zetetic.database.sqlcipher.driver.SQLCipherDriver

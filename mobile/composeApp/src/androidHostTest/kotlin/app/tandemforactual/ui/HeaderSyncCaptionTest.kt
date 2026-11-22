@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.state.MainCloudStatus
+import app.tandemforactual.ui.core.state.headerSyncCaption
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

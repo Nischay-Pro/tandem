@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.ui.text.AnnotatedString
+import app.tandemforactual.ui.design.templates.currencySymbolTransformation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

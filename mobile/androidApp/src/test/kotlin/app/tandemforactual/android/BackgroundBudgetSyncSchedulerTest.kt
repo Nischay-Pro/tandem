@@ -1,7 +1,7 @@
 package app.tandemforactual.android
 
 import androidx.work.NetworkType
-import app.tandemforactual.ui.SyncNetwork
+import app.tandemforactual.ui.core.session.SyncNetwork
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Test

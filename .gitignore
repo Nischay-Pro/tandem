@@ -1,5 +1,5 @@
 # JavaScript / TypeScript
-node_modules/
+node_modules
 .pnpm-store/
 dist/
 coverage/
@@ -40,3 +40,5 @@ Thumbs.db
 # Process core dumps can contain credentials and financial data
 core
 core.*
+!**/src/**/core/
+__pycache__/

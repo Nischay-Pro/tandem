@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 UI_ROOT = ROOT / "mobile/composeApp/src/commonMain/kotlin/app/tandemforactual/ui"
-THEME_FILE = UI_ROOT / "TandemTheme.kt"
+THEME_FILE = UI_ROOT / "design/theme/TandemTheme.kt"
 RULES = {
     "numeric fontSize; use TandemTypography": re.compile(r"\bfontSize\s*=\s*\d+(?:\.\d+)?\.sp\b"),
     "fixed list row height; use TandemLayout": re.compile(
@@ -21,51 +21,51 @@ RULES = {
 }
 DIALOG_CALL = re.compile(r"\b(?:AlertDialog|Dialog)\s*\(")
 HEADLINE_SIZE = re.compile(r"\bTandemTypography\.setupHeadline\b(?!LineHeight)")
-HEADLINE_FILE = UI_ROOT / "templates/ContentTemplates.kt"
+HEADLINE_FILE = UI_ROOT / "design/templates/ContentTemplates.kt"
 RAW_SETTINGS_SPACING = re.compile(r"\.(?:padding|spacedBy)\([^)]*\b\d+(?:\.\d+)?\.dp\b", re.DOTALL)
 SHARED_SETTINGS_SPACING_FILES = (
-    UI_ROOT / "screens/SettingsScreen.kt",
-    UI_ROOT / "templates/SettingsRowTemplates.kt",
-    UI_ROOT / "components/Rows.kt",
+    UI_ROOT / "feature/settings/AppearanceScreen.kt",
+    UI_ROOT / "design/templates/SettingRowLayout.kt",
+    UI_ROOT / "design/rows/ListRow.kt",
 )
 LAYOUT_CONTRACTS = {
-    UI_ROOT / "TandemTheme.kt": (
+    UI_ROOT / "design/theme/TandemTheme.kt": (
         re.compile(r"listRowMinHeight\s*=\s*64\.dp"),
         re.compile(r"compactListRowMinHeight\s*=\s*56\.dp"),
         re.compile(r"listRowHorizontalInset\s*=\s*TandemSpacing\.large"),
         re.compile(r"listRowVerticalInset\s*=\s*TandemSpacing\.small"),
     ),
-    UI_ROOT / "components/Rows.kt": (
+    UI_ROOT / "design/rows/ListRow.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*rowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"TandemLayout\.listRowVerticalInset"),
         re.compile(r"TandemLayout\.compactListRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "components/AvailableAmountPill.kt": (
+    UI_ROOT / "design/money/AvailableAmountPill.kt": (
         re.compile(r"RoundedCornerShape\(TandemShapes\.pill\)"),
         re.compile(r"\.background\(palette\.raised\)"),
         re.compile(r"padding\(horizontal\s*=\s*TandemSpacing\.medium,\s*vertical\s*=\s*TandemSpacing\.extraSmall\)"),
     ),
-    UI_ROOT / "screens/SettingsScreen.kt": (
+    UI_ROOT / "feature/settings/AppearanceScreen.kt": (
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "templates/SettingsRowTemplates.kt": (
+    UI_ROOT / "design/templates/SettingRowLayout.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "screens/AccountListScreens.kt": (
+    UI_ROOT / "feature/accounts/AccountSummaryCard.kt": (
         re.compile(r"defaultMinSize\(minHeight\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
         re.compile(r"Arrangement\.spacedBy\(TandemLayout\.listRowGap\)"),
     ),
-    UI_ROOT / "screens/CategoryDetailScreen.kt": (
+    UI_ROOT / "feature/budget/components/CategoryThisMonthSection.kt": (
         re.compile(r"heightIn\(min\s*=\s*TandemLayout\.listRowMinHeight\)"),
         re.compile(r"horizontal\s*=\s*TandemLayout\.listRowHorizontalInset"),
         re.compile(r"vertical\s*=\s*TandemLayout\.listRowVerticalInset"),
@@ -106,11 +106,11 @@ def main() -> int:
                 relative = source.relative_to(ROOT)
                 line_number = content.count("\n", 0, match.start()) + 1
                 violations.append(f"{relative}:{line_number}: page headline; use DisplayHeadline")
-        if UI_ROOT / "components" not in source.parents:
+        if UI_ROOT / "design" not in source.parents:
             for match in DIALOG_CALL.finditer(content):
                 relative = source.relative_to(ROOT)
                 line_number = content.count("\n", 0, match.start()) + 1
-                violations.append(f"{relative}:{line_number}: raw dialog; use a shared ui/components wrapper")
+                violations.append(f"{relative}:{line_number}: raw dialog; use a shared ui/design wrapper")
 
     if violations:
         print("Mobile UI consistency violations:", file=sys.stderr)

@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.ui.core.state.cachedBudgetName
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

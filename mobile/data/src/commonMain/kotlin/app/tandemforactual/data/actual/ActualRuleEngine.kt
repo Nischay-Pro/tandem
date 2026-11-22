@@ -202,43 +202,8 @@ class ActualRuleEngine(
             }
         }
         val value = condition.value
-
-        fun num(any: Any?) = (any as? Number)?.toDouble()
         return when (condition.op) {
-            "is", "isapprox" ->
-                when (value) {
-                    is Value.Recur -> {
-                        val day = (field as? String)?.let(Day::parse) ?: return false
-                        if (condition.op == "isapprox") {
-                            ActualRecurrence.occursBetween(value.config, day.plus(-2), day.plus(2))
-                        } else {
-                            ActualRecurrence.occursBetween(value.config, day, day)
-                        }
-                    }
-                    is Value.Date -> {
-                        val day = field as? String ?: return false
-                        if (condition.op == "isapprox") {
-                            val center = Day.parse(value.date)
-                            day >= center.plus(-2).toString() && day <= center.plus(2).toString()
-                        } else {
-                            when (value.kind) {
-                                "date" -> day == value.date
-                                "month" -> day.take(7) == value.date
-                                else -> day.take(4) == value.date
-                            }
-                        }
-                    }
-                    is Value.Number -> {
-                        val n = num(field) ?: return false
-                        if (condition.op == "isapprox") {
-                            val threshold = kotlin.math.round(kotlin.math.abs(value.value) * 0.075)
-                            n >= value.value - threshold && n <= value.value + threshold
-                        } else {
-                            n == value.value
-                        }
-                    }
-                    else -> field == (value as Value.Literal).value
-                }
+            "is", "isapprox" -> isMatch(condition.op, value, field)
             "isNot" -> field != (value as Value.Literal).value
             "isbetween" -> {
                 val between = value as Value.Between
@@ -255,20 +220,7 @@ class ActualRuleEngine(
                 val matches = tags.map { tag -> Regex("(?<!#)${Regex.escape(tag.lowercase())}([\\s#]|$)").containsMatchIn(jsString(field)) }
                 if (condition.op == "hasTags") matches.all { it } else matches.any { it }
             }
-            "gt", "gte", "lt", "lte" -> {
-                if (field == null) return false
-                val comparison =
-                    when (value) {
-                        is Value.Date -> (field as String).compareTo(value.date)
-                        else -> num(field)?.compareTo((value as Value.Number).value) ?: return false
-                    }
-                when (condition.op) {
-                    "gt" -> comparison > 0
-                    "gte" -> comparison >= 0
-                    "lt" -> comparison < 0
-                    else -> comparison <= 0
-                }
-            }
+            "gt", "gte", "lt", "lte" -> compare(condition.op, value, field)
             "matches" ->
                 field != null &&
                     runCatching { Regex((value as Value.Literal).value as String).containsMatchIn(jsString(field)) }.getOrDefault(false)
@@ -277,6 +229,66 @@ class ActualRuleEngine(
                 (account["offbudget"] as Number?)?.toLong() == if (condition.op == "onBudget") 0L else 1L
             }
             else -> false
+        }
+    }
+
+    private fun num(any: Any?) = (any as? Number)?.toDouble()
+
+    private fun isMatch(
+        op: String,
+        value: Value,
+        field: Any?,
+    ): Boolean =
+        when (value) {
+            is Value.Recur -> {
+                val day = (field as? String)?.let(Day::parse) ?: return false
+                if (op == "isapprox") {
+                    ActualRecurrence.occursBetween(value.config, day.plus(-2), day.plus(2))
+                } else {
+                    ActualRecurrence.occursBetween(value.config, day, day)
+                }
+            }
+            is Value.Date -> {
+                val day = field as? String ?: return false
+                if (op == "isapprox") {
+                    val center = Day.parse(value.date)
+                    day >= center.plus(-2).toString() && day <= center.plus(2).toString()
+                } else {
+                    when (value.kind) {
+                        "date" -> day == value.date
+                        "month" -> day.take(7) == value.date
+                        else -> day.take(4) == value.date
+                    }
+                }
+            }
+            is Value.Number -> {
+                val n = num(field) ?: return false
+                if (op == "isapprox") {
+                    val threshold = kotlin.math.round(kotlin.math.abs(value.value) * 0.075)
+                    n >= value.value - threshold && n <= value.value + threshold
+                } else {
+                    n == value.value
+                }
+            }
+            else -> field == (value as Value.Literal).value
+        }
+
+    private fun compare(
+        op: String,
+        value: Value,
+        field: Any?,
+    ): Boolean {
+        if (field == null) return false
+        val comparison =
+            when (value) {
+                is Value.Date -> (field as String).compareTo(value.date)
+                else -> num(field)?.compareTo((value as Value.Number).value) ?: return false
+            }
+        return when (op) {
+            "gt" -> comparison > 0
+            "gte" -> comparison >= 0
+            "lt" -> comparison < 0
+            else -> comparison <= 0
         }
     }
 
