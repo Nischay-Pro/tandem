@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.core.navigation.openNeedsReview
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -34,7 +35,6 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.sync.openNeedsReview
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Clock

@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.core.navigation.openGeneralActivitySearch
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -49,12 +51,10 @@ import app.tandemforactual.ui.feature.activity.components.ActivitySelectionState
 import app.tandemforactual.ui.feature.activity.components.activityEmptyItem
 import app.tandemforactual.ui.feature.activity.components.activityPageStatusItem
 import app.tandemforactual.ui.feature.activity.components.activitySearchEntryItem
-import app.tandemforactual.ui.feature.budget.openGeneralActivitySearch
 import app.tandemforactual.ui.feature.transactions.SyncNoticeCard
 import app.tandemforactual.ui.feature.transactions.TransactionRow
 import app.tandemforactual.ui.feature.transactions.TransactionSelectionFloatingBar
 import app.tandemforactual.ui.feature.transactions.deleteTransactionSelection
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import app.tandemforactual.ui.feature.transactions.transactionSyncNeedsReview
 import app.tandemforactual.ui.feature.transactions.transactionSyncOperations
 import com.composables.icons.lucide.Clock

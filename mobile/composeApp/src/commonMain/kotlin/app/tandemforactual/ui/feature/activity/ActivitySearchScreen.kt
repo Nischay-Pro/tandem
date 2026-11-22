@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -56,7 +57,6 @@ import app.tandemforactual.ui.feature.activity.components.rememberActivitySearch
 import app.tandemforactual.ui.feature.activity.components.rememberSaveActivitySearchState
 import app.tandemforactual.ui.feature.transactions.TransactionRow
 import app.tandemforactual.ui.feature.transactions.TransactionSelectionFloatingBar
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import kotlinx.coroutines.launch
 
 @Composable

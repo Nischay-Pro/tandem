@@ -1,8 +1,5 @@
-@file:Suppress("ktlint:standard:function-naming")
+package app.tandemforactual.ui.core.navigation
 
-package app.tandemforactual.ui.feature.sync
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute

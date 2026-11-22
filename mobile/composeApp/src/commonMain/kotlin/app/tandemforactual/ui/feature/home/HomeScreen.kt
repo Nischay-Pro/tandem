@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -48,7 +49,6 @@ import app.tandemforactual.ui.feature.planning.SavingsGoalsCard
 import app.tandemforactual.ui.feature.planning.rememberPlanningEditors
 import app.tandemforactual.ui.feature.schedules.LiveUpcomingBillsCard
 import app.tandemforactual.ui.feature.transactions.SyncNoticeCard
-import app.tandemforactual.ui.feature.transactions.openTransaction
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_more
 import app.tandemforactual.ui.generated.resources.home_set_up

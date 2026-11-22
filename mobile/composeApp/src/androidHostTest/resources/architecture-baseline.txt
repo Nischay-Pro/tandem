@@ -1,12 +1,10 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature AccountDetailScreen -> budget
 cross-feature AccountDetailScreen -> currency
 cross-feature AccountDetailScreen -> transactions
 cross-feature AccountOptionsScreen -> currency
 cross-feature AccountsScreen -> banking
 cross-feature AccountsScreen -> budget
 cross-feature AccountsScreen -> currency
-cross-feature ActivityScreen -> budget
 cross-feature ActivityScreen -> transactions
 cross-feature ActivitySearchScreen -> transactions
 cross-feature AppLockGate -> sync
@@ -16,13 +14,11 @@ cross-feature BudgetRulesScreen -> activity
 cross-feature BudgetScreen -> schedules
 cross-feature BudgetScreen -> transactions
 cross-feature BudgetUnlockScreen -> auth
-cross-feature CategoryDetailScreenParts -> reports
 cross-feature CategoryGroupScreen -> accounts
 cross-feature CurrencyScreens -> accounts
 cross-feature CustomReportScreen -> insights
 cross-feature CustomReportScreens -> insights
 cross-feature CustomReportsScreen -> insights
-cross-feature DataHealthScreen -> transactions
 cross-feature HomeLayoutScreen -> budget
 cross-feature HomeScreen -> planning
 cross-feature HomeScreen -> schedules
@@ -46,7 +42,6 @@ cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
 cross-feature TransactionDetailScreen -> reimbursements
-cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature WhatIfScreen -> insights
 function-size AppScreenRouter.ScreenContent

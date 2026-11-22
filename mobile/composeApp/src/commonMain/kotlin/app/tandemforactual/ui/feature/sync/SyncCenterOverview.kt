@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui.feature.sync
 import androidx.compose.runtime.Composable
+import app.tandemforactual.ui.core.navigation.openNeedsReview
 import app.tandemforactual.ui.core.session.SyncRecovery
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.syncRecovery
