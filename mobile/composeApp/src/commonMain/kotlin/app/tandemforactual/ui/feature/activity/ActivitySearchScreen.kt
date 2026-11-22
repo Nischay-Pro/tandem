@@ -2,33 +2,22 @@
 
 package app.tandemforactual.ui.feature.activity
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Icon
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,54 +25,38 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.observeActivitySearchRecords
-import app.tandemforactual.ui.core.state.ActivitySearchCache
-import app.tandemforactual.ui.core.state.ActivitySearchResultCache
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
-import app.tandemforactual.ui.core.state.recordName
-import app.tandemforactual.ui.design.buttons.TandemActionButton
-import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.SkeletonRows
-import app.tandemforactual.ui.design.sheets.TandemTaskSheet
-import app.tandemforactual.ui.design.templates.TextFieldCard
-import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemFloatingEnter
 import app.tandemforactual.ui.design.theme.tandemFloatingExit
-import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.feature.activity.components.ActivitySavedSearchControls
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchEvaluationState
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchFilterChips
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchIndexState
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchResultsHeader
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchSelectionTotalEffect
+import app.tandemforactual.ui.feature.activity.components.ActivitySearchSuggestions
+import app.tandemforactual.ui.feature.activity.components.ActivitySelectionState
+import app.tandemforactual.ui.feature.activity.components.SaveActivitySearchSheet
+import app.tandemforactual.ui.feature.activity.components.rememberActivityQuickFilters
+import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchEvaluation
+import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchIndex
+import app.tandemforactual.ui.feature.activity.components.rememberSaveActivitySearchState
 import app.tandemforactual.ui.feature.transactions.TransactionRow
 import app.tandemforactual.ui.feature.transactions.TransactionSelectionFloatingBar
-import app.tandemforactual.ui.feature.transactions.deleteTransactionSelection
 import app.tandemforactual.ui.feature.transactions.openTransaction
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.X
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ActivitySearchScreen(
@@ -95,26 +68,13 @@ internal fun ActivitySearchScreen(
     autoFocusSearch: Boolean,
 ) {
     val scope = rememberCoroutineScope()
-    val todayIso = platformTodayIsoDate()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
     val savedSearches = mobileSession.planning.savedSearches
-    LaunchedEffect(state.selectedBudgetId, state.savedActivitySearchesJson, mobileSession.databaseGeneration) {
-        val legacy = decodeSavedActivitySearches(state.savedActivitySearchesJson)
-        val moving = legacy.filter { it.budgetId == state.selectedBudgetId }
-        if (moving.isEmpty() || state.selectedBudgetId.isBlank()) return@LaunchedEffect
-        if (moving.all { mobileSession.planning.saveSearch(state.selectedBudgetId, it.toSavedSearch(newSavedSearchId())) }) {
-            state.savedActivitySearchesJson = encodeSavedActivitySearches(legacy - moving.toSet())
-        }
-    }
-    var showSaveSearchDialog by rememberSaveable { mutableStateOf(false) }
-    var savedSearchNameDraft by rememberSaveable { mutableStateOf("") }
+    LegacySavedSearchMigrationEffect(state, mobileSession)
+    val saveSearch = rememberSaveActivitySearchState()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-    var selectionMode by remember(state.selectedBudgetId) { mutableStateOf(false) }
-    var selectedTransactionIds by remember(state.selectedBudgetId) { mutableStateOf<Set<String>>(emptySet()) }
-    var confirmBulkDelete by remember(state.selectedBudgetId) { mutableStateOf(false) }
-    var isDeletingSelection by remember(state.selectedBudgetId) { mutableStateOf(false) }
+    val selection = remember(state.selectedBudgetId) { ActivitySelectionState() }
     val filters = state.activitySearchFilters
-    val hasActiveSearch = search.isNotBlank() || filters.isNotEmpty()
     val cachedSearch = state.activitySearchCache?.takeIf { it.budgetId == state.selectedBudgetId }
     val cachedEvaluation =
         state.activitySearchResultCache?.takeIf { cached ->
@@ -123,216 +83,19 @@ internal fun ActivitySearchScreen(
                 cached.filters == filters &&
                 cached.sourceRecords === cachedSearch?.searchableRecords
         }
-    LaunchedEffect(state.selectedBudgetId, mobileSession, mobileSession.databaseGeneration) {
-        if (isLiveBudget) mobileSession.observeActivitySearchRecords(state.selectedBudgetId)
-    }
-    var searchableRecords by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedSearch?.searchableRecords ?: emptyList())
-    }
-    var loadedSearchBudgetId by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedSearch?.budgetId ?: "")
-    }
-    var isBuildingSearchRecords by remember(state.selectedBudgetId) { mutableStateOf(isLiveBudget && cachedSearch == null) }
-    LaunchedEffect(
-        state.selectedBudgetId,
-        mobileSession.activitySearchRecordsBudgetId,
-        mobileSession.activitySearchRecords,
-        mobileSession.accountRecords,
-        mobileSession.payeeRecords,
-        mobileSession.categoryRecords,
-        mobileSession.budgetDisplaySettings,
-    ) {
-        if (!isLiveBudget) {
-            searchableRecords = emptyList()
-            loadedSearchBudgetId = ""
-            isBuildingSearchRecords = false
-        } else if (mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId) {
-            searchableRecords = emptyList()
-            loadedSearchBudgetId = ""
-            isBuildingSearchRecords = false
-        } else {
-            val records = mobileSession.activitySearchRecords
-            val accountRecords = mobileSession.accountRecords
-            val payeeRecords = mobileSession.payeeRecords
-            val categoryRecords = mobileSession.categoryRecords
-            val displaySettings = mobileSession.budgetDisplaySettings
-            val currentCache = state.activitySearchCache
-            if (
-                currentCache?.matches(
-                    state.selectedBudgetId,
-                    records,
-                    accountRecords,
-                    payeeRecords,
-                    categoryRecords,
-                    displaySettings,
-                ) == true
-            ) {
-                searchableRecords = currentCache.searchableRecords
-                loadedSearchBudgetId = state.selectedBudgetId
-                isBuildingSearchRecords = false
-            } else {
-                isBuildingSearchRecords = true
-                val indexed =
-                    withContext(Dispatchers.Default) {
-                        buildSearchActivityRecords(
-                            records = records,
-                            accounts =
-                                accountRecords
-                                    .mapNotNull { record ->
-                                        record.recordName()?.let { record.recordId to it }
-                                    }.toMap(),
-                            payees =
-                                payeeRecords
-                                    .mapNotNull { record ->
-                                        record.recordName()?.let { record.recordId to it }
-                                    }.toMap(),
-                            categories =
-                                categoryRecords
-                                    .mapNotNull { record ->
-                                        record.recordName()?.let { record.recordId to it }
-                                    }.toMap(),
-                        )
-                    }
-                state.activitySearchCache =
-                    ActivitySearchCache(
-                        state.selectedBudgetId,
-                        records,
-                        accountRecords,
-                        payeeRecords,
-                        categoryRecords,
-                        displaySettings,
-                        indexed,
-                    )
-                searchableRecords = indexed
-                loadedSearchBudgetId = state.selectedBudgetId
-                isBuildingSearchRecords = false
-            }
-        }
-    }
-    val quickFilters =
-        remember(searchableRecords) {
-            buildList {
-                addAll(recentActivitySearchMonthFilters(searchableRecords))
-                if (searchableRecords.any { it.cleared != null }) {
-                    add(ActivitySearchFilter(ActivitySearchField.CLEARED, "", "Cleared"))
-                    add(ActivitySearchFilter(ActivitySearchField.UNCLEARED, "", "Uncleared"))
-                }
-                if (searchableRecords.any { it.reconciled != null }) {
-                    add(ActivitySearchFilter(ActivitySearchField.RECONCILED, "", "Reconciled"))
-                    add(ActivitySearchFilter(ActivitySearchField.UNRECONCILED, "", "Unreconciled"))
-                }
-                if (searchableRecords.any { it.approved != null }) {
-                    add(ActivitySearchFilter(ActivitySearchField.APPROVED, "", "Approved"))
-                    add(ActivitySearchFilter(ActivitySearchField.UNAPPROVED, "", "Unapproved"))
-                }
-                if (searchableRecords.any { it.matched != null }) {
-                    add(ActivitySearchFilter(ActivitySearchField.MATCHED, "", "Matched"))
-                    add(ActivitySearchFilter(ActivitySearchField.UNMATCHED, "", "Unmatched"))
-                }
-                if (searchableRecords.any { it.transfer }) add(ActivitySearchFilter(ActivitySearchField.TRANSFER, "", "Transfer"))
-                searchableRecords
-                    .asSequence()
-                    .flatMap { it.tagNames.asSequence() }
-                    .distinct()
-                    .sortedBy(String::lowercase)
-                    .take(4)
-                    .forEach { tag -> add(ActivitySearchFilter(ActivitySearchField.TAG, tag, "Tag: #$tag")) }
-            }
-        }
-    var suggestions by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedEvaluation?.suggestions ?: emptyList())
-    }
-    var resultIndices by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedEvaluation?.indices ?: emptyList())
-    }
-    var isEvaluatingSearch by remember(state.selectedBudgetId) { mutableStateOf(cachedEvaluation == null) }
-    LaunchedEffect(state.selectedBudgetId, search, filters, searchableRecords, quickFilters, state.budgetDisplaySettings) {
-        val currentEvaluation = state.activitySearchResultCache
-        if (
-            currentEvaluation?.budgetId == state.selectedBudgetId &&
-            currentEvaluation.query == search &&
-            currentEvaluation.filters == filters &&
-            currentEvaluation.sourceRecords === searchableRecords
-        ) {
-            resultIndices = currentEvaluation.indices
-            suggestions = currentEvaluation.suggestions
-            isEvaluatingSearch = false
-            return@LaunchedEffect
-        }
-        isEvaluatingSearch = true
-        if (search.isNotBlank()) delay(150)
-        val displaySettings = state.budgetDisplaySettings
-        val evaluation =
-            withContext(Dispatchers.Default) {
-                val preparedSearch = prepareActivitySearch(search, filters, displaySettings?.currencyCode)
-                val matchedIndices =
-                    if (search.isBlank() && filters.isEmpty()) {
-                        searchableRecords.indices.toList()
-                    } else {
-                        searchableRecords.mapIndexedNotNull { index, record ->
-                            index.takeIf { matchesActivitySearch(record, preparedSearch) }
-                        }
-                    }
-                val refinements =
-                    if (search.isBlank()) {
-                        quickFilters
-                    } else {
-                        activitySearchSuggestions(search, searchableRecords, displaySettings?.currencyCode) {
-                            formatCurrency(it, displaySettings)
-                        }
-                    }
-                matchedIndices to refinements
-            }
-        state.activitySearchResultCache =
-            ActivitySearchResultCache(
-                state.selectedBudgetId,
-                search,
-                filters,
-                searchableRecords,
-                evaluation.first,
-                evaluation.second,
-            )
-        resultIndices = evaluation.first
-        suggestions = evaluation.second
-        isEvaluatingSearch = false
-    }
-    var sortedResultIndices by remember(state.selectedBudgetId) {
-        mutableStateOf(cachedEvaluation?.indices ?: emptyList())
+    val index = rememberActivitySearchIndex(state, mobileSession, isLiveBudget, cachedSearch)
+    val searchableRecords = index.searchableRecords
+    val quickFilters = rememberActivityQuickFilters(searchableRecords)
+    val evaluation = rememberActivitySearchEvaluation(state, search, filters, searchableRecords, quickFilters, cachedEvaluation)
+    ActivitySearchSelectionTotalEffect(state.selectedBudgetId, isLiveBudget, selection, searchableRecords, onActivitySelectionTotalChanged)
+    LaunchedEffect(search, filters) {
+        selection.selectionMode = false
+        selection.selectedTransactionIds = emptySet()
     }
     val resultsListState = LocalRouteLazyListState.current ?: rememberLazyListState()
-    val visibleTransactionIds =
-        remember(sortedResultIndices, searchableRecords) {
-            sortedResultIndices.mapNotNull { searchableRecords.getOrNull(it)?.recordId }.toSet()
-        }
-    val selectedTotalMinor =
-        remember(searchableRecords, selectedTransactionIds) {
-            searchableRecords
-                .asSequence()
-                .filter { it.recordId in selectedTransactionIds }
-                .sumOf(ActivitySearchRecord::amountMinorUnits)
-        }
-    LaunchedEffect(isLiveBudget, selectionMode, selectedTransactionIds, selectedTotalMinor) {
-        onActivitySelectionTotalChanged(
-            selectedTotalMinor.takeIf { isLiveBudget && selectionMode && selectedTransactionIds.isNotEmpty() },
-        )
-    }
-    DisposableEffect(state.selectedBudgetId) {
-        onDispose { onActivitySelectionTotalChanged(null) }
-    }
-    LaunchedEffect(search, filters) {
-        selectionMode = false
-        selectedTransactionIds = emptySet()
-    }
-    val selectedSortOrder = state.activitySortOrder
-    LaunchedEffect(resultIndices, searchableRecords, selectedSortOrder) {
-        sortedResultIndices =
-            if (selectedSortOrder == ActivitySortOrder.NEWEST_FIRST) {
-                resultIndices
-            } else {
-                withContext(Dispatchers.Default) {
-                    sortActivitySearchIndices(resultIndices, searchableRecords, selectedSortOrder)
-                }
-            }
+    val onSearchChange: (String) -> Unit = {
+        search = it
+        state.activitySearchQuery = it
     }
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -341,346 +104,202 @@ internal fun ActivitySearchScreen(
         ) {
             ActivitySearchInput(
                 value = search,
-                onValueChange = {
-                    search = it
-                    state.activitySearchQuery = it
-                },
+                onValueChange = onSearchChange,
                 autoFocus = autoFocusSearch,
                 focusRequestKey = state.activitySearchFocusRequest,
             )
-            if (savedSearches.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    savedSearches.forEach { savedSearch ->
-                        SurfaceCard(onClick = {
-                            search = savedSearch.query
-                            state.activitySearchQuery = savedSearch.query
-                            state.activitySearchFilters = savedSearch.activityFilters()
-                        }) {
-                            Row(
-                                Modifier.widthIn(min = 132.dp, max = 220.dp).padding(start = TandemSpacing.medium),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                            ) {
-                                Column(Modifier.weight(1f).padding(vertical = TandemSpacing.small)) {
-                                    Text(
-                                        savedSearch.name,
-                                        color = tandemPalette.text,
-                                        fontSize = TandemTypography.caption,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        savedSearch.summary(),
-                                        color = tandemPalette.muted,
-                                        fontSize = TandemTypography.caption,
-                                        maxLines = 1,
-                                    )
-                                }
-                                TandemIconButton(
-                                    Lucide.X,
-                                    "Remove ${savedSearch.name}",
-                                    sizeDp = 36,
-                                    iconSizeDp = 16,
-                                ) {
-                                    scope.launch { mobileSession.planning.deleteSavedSearch(state.selectedBudgetId, savedSearch.id) }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if (search.isNotBlank() || filters.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(
-                        onClick = {
-                            savedSearchNameDraft =
-                                search.trim().ifBlank {
-                                    filters.joinToString(" · ") { it.label }.take(80)
-                                }
-                            showSaveSearchDialog = true
-                        },
-                    ) {
-                        Icon(Lucide.Plus, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.accent)
-                        Spacer(Modifier.width(TandemSpacing.extraSmall))
-                        Text("Save search", color = tandemPalette.accent, fontSize = TandemTypography.caption)
-                    }
-                }
-            }
-            if (filters.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    filters.forEach { filter ->
-                        ActivitySearchFilterChip(filter) { state.activitySearchFilters = filters - filter }
-                    }
-                }
-            }
-            val shownSuggestions =
-                if (search.isBlank()) {
-                    quickFilters
-                } else {
-                    suggestions.filterNot { it.label.equals(search.trim(), ignoreCase = true) }
-                }
-            if (shownSuggestions.isNotEmpty()) {
-                Text(
-                    if (search.isBlank()) "Quick filters" else "Suggestions",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (search.isBlank()) {
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        shownSuggestions.take(8).forEach { suggestion ->
-                            val isActive = isActivitySearchFilterActive(state.activitySearchFilters, suggestion)
-                            ActivitySearchQuickFilter(suggestion, isActive) {
-                                state.activitySearchFilters =
-                                    toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
-                            }
-                        }
-                    }
-                } else {
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                    ) {
-                        shownSuggestions.take(8).forEach { suggestion ->
-                            ActivitySearchSuggestion(suggestion) {
-                                state.activitySearchFilters =
-                                    toggleActivitySearchFilter(state.activitySearchFilters, suggestion)
-                                search = ""
-                                state.activitySearchQuery = ""
-                            }
-                        }
-                    }
-                }
-            }
-            if (LocalDensity.current.fontScale >= 1.3f) {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            if (hasActiveSearch) "Results" else "All transactions",
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.cardTitle,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            formatInteger(resultIndices.size),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
-                    }
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            if (hasActiveSearch) "Results" else "All transactions",
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.cardTitle,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            formatInteger(resultIndices.size),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
-                    ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
-                }
-            }
-            if (selectionMode) {
+            ActivitySavedSearchControls(state, mobileSession, scope, search, saveSearch, onSearchChange)
+            if (filters.isNotEmpty()) ActivitySearchFilterChips(filters) { state.activitySearchFilters = filters - it }
+            ActivitySearchSuggestions(state, search, quickFilters, evaluation.suggestions) { onSearchChange("") }
+            ActivitySearchResultsHeader(state, search.isNotBlank() || filters.isNotEmpty(), evaluation.resultIndices.size)
+            if (selection.selectionMode) {
                 mobileSession.transactionWriteMessage?.let { InlineMessage(it, InlineMessageKind.ERROR) }
             }
-            if (
-                isLiveBudget &&
-                (
-                    mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId ||
-                        loadedSearchBudgetId != state.selectedBudgetId ||
-                        isBuildingSearchRecords
-                )
-            ) {
-                SkeletonRows(modifier = Modifier.weight(1f))
-            } else if (isEvaluatingSearch && resultIndices.isEmpty()) {
-                SkeletonRows(modifier = Modifier.weight(1f))
-            } else if (resultIndices.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    EmptyState(
-                        if (filters.isEmpty() &&
-                            search.isBlank()
-                        ) {
-                            "No transactions yet"
-                        } else {
-                            "No matching transactions"
-                        },
-                        modifier = Modifier.padding(TandemSpacing.large),
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = resultsListState,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(bottom = if (selectionMode) 88.dp else 0.dp),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+            ActivitySearchResults(
+                state,
+                mobileSession,
+                navigation,
+                merchantIconMatcher,
+                search,
+                index,
+                evaluation,
+                selection,
+                resultsListState,
+            )
+        }
+        ActivitySearchSelectionBar(isLiveBudget, selection, evaluation.sortedResultIndices, searchableRecords)
+    }
+    SaveActivitySearchSheet(saveSearch) { name ->
+        val id = savedSearches.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id ?: newSavedSearchId()
+        val entry = SavedActivitySearch(state.selectedBudgetId, name, search, filters).toSavedSearch(id)
+        scope.launch { mobileSession.planning.saveSearch(state.selectedBudgetId, entry) }
+    }
+    ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection)
+}
+
+/** Moves searches saved by older versions in app settings into the budget's planning store. */
+@Composable
+private fun LegacySavedSearchMigrationEffect(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    LaunchedEffect(state.selectedBudgetId, state.savedActivitySearchesJson, mobileSession.databaseGeneration) {
+        val legacy = decodeSavedActivitySearches(state.savedActivitySearchesJson)
+        val moving = legacy.filter { it.budgetId == state.selectedBudgetId }
+        if (moving.isEmpty() || state.selectedBudgetId.isBlank()) return@LaunchedEffect
+        if (moving.all { mobileSession.planning.saveSearch(state.selectedBudgetId, it.toSavedSearch(newSavedSearchId())) }) {
+            state.savedActivitySearchesJson = encodeSavedActivitySearches(legacy - moving.toSet())
+        }
+    }
+}
+
+/** A skeleton while indexing or searching, an empty state, or the matching transactions. */
+@Composable
+private fun ColumnScope.ActivitySearchResults(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+    search: String,
+    index: ActivitySearchIndexState,
+    evaluation: ActivitySearchEvaluationState,
+    selection: ActivitySelectionState,
+    resultsListState: LazyListState,
+) {
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    val filters = state.activitySearchFilters
+    if (
+        isLiveBudget &&
+        (
+            mobileSession.activitySearchRecordsBudgetId != state.selectedBudgetId ||
+                index.loadedSearchBudgetId != state.selectedBudgetId ||
+                index.isBuildingSearchRecords
+        )
+    ) {
+        SkeletonRows(modifier = Modifier.weight(1f))
+    } else if (evaluation.isEvaluatingSearch && evaluation.resultIndices.isEmpty()) {
+        SkeletonRows(modifier = Modifier.weight(1f))
+    } else if (evaluation.resultIndices.isEmpty()) {
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            EmptyState(
+                if (filters.isEmpty() &&
+                    search.isBlank()
                 ) {
-                    itemsIndexed(
-                        sortedResultIndices,
-                        key = { _, index ->
-                            val record = searchableRecords.getOrNull(index)
-                            "search:${record?.recordId ?: index}"
-                        },
-                    ) { position, index ->
-                        searchableRecords.getOrNull(index)?.let { record ->
-                            val previousDate =
-                                sortedResultIndices
-                                    .getOrNull(position - 1)
-                                    ?.let(searchableRecords::getOrNull)
-                                    ?.dateIso
-                            val transaction =
-                                remember(record, state.budgetDisplaySettings, merchantIconMatcher, todayIso) {
-                                    record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher, todayIso)
-                                }
-                            val transactionId = transaction.recordId
-                            TransactionRow(
-                                transaction,
-                                activityStyle = true,
-                                selectionMode = selectionMode,
-                                selected = transactionId != null && transactionId in selectedTransactionIds,
-                                showDateHeader = previousDate != record.dateIso,
-                                showAccount = true,
-                                showDivider = true,
-                                onLongClick =
-                                    if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
-                                        {
-                                            selectionMode = true
-                                            selectedTransactionIds = selectedTransactionIds + transactionId
-                                        }
-                                    } else {
-                                        null
-                                    },
-                            ) {
-                                if (selectionMode && transactionId != null) {
-                                    selectedTransactionIds =
-                                        if (transactionId in selectedTransactionIds) {
-                                            selectedTransactionIds - transactionId
-                                        } else {
-                                            selectedTransactionIds + transactionId
-                                        }
-                                    if (selectedTransactionIds.isEmpty()) selectionMode = false
-                                } else {
-                                    openTransaction(state, navigation, transaction, isLive = isLiveBudget)
-                                }
+                    "No transactions yet"
+                } else {
+                    "No matching transactions"
+                },
+                modifier = Modifier.padding(TandemSpacing.large),
+            )
+        }
+    } else {
+        ActivitySearchResultList(
+            state,
+            navigation,
+            merchantIconMatcher,
+            evaluation.sortedResultIndices,
+            index.searchableRecords,
+            selection,
+            resultsListState,
+        )
+    }
+}
+
+/** The matching transactions with date headers, selection and opening. */
+@Composable
+private fun ColumnScope.ActivitySearchResultList(
+    state: AppState,
+    navigation: AppNavigation,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+    sortedResultIndices: List<Int>,
+    searchableRecords: List<ActivitySearchRecord>,
+    selection: ActivitySelectionState,
+    resultsListState: LazyListState,
+) {
+    val todayIso = platformTodayIsoDate()
+    val isLiveBudget = state.selectedBudgetId.isNotBlank()
+    LazyColumn(
+        state = resultsListState,
+        modifier = Modifier.weight(1f).fillMaxWidth(),
+        contentPadding = PaddingValues(bottom = if (selection.selectionMode) 88.dp else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+    ) {
+        itemsIndexed(
+            sortedResultIndices,
+            key = { _, index ->
+                val record = searchableRecords.getOrNull(index)
+                "search:${record?.recordId ?: index}"
+            },
+        ) { position, index ->
+            searchableRecords.getOrNull(index)?.let { record ->
+                val previousDate =
+                    sortedResultIndices
+                        .getOrNull(position - 1)
+                        ?.let(searchableRecords::getOrNull)
+                        ?.dateIso
+                val transaction =
+                    remember(record, state.budgetDisplaySettings, merchantIconMatcher, todayIso) {
+                        record.toTransactionItem(state.budgetDisplaySettings, merchantIconMatcher, todayIso)
+                    }
+                val transactionId = transaction.recordId
+                TransactionRow(
+                    transaction,
+                    activityStyle = true,
+                    selectionMode = selection.selectionMode,
+                    selected = transactionId != null && transactionId in selection.selectedTransactionIds,
+                    showDateHeader = previousDate != record.dateIso,
+                    showAccount = true,
+                    showDivider = true,
+                    onLongClick =
+                        if (isLiveBudget && !state.readOnlyMode && transactionId != null) {
+                            {
+                                selection.selectionMode = true
+                                selection.selectedTransactionIds = selection.selectedTransactionIds + transactionId
                             }
-                        }
+                        } else {
+                            null
+                        },
+                ) {
+                    if (selection.selectionMode && transactionId != null) {
+                        selection.toggle(transactionId)
+                    } else {
+                        openTransaction(state, navigation, transaction, isLive = isLiveBudget)
                     }
                 }
             }
         }
-        AnimatedVisibility(
-            visible = isLiveBudget && selectionMode,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = tandemFloatingEnter(tandemReduceMotion),
-            exit = tandemFloatingExit(tandemReduceMotion),
-        ) {
-            val allSelected = visibleTransactionIds.isNotEmpty() && selectedTransactionIds.containsAll(visibleTransactionIds)
-            TransactionSelectionFloatingBar(
-                allSelected = allSelected,
-                canDelete = selectedTransactionIds.isNotEmpty() && !isDeletingSelection,
-                isWorking = isDeletingSelection,
-                onToggleAll = {
-                    selectedTransactionIds = if (allSelected) emptySet() else visibleTransactionIds
-                    if (allSelected) selectionMode = false
-                },
-                onDelete = { confirmBulkDelete = true },
-                modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            )
-        }
     }
-    TandemTaskSheet(
-        visible = showSaveSearchDialog,
-        onDismissRequest = { showSaveSearchDialog = false },
-        onDismissed = {},
+}
+
+/** The floating bar for selecting every visible result or deleting the selection. */
+@Composable
+private fun BoxScope.ActivitySearchSelectionBar(
+    isLiveBudget: Boolean,
+    selection: ActivitySelectionState,
+    sortedResultIndices: List<Int>,
+    searchableRecords: List<ActivitySearchRecord>,
+) {
+    val visibleTransactionIds =
+        remember(sortedResultIndices, searchableRecords) {
+            sortedResultIndices.mapNotNull { searchableRecords.getOrNull(it)?.recordId }.toSet()
+        }
+    AnimatedVisibility(
+        visible = isLiveBudget && selection.selectionMode,
+        modifier = Modifier.align(Alignment.BottomCenter),
+        enter = tandemFloatingEnter(tandemReduceMotion),
+        exit = tandemFloatingExit(tandemReduceMotion),
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                TandemModalHeader(
-                    title = "Save search",
-                    onClose = { showSaveSearchDialog = false },
-                )
-                TextFieldCard(
-                    "Name",
-                    savedSearchNameDraft,
-                    { savedSearchNameDraft = it.take(80) },
-                    TextFieldOptions(placeholder = "Name this search"),
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    TandemActionButton(
-                        "Cancel",
-                        TandemActionButtonTone.NEUTRAL,
-                        modifier = Modifier.weight(1f),
-                        onClick = { showSaveSearchDialog = false },
-                    )
-                    TandemActionButton(
-                        "Save",
-                        TandemActionButtonTone.PRIMARY,
-                        modifier = Modifier.weight(1f),
-                        enabled = savedSearchNameDraft.isNotBlank(),
-                        onClick = {
-                            val name = savedSearchNameDraft.trim()
-                            val id = savedSearches.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id ?: newSavedSearchId()
-                            val entry = SavedActivitySearch(state.selectedBudgetId, name, search, filters).toSavedSearch(id)
-                            scope.launch { mobileSession.planning.saveSearch(state.selectedBudgetId, entry) }
-                            showSaveSearchDialog = false
-                        },
-                    )
-                }
-            }
-        }
-    }
-    LaunchedEffect(confirmBulkDelete) {
-        if (confirmBulkDelete) {
-            isDeletingSelection = true
-            val deleted = deleteTransactionSelection(mobileSession, state.selectedBudgetId, selectedTransactionIds)
-            isDeletingSelection = false
-            confirmBulkDelete = false
-            if (deleted) {
-                selectedTransactionIds = emptySet()
-                selectionMode = false
-            }
-        }
+        val allSelected = visibleTransactionIds.isNotEmpty() && selection.selectedTransactionIds.containsAll(visibleTransactionIds)
+        TransactionSelectionFloatingBar(
+            allSelected = allSelected,
+            canDelete = selection.selectedTransactionIds.isNotEmpty() && !selection.isDeletingSelection,
+            isWorking = selection.isDeletingSelection,
+            onToggleAll = {
+                selection.selectedTransactionIds = if (allSelected) emptySet() else visibleTransactionIds
+                if (allSelected) selection.selectionMode = false
+            },
+            onDelete = { selection.confirmBulkDelete = true },
+            modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+        )
     }
 }

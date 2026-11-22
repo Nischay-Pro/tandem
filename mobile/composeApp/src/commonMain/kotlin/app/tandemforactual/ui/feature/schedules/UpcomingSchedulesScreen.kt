@@ -1,91 +1,54 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.schedules
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Icon
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.BudgetRecordEntity
-import app.tandemforactual.ui.core.format.formatAmount
-import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
-import app.tandemforactual.ui.core.state.formatAmount
-import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.formatTransactionListDate
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.recordName
-import app.tandemforactual.ui.design.buttons.TandemActionButton
-import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
-import app.tandemforactual.ui.design.feedback.FeedbackMessageOwner
-import app.tandemforactual.ui.design.feedback.FieldErrorMessage
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
-import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
-import app.tandemforactual.ui.design.sheets.TandemTaskSheet
-import app.tandemforactual.ui.design.templates.FieldFrame
 import app.tandemforactual.ui.design.templates.PageLazyColumn
-import app.tandemforactual.ui.design.templates.TextFieldCard
-import app.tandemforactual.ui.design.templates.TextFieldOptions
-import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.TandemTypography
-import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.rules.amountLabel
+import app.tandemforactual.ui.feature.schedules.components.ScheduleActionsSheet
+import app.tandemforactual.ui.feature.schedules.components.ScheduleDeleteConfirmationDialog
+import app.tandemforactual.ui.feature.schedules.components.ScheduleDialogState
+import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDatePicker
+import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDraft
+import app.tandemforactual.ui.feature.schedules.components.ScheduleEditForm
+import app.tandemforactual.ui.feature.schedules.components.ScheduleSelectionState
+import app.tandemforactual.ui.feature.schedules.components.editedScheduleFields
+import app.tandemforactual.ui.feature.schedules.components.rememberScheduleDateValue
+import app.tandemforactual.ui.feature.schedules.components.rememberScheduleEditDraft
 import app.tandemforactual.ui.feature.transactions.parseIsoDate
 import com.composables.icons.lucide.CalendarDays
-import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Pencil
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.X
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 @Composable
 internal fun UpcomingSchedulesScreen(
@@ -98,686 +61,245 @@ internal fun UpcomingSchedulesScreen(
     // A dismissed action sheet must stay dismissed when this route is restored from the
     // navigation stack. Persisting this transient visibility state can reopen the sheet
     // after Back returns to an earlier Upcoming bills route entry.
-    var selectedScheduleId by remember(state.selectedBudgetId) { mutableStateOf<String?>(null) }
-    var showScheduleEditor by remember(state.selectedBudgetId) { mutableStateOf(false) }
-    var showDeleteScheduleConfirmation by remember(state.selectedBudgetId, selectedScheduleId) { mutableStateOf(false) }
-    var dialogMode by remember(state.selectedBudgetId, selectedScheduleId) { mutableStateOf("menu") }
+    val selection = remember(state.selectedBudgetId) { ScheduleSelectionState() }
+    val dialog = remember(state.selectedBudgetId, selection.selectedScheduleId) { ScheduleDialogState() }
     LaunchedEffect(state.pendingScheduleToOpenId, schedules) {
         val requestedId = state.pendingScheduleToOpenId ?: return@LaunchedEffect
         if (schedules.any { it.id == requestedId }) {
-            selectedScheduleId = requestedId
-            showScheduleEditor = true
-            dialogMode = "menu"
+            selection.selectedScheduleId = requestedId
+            selection.showScheduleEditor = true
+            dialog.dialogMode = "menu"
             state.pendingScheduleToOpenId = null
         }
     }
-    var nameDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.name.orEmpty())
-    }
-    var amountDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        val schedule = schedules.firstOrNull { it.id == selectedScheduleId }
-        mutableStateOf(state.formatAmount(schedule?.amountMinor ?: schedule?.amountRangeMinor?.first ?: 0L))
-    }
-    var amountMaxDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        val range = schedules.firstOrNull { it.id == selectedScheduleId }?.amountRangeMinor
-        mutableStateOf(range?.second?.let(state::formatAmount).orEmpty())
-    }
-    var amountRuleDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.amountOp ?: "is")
-    }
-    var accountIdDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.accountId.orEmpty())
-    }
-    var payeeIdDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(schedules.firstOrNull { it.id == selectedScheduleId }?.payeeId.orEmpty())
-    }
-    val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
-    val pendingScheduleActions =
-        selectedSchedule?.let { mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, it.id) }.orEmpty()
-    val pendingActionBlocksChoice =
-        pendingScheduleActions.size > 1 ||
-            pendingScheduleActions.any { pendingAction ->
-                selectedSchedule != null && !mobileSession.schedules.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
-            }
-    val dateValue =
-        remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
-            selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+    val selectedSchedule = schedules.firstOrNull { it.id == selection.selectedScheduleId }
+    val dateValue = rememberScheduleDateValue(selectedSchedule)
+    val draft = rememberScheduleEditDraft(state, selection.selectedScheduleId, selectedSchedule, dateValue)
+    val scope = rememberCoroutineScope()
+    PageLazyColumn {
+        upcomingScheduleItems(state, mobileSession, schedules) { schedule ->
+            selection.selectedScheduleId = schedule.id
+            selection.showScheduleEditor = true
+            dialog.dialogMode = "menu"
+            mobileSession.feedback.clearBudgetActionMessage()
         }
-    val dateConfig = dateValue as? JsonObject
-    var dateDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(
-            dateConfig?.get("start")?.jsonPrimitive?.contentOrNull
-                ?: (dateValue as? JsonPrimitive)?.contentOrNull
-                ?: selectedSchedule?.nextDate.orEmpty(),
+    }
+
+    ScheduleActionsSheet(
+        state,
+        mobileSession,
+        selection,
+        dialog,
+        selectedSchedule,
+        scope,
+    ) {
+        ScheduleEditForm(
+            state,
+            mobileSession,
+            draft,
+            rememberScheduleAccountOptions(accounts),
+            rememberSchedulePayeeOptions(payeeRecords, selectedSchedule),
+            onSave = {
+                if (selectedSchedule !=
+                    null
+                ) {
+                    saveScheduleEdit(state, mobileSession, scope, draft, dateValue as? JsonObject, selectedSchedule, selection)
+                }
+            },
+            onCancel = { dialog.dialogMode = "menu" },
         )
     }
-    var frequencyDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("frequency")?.jsonPrimitive?.contentOrNull ?: "once")
-    }
-    var intervalDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("interval")?.jsonPrimitive?.contentOrNull ?: "1")
-    }
-    var skipWeekendDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("skipWeekend")?.jsonPrimitive?.booleanOrNull ?: false)
-    }
-    var endModeDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("endMode")?.jsonPrimitive?.contentOrNull ?: "never")
-    }
-    var endOccurrencesDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("endOccurrences")?.jsonPrimitive?.contentOrNull ?: "12")
-    }
-    var endDateDraft by rememberSaveable(state.selectedBudgetId, selectedScheduleId) {
-        mutableStateOf(dateConfig?.get("endDate")?.jsonPrimitive?.contentOrNull ?: selectedSchedule?.nextDate.orEmpty())
-    }
-    var datePickerTarget by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
-    var editError by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
-    var editErrorField by rememberSaveable(state.selectedBudgetId, selectedScheduleId) { mutableStateOf<String?>(null) }
-
-    fun clearEditError(field: String? = null) {
-        if (field == null || editErrorField == field) {
-            editError = null
-            editErrorField = null
-        }
-    }
-    val scope = rememberCoroutineScope()
-    val payeeOptions =
-        remember(payeeRecords, selectedSchedule?.payeeId) {
-            val names =
-                payeeRecords
-                    .mapNotNull { record ->
-                        record.recordName()?.let { record.recordId to it }
-                    }.toMap()
-                    .toMutableMap()
-            selectedSchedule?.payeeId?.let { id -> if (id !in names) names[id] = id }
-            names.entries.sortedBy { it.value.lowercase() }.map { it.key to it.value }
-        }
-    val accountOptions =
-        remember(accounts) {
-            accounts.filterNot(LiveAccountSummary::closed).sortedBy { it.name.lowercase() }.map { it.id to it.name }
-        }
-    PageLazyColumn {
-        if (schedules.isEmpty()) {
-            item(key = "upcoming-schedules-empty") {
-                SurfaceCard {
-                    EmptyState(
-                        "No upcoming bills",
-                        "Schedules added in Actual will appear here.",
-                        modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    )
-                }
-            }
-        } else {
-            items(schedules.size, key = { index -> schedules[index].id }) { index ->
-                val schedule = schedules[index]
-                val pendingActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
-                SurfaceCard {
-                    pendingActions.forEach { pendingAction ->
-                        InlineMessage(
-                            text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
-                            kind =
-                                if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
-                                    InlineMessageKind.WARNING
-                                } else {
-                                    InlineMessageKind.INFO
-                                },
-                            actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction),
-                            onAction =
-                                if (mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction) != null) {
-                                    { mobileSession.schedules.performScheduleActionStatusAction(pendingAction) }
-                                } else {
-                                    null
-                                },
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ListRow(
-                            schedule.name,
-                            listOfNotNull(
-                                formatTransactionListDate(schedule.nextDate),
-                                schedule.accountName,
-                            ).joinToString(" · "),
-                            schedule.amountLabel(state),
-                            leading = RowLeading.Icon(Lucide.CalendarDays),
-                            onClick = {
-                                selectedScheduleId = schedule.id
-                                showScheduleEditor = true
-                                dialogMode = "menu"
-                                mobileSession.feedback.clearBudgetActionMessage()
-                            },
-                        )
-                        TandemIconButton(
-                            Lucide.ChevronRight,
-                            "Schedule actions",
-                            modifier = Modifier.padding(end = TandemSpacing.small),
-                            sizeDp = 40,
-                            iconSizeDp = 18,
-                            containerColor = tandemPalette.raised,
-                        ) {
-                            selectedScheduleId = schedule.id
-                            showScheduleEditor = true
-                            dialogMode = "menu"
-                            mobileSession.feedback.clearBudgetActionMessage()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    TandemTaskSheet(
-        visible = showScheduleEditor && selectedSchedule != null,
-        onDismissRequest = {
-            if (!mobileSession.isPerformingBudgetAction) {
-                showScheduleEditor = false
-                showDeleteScheduleConfirmation = false
-                selectedScheduleId = null
-                dialogMode = "menu"
-                state.pendingScheduleToOpenId = null
-            }
-        },
-        onDismissed = {
-            showDeleteScheduleConfirmation = false
-            selectedScheduleId = null
-            dialogMode = "menu"
-            state.pendingScheduleToOpenId = null
-        },
-    ) {
-        if (selectedSchedule != null) {
-            SurfaceCard(
-                Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 480.dp)
-                    .padding(horizontal = TandemSpacing.large),
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(TandemSpacing.large)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Icon(
-                            if (dialogMode == "edit") Lucide.Pencil else Lucide.CalendarDays,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = tandemPalette.accent,
-                        )
-                        Text(
-                            when {
-                                dialogMode == "edit" -> "Edit schedule"
-                                else -> selectedSchedule.name
-                            },
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontFamily = tandemAlloFamily(),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        TandemIconButton(
-                            Lucide.X,
-                            "Close",
-                            sizeDp = 40,
-                            iconSizeDp = 18,
-                            containerColor = tandemPalette.raised,
-                            enabled = !mobileSession.isPerformingBudgetAction,
-                        ) {
-                            showScheduleEditor = false
-                            state.pendingScheduleToOpenId = null
-                            dialogMode = "menu"
-                        }
-                    }
-                    when {
-                        dialogMode == "delete" -> {
-                            Text(
-                                "Confirm deleting this schedule in the alert.",
-                                color = tandemPalette.muted,
-                                fontSize = TandemTypography.body,
-                            )
-                        }
-                        dialogMode == "edit" -> {
-                            editError?.takeIf { editErrorField == null }?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                            TextFieldCard("Name", nameDraft, {
-                                nameDraft = it
-                                clearEditError("name")
-                            })
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "name"), "name")
-                            TextFieldCard(
-                                "Amount",
-                                amountDraft,
-                                {
-                                    amountDraft = it
-                                    clearEditError("amount")
-                                },
-                                TextFieldOptions(
-                                    amountFractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                ),
-                            )
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "amount"), "amount")
-                            ScheduleChoiceField(
-                                "Amount rule",
-                                when (amountRuleDraft) {
-                                    "isapprox" -> "About this amount"
-                                    "isbetween" -> "Between two amounts"
-                                    else -> "Exact amount"
-                                },
-                                listOf("is" to "Exact amount", "isapprox" to "About this amount", "isbetween" to "Between two amounts"),
-                            ) {
-                                amountRuleDraft = it
-                                clearEditError("maximum")
-                            }
-                            if (amountRuleDraft == "isbetween") {
-                                TextFieldCard(
-                                    "Maximum amount",
-                                    amountMaxDraft,
-                                    {
-                                        amountMaxDraft = it
-                                        clearEditError("maximum")
-                                    },
-                                    TextFieldOptions(
-                                        amountFractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    ),
-                                )
-                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "maximum"), "maximum")
-                            }
-                            ScheduleChoiceField(
-                                "Account",
-                                accountOptions.firstOrNull { it.first == accountIdDraft }?.second ?: "Choose account",
-                                accountOptions,
-                            ) {
-                                accountIdDraft = it
-                                clearEditError("account")
-                            }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "account"), "account")
-                            ScheduleChoiceField(
-                                "Payee",
-                                payeeOptions.firstOrNull { it.first == payeeIdDraft }?.second ?: "Choose payee",
-                                payeeOptions,
-                            ) {
-                                payeeIdDraft = it
-                                clearEditError("payee")
-                            }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "payee"), "payee")
-                            ScheduleChoiceField(
-                                if (frequencyDraft == "once") "Repeats" else "Repeats every",
-                                when (frequencyDraft) {
-                                    "daily" -> "Daily"
-                                    "weekly" -> "Weekly"
-                                    "monthly" -> "Monthly"
-                                    "yearly" -> "Yearly"
-                                    else -> "One time"
-                                },
-                                listOf(
-                                    "once" to "One time",
-                                    "daily" to "Daily",
-                                    "weekly" to "Weekly",
-                                    "monthly" to "Monthly",
-                                    "yearly" to "Yearly",
-                                ),
-                            ) {
-                                frequencyDraft = it
-                                if (editErrorField in setOf("interval", "occurrences", "startDate", "endDate")) {
-                                    clearEditError()
-                                }
-                            }
-                            if (frequencyDraft != "once") {
-                                TextFieldCard(
-                                    "Interval",
-                                    intervalDraft,
-                                    {
-                                        intervalDraft = it.filter(Char::isDigit).take(3)
-                                        clearEditError("interval")
-                                    },
-                                    TextFieldOptions(
-                                        placeholder = "1",
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    ),
-                                )
-                                ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "interval"), "interval")
-                            }
-                            FieldFrame(
-                                if (frequencyDraft == "once") "Date" else "Start date",
-                                onClickLabel = "Choose date",
-                                onClick = { datePickerTarget = "start" },
-                            ) {
-                                Text(
-                                    formatLiveDate(dateDraft),
-                                    Modifier.weight(1f),
-                                    color = tandemPalette.text,
-                                    fontSize = TandemTypography.action,
-                                )
-                                Icon(
-                                    Lucide.ChevronDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = tandemPalette.muted,
-                                )
-                            }
-                            ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "startDate"), "startDate")
-                            if (frequencyDraft != "once") {
-                                ToggleRow("Skip weekends", checked = skipWeekendDraft) {
-                                    skipWeekendDraft = it
-                                }
-                                ScheduleChoiceField(
-                                    "Ends",
-                                    when (endModeDraft) {
-                                        "after_n_occurrences" -> "After a number of repeats"
-                                        "on_date" -> "On a date"
-                                        else -> "Never"
-                                    },
-                                    listOf(
-                                        "never" to "Never",
-                                        "after_n_occurrences" to "After a number of repeats",
-                                        "on_date" to "On a date",
-                                    ),
-                                ) {
-                                    endModeDraft = it
-                                    if (editErrorField in setOf("occurrences", "endDate")) clearEditError()
-                                }
-                                if (endModeDraft == "after_n_occurrences") {
-                                    TextFieldCard(
-                                        "Number of repeats",
-                                        endOccurrencesDraft,
-                                        {
-                                            endOccurrencesDraft = it.filter(Char::isDigit).take(6)
-                                            clearEditError("occurrences")
-                                        },
-                                        TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
-                                    )
-                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "occurrences"), "occurrences")
-                                }
-                                if (endModeDraft == "on_date") {
-                                    FieldFrame(
-                                        "End date",
-                                        onClickLabel = "Choose end date",
-                                        onClick = { datePickerTarget = "end" },
-                                    ) {
-                                        Text(
-                                            formatLiveDate(endDateDraft),
-                                            Modifier.weight(1f),
-                                            color = tandemPalette.text,
-                                            fontSize = TandemTypography.action,
-                                        )
-                                        Icon(
-                                            Lucide.ChevronDown,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = tandemPalette.muted,
-                                        )
-                                    }
-                                    ScheduleFieldError(scheduleFieldErrorMessage(editError, editErrorField, "endDate"), "endDate")
-                                }
-                            }
-                            budgetActionFeedbackMessage(mobileSession)
-                            TandemActionButton(
-                                if (mobileSession.isPerformingBudgetAction) {
-                                    "Saving…"
-                                } else {
-                                    "Save schedule"
-                                },
-                                TandemActionButtonTone.PRIMARY,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled =
-                                    !mobileSession.isPerformingBudgetAction,
-                                loading = mobileSession.isPerformingBudgetAction,
-                            ) {
-                                val amountMinor = state.parseAmountMinorUnits(amountDraft)
-                                val amountMaxMinor = state.parseAmountMinorUnits(amountMaxDraft)
-                                val interval = intervalDraft.toIntOrNull()
-                                val occurrences = endOccurrencesDraft.toIntOrNull()
-                                val dateIsValid = parseIsoDate(dateDraft) != null
-                                val endDateIsValid = endModeDraft != "on_date" || parseIsoDate(endDateDraft) != null
-                                val amountRangeIsInvalid =
-                                    amountRuleDraft == "isbetween" &&
-                                        amountMinor != null &&
-                                        amountMaxMinor != null &&
-                                        amountMinor > amountMaxMinor
-                                val intervalIsInvalid =
-                                    frequencyDraft != "once" && (interval == null || interval !in 1..999)
-                                val repeatCountIsInvalid =
-                                    frequencyDraft != "once" &&
-                                        endModeDraft == "after_n_occurrences" &&
-                                        (occurrences == null || occurrences !in 1..100_000)
-                                val endBeforeStart = endModeDraft == "on_date" && endDateDraft < dateDraft
-                                val validationError =
-                                    when {
-                                        nameDraft.isBlank() -> "name" to "Enter a schedule name."
-                                        accountIdDraft.isBlank() -> "account" to "Choose an account."
-                                        payeeIdDraft.isBlank() -> "payee" to "Choose a payee."
-                                        amountMinor == null -> "amount" to "Enter a valid amount."
-                                        amountRuleDraft == "isbetween" && amountMaxMinor == null ->
-                                            "maximum" to "Enter a valid maximum amount."
-                                        amountRangeIsInvalid -> "maximum" to "The maximum must be at least the minimum."
-                                        intervalIsInvalid -> "interval" to "Repeat interval must be between 1 and 999."
-                                        repeatCountIsInvalid -> "occurrences" to "Enter a valid number of repeats."
-                                        !dateIsValid -> "startDate" to "Choose a valid start date."
-                                        !endDateIsValid -> "endDate" to "Choose a valid end date."
-                                        endBeforeStart -> "endDate" to "The end date must be on or after the start date."
-                                        else -> null
-                                    }
-                                editErrorField = validationError?.first
-                                editError = validationError?.second
-                                if (editError == null) {
-                                    val editedDate =
-                                        if (frequencyDraft == "once") {
-                                            JsonPrimitive(dateDraft) as JsonElement
-                                        } else {
-                                            buildJsonObject {
-                                                dateConfig?.forEach { (key, value) ->
-                                                    if (key !in
-                                                        setOf(
-                                                            "frequency",
-                                                            "interval",
-                                                            "start",
-                                                            "skipWeekend",
-                                                            "endMode",
-                                                            "endOccurrences",
-                                                            "endDate",
-                                                        )
-                                                    ) {
-                                                        put(key, value)
-                                                    }
-                                                }
-                                                put("frequency", frequencyDraft)
-                                                put("interval", interval ?: 1)
-                                                put("start", dateDraft)
-                                                put("skipWeekend", skipWeekendDraft)
-                                                put("endMode", endModeDraft)
-                                                if (endModeDraft == "after_n_occurrences") put("endOccurrences", occurrences ?: 1)
-                                                if (endModeDraft == "on_date") put("endDate", endDateDraft)
-                                            }
-                                        }
-                                    val fields =
-                                        buildJsonObject {
-                                            put("name", nameDraft.trim())
-                                            put("accountId", accountIdDraft)
-                                            put("payeeId", payeeIdDraft)
-                                            put("amountOp", amountRuleDraft)
-                                            if (amountRuleDraft == "isbetween") {
-                                                put(
-                                                    "amountRangeMinor",
-                                                    buildJsonObject {
-                                                        put("num1", amountMinor ?: 0L)
-                                                        put("num2", amountMaxMinor ?: 0L)
-                                                    },
-                                                )
-                                            } else {
-                                                put("amountMinor", amountMinor ?: 0L)
-                                            }
-                                            put("date", editedDate)
-                                        }
-                                    scope.launch {
-                                        val saved =
-                                            mobileSession.schedules.manageBudgetSchedule(
-                                                state.selectedBudgetId,
-                                                selectedSchedule.id,
-                                                "edit",
-                                                null,
-                                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                fields,
-                                            )
-                                        if (saved) showScheduleEditor = false
-                                    }
-                                }
-                            }
-                            TandemActionButton(
-                                "Cancel",
-                                TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) { dialogMode = "menu" }
-                        }
-                        else -> {
-                            budgetActionFeedbackMessage(mobileSession)
-                            pendingScheduleActions.forEach { pending ->
-                                InlineMessage(
-                                    text = mobileSession.schedules.scheduleActionStatusMessage(pending),
-                                    kind = InlineMessageKind.WARNING,
-                                    actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pending),
-                                    onAction =
-                                        if (mobileSession.schedules.scheduleActionStatusActionLabel(pending) != null) {
-                                            { mobileSession.schedules.performScheduleActionStatusAction(pending) }
-                                        } else {
-                                            null
-                                        },
-                                )
-                            }
-                            TandemActionButton(
-                                "Post now",
-                                TandemActionButtonTone.PRIMARY,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.CalendarDays,
-                                enabled = !mobileSession.isPerformingBudgetAction && !pendingActionBlocksChoice,
-                                loading = mobileSession.isPerformingBudgetAction,
-                            ) {
-                                scope.launch {
-                                    val posted =
-                                        mobileSession.schedules.manageBudgetSchedule(
-                                            state.selectedBudgetId,
-                                            selectedSchedule.id,
-                                            "post",
-                                            null,
-                                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                                            expectedNextDate = selectedSchedule.nextDate,
-                                        )
-                                    if (posted) showScheduleEditor = false
-                                }
-                            }
-                            if (selectedSchedule.canSkip) {
-                                TandemActionButton(
-                                    "Skip next date",
-                                    TandemActionButtonTone.NEUTRAL,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    icon = Lucide.CalendarDays,
-                                    enabled = !mobileSession.isPerformingBudgetAction && !pendingActionBlocksChoice,
-                                    loading = mobileSession.isPerformingBudgetAction,
-                                ) {
-                                    scope.launch {
-                                        val skipped =
-                                            mobileSession.schedules.manageBudgetSchedule(
-                                                state.selectedBudgetId,
-                                                selectedSchedule.id,
-                                                "skip",
-                                                null,
-                                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                                                expectedNextDate = selectedSchedule.nextDate,
-                                            )
-                                        if (skipped) showScheduleEditor = false
-                                    }
-                                }
-                            }
-                            TandemActionButton(
-                                "Edit schedule",
-                                TandemActionButtonTone.NEUTRAL,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.Pencil,
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) {
-                                mobileSession.feedback.clearBudgetActionMessage()
-                                dialogMode = "edit"
-                            }
-                            TandemActionButton(
-                                "Delete",
-                                TandemActionButtonTone.DESTRUCTIVE,
-                                modifier = Modifier.fillMaxWidth(),
-                                icon = Lucide.Trash2,
-                                enabled = !mobileSession.isPerformingBudgetAction,
-                            ) {
-                                mobileSession.feedback.clearBudgetActionMessage()
-                                dialogMode = "delete"
-                                showDeleteScheduleConfirmation = true
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (showDeleteScheduleConfirmation && selectedSchedule != null) {
-        DestructiveConfirmationDialog(
-            title = "Delete schedule?",
-            message = mobileSession.budgetActionMessage ?: "Remove ${selectedSchedule.name} from upcoming bills?",
-            messageKind = mobileSession.feedback.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
-            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
-            onMessageAction =
-                if (mobileSession.feedback.budgetActionMessageActionLabel ==
-                    null
-                ) {
-                    null
-                } else {
-                    mobileSession.feedback::retryBudgetAction
-                },
-            confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
-            dismissLabel = "Keep schedule",
-            enabled = !mobileSession.isPerformingBudgetAction,
+    if (dialog.showDeleteScheduleConfirmation && selectedSchedule != null) {
+        ScheduleDeleteConfirmationDialog(
+            mobileSession,
+            selectedSchedule,
             onDismissRequest = {
                 if (!mobileSession.isPerformingBudgetAction) {
-                    showDeleteScheduleConfirmation = false
-                    dialogMode = "menu"
+                    dialog.showDeleteScheduleConfirmation = false
+                    dialog.dialogMode = "menu"
                 }
             },
-            onConfirm = {
-                scope.launch {
-                    val deleted =
-                        mobileSession.schedules.manageBudgetSchedule(
-                            state.selectedBudgetId,
-                            selectedSchedule.id,
-                            "delete",
-                            null,
-                            state.encryptedPassword.takeIf { it.isNotBlank() },
-                        )
-                    if (deleted) {
-                        showDeleteScheduleConfirmation = false
-                        showScheduleEditor = false
-                    } else {
-                        showDeleteScheduleConfirmation = false
-                        dialogMode = "menu"
-                    }
-                }
-            },
+            onConfirm = { deleteSchedule(state, mobileSession, scope, selectedSchedule, selection, dialog) },
         )
     }
-    ScheduleDatePickerDialog(
-        visible = datePickerTarget != null,
-        initialDate = if (datePickerTarget == "end") endDateDraft else dateDraft,
-        onDismiss = { datePickerTarget = null },
-        onSelect = { value ->
-            val field = if (datePickerTarget == "end") "endDate" else "startDate"
-            if (datePickerTarget == "end") endDateDraft = value else dateDraft = value
-            datePickerTarget = null
-            clearEditError(field)
-        },
-    )
+    ScheduleEditDatePicker(draft)
 }
 
 @Composable
-private fun ScheduleFieldError(
-    message: String?,
-    field: String,
+private fun rememberSchedulePayeeOptions(
+    payeeRecords: List<BudgetRecordEntity>,
+    selectedSchedule: LiveScheduleSummary?,
+): List<Pair<String, String>> =
+    remember(payeeRecords, selectedSchedule?.payeeId) {
+        val names =
+            payeeRecords
+                .mapNotNull { record ->
+                    record.recordName()?.let { record.recordId to it }
+                }.toMap()
+                .toMutableMap()
+        selectedSchedule?.payeeId?.let { id -> if (id !in names) names[id] = id }
+        names.entries.sortedBy { it.value.lowercase() }.map { it.key to it.value }
+    }
+
+@Composable
+private fun rememberScheduleAccountOptions(accounts: List<LiveAccountSummary>): List<Pair<String, String>> =
+    remember(accounts) {
+        accounts.filterNot(LiveAccountSummary::closed).sortedBy { it.name.lowercase() }.map { it.id to it.name }
+    }
+
+/** One card per upcoming schedule with its pending-action notices, or an empty state. */
+private fun LazyListScope.upcomingScheduleItems(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    schedules: List<LiveScheduleSummary>,
+    onOpen: (LiveScheduleSummary) -> Unit,
 ) {
-    FieldErrorMessage(message, owner = FeedbackMessageOwner.Field(field))
+    if (schedules.isEmpty()) {
+        item(key = "upcoming-schedules-empty") {
+            SurfaceCard {
+                EmptyState(
+                    "No upcoming bills",
+                    "Schedules added in Actual will appear here.",
+                    modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
+                )
+            }
+        }
+    } else {
+        items(schedules.size, key = { index -> schedules[index].id }) { index ->
+            val schedule = schedules[index]
+            val pendingActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
+            SurfaceCard {
+                pendingActions.forEach { pendingAction ->
+                    InlineMessage(
+                        text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
+                        kind =
+                            if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
+                                InlineMessageKind.WARNING
+                            } else {
+                                InlineMessageKind.INFO
+                            },
+                        actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction),
+                        onAction =
+                            if (mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction) != null) {
+                                { mobileSession.schedules.performScheduleActionStatusAction(pendingAction) }
+                            } else {
+                                null
+                            },
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ListRow(
+                        schedule.name,
+                        listOfNotNull(
+                            formatTransactionListDate(schedule.nextDate),
+                            schedule.accountName,
+                        ).joinToString(" · "),
+                        schedule.amountLabel(state),
+                        leading = RowLeading.Icon(Lucide.CalendarDays),
+                        onClick = { onOpen(schedule) },
+                    )
+                    TandemIconButton(
+                        Lucide.ChevronRight,
+                        "Schedule actions",
+                        modifier = Modifier.padding(end = TandemSpacing.small),
+                        sizeDp = 40,
+                        iconSizeDp = 18,
+                        containerColor = tandemPalette.raised,
+                    ) {
+                        onOpen(schedule)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Validates the draft and, when it is valid, sends the edit and closes the sheet once saved. */
+private fun saveScheduleEdit(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    scope: CoroutineScope,
+    draft: ScheduleEditDraft,
+    dateConfig: JsonObject?,
+    selectedSchedule: LiveScheduleSummary,
+    selection: ScheduleSelectionState,
+) {
+    val amountMinor = state.parseAmountMinorUnits(draft.amountDraft)
+    val amountMaxMinor = state.parseAmountMinorUnits(draft.amountMaxDraft)
+    val interval = draft.intervalDraft.toIntOrNull()
+    val occurrences = draft.endOccurrencesDraft.toIntOrNull()
+    val dateIsValid = parseIsoDate(draft.dateDraft) != null
+    val endDateIsValid = draft.endModeDraft != "on_date" || parseIsoDate(draft.endDateDraft) != null
+    val amountRangeIsInvalid =
+        draft.amountRuleDraft == "isbetween" &&
+            amountMinor != null &&
+            amountMaxMinor != null &&
+            amountMinor > amountMaxMinor
+    val intervalIsInvalid =
+        draft.frequencyDraft != "once" && (interval == null || interval !in 1..999)
+    val repeatCountIsInvalid =
+        draft.frequencyDraft != "once" &&
+            draft.endModeDraft == "after_n_occurrences" &&
+            (occurrences == null || occurrences !in 1..100_000)
+    val endBeforeStart = draft.endModeDraft == "on_date" && draft.endDateDraft < draft.dateDraft
+    val validationError =
+        when {
+            draft.nameDraft.isBlank() -> "name" to "Enter a schedule name."
+            draft.accountIdDraft.isBlank() -> "account" to "Choose an account."
+            draft.payeeIdDraft.isBlank() -> "payee" to "Choose a payee."
+            amountMinor == null -> "amount" to "Enter a valid amount."
+            draft.amountRuleDraft == "isbetween" && amountMaxMinor == null ->
+                "maximum" to "Enter a valid maximum amount."
+            amountRangeIsInvalid -> "maximum" to "The maximum must be at least the minimum."
+            intervalIsInvalid -> "interval" to "Repeat interval must be between 1 and 999."
+            repeatCountIsInvalid -> "occurrences" to "Enter a valid number of repeats."
+            !dateIsValid -> "startDate" to "Choose a valid start date."
+            !endDateIsValid -> "endDate" to "Choose a valid end date."
+            endBeforeStart -> "endDate" to "The end date must be on or after the start date."
+            else -> null
+        }
+    draft.editErrorField = validationError?.first
+    draft.editError = validationError?.second
+    if (draft.editError == null) {
+        val fields = draft.editedScheduleFields(dateConfig, amountMinor, amountMaxMinor, interval, occurrences)
+        scope.launch {
+            val saved =
+                mobileSession.schedules.manageBudgetSchedule(
+                    state.selectedBudgetId,
+                    selectedSchedule.id,
+                    "edit",
+                    null,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                    fields,
+                )
+            if (saved) selection.showScheduleEditor = false
+        }
+    }
+}
+
+private fun deleteSchedule(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    scope: CoroutineScope,
+    selectedSchedule: LiveScheduleSummary,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+) {
+    scope.launch {
+        val deleted =
+            mobileSession.schedules.manageBudgetSchedule(
+                state.selectedBudgetId,
+                selectedSchedule.id,
+                "delete",
+                null,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
+        if (deleted) {
+            dialog.showDeleteScheduleConfirmation = false
+            selection.showScheduleEditor = false
+        } else {
+            dialog.showDeleteScheduleConfirmation = false
+            dialog.dialogMode = "menu"
+        }
+    }
 }
