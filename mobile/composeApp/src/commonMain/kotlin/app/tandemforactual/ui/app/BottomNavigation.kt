@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.design.theme.TandemMotion
@@ -103,54 +105,68 @@ internal fun BottomNavigation(
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
             items.forEach { (route, label) ->
-                val active = route == selected
-                val tabColor by
-                    animateColorAsState(
-                        targetValue = if (active) palette.accent else palette.muted,
-                        animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                        label = "tab-color-${route.name.lowercase()}",
-                    )
-                val iconScale by
-                    animateFloatAsState(
-                        targetValue = if (active) 1.08f else 1f,
-                        animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-                        label = "tab-icon-scale-${route.name.lowercase()}",
-                    )
-                Column(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .defaultMinSize(minHeight = 52.dp)
-                            .clip(tabShape)
-                            .selectable(
-                                selected = active,
-                                enabled = visible,
-                                role = Role.Tab,
-                                onClick = { selectTab(route) },
-                            ).semantics(mergeDescendants = true) {
-                                if (visible) {
-                                    contentDescription = label
-                                    this.selected = active
-                                }
-                            }.then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
-                            .padding(vertical = TandemSpacing.small),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-                ) {
-                    NavigationGlyph(route, tabColor, iconScale)
-                    CompositionLocalProvider(LocalDensity provides labelDensity) {
-                        Text(
-                            label,
-                            color = tabColor,
-                            fontSize = TandemTypography.micro,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                        )
-                    }
-                }
+                BottomNavigationTab(route, label, route == selected, visible, tabShape, labelDensity, selectTab)
             }
+        }
+    }
+}
+
+/** One tab in the bottom bar: its glyph and label, tinted and scaled when selected. */
+@Composable
+private fun RowScope.BottomNavigationTab(
+    route: AppRoute,
+    label: String,
+    active: Boolean,
+    visible: Boolean,
+    tabShape: RoundedCornerShape,
+    labelDensity: Density,
+    selectTab: (AppRoute) -> Unit,
+) {
+    val palette = tandemPalette
+    val tabColor by
+        animateColorAsState(
+            targetValue = if (active) palette.accent else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = "tab-color-${route.name.lowercase()}",
+        )
+    val iconScale by
+        animateFloatAsState(
+            targetValue = if (active) 1.08f else 1f,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+            label = "tab-icon-scale-${route.name.lowercase()}",
+        )
+    Column(
+        modifier =
+            Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 52.dp)
+                .clip(tabShape)
+                .selectable(
+                    selected = active,
+                    enabled = visible,
+                    role = Role.Tab,
+                    onClick = { selectTab(route) },
+                ).semantics(mergeDescendants = true) {
+                    if (visible) {
+                        contentDescription = label
+                        this.selected = active
+                    }
+                }.then(if (visible) Modifier else Modifier.clearAndSetSemantics {})
+                .padding(vertical = TandemSpacing.small),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+    ) {
+        NavigationGlyph(route, tabColor, iconScale)
+        CompositionLocalProvider(LocalDensity provides labelDensity) {
+            Text(
+                label,
+                color = tabColor,
+                fontSize = TandemTypography.micro,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+            )
         }
     }
 }

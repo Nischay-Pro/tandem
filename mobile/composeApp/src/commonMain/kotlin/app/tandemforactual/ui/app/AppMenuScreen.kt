@@ -108,30 +108,7 @@ internal fun AppMenu(
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TandemIconButton(Lucide.X, "Close menu", containerColor = palette.surface, onClick = onClose)
-                    Spacer(Modifier.weight(1f))
-                    Row(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(palette.surface)
-                            .clickable(role = Role.Button, onClick = onSwitchBudget)
-                            .padding(horizontal = TandemSpacing.medium, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Lucide.ArrowLeftRight, null, Modifier.size(16.dp), tint = palette.text)
-                        Text(
-                            "Switch budget",
-                            Modifier.padding(start = TandemSpacing.extraSmall),
-                            color = palette.text,
-                            fontSize = TandemTypography.compactBody,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
+                AppMenuTopBar(onClose, onSwitchBudget)
                 Column(
                     Modifier
                         .weight(1f)
@@ -149,33 +126,73 @@ internal fun AppMenu(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp,
                     )
-                    val advanced = (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .clip(RoundedCornerShape(TandemShapes.control))
-                            .toggleable(value = advanced, role = Role.Switch) {
-                                state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL)
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Lucide.PanelsTopLeft, null, Modifier.size(22.dp), tint = palette.text)
-                        Column(Modifier.weight(1f).padding(start = TandemSpacing.medium)) {
-                            Text("Advanced", color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
-                            Text(
-                                "More tabs, tools and detail",
-                                color = palette.muted,
-                                fontSize = TandemTypography.label,
-                            )
-                        }
-                        AdvancedModeSwitch(state, labeled = false)
-                    }
+                    AdvancedModeRow(state)
                     items.forEach { MenuRow(it) }
                     MenuFooter(onAbout, onLicenses)
                 }
             }
         }
+    }
+}
+
+/** The menu's top bar: close on the left, switch budget on the right. */
+@Composable
+private fun AppMenuTopBar(
+    onClose: () -> Unit,
+    onSwitchBudget: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TandemIconButton(Lucide.X, "Close menu", containerColor = palette.surface, onClick = onClose)
+        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier
+                .clip(CircleShape)
+                .background(palette.surface)
+                .clickable(role = Role.Button, onClick = onSwitchBudget)
+                .padding(horizontal = TandemSpacing.medium, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Lucide.ArrowLeftRight, null, Modifier.size(16.dp), tint = palette.text)
+            Text(
+                "Switch budget",
+                Modifier.padding(start = TandemSpacing.extraSmall),
+                color = palette.text,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/** The Advanced mode toggle row, following a pending mode switch. */
+@Composable
+private fun AdvancedModeRow(state: AppState) {
+    val palette = tandemPalette
+    val advanced = (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .toggleable(value = advanced, role = Role.Switch) {
+                state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL)
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Lucide.PanelsTopLeft, null, Modifier.size(22.dp), tint = palette.text)
+        Column(Modifier.weight(1f).padding(start = TandemSpacing.medium)) {
+            Text("Advanced", color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
+            Text(
+                "More tabs, tools and detail",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+            )
+        }
+        AdvancedModeSwitch(state, labeled = false)
     }
 }
 

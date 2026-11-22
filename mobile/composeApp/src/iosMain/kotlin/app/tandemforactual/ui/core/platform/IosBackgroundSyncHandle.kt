@@ -3,6 +3,7 @@ package app.tandemforactual.ui.core.platform
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.data.store.AlertKind
@@ -110,29 +111,16 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
             sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
-        val overspending =
-            if (overspendingAlertsEnabled) {
-                overspendingAlert(repository, AppPreferencesStore(database), budgetId, platformTodayIsoDate().take(7))
-            } else {
-                null
-            }
-        val policy = NotificationPolicy.read(preferences)
-        val minute = platformMinuteOfDay()
-        val today = platformTodayIsoDate()
-        val settings = repository.readBudgetDisplaySettings(budgetId)
-        val format = { minor: Long -> formatCurrency(minor, settings) }
-        val store = AppPreferencesStore(database)
-        if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
-            upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
-        }
-        if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
-            largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
-        }
-        if (policy.quietHours?.contains(minute) == true) {
-            IosBackgroundSyncAlerts(taskSucceeded = true)
-        } else {
-            summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
-        }
+        postSyncAlerts(
+            database,
+            repository,
+            preferences,
+            budgetId,
+            summary,
+            overspendingAlertsEnabled,
+            conflictAlertsEnabled,
+            rejectedAlertsEnabled,
+        )
     } catch (error: CancellationException) {
         IosBackgroundSyncAlerts(taskSucceeded = false)
     } catch (_: IosCredentialUnavailableBeforeFirstUnlockException) {
@@ -147,6 +135,41 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         IosBackgroundSyncAlerts(taskSucceeded = false, notifySyncFailure = syncRemindersEnabled)
     } finally {
         database.close()
+    }
+}
+
+private suspend fun postSyncAlerts(
+    database: TandemDatabase,
+    repository: LocalBudgetRepository,
+    preferences: Map<String, String>,
+    budgetId: String,
+    summary: BudgetSyncSummary,
+    overspendingAlertsEnabled: Boolean,
+    conflictAlertsEnabled: Boolean,
+    rejectedAlertsEnabled: Boolean,
+): IosBackgroundSyncAlerts {
+    val overspending =
+        if (overspendingAlertsEnabled) {
+            overspendingAlert(repository, AppPreferencesStore(database), budgetId, platformTodayIsoDate().take(7))
+        } else {
+            null
+        }
+    val policy = NotificationPolicy.read(preferences)
+    val minute = platformMinuteOfDay()
+    val today = platformTodayIsoDate()
+    val settings = repository.readBudgetDisplaySettings(budgetId)
+    val format = { minor: Long -> formatCurrency(minor, settings) }
+    val store = AppPreferencesStore(database)
+    if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
+        upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+    }
+    if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
+        largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+    }
+    return if (policy.quietHours?.contains(minute) == true) {
+        IosBackgroundSyncAlerts(taskSucceeded = true)
+    } else {
+        summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
     }
 }
 

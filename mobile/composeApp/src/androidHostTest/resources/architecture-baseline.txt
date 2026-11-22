@@ -66,12 +66,10 @@ function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size ActivitySearch.activitySearchSuggestions
 function-size AppLockGate.EncryptedBudgetUnlock
-function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
 function-size AreaChart.AreaChart
 function-size BankBrowserLinkSheet.BanksStep
 function-size BankConnectionsScreen.BankConnectionsScreen
-function-size BottomNavigation.BottomNavigation
 function-size BudgetChooserScreen.BudgetChooserScreen
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
@@ -93,14 +91,10 @@ function-size HomeScreen.HomeEntryCard
 function-size HomeScreen.HomeScreen
 function-size HouseholdScreen.HouseholdScreen
 function-size InsightScreens.MonthlyReviewScreen
-function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
 function-size ListRow.ListRow
-function-size LiveBudgetModels.liveBudgetMonthSummary
-function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
 function-size MatchEditorScreen.MatchEditorScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
-function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
 function-size PageTemplates.PageLazyColumnContent
 function-size PendingChangesScreen.PendingChangesScreen
