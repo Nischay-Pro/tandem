@@ -3,15 +3,7 @@ export default {
     "@stryker-mutator/vitest-runner",
     "@stryker-mutator/typescript-checker",
   ],
-  mutate: [
-    "src/actual/actual-session.ts",
-    "src/actual/transaction-reconciliation.ts",
-    "src/actual/transaction-reconciler.ts",
-    "src/actual/transaction-store.ts",
-    "src/database/budget-lock.ts",
-    "src/auth/device-auth.ts",
-    "src/auth/postgres-device-auth-store.ts",
-  ],
+  mutate: ["src/store.ts", "src/actual-access.ts", "src/app.ts"],
   testRunner: "vitest",
   vitest: {
     configFile: "vitest.config.ts",
@@ -24,7 +16,7 @@ export default {
   incrementalFile: "../../.dev-tmp/stryker/incremental.json",
   reporters: ["clear-text", "html"],
   htmlReporter: {
-    fileName: "../../.dev-tmp/stryker/critical-finance-boundaries.html",
+    fileName: "../../.dev-tmp/stryker/extension-sync.html",
   },
   tempDirName: "../../.dev-tmp/stryker/temp",
   thresholds: {

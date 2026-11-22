@@ -298,7 +298,9 @@ export function checkVersions(repoRoot = root) {
       compatibility,
       /^\s+image:\s+ghcr\.io\/actualbudget\/actual:([\d.]+)@/m,
     ),
-    actualApi: apiPackage.dependencies?.["@actual-app/api"],
+    actualApi:
+      apiPackage.dependencies?.["@actual-app/api"] ??
+      apiPackage.devDependencies?.["@actual-app/api"],
     kotlin: catalogVersion("kotlin"),
     androidGradlePlugin: catalogVersion("androidGradlePlugin"),
     openapiGenerator: catalogVersion("openapiKmpGen"),

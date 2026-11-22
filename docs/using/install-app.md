@@ -37,14 +37,12 @@ prereleases. An iOS build is available from source only.
    installation, use its settings prompt for that file source, then reopen the
    APK.
 
-4. **Connect to your budget.** Enter the HTTPS server address provided by the
-   operator, then sign in with your Actual account and choose a budget. Tandem
-   checks for its API Gateway at `/api/v1/`; use the server address without
-   adding that path.
+4. **Connect to your budget.** Enter your Actual server's HTTPS address, sign
+   in with your Actual password and choose a budget. Encrypted budgets ask for
+   their budget password.
 
-   **Check:** Tandem reports that the first sync is complete. If sign-in fails, confirm
-   the operator has installed Tandem's API Gateway and that the server address
-   reaches it. See [server troubleshooting](../deploy/troubleshooting.md).
+   **Check:** Tandem reports that the first sync is complete. If sign-in fails,
+   open the same address in a browser and confirm Actual loads.
 
 5. **Choose how Tandem syncs.** After the first sync and any notification
    prompt, choose whether Tandem should sync in the background. Under **Sync

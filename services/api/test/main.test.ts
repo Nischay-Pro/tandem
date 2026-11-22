@@ -1,26 +1,35 @@
 import { describe, expect, it, vi } from "vitest";
-import { productionStartupExitCode, runProductionApi } from "../src/main.js";
-import { OperatorMessageError } from "../src/operator-message-error.js";
+import { createPool, run } from "../src/main.js";
 
-describe("API process startup", () => {
-  it("maps startup failures to stable process exit codes", () => {
-    expect(
-      productionStartupExitCode(new OperatorMessageError("bad config")),
-    ).toBe(2);
-    expect(productionStartupExitCode(new Error("startup failure"))).toBe(1);
-  });
-
-  it("uses a distinct exit code for configuration failures", async () => {
-    const signals = {
-      exitCode: undefined as number | undefined,
-      once: vi.fn(),
-    } as unknown as NodeJS.Process;
-
-    const failure = await runProductionApi({}, signals).catch(
-      (error: unknown) => error,
+describe("startup", () => {
+  it("bootstraps the schema, listens and stops on a signal", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const end = vi.fn().mockResolvedValue(undefined);
+    const handlers = new Map<string, () => void>();
+    const app = await run(
+      {
+        DATABASE_URL: "postgresql://db",
+        ACTUAL_SERVER_URL: "https://actual.example",
+        HOST: "127.0.0.1",
+        PORT: "39847",
+      },
+      (signal, handler) => handlers.set(signal, handler),
+      () => ({ query, end }) as never,
     );
-
-    expect(failure).toBeInstanceOf(OperatorMessageError);
-    expect(signals.exitCode).toBe(2);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS planning_records"),
+    );
+    expect([...handlers.keys()]).toEqual(["SIGINT", "SIGTERM"]);
+    expect(
+      (await app.inject({ url: "/extension/v1/capabilities" })).statusCode,
+    ).toBe(200);
+    handlers.get("SIGTERM")!();
+    await vi.waitFor(() => expect(end).toHaveBeenCalled());
+    await expect(run({}, () => undefined)).rejects.toThrow("DATABASE_URL");
+    const pool = createPool("postgresql://user@127.0.0.1:1/db");
+    expect(pool.options.connectionString).toBe(
+      "postgresql://user@127.0.0.1:1/db",
+    );
+    await pool.end();
   });
 });

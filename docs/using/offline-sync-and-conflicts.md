@@ -5,9 +5,8 @@ synced successfully on this device once.
 
 ## What happens when you save
 
-Tandem saves supported changes on this phone first. When the Tandem server and
-Actual are reachable, Tandem sends the change and waits for Actual to confirm
-it. The change stays in **Pending Changes** while Tandem waits for confirmation.
+Tandem saves supported changes on this phone first. When Actual is reachable,
+Tandem sends the change and waits for Actual to confirm it. The change stays in **Pending Changes** while Tandem waits for confirmation.
 If the connection drops after you send an edit, it may already have reached
 Actual. Check its status before trying again.
 
@@ -16,9 +15,7 @@ flowchart TD
   save[Save in Tandem] --> queued["Saved on this device<br/>Pending Changes"]
   queued --> ready{"Can Tandem send the edit?"}
   ready -->|Offline| queued
-  ready -->|Server feature missing| waiting[Wait for a Tandem server update]
-  waiting -->|Server supports the feature| queued
-  ready -->|Ready| send[Send the edit to Tandem]
+  ready -->|Ready| send[Send the edit to Actual]
   send -->|Actual confirms the change| synced[Synced]
   send -->|Edits conflict| review[Needs review]
   send -->|Edit refused| rejected[Rejected]
