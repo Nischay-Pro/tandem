@@ -28,42 +28,7 @@ internal fun SecurityScreen(
     val canChangeReadOnly = state.readOnlyMode || !hasPendingWrites
     PageColumn {
         SectionCard("App access") {
-            val authenticator = LocalDeviceAuthenticator.current
-            val biometricAvailable = remember(authenticator) { authenticator?.isAvailable() == true }
-            ToggleRow(
-                title = "Biometric unlock",
-                subtitle =
-                    when {
-                        authenticator == null -> "Not available on this device"
-                        !biometricAvailable -> "Set up a screen lock on this device first"
-                        state.selectedBudgetEncrypted -> "Unlock your encrypted budget with biometrics"
-                        else -> "Fingerprint, face, or screen lock"
-                    },
-                checked = state.biometricLockEnabled,
-                enabled = biometricAvailable || state.biometricLockEnabled,
-                onChange = { enable ->
-                    val secretId = budgetPasswordSecretId(state.selectedBudgetId)
-                    val password = state.encryptedPassword
-                    when {
-                        authenticator == null -> if (!enable) state.biometricLockEnabled = false
-                        !enable ->
-                            authenticator.authenticate("Turn off biometric unlock") { success ->
-                                if (success) {
-                                    authenticator.deleteAllSecrets()
-                                    state.biometricLockEnabled = false
-                                }
-                            }
-                        state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
-                            authenticator.storeSecret(secretId, password, "Turn on biometric unlock") { stored ->
-                                if (stored) state.biometricLockEnabled = true
-                            }
-                        else ->
-                            authenticator.authenticate("Turn on biometric unlock") { success ->
-                                if (success) state.biometricLockEnabled = true
-                            }
-                    }
-                },
-            )
+            BiometricUnlockToggle(state)
             DividerLine()
             ToggleRow(
                 title = "Lock editing",
@@ -105,4 +70,45 @@ internal fun SecurityScreen(
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
     }
+}
+
+/** Turns biometric unlock on or off, confirming with the device first. */
+@Composable
+private fun BiometricUnlockToggle(state: AppState) {
+    val authenticator = LocalDeviceAuthenticator.current
+    val biometricAvailable = remember(authenticator) { authenticator?.isAvailable() == true }
+    ToggleRow(
+        title = "Biometric unlock",
+        subtitle =
+            when {
+                authenticator == null -> "Not available on this device"
+                !biometricAvailable -> "Set up a screen lock on this device first"
+                state.selectedBudgetEncrypted -> "Unlock your encrypted budget with biometrics"
+                else -> "Fingerprint, face, or screen lock"
+            },
+        checked = state.biometricLockEnabled,
+        enabled = biometricAvailable || state.biometricLockEnabled,
+        onChange = { enable ->
+            val secretId = budgetPasswordSecretId(state.selectedBudgetId)
+            val password = state.encryptedPassword
+            when {
+                authenticator == null -> if (!enable) state.biometricLockEnabled = false
+                !enable ->
+                    authenticator.authenticate("Turn off biometric unlock") { success ->
+                        if (success) {
+                            authenticator.deleteAllSecrets()
+                            state.biometricLockEnabled = false
+                        }
+                    }
+                state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
+                    authenticator.storeSecret(secretId, password, "Turn on biometric unlock") { stored ->
+                        if (stored) state.biometricLockEnabled = true
+                    }
+                else ->
+                    authenticator.authenticate("Turn on biometric unlock") { success ->
+                        if (success) state.biometricLockEnabled = true
+                    }
+            }
+        },
+    )
 }

@@ -46,40 +46,12 @@ internal fun NotificationsScreen(
     onToggleNotificationPermission: ((Boolean) -> Unit)?,
 ) {
     PageColumn {
-        SurfaceCard {
-            if (notificationPermissionEnabled != null && onToggleNotificationPermission != null) {
-                ToggleRow(
-                    "Allow notifications",
-                    if (notificationPermissionEnabled) {
-                        "On · Turn off in notification settings"
-                    } else {
-                        "Off · Turn on in notification settings"
-                    },
-                    notificationPermissionEnabled,
-                    onChange = onToggleNotificationPermission,
-                )
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    Text(
-                        "Notifications",
-                        modifier = Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.compactBody,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    if (onRequestNotificationPermission != null) {
-                        CompactActionButton("Turn on", Modifier.weight(1f), onRequestNotificationPermission)
-                    }
-                    if (onOpenNotificationSettings != null) {
-                        CompactActionButton("Settings", Modifier.weight(1f), onOpenNotificationSettings)
-                    }
-                }
-            }
-        }
+        NotificationPermissionCard(
+            onRequestNotificationPermission,
+            onOpenNotificationSettings,
+            notificationPermissionEnabled,
+            onToggleNotificationPermission,
+        )
         val askOnEnable: (Boolean) -> Unit = { on ->
             if (on && notificationPermissionEnabled == false) onRequestNotificationPermission?.invoke()
         }
@@ -98,54 +70,113 @@ internal fun NotificationsScreen(
                 state.bankSyncAlerts = it
             }
         }
-        SectionCard("Money") {
-            ToggleRow(
-                "Upcoming bills",
-                "From your schedules, ${billLeadLabel(state.billLeadDays)}",
-                state.upcomingBillAlerts,
-            ) {
-                state.upcomingBillAlerts = it
-                askOnEnable(it)
-            }
-            RevealedOption(state.upcomingBillAlerts) {
-                FilterPills(listOf(1, 3, 7).map { it to billLeadLabel(it) }, state.billLeadDays, { state.billLeadDays = it })
-            }
-            DividerLine()
-            ToggleRow("Overspending alerts", "When a category goes over budget this month", state.overspendingAlerts) {
-                state.overspendingAlerts = it
-            }
-            DividerLine()
-            ToggleRow(
-                "Large transactions",
-                "Spending of ${state.formatCurrency(state.largeTransactionMinor)} or more",
-                state.largeTransactionAlerts,
-            ) {
-                state.largeTransactionAlerts = it
-                askOnEnable(it)
-            }
-            RevealedOption(state.largeTransactionAlerts) {
-                FilterPills(
-                    LARGE_TRANSACTION_STEPS.map { it to state.formatCurrency(it) },
-                    state.largeTransactionMinor,
-                    { state.largeTransactionMinor = it },
-                )
-            }
-        }
-        val quiet = QuietHours.parse(state.quietHours)
-        SectionCard("Quiet hours") {
-            ToggleRow(
-                "Quiet hours",
-                quiet?.let { "Silent ${quietHoursLabel(it)}" } ?: "Notifications can arrive at any time",
-                quiet != null,
-            ) { state.quietHours = if (it) QUIET_HOURS_PRESETS.first().encode() else "" }
-            RevealedOption(quiet != null) {
-                FilterPills(QUIET_HOURS_PRESETS.map { it to quietHoursLabel(it) }, quiet ?: QUIET_HOURS_PRESETS.first(), {
-                    state.quietHours = it.encode()
-                })
-            }
-        }
+        MoneyAlertsSection(state, askOnEnable)
+        QuietHoursSection(state)
         if (state.privacyModeEnabled) InfoBubble("Hide amounts is on, so notifications leave amounts out.")
         InfoBubble("In-app banners always show, even when phone notifications are off.")
+    }
+}
+
+/** The system notification permission, as a switch or as buttons to turn it on. */
+@Composable
+private fun NotificationPermissionCard(
+    onRequestNotificationPermission: (() -> Unit)?,
+    onOpenNotificationSettings: (() -> Unit)?,
+    notificationPermissionEnabled: Boolean?,
+    onToggleNotificationPermission: ((Boolean) -> Unit)?,
+) {
+    SurfaceCard {
+        if (notificationPermissionEnabled != null && onToggleNotificationPermission != null) {
+            ToggleRow(
+                "Allow notifications",
+                if (notificationPermissionEnabled) {
+                    "On · Turn off in notification settings"
+                } else {
+                    "Off · Turn on in notification settings"
+                },
+                notificationPermissionEnabled,
+                onChange = onToggleNotificationPermission,
+            )
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            ) {
+                Text(
+                    "Notifications",
+                    modifier = Modifier.weight(1f),
+                    color = tandemPalette.text,
+                    fontSize = TandemTypography.compactBody,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (onRequestNotificationPermission != null) {
+                    CompactActionButton("Turn on", Modifier.weight(1f), onRequestNotificationPermission)
+                }
+                if (onOpenNotificationSettings != null) {
+                    CompactActionButton("Settings", Modifier.weight(1f), onOpenNotificationSettings)
+                }
+            }
+        }
+    }
+}
+
+/** Bill, overspending and large-transaction alerts. */
+@Composable
+private fun MoneyAlertsSection(
+    state: AppState,
+    askOnEnable: (Boolean) -> Unit,
+) {
+    SectionCard("Money") {
+        ToggleRow(
+            "Upcoming bills",
+            "From your schedules, ${billLeadLabel(state.billLeadDays)}",
+            state.upcomingBillAlerts,
+        ) {
+            state.upcomingBillAlerts = it
+            askOnEnable(it)
+        }
+        RevealedOption(state.upcomingBillAlerts) {
+            FilterPills(listOf(1, 3, 7).map { it to billLeadLabel(it) }, state.billLeadDays, { state.billLeadDays = it })
+        }
+        DividerLine()
+        ToggleRow("Overspending alerts", "When a category goes over budget this month", state.overspendingAlerts) {
+            state.overspendingAlerts = it
+        }
+        DividerLine()
+        ToggleRow(
+            "Large transactions",
+            "Spending of ${state.formatCurrency(state.largeTransactionMinor)} or more",
+            state.largeTransactionAlerts,
+        ) {
+            state.largeTransactionAlerts = it
+            askOnEnable(it)
+        }
+        RevealedOption(state.largeTransactionAlerts) {
+            FilterPills(
+                LARGE_TRANSACTION_STEPS.map { it to state.formatCurrency(it) },
+                state.largeTransactionMinor,
+                { state.largeTransactionMinor = it },
+            )
+        }
+    }
+}
+
+/** Whether and when notifications stay silent. */
+@Composable
+private fun QuietHoursSection(state: AppState) {
+    val quiet = QuietHours.parse(state.quietHours)
+    SectionCard("Quiet hours") {
+        ToggleRow(
+            "Quiet hours",
+            quiet?.let { "Silent ${quietHoursLabel(it)}" } ?: "Notifications can arrive at any time",
+            quiet != null,
+        ) { state.quietHours = if (it) QUIET_HOURS_PRESETS.first().encode() else "" }
+        RevealedOption(quiet != null) {
+            FilterPills(QUIET_HOURS_PRESETS.map { it to quietHoursLabel(it) }, quiet ?: QUIET_HOURS_PRESETS.first(), {
+                state.quietHours = it.encode()
+            })
+        }
     }
 }
 

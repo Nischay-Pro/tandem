@@ -98,146 +98,186 @@ internal fun SettingsScreen(
                 SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
             }
         }
-        SectionCard(stringResource(Res.string.settings_section_personalization)) {
-            ListRow(
-                stringResource(Res.string.home_customize),
-                stringResource(Res.string.settings_personalize_detail),
-                leading = RowLeading.Icon(Lucide.Sparkles),
-                onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
-            )
-            DividerLine()
-            ToggleRow(
-                stringResource(Res.string.mode_advanced),
-                stringResource(Res.string.mode_advanced_detail),
-                (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED,
-            ) { state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL) }
-            if (state.experience != null) {
-                DividerLine()
-                ListRow(
-                    stringResource(Res.string.settings_reset_personalization),
-                    stringResource(Res.string.settings_reset_personalization_detail),
-                    leading = RowLeading.Icon(Lucide.RotateCcw),
-                    onClick = { state.resetExperience() },
-                )
-            }
-            DividerLine()
-            ListRow(
-                stringResource(Res.string.settings_appearance),
-                stringResource(Res.string.settings_appearance_detail),
-                leading = RowLeading.Icon(Lucide.Palette),
-                onClick = { navigation.open(AppRoute.APPEARANCE) },
-            )
-            LocalAppLanguage.current?.let { language ->
-                var choosingLanguage by remember { mutableStateOf(false) }
-                DividerLine()
-                ListRow(
-                    stringResource(Res.string.settings_language),
-                    APP_LANGUAGES.firstOrNull { it.tag == language.current }?.nativeName
-                        ?: stringResource(Res.string.settings_language_device),
-                    leading = RowLeading.Icon(Lucide.Languages),
-                    onClick = { choosingLanguage = true },
-                )
-                LanguagePickerSheet(choosingLanguage, language) { choosingLanguage = false }
-            }
-        }
-        SectionCard(stringResource(Res.string.settings_section_budget)) {
-            ListRow(
-                stringResource(Res.string.settings_budget_preferences),
-                stringResource(Res.string.settings_budget_preferences_detail),
-                leading = RowLeading.Icon(Lucide.WalletCards),
-                onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
-            )
+        PersonalizationSection(state, navigation)
+        BudgetSettingsSection(navigation)
+        ConnectionSection(navigation)
+        PrivacySection(state, navigation, mobileSession)
+        SupportSection(state, navigation)
+    }
+}
+
+/** Home layout, interface mode, appearance and language. */
+@Composable
+private fun PersonalizationSection(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    SectionCard(stringResource(Res.string.settings_section_personalization)) {
+        ListRow(
+            stringResource(Res.string.home_customize),
+            stringResource(Res.string.settings_personalize_detail),
+            leading = RowLeading.Icon(Lucide.Sparkles),
+            onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
+        )
+        DividerLine()
+        ToggleRow(
+            stringResource(Res.string.mode_advanced),
+            stringResource(Res.string.mode_advanced_detail),
+            (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED,
+        ) { state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL) }
+        if (state.experience != null) {
             DividerLine()
             ListRow(
-                stringResource(Res.string.settings_manage_payees),
-                stringResource(Res.string.settings_manage_payees_detail),
-                leading = RowLeading.Icon(Lucide.Tags),
-                onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
-            )
-            DividerLine()
-            ListRow(
-                stringResource(Res.string.settings_budget_rules),
-                stringResource(Res.string.settings_budget_rules_detail),
-                leading = RowLeading.Icon(Lucide.ListChecks),
-                onClick = { navigation.open(AppRoute.BUDGET_RULES) },
+                stringResource(Res.string.settings_reset_personalization),
+                stringResource(Res.string.settings_reset_personalization_detail),
+                leading = RowLeading.Icon(Lucide.RotateCcw),
+                onClick = { state.resetExperience() },
             )
         }
-        SectionCard(stringResource(Res.string.settings_section_connection)) {
-            ListRow(
-                stringResource(Res.string.settings_sync_preferences),
-                stringResource(Res.string.settings_sync_preferences_detail),
-                leading = RowLeading.Icon(Lucide.CloudSync),
-                onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
-            )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_appearance),
+            stringResource(Res.string.settings_appearance_detail),
+            leading = RowLeading.Icon(Lucide.Palette),
+            onClick = { navigation.open(AppRoute.APPEARANCE) },
+        )
+        LocalAppLanguage.current?.let { language ->
+            var choosingLanguage by remember { mutableStateOf(false) }
             DividerLine()
             ListRow(
-                stringResource(Res.string.settings_server_device),
-                stringResource(Res.string.settings_server_device_detail),
-                leading = RowLeading.Icon(Lucide.Smartphone),
-                onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
+                stringResource(Res.string.settings_language),
+                APP_LANGUAGES.firstOrNull { it.tag == language.current }?.nativeName
+                    ?: stringResource(Res.string.settings_language_device),
+                leading = RowLeading.Icon(Lucide.Languages),
+                onClick = { choosingLanguage = true },
             )
-            DividerLine()
-            ListRow(
-                stringResource(Res.string.settings_notifications),
-                stringResource(Res.string.settings_notifications_detail),
-                leading = RowLeading.Icon(Lucide.Bell),
-                onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
-            )
+            LanguagePickerSheet(choosingLanguage, language) { choosingLanguage = false }
         }
-        SectionCard(stringResource(Res.string.settings_section_privacy)) {
-            if (!state.selectedBudgetEncrypted && mobileSession.planning.syncStatus != PlanningSyncStatus.OFF) {
-                var showingRecoveryKey by remember { mutableStateOf(false) }
-                val scope = rememberCoroutineScope()
-                ListRow(
-                    "Planning recovery key",
-                    "Add another device to your synced planning details",
-                    leading = RowLeading.Icon(Lucide.KeyRound),
-                    onClick = { showingRecoveryKey = true },
-                )
-                RecoveryKeySheet(
-                    showingRecoveryKey,
-                    remember(state.selectedBudgetId, showingRecoveryKey) {
-                        formatRecoveryKey(mobileSession.planning.keyring.recoveryKey(state.selectedBudgetId))
-                    },
-                    onUseKey = { key ->
-                        scope.launch { mobileSession.planning.useRecoveryKey(state.selectedBudgetId, key) }
-                        showingRecoveryKey = false
-                    },
-                    onDismiss = { showingRecoveryKey = false },
-                )
-                DividerLine()
-            }
+    }
+}
+
+/** Budget preferences, payees and rules. */
+@Composable
+private fun BudgetSettingsSection(navigation: AppNavigation) {
+    SectionCard(stringResource(Res.string.settings_section_budget)) {
+        ListRow(
+            stringResource(Res.string.settings_budget_preferences),
+            stringResource(Res.string.settings_budget_preferences_detail),
+            leading = RowLeading.Icon(Lucide.WalletCards),
+            onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_manage_payees),
+            stringResource(Res.string.settings_manage_payees_detail),
+            leading = RowLeading.Icon(Lucide.Tags),
+            onClick = { navigation.open(AppRoute.MANAGE_PAYEES) },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_budget_rules),
+            stringResource(Res.string.settings_budget_rules_detail),
+            leading = RowLeading.Icon(Lucide.ListChecks),
+            onClick = { navigation.open(AppRoute.BUDGET_RULES) },
+        )
+    }
+}
+
+/** Sync, server and notification settings. */
+@Composable
+private fun ConnectionSection(navigation: AppNavigation) {
+    SectionCard(stringResource(Res.string.settings_section_connection)) {
+        ListRow(
+            stringResource(Res.string.settings_sync_preferences),
+            stringResource(Res.string.settings_sync_preferences_detail),
+            leading = RowLeading.Icon(Lucide.CloudSync),
+            onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_server_device),
+            stringResource(Res.string.settings_server_device_detail),
+            leading = RowLeading.Icon(Lucide.Smartphone),
+            onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_notifications),
+            stringResource(Res.string.settings_notifications_detail),
+            leading = RowLeading.Icon(Lucide.Bell),
+            onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
+        )
+    }
+}
+
+/** The planning recovery key, security and the local copy. */
+@Composable
+private fun PrivacySection(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+) {
+    SectionCard(stringResource(Res.string.settings_section_privacy)) {
+        if (!state.selectedBudgetEncrypted && mobileSession.planning.syncStatus != PlanningSyncStatus.OFF) {
+            var showingRecoveryKey by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
             ListRow(
-                stringResource(Res.string.settings_security),
-                stringResource(Res.string.settings_security_detail),
-                leading = RowLeading.Icon(Lucide.ShieldCheck),
-                onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
+                "Planning recovery key",
+                "Add another device to your synced planning details",
+                leading = RowLeading.Icon(Lucide.KeyRound),
+                onClick = { showingRecoveryKey = true },
             )
-            DividerLine()
-            ListRow(
-                stringResource(Res.string.settings_local_data),
-                stringResource(Res.string.settings_local_data_detail),
-                leading = RowLeading.Icon(Lucide.Database),
-                onClick = { navigation.open(AppRoute.LOCAL_DATA) },
-            )
-        }
-        SectionCard(stringResource(Res.string.settings_section_support)) {
-            ListRow(
-                stringResource(Res.string.settings_getting_started),
-                stringResource(Res.string.settings_getting_started_detail),
-                leading = RowLeading.Icon(Lucide.BookOpen),
-                onClick = {
-                    state.hasDismissedBudgetHint = false
-                    navigation.selectTab(AppRoute.BUDGET)
+            RecoveryKeySheet(
+                showingRecoveryKey,
+                remember(state.selectedBudgetId, showingRecoveryKey) {
+                    formatRecoveryKey(mobileSession.planning.keyring.recoveryKey(state.selectedBudgetId))
                 },
+                onUseKey = { key ->
+                    scope.launch { mobileSession.planning.useRecoveryKey(state.selectedBudgetId, key) }
+                    showingRecoveryKey = false
+                },
+                onDismiss = { showingRecoveryKey = false },
             )
             DividerLine()
-            ListRow(
-                stringResource(Res.string.settings_about),
-                stringResource(Res.string.settings_about_detail),
-                leading = RowLeading.Icon(Lucide.Info),
-                onClick = { navigation.open(AppRoute.ABOUT) },
-            )
         }
+        ListRow(
+            stringResource(Res.string.settings_security),
+            stringResource(Res.string.settings_security_detail),
+            leading = RowLeading.Icon(Lucide.ShieldCheck),
+            onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_local_data),
+            stringResource(Res.string.settings_local_data_detail),
+            leading = RowLeading.Icon(Lucide.Database),
+            onClick = { navigation.open(AppRoute.LOCAL_DATA) },
+        )
+    }
+}
+
+/** Getting started again and about Tandem. */
+@Composable
+private fun SupportSection(
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    SectionCard(stringResource(Res.string.settings_section_support)) {
+        ListRow(
+            stringResource(Res.string.settings_getting_started),
+            stringResource(Res.string.settings_getting_started_detail),
+            leading = RowLeading.Icon(Lucide.BookOpen),
+            onClick = {
+                state.hasDismissedBudgetHint = false
+                navigation.selectTab(AppRoute.BUDGET)
+            },
+        )
+        DividerLine()
+        ListRow(
+            stringResource(Res.string.settings_about),
+            stringResource(Res.string.settings_about_detail),
+            leading = RowLeading.Icon(Lucide.Info),
+            onClick = { navigation.open(AppRoute.ABOUT) },
+        )
     }
 }
