@@ -74,6 +74,7 @@ import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Stethoscope
 import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.TrendingDown
+import com.composables.icons.lucide.TrendingUp
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.Wand
@@ -385,6 +386,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
+        add(AppMenuItem(Lucide.TrendingUp, "Spending trends", "Compared with past months") { open(AppRoute.SPENDING_TRENDS) })
         add(AppMenuItem(Lucide.FlaskConical, "What if", "Try income and spending changes") { open(AppRoute.WHAT_IF) })
         add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
         add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })

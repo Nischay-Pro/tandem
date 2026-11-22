@@ -198,6 +198,7 @@ internal enum class AppRoute(
     RETIREMENT_SETUP("Retirement accounts"),
     RETIREMENT_MATCH("Employer match"),
     WHAT_IF("What if"),
+    SPENDING_TRENDS("Spending trends"),
     EXPORT("Export & backup"),
     EXCHANGE_RATES("Currencies"),
     HOUSEHOLD("Household"),
