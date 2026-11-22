@@ -68,7 +68,6 @@ function-size AccountEdits.markTransactionsReconciled
 function-size AccountOptionsScreen.AccountOptionsScreen
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
-function-size AccountsScreen.AccountsScreen
 function-size ActivityScreen.ActivityScreen
 function-size ActivitySearch.activitySearchSuggestions
 function-size ActivitySearchScreen.ActivitySearchScreen
@@ -180,7 +179,6 @@ layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
 size AccountDetailScreen
-size AccountsScreen
 size ActivitySearch
 size ActivitySearchScreen
 size AppHeader
