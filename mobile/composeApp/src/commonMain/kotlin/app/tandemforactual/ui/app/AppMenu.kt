@@ -45,6 +45,21 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.tandemforactual.ui.app.routes.accountsMenu
+import app.tandemforactual.ui.app.routes.bankingMenu
+import app.tandemforactual.ui.app.routes.checkupMenu
+import app.tandemforactual.ui.app.routes.currencyMenu
+import app.tandemforactual.ui.app.routes.exportMenu
+import app.tandemforactual.ui.app.routes.homeMenu
+import app.tandemforactual.ui.app.routes.householdMenu
+import app.tandemforactual.ui.app.routes.insightsMenu
+import app.tandemforactual.ui.app.routes.planningMenu
+import app.tandemforactual.ui.app.routes.reimbursementsMenu
+import app.tandemforactual.ui.app.routes.reportsMenu
+import app.tandemforactual.ui.app.routes.retirementMenu
+import app.tandemforactual.ui.app.routes.rulesMenu
+import app.tandemforactual.ui.app.routes.schedulesMenu
+import app.tandemforactual.ui.app.routes.syncMenu
 import app.tandemforactual.ui.core.format.platformAppVersionName
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -62,40 +77,16 @@ import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.ArrowLeftRight
-import com.composables.icons.lucide.CalendarCheck
-import com.composables.icons.lucide.CalendarClock
-import com.composables.icons.lucide.ChartBar
-import com.composables.icons.lucide.ChartColumn
-import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
-import com.composables.icons.lucide.Coins
 import com.composables.icons.lucide.ExternalLink
-import com.composables.icons.lucide.FileDown
-import com.composables.icons.lucide.FileUp
-import com.composables.icons.lucide.Flag
-import com.composables.icons.lucide.FlaskConical
-import com.composables.icons.lucide.Gauge
-import com.composables.icons.lucide.GitMerge
-import com.composables.icons.lucide.HandCoins
-import com.composables.icons.lucide.History
-import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.PanelsTopLeft
-import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.ScanLine
-import com.composables.icons.lucide.Sparkles
-import com.composables.icons.lucide.Stethoscope
-import com.composables.icons.lucide.Store
-import com.composables.icons.lucide.TrendingDown
-import com.composables.icons.lucide.TrendingUp
-import com.composables.icons.lucide.Users
-import com.composables.icons.lucide.WalletCards
-import com.composables.icons.lucide.Wand
 import com.composables.icons.lucide.X
 
 /** One destination in the menu, with an optional short hint on the right such as a count. */
@@ -360,6 +351,63 @@ private fun ColumnScope.MenuFooter(
     }
 }
 
+/** What menu entries may read when deciding whether and how to show themselves. */
+internal class MenuContext(
+    val advanced: Boolean,
+    val ruleCount: Int,
+    val scheduleCount: Int,
+    val payeeCount: Int,
+    val conflictCount: Int,
+    val reimbursementsOwedMinor: Long,
+    val formatMoney: (Long) -> String,
+    val readOnly: Boolean,
+    val open: (AppRoute) -> Unit,
+    val onAddTransaction: () -> Unit,
+    val onScanReceipt: () -> Unit,
+    val onManageBanks: () -> Unit,
+    val onFeedback: () -> Unit,
+)
+
+/** One menu entry; [order] keeps the menu in a stable order across features. Returns null when hidden. */
+internal class MenuEntry(
+    val order: Int,
+    val build: (MenuContext) -> AppMenuItem?,
+)
+
+private val shellMenu: List<MenuEntry> =
+    listOf(
+        MenuEntry(
+            10,
+        ) { ctx -> with(ctx) { if (!readOnly) AppMenuItem(Lucide.Plus, "Add transaction", onClick = onAddTransaction) else null } },
+        MenuEntry(20) { ctx ->
+            with(ctx) {
+                if (!readOnly) AppMenuItem(Lucide.ScanLine, "Scan a receipt", "Fills in the details", onClick = onScanReceipt) else null
+            }
+        },
+        MenuEntry(290) { ctx -> with(ctx) { AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback) } },
+    )
+
+internal val menuEntries: List<MenuEntry> =
+    (
+        shellMenu +
+            accountsMenu +
+            bankingMenu +
+            checkupMenu +
+            currencyMenu +
+            exportMenu +
+            homeMenu +
+            householdMenu +
+            insightsMenu +
+            planningMenu +
+            reimbursementsMenu +
+            reportsMenu +
+            retirementMenu +
+            rulesMenu +
+            schedulesMenu +
+            syncMenu +
+            emptyList()
+    ).sortedBy { it.order }
+
 /** The menu's tools for the open budget, with counts where they help decide where to go next. */
 internal fun appMenuItems(
     advanced: Boolean,
@@ -375,54 +423,22 @@ internal fun appMenuItems(
     onScanReceipt: () -> Unit,
     onManageBanks: () -> Unit,
     onFeedback: () -> Unit,
-): List<AppMenuItem> =
-    buildList {
-        if (!readOnly) add(AppMenuItem(Lucide.Plus, "Add transaction", onClick = onAddTransaction))
-        if (!readOnly) add(AppMenuItem(Lucide.ScanLine, "Scan a receipt", "Fills in the details", onClick = onScanReceipt))
-        if (conflictCount > 0) {
-            add(
-                AppMenuItem(
-                    Lucide.GitMerge,
-                    "Review conflicts",
-                    "$conflictCount to review",
-                    hintIsAlert = true,
-                ) { open(AppRoute.CONFLICT_INBOX) },
-            )
-        }
-        add(AppMenuItem(Lucide.CloudSync, "Sync Center", "Sync, bank links and fixes") { open(AppRoute.SYNC_CENTER) })
-        if (!advanced) add(AppMenuItem(Lucide.WalletCards, "Accounts") { open(AppRoute.ACCOUNTS) })
-        add(AppMenuItem(Lucide.Landmark, "Bank connections", "Link and sync") { open(AppRoute.BANK_CONNECTIONS) })
-        add(AppMenuItem(Lucide.FileUp, "Import a statement", "CSV, OFX, QIF") { open(AppRoute.ACCOUNTS) })
-        add(
-            AppMenuItem(
-                Lucide.CalendarClock,
-                "Schedules",
-                scheduleCount.takeIf { it > 0 }?.let { "$it upcoming" },
-            ) { open(AppRoute.SCHEDULES) },
+): List<AppMenuItem> {
+    val context =
+        MenuContext(
+            advanced,
+            ruleCount,
+            scheduleCount,
+            payeeCount,
+            conflictCount,
+            reimbursementsOwedMinor,
+            formatMoney,
+            readOnly,
+            open,
+            onAddTransaction,
+            onScanReceipt,
+            onManageBanks,
+            onFeedback,
         )
-        add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
-        add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
-        if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
-        add(AppMenuItem(Lucide.ChartBar, "Custom reports", "Build and save your own") { open(AppRoute.CUSTOM_REPORTS) })
-        add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
-        add(AppMenuItem(Lucide.TrendingUp, "Spending trends", "Compared with past months") { open(AppRoute.SPENDING_TRENDS) })
-        add(AppMenuItem(Lucide.Gauge, "Spending forecast", "Where this month lands") { open(AppRoute.SPENDING_FORECAST) })
-        add(AppMenuItem(Lucide.FlaskConical, "What if", "Try income and spending changes") { open(AppRoute.WHAT_IF) })
-        add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
-        add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })
-        add(
-            AppMenuItem(Lucide.HandCoins, "Reimbursements", reimbursementsOwedMinor.takeIf { it > 0 }?.let { "${formatMoney(it)} owed" }) {
-                open(AppRoute.REIMBURSEMENTS)
-            },
-        )
-        add(AppMenuItem(Lucide.PiggyBank, "Retirement & savings", "401(k), IRA, HSA and more") { open(AppRoute.RETIREMENT) })
-        add(AppMenuItem(Lucide.Flag, "Goal timeline", "When each goal is reached") { open(AppRoute.GOAL_TIMELINE) })
-        add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
-        add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
-        add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
-        add(AppMenuItem(Lucide.Users, "Household", "Share this budget") { open(AppRoute.HOUSEHOLD) })
-        add(AppMenuItem(Lucide.Coins, "Currencies", "Accounts in other currencies") { open(AppRoute.EXCHANGE_RATES) })
-        add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
-        add(AppMenuItem(Lucide.Sparkles, "Personalize Home", "Order and sections") { open(AppRoute.HOME_LAYOUT) })
-        add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))
-    }
+    return menuEntries.mapNotNull { it.build(context) }
+}

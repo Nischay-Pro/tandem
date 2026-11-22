@@ -3,6 +3,8 @@ package app.tandemforactual.ui.app.routes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.app.AppMenuItem
+import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.sync.BudgetMutationReviewScreen
@@ -13,6 +15,10 @@ import app.tandemforactual.ui.feature.sync.PendingChangesScreen
 import app.tandemforactual.ui.feature.sync.RejectedWriteScreen
 import app.tandemforactual.ui.feature.sync.SyncCenterScreen
 import app.tandemforactual.ui.feature.sync.UncertainWriteScreen
+import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.GitMerge
+import com.composables.icons.lucide.History
+import com.composables.icons.lucide.Lucide
 
 /** Screens for the sync routes. */
 internal val syncScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
@@ -86,4 +92,31 @@ internal val syncScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
                     ChangeHistoryScreen(state, mobileSession, deviceName)
                 }
             },
+    )
+
+/** This feature's entries in the full-screen menu. */
+internal val syncMenu: List<MenuEntry> =
+    listOf(
+        MenuEntry(30) { ctx ->
+            with(ctx) {
+                if (conflictCount > 0) {
+                    AppMenuItem(
+                        Lucide.GitMerge,
+                        "Review conflicts",
+                        "$conflictCount to review",
+                        hintIsAlert = true,
+                    ) { open(AppRoute.CONFLICT_INBOX) }
+                } else {
+                    null
+                }
+            }
+        },
+        MenuEntry(40) { ctx ->
+            with(ctx) {
+                AppMenuItem(Lucide.CloudSync, "Sync Center", "Sync, bank links and fixes") { open(AppRoute.SYNC_CENTER) }
+            }
+        },
+        MenuEntry(
+            240,
+        ) { ctx -> with(ctx) { AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) } } },
     )

@@ -3,6 +3,8 @@ package app.tandemforactual.ui.app.routes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.app.AppMenuItem
+import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.budget.openReportCategoryActivity
@@ -11,6 +13,9 @@ import app.tandemforactual.ui.feature.reports.CustomReportsScreen
 import app.tandemforactual.ui.feature.reports.ReportDetailScreen
 import app.tandemforactual.ui.feature.reports.ReportKind
 import app.tandemforactual.ui.feature.reports.ReportsScreen
+import com.composables.icons.lucide.ChartBar
+import com.composables.icons.lucide.ChartColumn
+import com.composables.icons.lucide.Lucide
 
 /** Screens for the reports routes. */
 internal val reportsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
@@ -67,4 +72,17 @@ internal val reportsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> 
                     CustomReportScreen(state, mobileSession, navigation)
                 }
             },
+    )
+
+/** This feature's entries in the full-screen menu. */
+internal val reportsMenu: List<MenuEntry> =
+    listOf(
+        MenuEntry(
+            110,
+        ) { ctx -> with(ctx) { if (!advanced) AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) } else null } },
+        MenuEntry(120) { ctx ->
+            with(ctx) {
+                AppMenuItem(Lucide.ChartBar, "Custom reports", "Build and save your own") { open(AppRoute.CUSTOM_REPORTS) }
+            }
+        },
     )

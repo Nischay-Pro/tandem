@@ -3,11 +3,16 @@ package app.tandemforactual.ui.app.routes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.app.AppMenuItem
+import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.rules.BudgetRulesScreen
 import app.tandemforactual.ui.feature.rules.ManagePayeesScreen
 import app.tandemforactual.ui.feature.rules.RuleEditorSheet
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Store
+import com.composables.icons.lucide.Wand
 
 /** Screens for the rules routes. */
 internal val rulesScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
@@ -41,4 +46,19 @@ internal val rulesScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
                     RuleEditorSheet(state, mobileSession)
                 }
             },
+    )
+
+/** This feature's entries in the full-screen menu. */
+internal val rulesMenu: List<MenuEntry> =
+    listOf(
+        MenuEntry(90) { ctx ->
+            with(ctx) {
+                AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) }
+            }
+        },
+        MenuEntry(100) { ctx ->
+            with(ctx) {
+                AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) }
+            }
+        },
     )
