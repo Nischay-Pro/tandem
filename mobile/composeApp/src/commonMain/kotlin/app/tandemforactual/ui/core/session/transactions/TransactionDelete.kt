@@ -3,6 +3,7 @@ package app.tandemforactual.ui.core.session.transactions
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.ui.core.session.UndoNotice
@@ -84,26 +85,7 @@ internal suspend fun TransactionController.deleteTransaction(
                 it.recordType == "transaction" && it.recordId == transactionId && it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES
             }.maxByOrNull { it.updatedAtEpochMs }
     if (pendingForRecord?.action == LocalWriteAction.CREATE.name && pendingForRecord.status == "queued") {
-        host.markSavingTransaction(true)
-        try {
-            localRepository.discardWrite(pendingForRecord.operationId)
-            host.reportTransactionWriteMessage(null)
-            host.loadLocalRecords(budgetId)
-            return true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            host.reportTransactionWriteMessage(
-                localStorageFailureMessage(
-                    error,
-                    "Tandem couldn’t remove this transaction. Open Pending Changes to check it.",
-                ),
-            )
-            host.loadLocalRecords(budgetId)
-            return false
-        } finally {
-            host.markSavingTransaction(false)
-        }
+        return discardQueuedTransactionCreate(localRepository, budgetId, pendingForRecord)
     }
     if (pendingForRecord != null && pendingForRecord.status != "queued") {
         host.reportTransactionWriteMessage("Open Pending Changes to review this transaction before deleting it.")
@@ -116,7 +98,43 @@ internal suspend fun TransactionController.deleteTransaction(
         host.reportTransactionWriteMessage("This transaction isn’t up to date. Sync the budget before deleting it.")
         return false
     }
+    return enqueueTransactionDelete(localRepository, budgetId, transactionId, revision, baseJson)
+}
 
+private suspend fun TransactionController.discardQueuedTransactionCreate(
+    localRepository: LocalBudgetRepository,
+    budgetId: String,
+    pendingForRecord: OutboxOperationEntity,
+): Boolean {
+    host.markSavingTransaction(true)
+    try {
+        localRepository.discardWrite(pendingForRecord.operationId)
+        host.reportTransactionWriteMessage(null)
+        host.loadLocalRecords(budgetId)
+        return true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        host.reportTransactionWriteMessage(
+            localStorageFailureMessage(
+                error,
+                "Tandem couldn’t remove this transaction. Open Pending Changes to check it.",
+            ),
+        )
+        host.loadLocalRecords(budgetId)
+        return false
+    } finally {
+        host.markSavingTransaction(false)
+    }
+}
+
+private suspend fun TransactionController.enqueueTransactionDelete(
+    localRepository: LocalBudgetRepository,
+    budgetId: String,
+    transactionId: String,
+    revision: String,
+    baseJson: String,
+): Boolean {
     host.markSavingTransaction(true)
     try {
         val operationId = Uuid.random().toString()

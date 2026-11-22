@@ -3,6 +3,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import app.tandemforactual.ui.core.session.BudgetReorderKind
+import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
 import app.tandemforactual.ui.core.session.budgetMutationFailureMessage
@@ -29,23 +30,7 @@ internal suspend fun BudgetEditQueue.processQueuedBudgetReorders() {
         snapshotFlow { isCorrectingBudgetMutation }.first { !it }
         if (budgetReorderQueue.moves.firstOrNull() != request) continue
         if (request.isOrderDraft()) {
-            // Reorders wait on the device and go out together in one request.
-            awaitBudgetOrderFlush()
-            if (host.isSigningOut) return
-            if (!budgetReorderQueue.hasOrderDraftsAtHead()) continue
-            snapshotFlow { isPersistingBudgetMutation }.first { !it }
-            try {
-                budgetQueuePersistenceMutex.withLock {
-                    val folded = budgetReorderQueueState.foldOrderDrafts()
-                    persistBudgetReorderQueueNow(folded)
-                    budgetReorderQueueState = folded
-                }
-                orderDraftsHeldSinceEpochMs = null
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                delay(1_000)
-            }
+            if (!foldOrderDraftsWhenReady()) return
             continue
         }
         persistCurrentBudgetReorderQueue()
@@ -83,109 +68,142 @@ internal suspend fun BudgetEditQueue.processQueuedBudgetReorders() {
         if (budgetReorderQueue.moves.firstOrNull() != request) continue
 
         if (request.refreshBeforeSend) {
-            val refreshed =
-                host.synchronize(
-                    budgetId = request.budgetId,
-                    encryptionPassword = request.encryptionPassword,
-                    sendQueuedWrites = false,
-                    retryQueuedBudgetMutations = false,
-                    background = true,
-                )
-            if (refreshed == null) {
-                budgetReorderQueue =
-                    budgetReorderQueue.waitForConnection(
-                        request,
-                        "Saved on this device. Waiting to refresh Actual before trying again.",
-                    )
-                persistCurrentBudgetReorderQueue()
-                continue
-            }
-            val refreshedRequest = budgetReorderQueue.moves.firstOrNull { it.operationId == request.operationId } ?: continue
-            val readyRequest = refreshedRequest.copy(refreshBeforeSend = false)
-            try {
-                budgetQueuePersistenceMutex.withLock {
-                    val next =
-                        budgetReorderQueueState.copy(
-                            moves =
-                                budgetReorderQueueState.moves.map { move ->
-                                    if (move.operationId == request.operationId) readyRequest else move
-                                },
-                        )
-                    persistBudgetReorderQueueNow(next)
-                    budgetReorderQueueState = next
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                budgetReorderQueue =
-                    budgetReorderQueue.waitForConnection(
-                        request,
-                        "Saved on this device. Tandem couldn’t save the refreshed change before retrying.",
-                    )
-                persistCurrentBudgetReorderQueue()
-                continue
-            }
-            request = readyRequest
+            request = refreshBeforeSending(request) ?: continue
         }
 
-        var mutationStarted = host.repository?.beginBudgetMutation(request.operationId) == true
-        if (!mutationStarted) {
-            persistCurrentBudgetReorderQueue()
-            mutationStarted = host.repository?.beginBudgetMutation(request.operationId) == true
-        }
-        if (!mutationStarted) {
-            val stored = host.repository?.readPendingWrites(request.budgetId)?.firstOrNull { it.operationId == request.operationId }
-            val stateMessage =
-                when (stored?.status) {
-                    "uncertain", "conflict", "rejected" -> budgetMutationFailureMessage(stored.lastErrorCode)
-                    "discarded", "committed" -> "This change is no longer pending."
-                    else -> null
-                }
-            if (stateMessage != null) {
-                budgetReorderQueue =
-                    if (stored?.status in setOf("uncertain", "conflict")) {
-                        budgetReorderQueue.holdForReview(request, stateMessage)
-                    } else {
-                        budgetReorderQueue.failHead(request, stateMessage)
-                    }
-                persistCurrentBudgetReorderQueue()
-            } else {
-                delay(100)
-            }
-            continue
-        }
+        if (!beginBudgetMutationOrSettle(request)) continue
 
-        var createdCategoryGroupId: String? = null
-        var createdCategoryId: String? = null
-        var createdPayeeId: String? = null
-        var createdAccountId: String? = null
-        host.feedback.budgetActionWasAppliedButRefreshFailed = false
-        host.feedback.budgetActionShouldRetry = false
-        host.feedback.lastBudgetActionHttpStatus = null
-        host.feedback.lastBudgetActionErrorCode = null
-        val isRefreshOnlyRequest =
-            request.refreshOnly ||
-                request.kind in
-                setOf(
-                    BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
-                    BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
-                    BudgetReorderKind.REFRESH_CATEGORY_CREATE,
-                    BudgetReorderKind.REFRESH_CATEGORY_RENAME,
-                )
-        val moved =
-            host.withoutBudgetActionFeedback {
-                if (isRefreshOnlyRequest) {
-                    host.synchronize(request.budgetId, request.encryptionPassword, background = true) != null
-                } else {
-                    val dispatched = dispatch(request)
-                    createdCategoryGroupId = dispatched.categoryGroupId
-                    createdCategoryId = dispatched.categoryId
-                    createdPayeeId = dispatched.payeeId
-                    createdAccountId = dispatched.accountId
-                    dispatched.moved
-                }
-            }
-        settleAfterSend(request, moved, isRefreshOnlyRequest, createdCategoryGroupId, createdCategoryId, createdPayeeId, createdAccountId)
-        persistCurrentBudgetReorderQueue()
+        sendBudgetMutation(request)
     }
+}
+
+private suspend fun BudgetEditQueue.foldOrderDraftsWhenReady(): Boolean {
+    awaitBudgetOrderFlush()
+    if (host.isSigningOut) return false
+    if (!budgetReorderQueue.hasOrderDraftsAtHead()) return true
+    snapshotFlow { isPersistingBudgetMutation }.first { !it }
+    try {
+        budgetQueuePersistenceMutex.withLock {
+            val folded = budgetReorderQueueState.foldOrderDrafts()
+            persistBudgetReorderQueueNow(folded)
+            budgetReorderQueueState = folded
+        }
+        orderDraftsHeldSinceEpochMs = null
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        delay(1_000)
+    }
+    return true
+}
+
+private suspend fun BudgetEditQueue.refreshBeforeSending(request: QueuedBudgetReorder): QueuedBudgetReorder? {
+    val refreshed =
+        host.synchronize(
+            budgetId = request.budgetId,
+            encryptionPassword = request.encryptionPassword,
+            sendQueuedWrites = false,
+            retryQueuedBudgetMutations = false,
+            background = true,
+        )
+    if (refreshed == null) {
+        budgetReorderQueue =
+            budgetReorderQueue.waitForConnection(
+                request,
+                "Saved on this device. Waiting to refresh Actual before trying again.",
+            )
+        persistCurrentBudgetReorderQueue()
+        return null
+    }
+    val refreshedRequest = budgetReorderQueue.moves.firstOrNull { it.operationId == request.operationId } ?: return null
+    val readyRequest = refreshedRequest.copy(refreshBeforeSend = false)
+    try {
+        budgetQueuePersistenceMutex.withLock {
+            val next =
+                budgetReorderQueueState.copy(
+                    moves =
+                        budgetReorderQueueState.moves.map { move ->
+                            if (move.operationId == request.operationId) readyRequest else move
+                        },
+                )
+            persistBudgetReorderQueueNow(next)
+            budgetReorderQueueState = next
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        budgetReorderQueue =
+            budgetReorderQueue.waitForConnection(
+                request,
+                "Saved on this device. Tandem couldn’t save the refreshed change before retrying.",
+            )
+        persistCurrentBudgetReorderQueue()
+        return null
+    }
+    return readyRequest
+}
+
+private suspend fun BudgetEditQueue.beginBudgetMutationOrSettle(request: QueuedBudgetReorder): Boolean {
+    var mutationStarted = host.repository?.beginBudgetMutation(request.operationId) == true
+    if (!mutationStarted) {
+        persistCurrentBudgetReorderQueue()
+        mutationStarted = host.repository?.beginBudgetMutation(request.operationId) == true
+    }
+    if (!mutationStarted) {
+        val stored = host.repository?.readPendingWrites(request.budgetId)?.firstOrNull { it.operationId == request.operationId }
+        val stateMessage =
+            when (stored?.status) {
+                "uncertain", "conflict", "rejected" -> budgetMutationFailureMessage(stored.lastErrorCode)
+                "discarded", "committed" -> "This change is no longer pending."
+                else -> null
+            }
+        if (stateMessage != null) {
+            budgetReorderQueue =
+                if (stored?.status in setOf("uncertain", "conflict")) {
+                    budgetReorderQueue.holdForReview(request, stateMessage)
+                } else {
+                    budgetReorderQueue.failHead(request, stateMessage)
+                }
+            persistCurrentBudgetReorderQueue()
+        } else {
+            delay(100)
+        }
+        return false
+    }
+    return true
+}
+
+private suspend fun BudgetEditQueue.sendBudgetMutation(request: QueuedBudgetReorder) {
+    var createdCategoryGroupId: String? = null
+    var createdCategoryId: String? = null
+    var createdPayeeId: String? = null
+    var createdAccountId: String? = null
+    host.feedback.budgetActionWasAppliedButRefreshFailed = false
+    host.feedback.budgetActionShouldRetry = false
+    host.feedback.lastBudgetActionHttpStatus = null
+    host.feedback.lastBudgetActionErrorCode = null
+    val isRefreshOnlyRequest =
+        request.refreshOnly ||
+            request.kind in
+            setOf(
+                BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
+                BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+                BudgetReorderKind.REFRESH_CATEGORY_CREATE,
+                BudgetReorderKind.REFRESH_CATEGORY_RENAME,
+            )
+    val moved =
+        host.withoutBudgetActionFeedback {
+            if (isRefreshOnlyRequest) {
+                host.synchronize(request.budgetId, request.encryptionPassword, background = true) != null
+            } else {
+                val dispatched = dispatch(request)
+                createdCategoryGroupId = dispatched.categoryGroupId
+                createdCategoryId = dispatched.categoryId
+                createdPayeeId = dispatched.payeeId
+                createdAccountId = dispatched.accountId
+                dispatched.moved
+            }
+        }
+    settleAfterSend(request, moved, isRefreshOnlyRequest, createdCategoryGroupId, createdCategoryId, createdPayeeId, createdAccountId)
+    persistCurrentBudgetReorderQueue()
 }

@@ -216,28 +216,7 @@ internal suspend fun BudgetEdits.markTransactionsReconciled(
             val shouldBeCleared = transactionId in selectedIds
             val currentlyCleared = base.booleanValue("cleared") == true
             if (currentlyCleared == shouldBeCleared && !shouldBeCleared) continue
-            val patch =
-                buildJsonObject {
-                    if (currentlyCleared != shouldBeCleared) put("cleared", shouldBeCleared)
-                    if (shouldBeCleared) put("reconciled", true)
-                }
-            val optimistic = JsonObject(base + patch)
-            val operationId = Uuid.random().toString()
-            requests +=
-                LocalWriteRequest(
-                    operationId = operationId,
-                    idempotencyKey = operationId,
-                    budgetId = budgetId,
-                    recordType = "transaction",
-                    recordId = transactionId,
-                    action = LocalWriteAction.UPDATE,
-                    baseRevision = revision,
-                    baseSnapshotJson = baseJson,
-                    patchJson = patch.toString(),
-                    optimisticJson = optimistic.toString(),
-                    createdAtEpochMs = host.nowEpochMillis(),
-                    optimisticProjection = optimistic.toProjection(),
-                )
+            requests += reconcileWriteRequest(budgetId, transactionId, base, revision, baseJson, currentlyCleared, shouldBeCleared)
         }
         if (requests.isEmpty()) {
             host.reportTransactionWriteMessage("No transaction changes to save.")
@@ -255,6 +234,38 @@ internal suspend fun BudgetEdits.markTransactionsReconciled(
     } finally {
         host.markSavingTransaction(false)
     }
+}
+
+private fun BudgetEdits.reconcileWriteRequest(
+    budgetId: String,
+    transactionId: String,
+    base: JsonObject,
+    revision: String,
+    baseJson: String,
+    currentlyCleared: Boolean,
+    shouldBeCleared: Boolean,
+): LocalWriteRequest {
+    val patch =
+        buildJsonObject {
+            if (currentlyCleared != shouldBeCleared) put("cleared", shouldBeCleared)
+            if (shouldBeCleared) put("reconciled", true)
+        }
+    val optimistic = JsonObject(base + patch)
+    val operationId = Uuid.random().toString()
+    return LocalWriteRequest(
+        operationId = operationId,
+        idempotencyKey = operationId,
+        budgetId = budgetId,
+        recordType = "transaction",
+        recordId = transactionId,
+        action = LocalWriteAction.UPDATE,
+        baseRevision = revision,
+        baseSnapshotJson = baseJson,
+        patchJson = patch.toString(),
+        optimisticJson = optimistic.toString(),
+        createdAtEpochMs = host.nowEpochMillis(),
+        optimisticProjection = optimistic.toProjection(),
+    )
 }
 
 internal suspend fun BudgetEdits.createQueuedBudgetAccount(request: QueuedBudgetReorder): String? {

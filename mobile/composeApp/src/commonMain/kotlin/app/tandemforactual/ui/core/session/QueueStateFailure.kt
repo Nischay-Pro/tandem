@@ -117,41 +117,62 @@ internal fun BudgetReorderQueueState.failHead(
             waitingForConnection = false,
         )
     }
-    val failedMoves =
-        if (move.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP) {
-            moves.filter { queued ->
-                queued == move ||
-                    queued.budgetId == move.budgetId &&
-                    (
-                        queued.itemId == move.itemId ||
-                            queued.targetId == move.itemId ||
-                            queued.parentGroupId == move.itemId ||
-                            move.itemId in queued.desiredOrder
-                    )
-            }
-        } else {
-            listOf(move)
-        }
+    val failedMoves = failedMovesFor(move)
     val failedSet = failedMoves.toSet()
     val remainingMoves = moves.filterNot { it in failedSet }
-    val affectedKeys = failedMoves.map { budgetReorderStatusKey(it.budgetId, it.scopeId) }.distinct()
-    val nextStatuses =
-        affectedKeys.associateWith { key ->
-            val removedCount = failedMoves.count { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
-            val remaining = remainingMoves.filter { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
-            val latestOrder = remaining.lastOrNull { it.kind in budgetOrderKinds }?.desiredOrder
-            val current = statuses[key] ?: BudgetReorderStatus()
-            if (remaining.isEmpty()) {
-                BudgetReorderStatus(message = message, warning = true)
-            } else {
-                current.copy(
-                    pendingCount = (current.pendingCount - removedCount).coerceAtLeast(0),
-                    message = message,
-                    warning = true,
-                    optimisticOrder = latestOrder ?: current.optimisticOrder,
+    val nextStatuses = failedStatuses(failedMoves, remainingMoves, message)
+    return copy(
+        moves = remainingMoves,
+        statuses = statuses + nextStatuses,
+        waitingForConnection = false,
+    ).clearFailedCategoryOverrides(failedMoves, remainingMoves)
+        .clearFailedGroupOverrides(failedMoves, remainingMoves)
+}
+
+private fun BudgetReorderQueueState.failedMovesFor(move: QueuedBudgetReorder): List<QueuedBudgetReorder> =
+    if (move.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP) {
+        moves.filter { queued ->
+            queued == move ||
+                queued.budgetId == move.budgetId &&
+                (
+                    queued.itemId == move.itemId ||
+                        queued.targetId == move.itemId ||
+                        queued.parentGroupId == move.itemId ||
+                        move.itemId in queued.desiredOrder
                 )
-            }
         }
+    } else {
+        listOf(move)
+    }
+
+private fun BudgetReorderQueueState.failedStatuses(
+    failedMoves: List<QueuedBudgetReorder>,
+    remainingMoves: List<QueuedBudgetReorder>,
+    message: String,
+): Map<String, BudgetReorderStatus> {
+    val affectedKeys = failedMoves.map { budgetReorderStatusKey(it.budgetId, it.scopeId) }.distinct()
+    return affectedKeys.associateWith { key ->
+        val removedCount = failedMoves.count { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
+        val remaining = remainingMoves.filter { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
+        val latestOrder = remaining.lastOrNull { it.kind in budgetOrderKinds }?.desiredOrder
+        val current = statuses[key] ?: BudgetReorderStatus()
+        if (remaining.isEmpty()) {
+            BudgetReorderStatus(message = message, warning = true)
+        } else {
+            current.copy(
+                pendingCount = (current.pendingCount - removedCount).coerceAtLeast(0),
+                message = message,
+                warning = true,
+                optimisticOrder = latestOrder ?: current.optimisticOrder,
+            )
+        }
+    }
+}
+
+private fun BudgetReorderQueueState.clearFailedCategoryOverrides(
+    failedMoves: List<QueuedBudgetReorder>,
+    remainingMoves: List<QueuedBudgetReorder>,
+): BudgetReorderQueueState {
     val visibilityKeys =
         failedMoves
             .filter { it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY) }
@@ -160,16 +181,6 @@ internal fun BudgetReorderQueueState.failHead(
                 remainingMoves.any {
                     categoryVisibilityKey(it.budgetId, it.itemId) == key &&
                         it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY)
-                }
-            }
-    val groupNameKeys =
-        failedMoves
-            .filter { it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME) }
-            .map { categoryVisibilityKey(it.budgetId, it.itemId) }
-            .filterNot { key ->
-                remainingMoves.any {
-                    categoryVisibilityKey(it.budgetId, it.itemId) == key &&
-                        it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME)
                 }
             }
     val categoryNameKeys =
@@ -192,16 +203,6 @@ internal fun BudgetReorderQueueState.failHead(
                         it.kind == BudgetReorderKind.MOVE_CATEGORY_TO_GROUP
                 }
             }
-    val groupVisibilityKeys =
-        failedMoves
-            .filter { it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP) }
-            .map { categoryVisibilityKey(it.budgetId, it.itemId) }
-            .filterNot { key ->
-                remainingMoves.any {
-                    categoryVisibilityKey(it.budgetId, it.itemId) == key &&
-                        it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP)
-                }
-            }
     val deletedCategoryKeys =
         failedMoves
             .filter { it.kind == BudgetReorderKind.DELETE_CATEGORY }
@@ -213,15 +214,40 @@ internal fun BudgetReorderQueueState.failHead(
                 }
             }
     return copy(
-        moves = remainingMoves,
-        statuses = statuses + nextStatuses,
         categoryVisibilityOverrides = categoryVisibilityOverrides - visibilityKeys,
-        categoryGroupNameOverrides = categoryGroupNameOverrides - groupNameKeys,
         categoryNameOverrides = categoryNameOverrides - categoryNameKeys,
         categoryGroupIdOverrides = categoryGroupIdOverrides - categoryMoveKeys,
-        categoryGroupVisibilityOverrides = categoryGroupVisibilityOverrides - groupVisibilityKeys,
         deletedCategoryIds = deletedCategoryIds - deletedCategoryKeys,
-        waitingForConnection = false,
+    )
+}
+
+private fun BudgetReorderQueueState.clearFailedGroupOverrides(
+    failedMoves: List<QueuedBudgetReorder>,
+    remainingMoves: List<QueuedBudgetReorder>,
+): BudgetReorderQueueState {
+    val groupNameKeys =
+        failedMoves
+            .filter { it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME) }
+            .map { categoryVisibilityKey(it.budgetId, it.itemId) }
+            .filterNot { key ->
+                remainingMoves.any {
+                    categoryVisibilityKey(it.budgetId, it.itemId) == key &&
+                        it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME)
+                }
+            }
+    val groupVisibilityKeys =
+        failedMoves
+            .filter { it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP) }
+            .map { categoryVisibilityKey(it.budgetId, it.itemId) }
+            .filterNot { key ->
+                remainingMoves.any {
+                    categoryVisibilityKey(it.budgetId, it.itemId) == key &&
+                        it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP)
+                }
+            }
+    return copy(
+        categoryGroupNameOverrides = categoryGroupNameOverrides - groupNameKeys,
+        categoryGroupVisibilityOverrides = categoryGroupVisibilityOverrides - groupVisibilityKeys,
     )
 }
 

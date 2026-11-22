@@ -141,11 +141,80 @@ internal fun liveBudgetMonthSummary(
 ): LiveBudgetMonthSummary? {
     monthRecord ?: return null
     val month = monthRecord.recordBody() ?: return null
+    return LiveBudgetMonthBuilder(
+        monthRecord,
+        month,
+        categoryRecords,
+        categoryGroupRecords,
+        categoryVisibilityOverrides,
+        categoryGroupNameOverrides,
+        categoryNameOverrides,
+        categoryGroupIdOverrides,
+        categoryGroupVisibilityOverrides,
+        deletedCategoryIds,
+        pendingCategoryGroups,
+        pendingCategories,
+        categoryBudgetOverrides,
+        categoryCarryoverOverrides,
+        pendingBudgetMutations,
+    ).build()
+}
+
+/** Builds one month's budget summary, replaying changes still waiting on the device over the synced month. */
+private class LiveBudgetMonthBuilder(
+    val monthRecord: BudgetRecordEntity,
+    val month: JsonObject,
+    val categoryRecords: List<BudgetRecordEntity>,
+    val categoryGroupRecords: List<BudgetRecordEntity>,
+    val categoryVisibilityOverrides: Map<String, Boolean>,
+    val categoryGroupNameOverrides: Map<String, String>,
+    val categoryNameOverrides: Map<String, String>,
+    val categoryGroupIdOverrides: Map<String, String>,
+    val categoryGroupVisibilityOverrides: Map<String, Boolean>,
+    val deletedCategoryIds: Set<String>,
+    val pendingCategoryGroups: List<LiveCategoryGroupSummary>,
+    val pendingCategories: List<PendingCategorySummary>,
+    val categoryBudgetOverrides: Map<String, Long>,
+    val categoryCarryoverOverrides: Map<String, Boolean>,
+    val pendingBudgetMutations: List<QueuedBudgetReorder>,
+) {
     val categoryNames = categoryRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
     val groupNames = categoryGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
-    val monthId = month.stringValue("month") ?: monthRecord.recordId
-    val matchingPlanMutations = pendingBudgetMutations.filter { it.isForBudgetMonth(monthId) }
-    val originalAssignments =
+    val effectiveBudgetOverrides = categoryBudgetOverrides.toMutableMap()
+    val effectiveCarryoverOverrides = categoryCarryoverOverrides.toMutableMap()
+    val pendingCategoryIds = (categoryBudgetOverrides.keys + categoryCarryoverOverrides.keys).toMutableSet()
+    var heldForNextMonthOverride: Long? = null
+    var heldForNextMonthPending = false
+    var assignedDelta = 0L
+
+    fun build(): LiveBudgetMonthSummary {
+        val monthId = month.stringValue("month") ?: monthRecord.recordId
+        val matchingPlanMutations = pendingBudgetMutations.filter { it.isForBudgetMonth(monthId) }
+        val originalAssignments = originalAssignments()
+        if (matchingPlanMutations.isNotEmpty()) replayPlanMutations(matchingPlanMutations, originalAssignments)
+        val groups = monthGroups()
+        val completeGroups = groups.toMutableList()
+        addRecordOnlyCategories(completeGroups)
+        val groupsWithPendingCreates =
+            completeGroups + pendingCategoryGroups.filterNot { pending -> completeGroups.any { it.id == pending.id } }
+        val groupsWithPendingCategories = groupsWithPendingCreates.toMutableList()
+        applyCategoryGroupMoves(groupsWithPendingCategories)
+        addPendingCategories(groupsWithPendingCategories)
+        return LiveBudgetMonthSummary(
+            toBudgetMinor =
+                month.longValue("toBudget")?.minus(assignedDelta)?.plus(
+                    heldForNextMonthOverride?.let { (month.longValue("forNextMonth") ?: 0L) - it } ?: 0L,
+                ),
+            incomeAvailableMinor = month.longValue("incomeAvailable"),
+            totalBudgetedMinor = month.longValue("totalBudgeted")?.plus(assignedDelta),
+            totalSpentMinor = month.longValue("totalSpent"),
+            groups = groupsWithPendingCategories,
+            heldForNextMonthMinor = heldForNextMonthOverride ?: month.longValue("forNextMonth"),
+            heldForNextMonthPending = heldForNextMonthPending,
+        )
+    }
+
+    fun originalAssignments(): Map<String, Long> =
         (month["categoryGroups"] as? JsonArray)
             ?.flatMap { element ->
                 val group = element as? JsonObject ?: return@flatMap emptyList()
@@ -157,12 +226,11 @@ internal fun liveBudgetMonthSummary(
                     }.orEmpty()
             }.orEmpty()
             .toMap()
-    val effectiveBudgetOverrides = categoryBudgetOverrides.toMutableMap()
-    val effectiveCarryoverOverrides = categoryCarryoverOverrides.toMutableMap()
-    val pendingCategoryIds = (categoryBudgetOverrides.keys + categoryCarryoverOverrides.keys).toMutableSet()
-    var heldForNextMonthOverride: Long? = null
-    var heldForNextMonthPending = false
-    if (matchingPlanMutations.isNotEmpty()) {
+
+    fun replayPlanMutations(
+        matchingPlanMutations: List<QueuedBudgetReorder>,
+        originalAssignments: Map<String, Long>,
+    ) {
         val replayedAssignments = originalAssignments.toMutableMap()
         var replayedHold = month.longValue("forNextMonth")
         matchingPlanMutations.forEach { move ->
@@ -212,8 +280,8 @@ internal fun liveBudgetMonthSummary(
         }
         heldForNextMonthOverride = replayedHold
     }
-    var assignedDelta = 0L
-    val groups =
+
+    fun monthGroups(): List<LiveCategoryGroupSummary> =
         (month["categoryGroups"] as? JsonArray)
             ?.mapNotNull { element ->
                 val group = element as? JsonObject ?: return@mapNotNull null
@@ -261,107 +329,100 @@ internal fun liveBudgetMonthSummary(
                             ?: false,
                 )
             }.orEmpty()
-    val completeGroups = groups.toMutableList()
-    categoryRecords.forEach { record ->
-        if (record.recordId in deletedCategoryIds) return@forEach
-        val categoryBody = record.recordBody() ?: return@forEach
-        val isHidden = categoryVisibilityOverrides[record.recordId] ?: categoryBody.booleanValue("hidden") ?: false
-        if (isHidden || categoryBody.booleanValue("deleted") == true) return@forEach
-        val groupId =
-            categoryGroupIdOverrides[record.recordId]
-                ?: categoryBody.stringValue("group")
-                ?: categoryBody.stringValue("group_id")
-                ?: return@forEach
-        var groupIndex = completeGroups.indexOfFirst { it.id == groupId }
-        if (groupIndex < 0) {
-            val groupRecord = categoryGroupRecords.firstOrNull { it.recordId == groupId } ?: return@forEach
-            val groupBody = groupRecord.recordBody()
-            if (categoryGroupVisibilityOverrides[groupId] == true ||
-                groupBody?.booleanValue("hidden") == true ||
-                groupBody?.booleanValue("deleted") == true
-            ) {
-                return@forEach
+
+    fun addRecordOnlyCategories(completeGroups: MutableList<LiveCategoryGroupSummary>) {
+        categoryRecords.forEach { record ->
+            if (record.recordId in deletedCategoryIds) return@forEach
+            val categoryBody = record.recordBody() ?: return@forEach
+            val isHidden = categoryVisibilityOverrides[record.recordId] ?: categoryBody.booleanValue("hidden") ?: false
+            if (isHidden || categoryBody.booleanValue("deleted") == true) return@forEach
+            val groupId =
+                categoryGroupIdOverrides[record.recordId]
+                    ?: categoryBody.stringValue("group")
+                    ?: categoryBody.stringValue("group_id")
+                    ?: return@forEach
+            var groupIndex = completeGroups.indexOfFirst { it.id == groupId }
+            if (groupIndex < 0) {
+                val groupRecord = categoryGroupRecords.firstOrNull { it.recordId == groupId } ?: return@forEach
+                val groupBody = groupRecord.recordBody()
+                if (categoryGroupVisibilityOverrides[groupId] == true ||
+                    groupBody?.booleanValue("hidden") == true ||
+                    groupBody?.booleanValue("deleted") == true
+                ) {
+                    return@forEach
+                }
+                completeGroups +=
+                    LiveCategoryGroupSummary(
+                        id = groupId,
+                        name = categoryGroupNameOverrides[groupId] ?: groupNames[groupId] ?: groupId,
+                        categories = emptyList(),
+                        isIncome = groupBody?.booleanValue("is_income") ?: groupBody?.booleanValue("isIncome") ?: false,
+                    )
+                groupIndex = completeGroups.lastIndex
             }
-            completeGroups +=
-                LiveCategoryGroupSummary(
-                    id = groupId,
-                    name = categoryGroupNameOverrides[groupId] ?: groupNames[groupId] ?: groupId,
-                    categories = emptyList(),
-                    isIncome = groupBody?.booleanValue("is_income") ?: groupBody?.booleanValue("isIncome") ?: false,
+            val group = completeGroups[groupIndex]
+            if (group.categories.any { it.id == record.recordId }) return@forEach
+            completeGroups[groupIndex] =
+                group.copy(
+                    categories =
+                        group.categories +
+                            LiveCategorySummary(
+                                id = record.recordId,
+                                name = categoryNameOverrides[record.recordId] ?: categoryNames[record.recordId] ?: record.recordId,
+                                assignedMinor = 0,
+                                activityMinor = 0,
+                                balanceMinor = 0,
+                            ),
                 )
-            groupIndex = completeGroups.lastIndex
         }
-        val group = completeGroups[groupIndex]
-        if (group.categories.any { it.id == record.recordId }) return@forEach
-        completeGroups[groupIndex] =
-            group.copy(
-                categories =
-                    group.categories +
-                        LiveCategorySummary(
-                            id = record.recordId,
-                            name = categoryNameOverrides[record.recordId] ?: categoryNames[record.recordId] ?: record.recordId,
-                            assignedMinor = 0,
-                            activityMinor = 0,
-                            balanceMinor = 0,
-                        ),
-            )
     }
-    val groupsWithPendingCreates =
-        completeGroups + pendingCategoryGroups.filterNot { pending -> completeGroups.any { it.id == pending.id } }
-    val groupsWithPendingCategories = groupsWithPendingCreates.toMutableList()
-    categoryGroupIdOverrides.forEach { (categoryId, targetGroupId) ->
-        if (categoryId in deletedCategoryIds || categoryVisibilityOverrides[categoryId] == true) return@forEach
-        val categoryRecord = categoryRecords.firstOrNull { it.recordId == categoryId } ?: return@forEach
-        val name = categoryNameOverrides[categoryId] ?: categoryRecord.recordName() ?: categoryId
-        val targetIndex = groupsWithPendingCategories.indexOfFirst { it.id == targetGroupId }
-        if (targetIndex < 0) return@forEach
-        val movedCategory = groupsWithPendingCategories.flatMap { it.categories }.firstOrNull { it.id == categoryId }
-        val body = categoryRecord.recordBody()
-        val assigned = movedCategory?.assignedMinor ?: body?.longValue("budgeted") ?: body?.longValue("assigned") ?: 0
-        val activity = movedCategory?.activityMinor ?: body?.longValue("activity") ?: body?.longValue("spent") ?: 0
-        groupsWithPendingCategories.indices.forEach { index ->
-            val existing = groupsWithPendingCategories[index]
-            if (existing.categories.any { it.id == categoryId }) {
-                groupsWithPendingCategories[index] = existing.copy(categories = existing.categories.filterNot { it.id == categoryId })
+
+    fun applyCategoryGroupMoves(groupsWithPendingCategories: MutableList<LiveCategoryGroupSummary>) {
+        categoryGroupIdOverrides.forEach { (categoryId, targetGroupId) ->
+            if (categoryId in deletedCategoryIds || categoryVisibilityOverrides[categoryId] == true) return@forEach
+            val categoryRecord = categoryRecords.firstOrNull { it.recordId == categoryId } ?: return@forEach
+            val name = categoryNameOverrides[categoryId] ?: categoryRecord.recordName() ?: categoryId
+            val targetIndex = groupsWithPendingCategories.indexOfFirst { it.id == targetGroupId }
+            if (targetIndex < 0) return@forEach
+            val movedCategory = groupsWithPendingCategories.flatMap { it.categories }.firstOrNull { it.id == categoryId }
+            val body = categoryRecord.recordBody()
+            val assigned = movedCategory?.assignedMinor ?: body?.longValue("budgeted") ?: body?.longValue("assigned") ?: 0
+            val activity = movedCategory?.activityMinor ?: body?.longValue("activity") ?: body?.longValue("spent") ?: 0
+            groupsWithPendingCategories.indices.forEach { index ->
+                val existing = groupsWithPendingCategories[index]
+                if (existing.categories.any { it.id == categoryId }) {
+                    groupsWithPendingCategories[index] = existing.copy(categories = existing.categories.filterNot { it.id == categoryId })
+                }
+            }
+            val target = groupsWithPendingCategories[targetIndex]
+            groupsWithPendingCategories[targetIndex] =
+                target.copy(
+                    categories =
+                        target.categories +
+                            LiveCategorySummary(
+                                id = categoryId,
+                                name = name,
+                                assignedMinor = assigned,
+                                activityMinor = activity,
+                                balanceMinor = movedCategory?.balanceMinor ?: assigned + activity,
+                                carryover = movedCategory?.carryover ?: body?.booleanValue("carryover") ?: false,
+                                pendingChanges = movedCategory?.pendingChanges ?: categoryId in pendingCategoryIds,
+                            ),
+                )
+        }
+    }
+
+    fun addPendingCategories(groupsWithPendingCategories: MutableList<LiveCategoryGroupSummary>) {
+        pendingCategories.forEach { pending ->
+            if (pending.category.id in deletedCategoryIds) return@forEach
+            val groupIndex = groupsWithPendingCategories.indexOfFirst { it.id == pending.groupId }
+            if (groupIndex < 0) return@forEach
+            val group = groupsWithPendingCategories[groupIndex]
+            if (group.categories.none { it.id == pending.category.id }) {
+                groupsWithPendingCategories[groupIndex] = group.copy(categories = group.categories + pending.category)
             }
         }
-        val target = groupsWithPendingCategories[targetIndex]
-        groupsWithPendingCategories[targetIndex] =
-            target.copy(
-                categories =
-                    target.categories +
-                        LiveCategorySummary(
-                            id = categoryId,
-                            name = name,
-                            assignedMinor = assigned,
-                            activityMinor = activity,
-                            balanceMinor = movedCategory?.balanceMinor ?: assigned + activity,
-                            carryover = movedCategory?.carryover ?: body?.booleanValue("carryover") ?: false,
-                            pendingChanges = movedCategory?.pendingChanges ?: categoryId in pendingCategoryIds,
-                        ),
-            )
     }
-    pendingCategories.forEach { pending ->
-        if (pending.category.id in deletedCategoryIds) return@forEach
-        val groupIndex = groupsWithPendingCategories.indexOfFirst { it.id == pending.groupId }
-        if (groupIndex < 0) return@forEach
-        val group = groupsWithPendingCategories[groupIndex]
-        if (group.categories.none { it.id == pending.category.id }) {
-            groupsWithPendingCategories[groupIndex] = group.copy(categories = group.categories + pending.category)
-        }
-    }
-    return LiveBudgetMonthSummary(
-        toBudgetMinor =
-            month.longValue("toBudget")?.minus(assignedDelta)?.plus(
-                heldForNextMonthOverride?.let { (month.longValue("forNextMonth") ?: 0L) - it } ?: 0L,
-            ),
-        incomeAvailableMinor = month.longValue("incomeAvailable"),
-        totalBudgetedMinor = month.longValue("totalBudgeted")?.plus(assignedDelta),
-        totalSpentMinor = month.longValue("totalSpent"),
-        groups = groupsWithPendingCategories,
-        heldForNextMonthMinor = heldForNextMonthOverride ?: month.longValue("forNextMonth"),
-        heldForNextMonthPending = heldForNextMonthPending,
-    )
 }
 
 private fun parseQueuedBudgetPayload(payload: String): JsonObject? =
@@ -401,35 +462,8 @@ internal fun liveScheduleSummaries(
     val accounts = accountRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap()
     val baseSchedules =
         scheduleRecords
-            .mapNotNull { record ->
-                val body = record.recordBody() ?: return@mapNotNull null
-                if (body.booleanValue("completed") == true) return@mapNotNull null
-                val nextDate = body.stringValue("next_date") ?: return@mapNotNull null
-                val payeeId = body.stringValue("payee")
-                val accountId = body.stringValue("account")
-                val amountElement = body["amount"]
-                val amountObject = amountElement as? JsonObject
-                val dateObject = body["date"] as? JsonObject
-                val amountRange =
-                    amountObject?.let { amount ->
-                        val first = amount.longValue("num1")
-                        val second = amount.longValue("num2")
-                        if (first != null && second != null) first to second else null
-                    }
-                LiveScheduleSummary(
-                    id = record.recordId,
-                    name = body.stringValue("name") ?: payeeId?.let(payees::get) ?: "Scheduled transaction",
-                    nextDate = nextDate,
-                    dateValueJson = body["date"]?.toString() ?: JsonPrimitive(nextDate).toString(),
-                    accountId = accountId,
-                    accountName = accountId?.let(accounts::get),
-                    payeeId = payeeId,
-                    amountMinor = if (amountRange == null) body.longValue("amount") else null,
-                    amountRangeMinor = amountRange,
-                    amountOp = body.stringValue("amountOp") ?: "is",
-                    canSkip = dateObject?.stringValue("frequency") != null,
-                )
-            }.associateBy(LiveScheduleSummary::id)
+            .mapNotNull { record -> baseScheduleSummary(record, payees, accounts) }
+            .associateBy(LiveScheduleSummary::id)
     val projectedSchedules = baseSchedules.toMutableMap()
     pendingActions
         .filter { it.action == "edit" && it.recordId in projectedSchedules }
@@ -480,4 +514,38 @@ internal fun liveScheduleSummaries(
     return projectedSchedules.values
         .filterNot { it.id in locallyDeletedScheduleIds }
         .sortedBy(LiveScheduleSummary::nextDate)
+}
+
+private fun baseScheduleSummary(
+    record: BudgetRecordEntity,
+    payees: Map<String, String>,
+    accounts: Map<String, String>,
+): LiveScheduleSummary? {
+    val body = record.recordBody() ?: return null
+    if (body.booleanValue("completed") == true) return null
+    val nextDate = body.stringValue("next_date") ?: return null
+    val payeeId = body.stringValue("payee")
+    val accountId = body.stringValue("account")
+    val amountElement = body["amount"]
+    val amountObject = amountElement as? JsonObject
+    val dateObject = body["date"] as? JsonObject
+    val amountRange =
+        amountObject?.let { amount ->
+            val first = amount.longValue("num1")
+            val second = amount.longValue("num2")
+            if (first != null && second != null) first to second else null
+        }
+    return LiveScheduleSummary(
+        id = record.recordId,
+        name = body.stringValue("name") ?: payeeId?.let(payees::get) ?: "Scheduled transaction",
+        nextDate = nextDate,
+        dateValueJson = body["date"]?.toString() ?: JsonPrimitive(nextDate).toString(),
+        accountId = accountId,
+        accountName = accountId?.let(accounts::get),
+        payeeId = payeeId,
+        amountMinor = if (amountRange == null) body.longValue("amount") else null,
+        amountRangeMinor = amountRange,
+        amountOp = body.stringValue("amountOp") ?: "is",
+        canSkip = dateObject?.stringValue("frequency") != null,
+    )
 }
