@@ -28,7 +28,7 @@ import platform.Vision.VNImageRequestHandler
 import platform.Vision.VNRecognizeTextRequest
 import platform.Vision.VNRecognizedText
 import platform.Vision.VNRecognizedTextObservation
-import platform.Vision.VNRequestTextRecognitionLevel
+import platform.Vision.VNRequestTextRecognitionLevelAccurate
 import platform.darwin.NSObject
 
 @Composable
@@ -94,7 +94,7 @@ private fun recognize(image: UIImage): List<String>? {
     UIGraphicsEndImageContext()
     val cgImage = upright?.CGImage ?: return null
     val request = VNRecognizeTextRequest()
-    request.recognitionLevel = VNRequestTextRecognitionLevel.VNRequestTextRecognitionLevelAccurate
+    request.recognitionLevel = VNRequestTextRecognitionLevelAccurate
     request.usesLanguageCorrection = true
     val handler = VNImageRequestHandler(cGImage = cgImage, options = emptyMap<Any?, Any>())
     if (!handler.performRequests(listOf(request), null)) return null
