@@ -1,6 +1,8 @@
 package app.tandemforactual.ui.core.session.budget
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.ui.core.session.BUDGET_QUEUE_RESTORE_ERROR
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.BudgetReorderQueueState
@@ -56,127 +58,166 @@ internal fun BudgetEditQueue.retryQueuedBudgetReorders(
 
 internal fun BudgetEditQueue.retryBudgetMutation(operationId: String) {
     if (isCorrectingBudgetMutation) return
-    host.sessionScope.launch {
-        val localRepository = host.repository ?: return@launch
-        val operation = host.pendingWrites.firstOrNull { it.operationId == operationId } ?: return@launch
-        val request =
-            decodeBudgetReorderQueue(operation.patchJson)
-                .moves
-                .singleOrNull()
-                ?.let { move ->
-                    if (move.encryptionPassword == null) {
-                        move.copy(encryptionPassword = host.scheduleActionEncryptionPasswords[operation.budgetId])
-                    } else {
-                        move
-                    }
-                }
-                ?: return@launch
+    host.sessionScope.launch { retryBudgetMutationNow(operationId) }
+}
 
-        if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {
-            val refreshed =
-                host.synchronize(
-                    operation.budgetId,
-                    request.encryptionPassword,
-                    retryQueuedBudgetMutations = false,
-                )
-            if (refreshed == null) return@launch
-            runCatching { localRepository.completeBudgetMutationAfterConfirmation(operation.operationId) }
-                .getOrNull() ?: return@launch
-            if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
-                budgetReorderQueue = budgetReorderQueue.enqueue(request.copy(operationId = operation.operationId))
-            }
-            budgetReorderQueue = completeAppliedBudgetMutationAfterRefresh(request.copy(operationId = operation.operationId))
-            persistCurrentBudgetReorderQueue()
-            host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
-            retryQueuedBudgetReorders()
-            return@launch
-        }
+private suspend fun BudgetEditQueue.retryBudgetMutationNow(operationId: String) {
+    val localRepository = host.repository ?: return
+    val operation = host.pendingWrites.firstOrNull { it.operationId == operationId } ?: return
+    val request = retryRequestFor(operation) ?: return
 
-        if (budgetMutationRequiresActualCheck(operation.lastErrorCode)) {
-            val refreshed =
-                host.synchronize(
-                    operation.budgetId,
-                    request.encryptionPassword,
-                    retryQueuedBudgetMutations = false,
-                )
-            if (refreshed != null) {
-                if (request.kind == BudgetReorderKind.SET_CATEGORY_CARRYOVER) {
-                    val payload = request.payloadJson?.let(::parseQueuePayload)
-                    val monthId = payload?.stringValue("month")
-                    val desiredCarryover = payload?.booleanValue("enabled")
-                    val refreshedMonth =
-                        monthId?.let { localRepository.findRecord(operation.budgetId, "budget-month", it) }
-                    val actualCarryover = budgetMonthCategoryCarryover(refreshedMonth?.remoteJson, request.itemId)
-                    if (desiredCarryover != null && actualCarryover == desiredCarryover) {
-                        val confirmedRequest = request.copy(operationId = operation.operationId)
-                        val confirmed =
-                            runCatching {
-                                localRepository.completeBudgetMutationAfterConfirmation(operation.operationId)
-                            }.isSuccess
-                        if (confirmed) {
-                            if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
-                                budgetReorderQueue = budgetReorderQueue.enqueue(confirmedRequest)
-                            }
-                            budgetReorderQueue = completeAppliedBudgetMutationAfterRefresh(confirmedRequest)
-                            persistCurrentBudgetReorderQueue()
-                            host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
-                            retryQueuedBudgetReorders()
-                            return@launch
-                        }
-                    }
-                }
-                host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
-            }
-            return@launch
-        }
+    if (budgetMutationNeedsRefresh(operation.lastErrorCode)) {
+        completeAfterRefresh(localRepository, operation, request)
+        return
+    }
 
+    if (budgetMutationRequiresActualCheck(operation.lastErrorCode)) {
+        confirmWithActual(localRepository, operation, request)
+        return
+    }
+
+    val requeued =
         if (budgetMutationRetryNeedsNewKey(operation.lastErrorCode)) {
-            if (operation.status !in setOf("conflict", "rejected")) return@launch
-            val refreshed =
-                host.synchronize(
-                    operation.budgetId,
-                    request.encryptionPassword,
-                    retryQueuedBudgetMutations = false,
-                )
-            if (refreshed == null) return@launch
-            val replacementOperationId = Uuid.random().toString()
-            val replacement =
-                budgetMutationRequestForRetry(
-                    request,
-                    operation.lastErrorCode,
-                    replacementOperationId,
-                ) ?: return@launch
-            val nextQueue =
-                if (budgetReorderQueue.moves.any { it.operationId == operation.operationId }) {
-                    budgetReorderQueue.replaceOperationId(operation.operationId, replacementOperationId)
-                } else {
-                    budgetReorderQueue.enqueue(replacement)
-                }
-            budgetQueuePersistenceMutex.withLock {
-                persistBudgetReorderQueueNow(nextQueue, setOf(operation.operationId))
-                budgetReorderQueue = nextQueue
-            }
+            requeueWithNewKey(operation, request)
         } else {
-            val retryRequest =
-                budgetMutationRequestForRetry(
-                    request,
-                    operation.lastErrorCode,
-                    operation.operationId,
-                ) ?: return@launch
-            val retried =
-                runCatching { localRepository.retryBudgetMutationAfterReview(operationId) }
-                    .getOrNull() ?: return@launch
-            val resumedRequest = retryRequest.copy(operationId = retried.operationId)
-            if (budgetReorderQueue.moves.none { it.operationId == retried.operationId }) {
-                budgetReorderQueue = budgetReorderQueue.enqueue(resumedRequest)
+            resumeAfterReview(localRepository, operation, request, operationId)
+        }
+    if (!requeued) return
+    host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
+    retryQueuedBudgetReorders()
+}
+
+private fun BudgetEditQueue.retryRequestFor(operation: OutboxOperationEntity): QueuedBudgetReorder? =
+    decodeBudgetReorderQueue(operation.patchJson)
+        .moves
+        .singleOrNull()
+        ?.let { move ->
+            if (move.encryptionPassword == null) {
+                move.copy(encryptionPassword = host.scheduleActionEncryptionPasswords[operation.budgetId])
             } else {
-                budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+                move
             }
-            persistCurrentBudgetReorderQueue()
+        }
+
+private suspend fun BudgetEditQueue.completeAfterRefresh(
+    localRepository: LocalBudgetRepository,
+    operation: OutboxOperationEntity,
+    request: QueuedBudgetReorder,
+) {
+    val refreshed =
+        host.synchronize(
+            operation.budgetId,
+            request.encryptionPassword,
+            retryQueuedBudgetMutations = false,
+        )
+    if (refreshed == null) return
+    runCatching { localRepository.completeBudgetMutationAfterConfirmation(operation.operationId) }
+        .getOrNull() ?: return
+    if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
+        budgetReorderQueue = budgetReorderQueue.enqueue(request.copy(operationId = operation.operationId))
+    }
+    budgetReorderQueue = completeAppliedBudgetMutationAfterRefresh(request.copy(operationId = operation.operationId))
+    persistCurrentBudgetReorderQueue()
+    host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
+    retryQueuedBudgetReorders()
+}
+
+private suspend fun BudgetEditQueue.confirmWithActual(
+    localRepository: LocalBudgetRepository,
+    operation: OutboxOperationEntity,
+    request: QueuedBudgetReorder,
+) {
+    val refreshed =
+        host.synchronize(
+            operation.budgetId,
+            request.encryptionPassword,
+            retryQueuedBudgetMutations = false,
+        )
+    if (refreshed != null) {
+        if (request.kind == BudgetReorderKind.SET_CATEGORY_CARRYOVER) {
+            val payload = request.payloadJson?.let(::parseQueuePayload)
+            val monthId = payload?.stringValue("month")
+            val desiredCarryover = payload?.booleanValue("enabled")
+            val refreshedMonth =
+                monthId?.let { localRepository.findRecord(operation.budgetId, "budget-month", it) }
+            val actualCarryover = budgetMonthCategoryCarryover(refreshedMonth?.remoteJson, request.itemId)
+            if (desiredCarryover != null && actualCarryover == desiredCarryover) {
+                val confirmedRequest = request.copy(operationId = operation.operationId)
+                val confirmed =
+                    runCatching {
+                        localRepository.completeBudgetMutationAfterConfirmation(operation.operationId)
+                    }.isSuccess
+                if (confirmed) {
+                    if (budgetReorderQueue.moves.none { it.operationId == operation.operationId }) {
+                        budgetReorderQueue = budgetReorderQueue.enqueue(confirmedRequest)
+                    }
+                    budgetReorderQueue = completeAppliedBudgetMutationAfterRefresh(confirmedRequest)
+                    persistCurrentBudgetReorderQueue()
+                    host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
+                    retryQueuedBudgetReorders()
+                    return
+                }
+            }
         }
         host.replacePendingWrites(localRepository.readPendingWrites(operation.budgetId))
-        retryQueuedBudgetReorders()
     }
+}
+
+private suspend fun BudgetEditQueue.requeueWithNewKey(
+    operation: OutboxOperationEntity,
+    request: QueuedBudgetReorder,
+): Boolean {
+    if (operation.status !in setOf("conflict", "rejected")) return false
+    val refreshed =
+        host.synchronize(
+            operation.budgetId,
+            request.encryptionPassword,
+            retryQueuedBudgetMutations = false,
+        )
+    if (refreshed == null) return false
+    val replacementOperationId = Uuid.random().toString()
+    val replacement =
+        budgetMutationRequestForRetry(
+            request,
+            operation.lastErrorCode,
+            replacementOperationId,
+        ) ?: return false
+    val nextQueue =
+        if (budgetReorderQueue.moves.any { it.operationId == operation.operationId }) {
+            budgetReorderQueue.replaceOperationId(operation.operationId, replacementOperationId)
+        } else {
+            budgetReorderQueue.enqueue(replacement)
+        }
+    budgetQueuePersistenceMutex.withLock {
+        persistBudgetReorderQueueNow(nextQueue, setOf(operation.operationId))
+        budgetReorderQueue = nextQueue
+    }
+    return true
+}
+
+private suspend fun BudgetEditQueue.resumeAfterReview(
+    localRepository: LocalBudgetRepository,
+    operation: OutboxOperationEntity,
+    request: QueuedBudgetReorder,
+    operationId: String,
+): Boolean {
+    val retryRequest =
+        budgetMutationRequestForRetry(
+            request,
+            operation.lastErrorCode,
+            operation.operationId,
+        ) ?: return false
+    val retried =
+        runCatching { localRepository.retryBudgetMutationAfterReview(operationId) }
+            .getOrNull() ?: return false
+    val resumedRequest = retryRequest.copy(operationId = retried.operationId)
+    if (budgetReorderQueue.moves.none { it.operationId == retried.operationId }) {
+        budgetReorderQueue = budgetReorderQueue.enqueue(resumedRequest)
+    } else {
+        budgetReorderQueue = budgetReorderQueue.resumeAfterConnection()
+    }
+    persistCurrentBudgetReorderQueue()
+    return true
 }
 
 internal suspend fun BudgetEditQueue.correctRejectedCategoryRename(
@@ -240,6 +281,15 @@ internal suspend fun BudgetEditQueue.correctRejectedCategoryRename(
             encryptionPassword = password,
             refreshBeforeSend = true,
         )
+    return saveCorrectedRename(localRepository, budgetId, operationId, replacement)
+}
+
+private suspend fun BudgetEditQueue.saveCorrectedRename(
+    localRepository: LocalBudgetRepository,
+    budgetId: String,
+    operationId: String,
+    replacement: QueuedBudgetReorder,
+): Boolean {
     isCorrectingBudgetMutation = true
     isPersistingBudgetMutation = true
     return try {

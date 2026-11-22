@@ -76,36 +76,6 @@ internal fun BudgetReorderQueueState.complete(
     val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
     val current = statusFor(move.budgetId, move.scopeId)
     val nextCount = (current.pendingCount - 1).coerceAtLeast(0)
-    val hasPendingVisibilityChange =
-        remainingMoves.any {
-            it.budgetId == move.budgetId &&
-                it.itemId == move.itemId &&
-                it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY)
-        }
-    val hasPendingGroupRename =
-        remainingMoves.any {
-            it.budgetId == move.budgetId &&
-                it.itemId == move.itemId &&
-                it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME)
-        }
-    val hasPendingCategoryRename =
-        remainingMoves.any {
-            it.budgetId == move.budgetId &&
-                it.itemId == move.itemId &&
-                it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME)
-        }
-    val hasPendingCategoryMove =
-        remainingMoves.any {
-            it.budgetId == move.budgetId && it.itemId == move.itemId && it.kind == BudgetReorderKind.MOVE_CATEGORY_TO_GROUP
-        }
-    val hasPendingGroupVisibilityChange =
-        remainingMoves.any {
-            it.budgetId == move.budgetId &&
-                it.itemId == move.itemId &&
-                it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP)
-        }
-    val hasPendingCategoryDelete =
-        remainingMoves.any { it.budgetId == move.budgetId && it.itemId == move.itemId && it.kind == BudgetReorderKind.DELETE_CATEGORY }
     val nextStatus =
         when {
             refreshFailed ->
@@ -117,6 +87,36 @@ internal fun BudgetReorderQueueState.complete(
             nextCount == 0 -> BudgetReorderStatus()
             else -> current.copy(pendingCount = nextCount)
         }
+    return copy(
+        moves = remainingMoves,
+        statuses = statuses + (key to nextStatus),
+    ).clearCompletedCategoryOverrides(move, remainingMoves, refreshFailed)
+        .clearCompletedGroupOverrides(move, remainingMoves, refreshFailed)
+}
+
+private fun BudgetReorderQueueState.clearCompletedCategoryOverrides(
+    move: QueuedBudgetReorder,
+    remainingMoves: List<QueuedBudgetReorder>,
+    refreshFailed: Boolean,
+): BudgetReorderQueueState {
+    val hasPendingVisibilityChange =
+        remainingMoves.any {
+            it.budgetId == move.budgetId &&
+                it.itemId == move.itemId &&
+                it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY)
+        }
+    val hasPendingCategoryRename =
+        remainingMoves.any {
+            it.budgetId == move.budgetId &&
+                it.itemId == move.itemId &&
+                it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME)
+        }
+    val hasPendingCategoryMove =
+        remainingMoves.any {
+            it.budgetId == move.budgetId && it.itemId == move.itemId && it.kind == BudgetReorderKind.MOVE_CATEGORY_TO_GROUP
+        }
+    val hasPendingCategoryDelete =
+        remainingMoves.any { it.budgetId == move.budgetId && it.itemId == move.itemId && it.kind == BudgetReorderKind.DELETE_CATEGORY }
     val visibilityOverrides =
         if (move.kind in setOf(BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY) &&
             !refreshFailed &&
@@ -125,15 +125,6 @@ internal fun BudgetReorderQueueState.complete(
             categoryVisibilityOverrides - categoryVisibilityKey(move.budgetId, move.itemId)
         } else {
             categoryVisibilityOverrides
-        }
-    val groupNameOverrides =
-        if (move.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME) &&
-            !refreshFailed &&
-            !hasPendingGroupRename
-        ) {
-            categoryGroupNameOverrides - categoryVisibilityKey(move.budgetId, move.itemId)
-        } else {
-            categoryGroupNameOverrides
         }
     val categoryNameOverrides =
         if (move.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME) &&
@@ -150,6 +141,46 @@ internal fun BudgetReorderQueueState.complete(
         } else {
             categoryGroupIdOverrides
         }
+    val deletedCategoryIds =
+        if (move.kind == BudgetReorderKind.DELETE_CATEGORY && !refreshFailed && !hasPendingCategoryDelete) {
+            deletedCategoryIds - categoryVisibilityKey(move.budgetId, move.itemId)
+        } else {
+            deletedCategoryIds
+        }
+    return copy(
+        categoryVisibilityOverrides = visibilityOverrides,
+        categoryNameOverrides = categoryNameOverrides,
+        categoryGroupIdOverrides = categoryGroupIdOverrides,
+        deletedCategoryIds = deletedCategoryIds,
+    )
+}
+
+private fun BudgetReorderQueueState.clearCompletedGroupOverrides(
+    move: QueuedBudgetReorder,
+    remainingMoves: List<QueuedBudgetReorder>,
+    refreshFailed: Boolean,
+): BudgetReorderQueueState {
+    val hasPendingGroupRename =
+        remainingMoves.any {
+            it.budgetId == move.budgetId &&
+                it.itemId == move.itemId &&
+                it.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME)
+        }
+    val hasPendingGroupVisibilityChange =
+        remainingMoves.any {
+            it.budgetId == move.budgetId &&
+                it.itemId == move.itemId &&
+                it.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP)
+        }
+    val groupNameOverrides =
+        if (move.kind in setOf(BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME) &&
+            !refreshFailed &&
+            !hasPendingGroupRename
+        ) {
+            categoryGroupNameOverrides - categoryVisibilityKey(move.budgetId, move.itemId)
+        } else {
+            categoryGroupNameOverrides
+        }
     val categoryGroupVisibilityOverrides =
         if (move.kind in setOf(BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP) &&
             !refreshFailed &&
@@ -159,21 +190,9 @@ internal fun BudgetReorderQueueState.complete(
         } else {
             categoryGroupVisibilityOverrides
         }
-    val deletedCategoryIds =
-        if (move.kind == BudgetReorderKind.DELETE_CATEGORY && !refreshFailed && !hasPendingCategoryDelete) {
-            deletedCategoryIds - categoryVisibilityKey(move.budgetId, move.itemId)
-        } else {
-            deletedCategoryIds
-        }
     return copy(
-        moves = remainingMoves,
-        statuses = statuses + (key to nextStatus),
-        categoryVisibilityOverrides = visibilityOverrides,
         categoryGroupNameOverrides = groupNameOverrides,
-        categoryNameOverrides = categoryNameOverrides,
-        categoryGroupIdOverrides = categoryGroupIdOverrides,
         categoryGroupVisibilityOverrides = categoryGroupVisibilityOverrides,
-        deletedCategoryIds = deletedCategoryIds,
     )
 }
 

@@ -62,7 +62,6 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
-function-size AccountEdits.markTransactionsReconciled
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size ActivitySearch.activitySearchSuggestions
@@ -74,9 +73,6 @@ function-size BankBrowserLinkSheet.BanksStep
 function-size BankConnectionsScreen.BankConnectionsScreen
 function-size BottomNavigation.BottomNavigation
 function-size BudgetChooserScreen.BudgetChooserScreen
-function-size BudgetEditRecovery.correctRejectedCategoryRename
-function-size BudgetEditRecovery.retryBudgetMutation
-function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
 function-size ChangeHistoryScreen.ChangeHistoryScreen
@@ -110,9 +106,6 @@ function-size PageTemplates.PageLazyColumnContent
 function-size PendingChangesScreen.PendingChangesScreen
 function-size PersonalizeScreen.ModePreviewCard
 function-size PrivacyAmountText.PrivacyAmountText
-function-size QueueStateCompletion.complete
-function-size QueueStateEnqueue.enqueue
-function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
 function-size ReportDetailScreen.ReportDetailScreen
 function-size ReportsScreen.ReportCard

@@ -9,39 +9,12 @@ import kotlin.uuid.Uuid
 internal fun BudgetReorderQueueState.enqueue(move: QueuedBudgetReorder): BudgetReorderQueueState {
     val key = budgetReorderStatusKey(move.budgetId, move.scopeId)
     val current = statusFor(move.budgetId, move.scopeId)
-    val hiddenOverride =
-        when (move.kind) {
-            BudgetReorderKind.HIDE_CATEGORY -> true
-            BudgetReorderKind.SHOW_CATEGORY -> false
-            else -> null
-        }
-    val groupHiddenOverride =
-        when (move.kind) {
-            BudgetReorderKind.HIDE_CATEGORY_GROUP -> true
-            BudgetReorderKind.SHOW_CATEGORY_GROUP -> false
-            else -> null
-        }
-    val groupNameOverride =
-        move.name?.takeIf {
-            move.kind in
-                setOf(
-                    BudgetReorderKind.RENAME_CATEGORY_GROUP,
-                    BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
-                )
-        }
+    val hiddenOverride = categoryHiddenOverride(move)
+    val groupHiddenOverride = categoryGroupHiddenOverride(move)
+    val groupNameOverride = categoryGroupNameOverride(move)
     val categoryNameOverride =
         move.name?.takeIf { move.kind in setOf(BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME) }
-    val hasOrderingChange =
-        move.kind in
-            setOf(
-                BudgetReorderKind.CATEGORY,
-                BudgetReorderKind.CATEGORY_GROUP,
-                BudgetReorderKind.HIDE_CATEGORY,
-                BudgetReorderKind.SHOW_CATEGORY,
-                BudgetReorderKind.CREATE_CATEGORY_GROUP,
-                BudgetReorderKind.CREATE_CATEGORY,
-                BudgetReorderKind.MOVE_ACCOUNT,
-            )
+    val hasOrderingChange = hasOrderingChange(move)
     return copy(
         moves = moves + move.copy(requiresEncryptionPassword = move.requiresEncryptionPassword || move.encryptionPassword != null),
         statuses =
@@ -93,6 +66,41 @@ internal fun BudgetReorderQueueState.enqueue(move: QueuedBudgetReorder): BudgetR
             },
     )
 }
+
+private fun categoryHiddenOverride(move: QueuedBudgetReorder): Boolean? =
+    when (move.kind) {
+        BudgetReorderKind.HIDE_CATEGORY -> true
+        BudgetReorderKind.SHOW_CATEGORY -> false
+        else -> null
+    }
+
+private fun categoryGroupHiddenOverride(move: QueuedBudgetReorder): Boolean? =
+    when (move.kind) {
+        BudgetReorderKind.HIDE_CATEGORY_GROUP -> true
+        BudgetReorderKind.SHOW_CATEGORY_GROUP -> false
+        else -> null
+    }
+
+private fun categoryGroupNameOverride(move: QueuedBudgetReorder): String? =
+    move.name?.takeIf {
+        move.kind in
+            setOf(
+                BudgetReorderKind.RENAME_CATEGORY_GROUP,
+                BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
+            )
+    }
+
+private fun hasOrderingChange(move: QueuedBudgetReorder): Boolean =
+    move.kind in
+        setOf(
+            BudgetReorderKind.CATEGORY,
+            BudgetReorderKind.CATEGORY_GROUP,
+            BudgetReorderKind.HIDE_CATEGORY,
+            BudgetReorderKind.SHOW_CATEGORY,
+            BudgetReorderKind.CREATE_CATEGORY_GROUP,
+            BudgetReorderKind.CREATE_CATEGORY,
+            BudgetReorderKind.MOVE_ACCOUNT,
+        )
 
 /**
  * Queues a reorder draft. A new drop on a list replaces that list's unsent
