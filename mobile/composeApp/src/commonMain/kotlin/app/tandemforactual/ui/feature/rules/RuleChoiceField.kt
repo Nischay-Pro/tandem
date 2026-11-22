@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.ui.ActivitySearchInput
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -29,7 +30,6 @@ import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.activity.ActivitySearchInput
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 

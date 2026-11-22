@@ -42,6 +42,8 @@ import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.ui.BiometricPasswordCheckbox
+import app.tandemforactual.ui.core.ui.SyncStatusRing
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.feedback.FieldErrorMessage
 import app.tandemforactual.ui.design.templates.DisplayHeadline
@@ -52,7 +54,6 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.sync.SyncStatusRing
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide

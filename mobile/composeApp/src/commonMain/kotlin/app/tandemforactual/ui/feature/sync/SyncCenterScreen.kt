@@ -29,11 +29,11 @@ import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.ui.SyncNoticeCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.transactions.SyncNoticeCard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TriangleAlert
 import kotlinx.coroutines.launch

@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package app.tandemforactual.ui.feature.sync
+package app.tandemforactual.ui.core.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring

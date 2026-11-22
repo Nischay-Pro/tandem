@@ -28,6 +28,7 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -47,7 +48,6 @@ import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.accounts.accountTypeIcon
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Coins
 import com.composables.icons.lucide.Lucide

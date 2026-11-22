@@ -40,6 +40,8 @@ import app.tandemforactual.ui.core.state.homeLayout
 import app.tandemforactual.ui.core.state.isBudgetSectionCollapsed
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.toggleBudgetSection
+import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
+import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
@@ -62,8 +64,6 @@ import app.tandemforactual.ui.feature.budget.components.budgetOverviewItems
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetReorderState
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetScreenDialogs
 import app.tandemforactual.ui.feature.budget.components.rememberHoldSheetState
-import app.tandemforactual.ui.feature.schedules.LiveUpcomingBillsCard
-import app.tandemforactual.ui.feature.transactions.TransactionRow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 

@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package app.tandemforactual.ui.feature.transactions
+package app.tandemforactual.ui.core.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

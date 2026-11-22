@@ -22,6 +22,7 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
+import app.tandemforactual.ui.core.ui.ActivitySearchInput
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -32,7 +33,6 @@ import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.activity.ActivitySearchInput
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus

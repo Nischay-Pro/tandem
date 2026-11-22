@@ -1,32 +1,15 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature AccountDetailScreen -> transactions
 cross-feature AccountsScreen -> banking
 cross-feature AccountsScreen -> budget
-cross-feature ActivityScreen -> transactions
-cross-feature ActivitySearchScreen -> transactions
-cross-feature AppLockGate -> sync
 cross-feature BankConnectionsScreen -> sync
-cross-feature BudgetRulesScreen -> activity
-cross-feature BudgetScreen -> schedules
-cross-feature BudgetScreen -> transactions
-cross-feature BudgetUnlockScreen -> auth
-cross-feature CategoryGroupScreen -> accounts
-cross-feature CurrencyScreens -> accounts
 cross-feature CustomReportScreen -> insights
 cross-feature CustomReportScreens -> insights
 cross-feature CustomReportsScreen -> insights
 cross-feature HomeLayoutScreen -> budget
 cross-feature HomeScreen -> planning
-cross-feature HomeScreen -> schedules
-cross-feature HomeScreen -> transactions
-cross-feature ManagePayeesScreen -> activity
-cross-feature ManagePayeesScreen -> schedules
-cross-feature RuleChoiceField -> activity
 cross-feature SettingsScreen -> planning
-cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
-cross-feature TransactionDetailScreen -> reimbursements
 cross-feature WhatIfScreen -> insights
 function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork

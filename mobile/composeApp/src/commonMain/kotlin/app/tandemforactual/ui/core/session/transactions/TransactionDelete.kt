@@ -6,9 +6,9 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.UndoNotice
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
-import app.tandemforactual.ui.core.session.transactions.TransactionController
 import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
 import kotlinx.coroutines.CancellationException
 import kotlin.uuid.Uuid
@@ -172,3 +172,9 @@ private suspend fun TransactionController.enqueueTransactionDelete(
         host.markSavingTransaction(false)
     }
 }
+
+internal suspend fun deleteTransactionSelection(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    transactionIds: Set<String>,
+): Boolean = mobileSession.transactions.deleteTransactionsWithUndo(budgetId, transactionIds)

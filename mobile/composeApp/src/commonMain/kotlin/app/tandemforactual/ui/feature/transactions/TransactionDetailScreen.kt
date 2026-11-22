@@ -36,6 +36,9 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.ui.ReimbursementCard
+import app.tandemforactual.ui.core.ui.TransactionSyncNotice
+import app.tandemforactual.ui.core.ui.transactionSyncOperations
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -48,7 +51,6 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.reimbursements.ReimbursementCard
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff

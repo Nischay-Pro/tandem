@@ -39,6 +39,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -47,7 +48,6 @@ import app.tandemforactual.ui.design.templates.Heading
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.SettingRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.feature.transactions.TransactionRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -4,17 +4,9 @@ package app.tandemforactual.ui.feature.accounts
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.vector.ImageVector
 import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.liveAccountGroupLabel
-import com.composables.icons.lucide.ChartNoAxesCombined
-import com.composables.icons.lucide.CreditCard
-import com.composables.icons.lucide.HandCoins
-import com.composables.icons.lucide.Landmark
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.PiggyBank
-import com.composables.icons.lucide.WalletCards
 
 internal data class AccountListItemUi(
     val id: String,
@@ -77,28 +69,6 @@ internal fun accountBalanceAccessibilityDescription(
         balanceMinor < 0L -> "Negative balance, $formattedBalance"
         else -> "Balance, $formattedBalance"
     }
-
-internal fun accountTypeIcon(
-    accountName: String,
-    accountType: String? = null,
-): ImageVector {
-    val name = accountName.lowercase()
-    val type = accountType.orEmpty().lowercase()
-    return when {
-        "savings" in name || "saving" in name -> Lucide.PiggyBank
-        "checking" in name || "chequing" in name -> Lucide.Landmark
-        listOf("credit", "card", "visa", "mastercard", "amex", "discover").any { it in name } -> Lucide.CreditCard
-        listOf("loan", "mortgage", "debt").any { it in name } -> Lucide.HandCoins
-        listOf("investment", "brokerage", "401k", "403b", "ira", "retirement", "stocks").any { it in name } ->
-            Lucide.ChartNoAxesCombined
-        "checking" in type || "chequing" in type -> Lucide.Landmark
-        "savings" in type || "saving" in type -> Lucide.PiggyBank
-        listOf("credit", "card").any { it in type } -> Lucide.CreditCard
-        listOf("loan", "debt").any { it in type } -> Lucide.HandCoins
-        listOf("tracking", "investment").any { it in type } -> Lucide.ChartNoAxesCombined
-        else -> Lucide.WalletCards
-    }
-}
 
 internal fun accountGroupOrder(groupName: String): Int {
     val name = groupName.trim().lowercase()

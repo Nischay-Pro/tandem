@@ -33,6 +33,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatSignedCurrency
 import app.tandemforactual.ui.core.state.recordName
+import app.tandemforactual.ui.core.ui.SyncStatusRing
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
