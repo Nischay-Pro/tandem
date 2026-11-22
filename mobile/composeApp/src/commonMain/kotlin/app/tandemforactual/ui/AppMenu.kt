@@ -56,6 +56,7 @@ import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.FileUp
 import com.composables.icons.lucide.GitMerge
+import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
@@ -367,6 +368,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
+        add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
         add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
         add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))

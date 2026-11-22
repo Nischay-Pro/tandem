@@ -4,13 +4,17 @@ import app.tandemforactual.data.actual.ActualBankSync
 import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualBudgetReader
+import app.tandemforactual.data.actual.ActualChangeHistory
 import app.tandemforactual.data.actual.ActualDatabase
+import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
+import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.OperationOutcome
+import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.BudgetSyncProtocolException
@@ -156,6 +160,27 @@ class ActualDirectBudget private constructor(
             }
         }
 
+    val deviceNode: String get() = clock.clock.timestamp.node
+
+    suspend fun changeHistory(limit: Int): List<ChangeSet> =
+        locked {
+            runCatching {
+                synchronize()
+            }.exceptionOrNull()?.let { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            ActualChangeHistory(writer).recent(limit)
+        }
+
+    /** Reverts one edit from the change history against freshly synced state, then uploads the reversal. */
+    suspend fun undoChange(id: String): UndoResult =
+        locked {
+            synchronize()
+            val history = ActualChangeHistory(writer)
+            val set =
+                history.recent(UNDO_SEARCH_LIMIT).firstOrNull { it.id == id }
+                    ?: throw ActualEditException("This change is too old to undo", "change_not_found")
+            history.undo(set).also { synchronize() }
+        }
+
     /** Applies a budget edit against freshly synced state, then uploads it, as the gateway's maintenance routes did. */
     suspend fun <T> edit(
         today: String,
@@ -206,6 +231,8 @@ class ActualDirectBudget private constructor(
     internal fun closeNow() = db.close()
 
     companion object {
+        private const val UNDO_SEARCH_LIMIT = 200
+
         /**
          * [install] opens a new local database from the downloaded SQLite bytes. Keep it separate from any existing
          * budget until the initial sync succeeds. Persist [groupId] with the installed database for [reopen].
