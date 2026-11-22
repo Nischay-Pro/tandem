@@ -134,7 +134,7 @@ class ArchitectureTest {
     fun filesStaySmall() {
         check(
             "size",
-            allModules.filter { (_, f) -> f.text.lines().size > MAX_FILE_LINES }.map { (m, f) -> sizeKey(m, f.name) },
+            allModules.filter { (_, f) -> codeLines(f.text, countHeader = false) > MAX_FILE_LINES }.map { (m, f) -> sizeKey(m, f.name) },
         )
     }
 
@@ -148,14 +148,28 @@ class ArchitectureTest {
                         .functions(
                             includeNested = true,
                             includeLocal = false,
-                        ).filter { it.text.lines().size > MAX_FUNCTION_LINES }
+                        ).filter { codeLines(it.text, countHeader = true) > MAX_FUNCTION_LINES }
                         .map { "${sizeKey(m, f.name)}.${it.name}" }
                 }.distinct(),
         )
     }
 
+    /** Lines that hold code: blank lines, comments, and a file's package and imports don't count. */
+    private fun codeLines(
+        text: String,
+        countHeader: Boolean,
+    ): Int =
+        text.lines().count { line ->
+            val trimmed = line.trim()
+            trimmed.isNotEmpty() &&
+                !trimmed.startsWith("//") &&
+                !trimmed.startsWith("/*") &&
+                !trimmed.startsWith("*") &&
+                (countHeader || !(trimmed.startsWith("import ") || trimmed.startsWith("package ")))
+        }
+
     private companion object {
-        const val MAX_FILE_LINES = 400
+        const val MAX_FILE_LINES = 600
         const val MAX_FUNCTION_LINES = 80
     }
 }

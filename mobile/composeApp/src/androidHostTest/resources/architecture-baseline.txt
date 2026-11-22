@@ -73,7 +73,6 @@ function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetRulesScreen.BudgetRulesScreen
-function-size BudgetSwitchSplash.AdvancedModeSwitch
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
@@ -138,21 +137,8 @@ layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
 size ActivitySearch
-size AppState
-size BudgetReorderQueue
-size CustomReportScreen
-size LiveBudgetModels
-size ReportModels
 size ReportsScreenParts
-size RuleEditorSheet
 size StatementImport
-size SyncCenterScreenParts
-size TandemMobileSession
 size api-client:TandemApiClient
 size data:ActualBudgetEdits
-size data:ActualRuleEngine
-size data:ActualScheduleEdits
-size data:ActualTransactionOperations
-size data:BudgetSyncCoordinator
-size data:Daos
 size data:LocalBudgetRepository
