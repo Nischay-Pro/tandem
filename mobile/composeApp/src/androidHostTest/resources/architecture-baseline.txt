@@ -89,10 +89,6 @@ function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
 function-size FirstSyncScreen.FirstSyncScreen
 function-size GoalTimelineScreen.GoalTimelineScreen
-function-size HomeLayoutScreen.HomeLayoutRow
-function-size HomeLayoutScreen.HomeLayoutScreen
-function-size HomeScreen.HomeEntryCard
-function-size HomeScreen.HomeScreen
 function-size HouseholdScreen.HouseholdScreen
 function-size InsightScreens.MonthlyReviewScreen
 function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
@@ -102,7 +98,6 @@ function-size MatchEditorScreen.MatchEditorScreen
 function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
 function-size PendingChangesScreen.PendingChangesScreen
-function-size PersonalizeScreen.ModePreviewCard
 function-size QueueStateCompletion.complete
 function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
@@ -158,7 +153,6 @@ size CategoryDetailScreen
 size CategoryGroupScreen
 size CustomReportScreen
 size LiveBudgetModels
-size PersonalizeScreen
 size ReportModels
 size ReportsScreenParts
 size RuleEditorSheet

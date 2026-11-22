@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
@@ -102,30 +104,14 @@ internal fun HomeLayoutScreen(
         if (next != names) save(next.mapNotNull(byName::get))
     }
 
-    PageLazyColumn(verticalSpacing = TandemSpacing.small) {
-        item(key = "home-layout-intro") {
-            Column(Modifier.padding(bottom = TandemSpacing.small), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text(
-                    stringResource(Res.string.home_layout_detail),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.body,
-                    lineHeight = TandemTypography.bodyLineHeight,
-                )
-                val readyNote = stringResource(Res.string.home_layout_when_ready)
-                Text(
-                    if (state.interfaceMode ==
-                        InterfaceMode.MINIMAL
-                    ) {
-                        "${stringResource(Res.string.home_layout_minimal_note)} $readyNote"
-                    } else {
-                        readyNote
-                    },
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.compactBody,
-                    lineHeight = TandemTypography.compactLineHeight,
-                )
-            }
+    fun drop() {
+        drag.finish(savedOrder)?.let { result ->
+            if (result.finalOrder != result.startingOrder) save(result.finalOrder.mapNotNull(byName::get))
         }
+    }
+
+    PageLazyColumn(verticalSpacing = TandemSpacing.small) {
+        item(key = "home-layout-intro") { HomeLayoutIntro(state.interfaceMode) }
         item(key = "home-layout-heading") {
             Text(
                 stringResource(Res.string.home_layout_sections),
@@ -134,68 +120,115 @@ internal fun HomeLayoutScreen(
                 fontWeight = FontWeight.SemiBold,
             )
         }
-        shownLayout.forEachIndexed { index, item ->
-            item(key = "home-layout-${item.module.name}") {
-                val name = item.module.name
-
-                fun startDrag() = drag.start(shownLayout.map { it.module.name }, name)
-
-                fun dragBy(delta: Float) {
-                    if (drag.draggedItemId == name) drag.dragBy(delta)
-                }
-
-                fun drop() {
-                    drag.finish(savedOrder)?.let { result ->
-                        if (result.finalOrder != result.startingOrder) save(result.finalOrder.mapNotNull(byName::get))
-                    }
-                }
-                HomeLayoutRow(
-                    item = item,
-                    advancedOnlyHint = item.module.advancedOnly && state.interfaceMode == InterfaceMode.MINIMAL,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < shownLayout.lastIndex,
-                    modifier =
-                        dragReorderItemModifier(
-                            itemId = name,
-                            dragState = drag,
-                            reduceMotion = reduceMotion,
-                            dragEnabled = true,
-                            onDragStarted = ::startDrag,
-                            onDragBy = ::dragBy,
-                            onDragStopped = ::drop,
-                        ),
-                    onToggle = { shown -> save(shownLayout.map { if (it.module == item.module) it.copy(shown = shown) else it }) },
-                    onMoveUp = { move(item.module, -1) },
-                    onMoveDown = { move(item.module, 1) },
-                    onDragStarted = ::startDrag,
-                    onDragBy = ::dragBy,
-                    onDragStopped = ::drop,
-                )
-            }
-        }
+        homeLayoutRowItems(shownLayout, drag, reduceMotion, state.interfaceMode, ::save, ::move, ::drop)
         item(key = "home-layout-more") {
-            Column(Modifier.padding(top = TandemSpacing.medium)) {
-                SectionCard(stringResource(Res.string.home_layout_more_title)) {
-                    ListRow(
-                        stringResource(Res.string.home_layout_goals),
-                        stringResource(Res.string.home_layout_goals_detail),
-                        leading = RowLeading.Icon(Lucide.Sparkles),
-                        onClick = { navigation.open(AppRoute.PERSONALIZE) },
-                    )
-                    if (settings.moduleOrder.isNotEmpty() || settings.hiddenModules.isNotEmpty()) {
-                        DividerLine()
-                        ListRow(
-                            stringResource(Res.string.home_layout_reset),
-                            stringResource(Res.string.home_layout_reset_detail),
-                            leading = RowLeading.Icon(Lucide.RotateCcw),
-                            options = ListRowOptions(showChevron = false),
-                            onClick = {
-                                drag.releaseHeldDrop()
-                                state.updateExperience { it.withSuggestedHome() }
-                            },
-                        )
-                    }
-                }
+            HomeLayoutMoreSection(
+                showReset = settings.moduleOrder.isNotEmpty() || settings.hiddenModules.isNotEmpty(),
+                onPersonalize = { navigation.open(AppRoute.PERSONALIZE) },
+                onReset = {
+                    drag.releaseHeldDrop()
+                    state.updateExperience { it.withSuggestedHome() }
+                },
+            )
+        }
+    }
+}
+
+/** One draggable, toggleable row per Home section. */
+private fun LazyListScope.homeLayoutRowItems(
+    shownLayout: List<HomeLayoutItem>,
+    drag: DragReorderState,
+    reduceMotion: Boolean,
+    interfaceMode: InterfaceMode,
+    onSave: (List<HomeLayoutItem>) -> Unit,
+    onMove: (HomeModule, Int) -> Unit,
+    onDrop: () -> Unit,
+) {
+    shownLayout.forEachIndexed { index, item ->
+        item(key = "home-layout-${item.module.name}") {
+            val name = item.module.name
+
+            fun startDrag() = drag.start(shownLayout.map { it.module.name }, name)
+
+            fun dragBy(delta: Float) {
+                if (drag.draggedItemId == name) drag.dragBy(delta)
+            }
+            HomeLayoutRow(
+                item = item,
+                advancedOnlyHint = item.module.advancedOnly && interfaceMode == InterfaceMode.MINIMAL,
+                canMoveUp = index > 0,
+                canMoveDown = index < shownLayout.lastIndex,
+                modifier =
+                    dragReorderItemModifier(
+                        itemId = name,
+                        dragState = drag,
+                        reduceMotion = reduceMotion,
+                        dragEnabled = true,
+                        onDragStarted = ::startDrag,
+                        onDragBy = ::dragBy,
+                        onDragStopped = onDrop,
+                    ),
+                onToggle = { shown -> onSave(shownLayout.map { if (it.module == item.module) it.copy(shown = shown) else it }) },
+                onMoveUp = { onMove(item.module, -1) },
+                onMoveDown = { onMove(item.module, 1) },
+                onDragStarted = ::startDrag,
+                onDragBy = ::dragBy,
+                onDragStopped = onDrop,
+            )
+        }
+    }
+}
+
+/** What this screen changes, and how Minimal mode affects it. */
+@Composable
+private fun HomeLayoutIntro(interfaceMode: InterfaceMode) {
+    Column(Modifier.padding(bottom = TandemSpacing.small), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text(
+            stringResource(Res.string.home_layout_detail),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.body,
+            lineHeight = TandemTypography.bodyLineHeight,
+        )
+        val readyNote = stringResource(Res.string.home_layout_when_ready)
+        Text(
+            if (interfaceMode ==
+                InterfaceMode.MINIMAL
+            ) {
+                "${stringResource(Res.string.home_layout_minimal_note)} $readyNote"
+            } else {
+                readyNote
+            },
+            color = tandemPalette.muted,
+            fontSize = TandemTypography.compactBody,
+            lineHeight = TandemTypography.compactLineHeight,
+        )
+    }
+}
+
+/** Links to goal-based personalization and to resetting Home's layout. */
+@Composable
+private fun HomeLayoutMoreSection(
+    showReset: Boolean,
+    onPersonalize: () -> Unit,
+    onReset: () -> Unit,
+) {
+    Column(Modifier.padding(top = TandemSpacing.medium)) {
+        SectionCard(stringResource(Res.string.home_layout_more_title)) {
+            ListRow(
+                stringResource(Res.string.home_layout_goals),
+                stringResource(Res.string.home_layout_goals_detail),
+                leading = RowLeading.Icon(Lucide.Sparkles),
+                onClick = onPersonalize,
+            )
+            if (showReset) {
+                DividerLine()
+                ListRow(
+                    stringResource(Res.string.home_layout_reset),
+                    stringResource(Res.string.home_layout_reset_detail),
+                    leading = RowLeading.Icon(Lucide.RotateCcw),
+                    options = ListRowOptions(showChevron = false),
+                    onClick = onReset,
+                )
             }
         }
     }
@@ -234,36 +267,7 @@ private fun HomeLayoutRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
-            Row(
-                Modifier.weight(1f).graphicsLayer { alpha = contentAlpha },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                Box(
-                    Modifier
-                        .size(TandemLayout.compactListRowLeadingSize)
-                        .clip(RoundedCornerShape(TandemShapes.control))
-                        .background(palette.raised),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(item.module.icon(), contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                    Text(title, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (advancedOnlyHint) {
-                            stringResource(
-                                Res.string.home_layout_advanced_only,
-                            )
-                        } else {
-                            stringResource(item.module.detail())
-                        },
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                        lineHeight = TandemTypography.tightLineHeight,
-                    )
-                }
-            }
+            HomeLayoutRowLabel(item, title, advancedOnlyHint, contentAlpha)
             Box(
                 Modifier
                     .sizeIn(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
@@ -282,6 +286,47 @@ private fun HomeLayoutRow(
                 onDragStarted = onDragStarted,
                 onDragBy = onDragBy,
                 onDragStopped = onDragStopped,
+            )
+        }
+    }
+}
+
+/** Icon, title and detail of a Home layout row, faded when the section is hidden. */
+@Composable
+private fun RowScope.HomeLayoutRowLabel(
+    item: HomeLayoutItem,
+    title: String,
+    advancedOnlyHint: Boolean,
+    contentAlpha: Float,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier.weight(1f).graphicsLayer { alpha = contentAlpha },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Box(
+            Modifier
+                .size(TandemLayout.compactListRowLeadingSize)
+                .clip(RoundedCornerShape(TandemShapes.control))
+                .background(palette.raised),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(item.module.icon(), contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+            Text(title, color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (advancedOnlyHint) {
+                    stringResource(
+                        Res.string.home_layout_advanced_only,
+                    )
+                } else {
+                    stringResource(item.module.detail())
+                },
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+                lineHeight = TandemTypography.tightLineHeight,
             )
         }
     }
