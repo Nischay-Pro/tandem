@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.data.planning.CategoryForecast
 import app.tandemforactual.data.planning.ForecastBasis
 import app.tandemforactual.data.planning.ForecastStatus
+import app.tandemforactual.data.planning.SpendingForecast
 import app.tandemforactual.data.planning.SpendingInsights
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
@@ -82,58 +83,12 @@ internal fun SpendingForecastScreen(
             SkeletonRows()
             return@PageColumn
         }
-        val daysLeft = forecast.daysInMonth - forecast.dayOfMonth
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text("On pace to spend", color = palette.muted, fontSize = TandemTypography.body)
-            Text(
-                state.formatCurrency(forecast.projectedMinor),
-                color = if (forecast.limitMinor > 0 && forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.text,
-                fontSize = TandemTypography.heroTitle,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-            Text(
-                "${state.formatCurrency(forecast.spentMinor)} spent so far · " +
-                    if (daysLeft == 1) "1 day left" else "$daysLeft days left",
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
-        if (forecast.limitMinor > 0) {
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                val scale = maxOf(forecast.projectedMinor, forecast.limitMinor).toFloat()
-                ProgressBar(
-                    forecast.projectedMinor / scale,
-                    if (forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.accent,
-                    marker = forecast.limitMinor / scale,
-                )
-                Row {
-                    Text("Projected", Modifier.weight(1f), color = palette.muted, fontSize = TandemTypography.caption)
-                    Text(
-                        "${state.formatCurrency(forecast.limitMinor)} budgeted",
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                    )
-                }
-            }
-        }
+        ForecastHeadline(state, forecast)
         val atRisk = forecast.categories.filter { it.status != ForecastStatus.ON_TRACK }.sortedBy { it.runOutDate ?: "" }
         if (atRisk.isEmpty() && forecast.categories.isNotEmpty()) {
             InlineMessage("Every budgeted category is on pace to stay within its budget.", InlineMessageKind.SUCCESS)
         }
-        if (atRisk.isNotEmpty()) {
-            SectionCard("Heads up", "${atRisk.size} ${if (atRisk.size == 1) "category" else "categories"} may overspend") {
-                atRisk.forEachIndexed { index, category ->
-                    if (index > 0) DividerLine()
-                    Text(
-                        warning(state, names.category(category.categoryId), category, forecast.daysInMonth),
-                        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-                        color = palette.text,
-                        fontSize = TandemTypography.body,
-                    )
-                }
-            }
-        }
+        if (atRisk.isNotEmpty()) ForecastHeadsUp(state, atRisk, names, forecast.daysInMonth)
         val shown = forecast.categories.sortedByDescending { it.projectedMinor }
         if (shown.isEmpty()) {
             EmptyState("Nothing to forecast yet", "Spending recorded this month will be projected here.")
@@ -151,6 +106,72 @@ internal fun SpendingForecastScreen(
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
+    }
+}
+
+/** The projected total, what's been spent, the days left and the budget bar. */
+@Composable
+private fun ForecastHeadline(
+    state: AppState,
+    forecast: SpendingForecast,
+) {
+    val palette = tandemPalette
+    val daysLeft = forecast.daysInMonth - forecast.dayOfMonth
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text("On pace to spend", color = palette.muted, fontSize = TandemTypography.body)
+        Text(
+            state.formatCurrency(forecast.projectedMinor),
+            color = if (forecast.limitMinor > 0 && forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.text,
+            fontSize = TandemTypography.heroTitle,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+        Text(
+            "${state.formatCurrency(forecast.spentMinor)} spent so far · " +
+                if (daysLeft == 1) "1 day left" else "$daysLeft days left",
+            color = palette.muted,
+            fontSize = TandemTypography.compactBody,
+        )
+    }
+    if (forecast.limitMinor > 0) {
+        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            val scale = maxOf(forecast.projectedMinor, forecast.limitMinor).toFloat()
+            ProgressBar(
+                forecast.projectedMinor / scale,
+                if (forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.accent,
+                marker = forecast.limitMinor / scale,
+            )
+            Row {
+                Text("Projected", Modifier.weight(1f), color = palette.muted, fontSize = TandemTypography.caption)
+                Text(
+                    "${state.formatCurrency(forecast.limitMinor)} budgeted",
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                )
+            }
+        }
+    }
+}
+
+/** Warnings for categories that may overspend. */
+@Composable
+private fun ForecastHeadsUp(
+    state: AppState,
+    atRisk: List<CategoryForecast>,
+    names: RecordNames,
+    daysInMonth: Int,
+) {
+    val palette = tandemPalette
+    SectionCard("Heads up", "${atRisk.size} ${if (atRisk.size == 1) "category" else "categories"} may overspend") {
+        atRisk.forEachIndexed { index, category ->
+            if (index > 0) DividerLine()
+            Text(
+                warning(state, names.category(category.categoryId), category, daysInMonth),
+                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                color = palette.text,
+                fontSize = TandemTypography.body,
+            )
+        }
     }
 }
 

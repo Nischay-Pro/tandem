@@ -89,7 +89,6 @@ function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
 function-size FirstSyncScreen.FirstSyncScreen
 function-size GoalTimelineScreen.GoalTimelineScreen
-function-size InsightScreens.MonthlyReviewScreen
 function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
@@ -117,8 +116,6 @@ function-size SessionSignOut.signOutAndClearLocalData
 function-size SessionSync.synchronizeSerialized
 function-size SettingsScreen.SettingsScreen
 function-size SignInScreen.SignInScreen
-function-size SpendingForecastScreen.SpendingForecastScreen
-function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
 function-size StatementImportDialog.StatementImportDialog
 function-size TandemApp.TandemApp

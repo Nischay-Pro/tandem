@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.SpendingInsights
 import app.tandemforactual.data.planning.TrendBaseline
 import app.tandemforactual.data.planning.TrendDirection
+import app.tandemforactual.data.planning.TrendReport
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -62,26 +63,7 @@ internal fun SpendingTrendsScreen(
             SkeletonRows()
             return@PageColumn
         }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Text("Spent in ${state.selectedMonth}", color = palette.muted, fontSize = TandemTypography.body)
-            Text(
-                state.formatCurrency(report.total.currentMinor),
-                color = palette.text,
-                fontSize = TandemTypography.heroTitle,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-            if (report.baselineMonths > 0) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TrendBadge(report.total.direction, report.total.changeBasisPoints)
-                    Text(
-                        changeSentence(state, report.total.changeMinor, report.total.direction, comparedWith),
-                        color = palette.muted,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
-            }
-        }
+        SpendingTrendsHeadline(state, report, comparedWith)
         FilterPills(
             listOf(
                 TrendBaseline.LAST_MONTH to "Last month",
@@ -99,37 +81,7 @@ internal fun SpendingTrendsScreen(
                 EmptyState("Not enough history yet", "Trends appear once there’s a month of spending before ${state.selectedMonth}.")
             report.categories.isEmpty() -> EmptyState("No spending to compare", "Nothing was spent in ${state.selectedMonth} or before it.")
             else -> {
-                val up = report.categories.count { it.direction == TrendDirection.UP }
-                val down = report.categories.count { it.direction == TrendDirection.DOWN }
-                SectionCard("By category", "$up up and $down down against $comparedWith") {
-                    report.categories.forEachIndexed { index, trend ->
-                        if (index > 0) DividerLine()
-                        val name = names.category(trend.categoryId)
-                        ListRow(
-                            name,
-                            "${state.formatCurrency(
-                                trend.baselineMinor,
-                            )} ${if (baseline == TrendBaseline.LAST_MONTH) "last month" else "on average"}",
-                            leading = RowLeading.Icon(financeIcon(name)),
-                            options = ListRowOptions(showChevron = false),
-                            trailingContent = {
-                                Column(
-                                    horizontalAlignment = Alignment.End,
-                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-                                ) {
-                                    Text(
-                                        state.formatCurrency(trend.currentMinor),
-                                        color = palette.text,
-                                        fontSize = TandemTypography.body,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                    )
-                                    TrendBadge(trend.direction, trend.changeBasisPoints)
-                                }
-                            },
-                        )
-                    }
-                }
+                CategoryTrendsSection(state, report, names, baseline, comparedWith)
             }
         }
         Text(
@@ -137,6 +89,79 @@ internal fun SpendingTrendsScreen(
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
+    }
+}
+
+/** This month's spending total and how it compares with the baseline. */
+@Composable
+private fun SpendingTrendsHeadline(
+    state: AppState,
+    report: TrendReport,
+    comparedWith: String,
+) {
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Text("Spent in ${state.selectedMonth}", color = palette.muted, fontSize = TandemTypography.body)
+        Text(
+            state.formatCurrency(report.total.currentMinor),
+            color = palette.text,
+            fontSize = TandemTypography.heroTitle,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = tandemAlloFamily(),
+        )
+        if (report.baselineMonths > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                TrendBadge(report.total.direction, report.total.changeBasisPoints)
+                Text(
+                    changeSentence(state, report.total.changeMinor, report.total.direction, comparedWith),
+                    color = palette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
+            }
+        }
+    }
+}
+
+/** Each category's spending this month against the baseline. */
+@Composable
+private fun CategoryTrendsSection(
+    state: AppState,
+    report: TrendReport,
+    names: RecordNames,
+    baseline: TrendBaseline,
+    comparedWith: String,
+) {
+    val palette = tandemPalette
+    val up = report.categories.count { it.direction == TrendDirection.UP }
+    val down = report.categories.count { it.direction == TrendDirection.DOWN }
+    SectionCard("By category", "$up up and $down down against $comparedWith") {
+        report.categories.forEachIndexed { index, trend ->
+            if (index > 0) DividerLine()
+            val name = names.category(trend.categoryId)
+            ListRow(
+                name,
+                "${state.formatCurrency(
+                    trend.baselineMinor,
+                )} ${if (baseline == TrendBaseline.LAST_MONTH) "last month" else "on average"}",
+                leading = RowLeading.Icon(financeIcon(name)),
+                options = ListRowOptions(showChevron = false),
+                trailingContent = {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+                    ) {
+                        Text(
+                            state.formatCurrency(trend.currentMinor),
+                            color = palette.text,
+                            fontSize = TandemTypography.body,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                        TrendBadge(trend.direction, trend.changeBasisPoints)
+                    }
+                },
+            )
+        }
     }
 }
 
