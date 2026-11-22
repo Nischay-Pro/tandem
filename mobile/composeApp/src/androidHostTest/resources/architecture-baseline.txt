@@ -86,7 +86,6 @@ function-size ConflictInboxScreen.ConflictInboxScreen
 function-size CurrencyScreens.ExchangeRatesScreen
 function-size CustomReportScreen.CustomReportScreen
 function-size CustomReportScreen.ReportControls
-function-size DataHealthScreen.DataHealthScreen
 function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
 function-size ExportScreen.ExportScreen
