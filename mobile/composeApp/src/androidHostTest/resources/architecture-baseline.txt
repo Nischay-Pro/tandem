@@ -89,7 +89,6 @@ function-size BudgetReorderQueue.enqueue
 function-size BudgetReorderQueue.failHead
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
-function-size CategoryGroupScreen.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
@@ -184,7 +183,6 @@ size AppModels
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
-size CategoryGroupScreen
 size ConflictReviewScreen
 size CustomReportScreen
 size LiveBudgetModels
