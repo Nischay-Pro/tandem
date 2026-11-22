@@ -81,7 +81,6 @@ function-size BudgetChooserScreen.BudgetChooserScreen
 function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
-function-size BudgetMutationReviewScreen.BudgetMutationReviewScreen
 function-size BudgetReorderQueue.complete
 function-size BudgetReorderQueue.enqueue
 function-size BudgetReorderQueue.failHead
