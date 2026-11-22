@@ -115,16 +115,12 @@ function-size SettingsScreen.SettingsScreen
 function-size SignInScreen.SignInScreen
 function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
-function-size StatementImport.parseCsv
 function-size TandemApp.TandemApp
 function-size TandemThemeScreen.TandemTheme
 function-size TextFieldCard.TextFieldCard
-function-size TransactionActionComponents.TransactionRow
 function-size TransactionConflictResolution.resolve
 function-size TransactionCreate.createTransaction
 function-size TransactionDelete.deleteTransaction
-function-size TransactionDetailScreen.TransactionDetailScreen
-function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
 layering ActivitySearchCache -> feature.activity
 layering AppState -> app
@@ -148,6 +144,5 @@ size CategoryDetailScreen
 size CategoryGroupScreen
 size LiveBudgetModels
 size PersonalizeScreen
-size StatementImport
 size TandemApp
 size TandemMobileSession

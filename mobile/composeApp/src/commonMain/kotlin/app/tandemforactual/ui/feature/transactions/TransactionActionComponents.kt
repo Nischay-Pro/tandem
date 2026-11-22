@@ -81,53 +81,18 @@ internal fun TransactionRow(
             )
         }
         val row: @Composable () -> Unit = {
-            val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
-            Box(
-                Modifier
-                    .padding(horizontal = if (highlighted) TandemSpacing.extraSmall else 0.dp)
-                    .clip(RoundedCornerShape(TandemShapes.control))
-                    .background(if (highlighted) palette.accentSurface else Color.Transparent),
-            ) {
-                ListRow(
-                    transaction.payee,
-                    secondaryLabel,
-                    amountText.takeUnless { activityStyle || syncStatus != null },
-                    leading =
-                        when {
-                            selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
-                            activityStyle -> activityTransactionLeading(transaction)
-                            else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
-                        },
-                    options =
-                        ListRowOptions(
-                            trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
-                            subtitleMaxLines = 1,
-                        ),
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                    trailingContent =
-                        if (activityStyle || syncStatus != null) {
-                            {
-                                Column(
-                                    horizontalAlignment = Alignment.End,
-                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                                ) {
-                                    ActivityTransactionAmount(
-                                        amountText,
-                                        amountMinorUnits = transaction.amountMinorUnits,
-                                        fractionDigits =
-                                            transaction.displaySettings
-                                                ?.takeUnless { it.hideFraction }
-                                                ?.currencyFractionDigits ?: 0,
-                                    )
-                                    syncStatus?.let { TransactionSyncChip(it) }
-                                }
-                            }
-                        } else {
-                            null
-                        },
-                )
-            }
+            TransactionRowContent(
+                transaction,
+                amountText,
+                activityStyle,
+                selectionMode,
+                selected,
+                showAccount,
+                syncStatus,
+                highlighted,
+                onLongClick,
+                onClick,
+            )
         }
         if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
         if (showDivider) {
@@ -139,6 +104,78 @@ internal fun TransactionRow(
                     .background(palette.border.copy(alpha = 0.35f)),
             )
         }
+    }
+}
+
+/** The highlighted list row for one transaction, without its date header and divider. */
+@Composable
+private fun TransactionRowContent(
+    transaction: TransactionItem,
+    amountText: String,
+    activityStyle: Boolean,
+    selectionMode: Boolean,
+    selected: Boolean,
+    showAccount: Boolean,
+    syncStatus: String?,
+    highlighted: Boolean,
+    onLongClick: (() -> Unit)?,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
+    Box(
+        Modifier
+            .padding(horizontal = if (highlighted) TandemSpacing.extraSmall else 0.dp)
+            .clip(RoundedCornerShape(TandemShapes.control))
+            .background(if (highlighted) palette.accentSurface else Color.Transparent),
+    ) {
+        ListRow(
+            transaction.payee,
+            secondaryLabel,
+            amountText.takeUnless { activityStyle || syncStatus != null },
+            leading =
+                when {
+                    selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
+                    activityStyle -> activityTransactionLeading(transaction)
+                    else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
+                },
+            options =
+                ListRowOptions(
+                    trailingColor = if (transaction.amountMinorUnits > 0) palette.positive else palette.text,
+                    subtitleMaxLines = 1,
+                ),
+            onClick = onClick,
+            onLongClick = onLongClick,
+            trailingContent =
+                if (activityStyle || syncStatus != null) {
+                    { TransactionRowTrailing(transaction, amountText, syncStatus) }
+                } else {
+                    null
+                },
+        )
+    }
+}
+
+/** The amount and sync chip shown at the end of an activity-style transaction row. */
+@Composable
+private fun TransactionRowTrailing(
+    transaction: TransactionItem,
+    amountText: String,
+    syncStatus: String?,
+) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        ActivityTransactionAmount(
+            amountText,
+            amountMinorUnits = transaction.amountMinorUnits,
+            fractionDigits =
+                transaction.displaySettings
+                    ?.takeUnless { it.hideFraction }
+                    ?.currencyFractionDigits ?: 0,
+        )
+        syncStatus?.let { TransactionSyncChip(it) }
     }
 }
 

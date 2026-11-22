@@ -5,205 +5,6 @@ import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.ui.core.format.MIN_TRANSACTION_DATE
 import app.tandemforactual.ui.core.platform.MAX_STATEMENT_IMPORT_CHARS
 import app.tandemforactual.ui.feature.transactions.displayTransactionDate
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-
-internal enum class StatementDateOrder {
-    MONTH_DAY_YEAR,
-    DAY_MONTH_YEAR,
-}
-
-internal data class StatementCsvColumn(
-    val index: Int,
-    val name: String,
-)
-
-internal data class StatementCsvColumnMapping(
-    val dateColumn: Int? = null,
-    val amountColumn: Int? = null,
-    val debitColumn: Int? = null,
-    val creditColumn: Int? = null,
-    val referenceColumn: Int? = null,
-    val payeeColumn: Int? = null,
-    val notesColumn: Int? = null,
-) {
-    val isUsable: Boolean
-        get() = dateColumn != null && (amountColumn != null || debitColumn != null || creditColumn != null)
-
-    fun isValidFor(columnCount: Int): Boolean =
-        isUsable &&
-            listOf(dateColumn, amountColumn, debitColumn, creditColumn, referenceColumn, payeeColumn, notesColumn)
-                .filterNotNull()
-                .all { it in 0 until columnCount }
-}
-
-internal data class StatementCsvLayout(
-    val columns: List<StatementCsvColumn>,
-    val suggestedMapping: StatementCsvColumnMapping,
-)
-
-internal data class StatementCsvMappingPreference(
-    val serverUrl: String,
-    val budgetId: String,
-    val accountId: String,
-    val headers: List<String>,
-    val dateOrder: StatementDateOrder,
-    val columns: StatementCsvColumnMapping,
-)
-
-internal fun inspectStatementCsv(contents: String): StatementCsvLayout {
-    val content = contents.removePrefix("\uFEFF").trim()
-    if (content.isBlank()) throw StatementImportParseException("This statement is empty.")
-    if (content.length > MAX_STATEMENT_IMPORT_CHARS) throw StatementImportParseException("Choose a statement smaller than 10 MB.")
-    val rows = parseCsvRows(content, detectCsvDelimiter(content)).filter { row -> row.any(String::isNotBlank) }
-    val header = rows.firstOrNull() ?: throw StatementImportParseException("The CSV has no header row.")
-    val normalized = header.map(::normalizeColumn)
-
-    fun column(vararg aliases: String): Int? = normalized.indexOfFirst { it in aliases }.takeIf { it >= 0 }
-
-    return StatementCsvLayout(
-        columns = header.mapIndexed { index, name -> StatementCsvColumn(index, name.ifBlank { "Column ${index + 1}" }) },
-        suggestedMapping =
-            StatementCsvColumnMapping(
-                dateColumn = column("date", "transactiondate", "posteddate", "postingdate", "transactiondateposted"),
-                amountColumn = column("amount", "transactionamount", "value"),
-                debitColumn = column("debit", "withdrawal", "outflow", "moneyout"),
-                creditColumn = column("credit", "deposit", "inflow", "moneyin"),
-                referenceColumn =
-                    column(
-                        "fitid",
-                        "transactionid",
-                        "transactionreference",
-                        "transactionref",
-                        "reference",
-                        "referenceid",
-                        "bankreference",
-                        "traceid",
-                        "id",
-                    ),
-                payeeColumn = column("payee", "name", "description", "merchant", "transaction"),
-                notesColumn = column("memo", "notes", "note"),
-            ),
-    )
-}
-
-internal fun decodeStatementCsvMappingPreferences(serialized: String): List<StatementCsvMappingPreference> {
-    val root = runCatching { Json.parseToJsonElement(serialized) as? JsonArray }.getOrNull() ?: return emptyList()
-    return root
-        .mapNotNull { element ->
-            val item = element as? JsonObject ?: return@mapNotNull null
-            val serverUrl = item.stringValue("serverUrl")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val budgetId = item.stringValue("budgetId")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val accountId = item.stringValue("accountId")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val headers =
-                (item["headers"] as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-                    ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            val columnsObject = item["columns"] as? JsonObject ?: return@mapNotNull null
-            val columns =
-                StatementCsvColumnMapping(
-                    dateColumn = columnsObject.intValue("dateColumn"),
-                    amountColumn = columnsObject.intValue("amountColumn"),
-                    debitColumn = columnsObject.intValue("debitColumn"),
-                    creditColumn = columnsObject.intValue("creditColumn"),
-                    referenceColumn = columnsObject.intValue("referenceColumn"),
-                    payeeColumn = columnsObject.intValue("payeeColumn"),
-                    notesColumn = columnsObject.intValue("notesColumn"),
-                )
-            if (!columns.isUsable) return@mapNotNull null
-            StatementCsvMappingPreference(
-                serverUrl = serverUrl,
-                budgetId = budgetId,
-                accountId = accountId,
-                headers = headers,
-                dateOrder =
-                    StatementDateOrder.entries.firstOrNull { it.name == item.stringValue("dateOrder") }
-                        ?: StatementDateOrder.MONTH_DAY_YEAR,
-                columns = columns,
-            )
-        }.takeLast(MAX_SAVED_STATEMENT_CSV_MAPPINGS)
-}
-
-internal fun encodeStatementCsvMappingPreferences(preferences: List<StatementCsvMappingPreference>): String =
-    buildJsonArray {
-        preferences
-            .filter {
-                it.serverUrl.isNotBlank() &&
-                    it.budgetId.isNotBlank() &&
-                    it.accountId.isNotBlank() &&
-                    it.headers.isNotEmpty() &&
-                    it.columns.isUsable
-            }.distinctBy { Triple(it.serverUrl, it.budgetId, it.accountId) }
-            .takeLast(MAX_SAVED_STATEMENT_CSV_MAPPINGS)
-            .forEach { preference ->
-                add(
-                    buildJsonObject {
-                        put("budgetId", preference.budgetId)
-                        put("serverUrl", preference.serverUrl)
-                        put("accountId", preference.accountId)
-                        put("headers", buildJsonArray { preference.headers.forEach { add(JsonPrimitive(it)) } })
-                        put("dateOrder", preference.dateOrder.name)
-                        put(
-                            "columns",
-                            buildJsonObject {
-                                putNullableInt("dateColumn", preference.columns.dateColumn)
-                                putNullableInt("amountColumn", preference.columns.amountColumn)
-                                putNullableInt("debitColumn", preference.columns.debitColumn)
-                                putNullableInt("creditColumn", preference.columns.creditColumn)
-                                putNullableInt("referenceColumn", preference.columns.referenceColumn)
-                                putNullableInt("payeeColumn", preference.columns.payeeColumn)
-                                putNullableInt("notesColumn", preference.columns.notesColumn)
-                            },
-                        )
-                    },
-                )
-            }
-    }.toString()
-
-internal fun statementCsvMappingPreferenceFor(
-    serialized: String,
-    serverUrl: String,
-    budgetId: String,
-    accountId: String,
-    headers: List<String>,
-): StatementCsvMappingPreference? =
-    decodeStatementCsvMappingPreferences(serialized).lastOrNull {
-        it.serverUrl == serverUrl && it.budgetId == budgetId && it.accountId == accountId && it.headers == headers
-    }
-
-internal fun updateStatementCsvMappingPreference(
-    serialized: String,
-    preference: StatementCsvMappingPreference,
-): String {
-    val previous = decodeStatementCsvMappingPreferences(serialized)
-    return encodeStatementCsvMappingPreferences(
-        previous.filterNot {
-            it.serverUrl == preference.serverUrl && it.budgetId == preference.budgetId && it.accountId == preference.accountId
-        } + preference,
-    )
-}
-
-private const val MAX_SAVED_STATEMENT_CSV_MAPPINGS = 100
-
-private fun JsonObject.stringValue(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
-
-private fun JsonObject.intValue(key: String): Int? = this[key]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }
-
-private fun kotlinx.serialization.json.JsonObjectBuilder.putNullableInt(
-    key: String,
-    value: Int?,
-) {
-    put(key, value?.let(::JsonPrimitive) ?: JsonNull)
-}
 
 internal data class StatementImportDraft(
     val date: String,
@@ -328,87 +129,27 @@ private fun parseCsv(
 ): StatementParseResult {
     val rows = parseCsvRows(content, detectCsvDelimiter(content)).filter { row -> row.any(String::isNotBlank) }
     val header = rows.firstOrNull() ?: throw StatementImportParseException("The CSV has no header row.")
-    val mapping = csvMapping ?: inspectStatementCsv(content).suggestedMapping
-
-    fun validColumn(index: Int?): Int? = index?.takeIf { it in header.indices }
-    val dateColumn = validColumn(mapping.dateColumn)
-    if (dateColumn == null) {
-        throw StatementImportParseException("Choose the column that contains each transaction date.")
-    }
-    val amountColumn = validColumn(mapping.amountColumn)
-    val debitColumn = validColumn(mapping.debitColumn)
-    val creditColumn = validColumn(mapping.creditColumn)
-    if (amountColumn == null && debitColumn == null && creditColumn == null) {
-        throw StatementImportParseException("The CSV needs an Amount, Debit, or Credit column.")
-    }
-    val payeeColumn = validColumn(mapping.payeeColumn)
-    val notesColumn = validColumn(mapping.notesColumn)
-    val normalizedColumns = header.map(::normalizeColumn)
-    val detectedIdColumn =
-        normalizedColumns
-            .indexOfFirst {
-                it in
-                    setOf(
-                        "fitid",
-                        "transactionid",
-                        "transactionreference",
-                        "transactionref",
-                        "reference",
-                        "referenceid",
-                        "bankreference",
-                        "traceid",
-                        "id",
-                    )
-            }.takeIf { it >= 0 }
-    val idColumn = validColumn(mapping.referenceColumn) ?: detectedIdColumn
-    val typeColumn = normalizedColumns.indexOfFirst { it in setOf("type", "transactiontype") }.takeIf { it >= 0 }
+    val columns = resolveCsvColumns(header, csvMapping ?: inspectStatementCsv(content).suggestedMapping)
     var skipped = 0
     var firstSkippedReason: String? = null
     val generatedIds = mutableMapOf<String, Int>()
     val usedIds = mutableSetOf<String>()
-    val sourceIds =
-        rows.drop(1).mapNotNull { row -> row.cell(idColumn).takeIf(String::isNotBlank)?.let { it.take(200) } }
-    val duplicateSourceIds =
-        sourceIds
-            .groupingBy { it }
-            .eachCount()
-            .filterValues { it > 1 }
-            .keys
+    val duplicateSourceIds = duplicateCsvSourceIds(rows, columns.id)
     val transactions =
         rows.drop(1).mapIndexedNotNull { index, row ->
             val rowNumber = index + 2
             try {
-                val date = parseStatementDate(row.cell(dateColumn), dateOrder)
-                val debit = parseOptionalMoney(row.cell(debitColumn), currencyFractionDigits, numberFormat)
-                val credit = parseOptionalMoney(row.cell(creditColumn), currencyFractionDigits, numberFormat)
-                val amount =
-                    if (debit != null || credit != null) {
-                        kotlin.math.abs(credit ?: 0L) - kotlin.math.abs(debit ?: 0L)
-                    } else {
-                        val rawAmount = parseMoney(row.cell(amountColumn), currencyFractionDigits, numberFormat)
-                        val type = row.cell(typeColumn).lowercase()
-                        if (type.containsAny(
-                                "debit",
-                                "purchase",
-                                "withdrawal",
-                                "payment",
-                                "outflow",
-                            )
-                        ) {
-                            -kotlin.math.abs(rawAmount)
-                        } else {
-                            rawAmount
-                        }
-                    }
+                val date = parseStatementDate(row.cell(columns.date), dateOrder)
+                val amount = csvRowAmount(row, columns, currencyFractionDigits, numberFormat)
                 if (amount == 0L) {
                     skipped++
                     if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
                     return@mapIndexedNotNull null
                 }
-                val payee = row.cell(payeeColumn).ifBlank { "Imported transaction" }.take(200)
+                val payee = row.cell(columns.payee).ifBlank { "Imported transaction" }.take(200)
                 val sourceId =
                     row
-                        .cell(idColumn)
+                        .cell(columns.id)
                         .take(200)
                         .takeUnless { it.isBlank() || it in duplicateSourceIds }
                         .orEmpty()
@@ -417,7 +158,7 @@ private fun parseCsv(
                     date = date,
                     amountMinor = amount,
                     payeeName = payee,
-                    notes = row.cell(notesColumn).take(500).ifBlank { null },
+                    notes = row.cell(columns.notes).take(500).ifBlank { null },
                     importedId = importedId,
                 )
             } catch (error: IllegalArgumentException) {
@@ -429,119 +170,90 @@ private fun parseCsv(
     return StatementParseResult(transactions, skipped, firstSkippedReason)
 }
 
-private fun parseQif(
-    content: String,
-    dateOrder: StatementDateOrder,
-    currencyFractionDigits: Int,
-    numberFormat: String?,
-): StatementParseResult {
-    val records = mutableListOf<Map<Char, String>>()
-    var current = mutableMapOf<Char, String>()
-    content.lineSequence().forEach { rawLine ->
-        val line = rawLine.trim().removeSuffix("\r")
-        when {
-            line == "^" -> {
-                if (current.isNotEmpty()) records += current
-                current = mutableMapOf()
-            }
-            line.length > 1 && line[0].isLetter() -> current[line[0]] = line.drop(1).trim()
-        }
+private class CsvColumns(
+    val date: Int,
+    val amount: Int?,
+    val debit: Int?,
+    val credit: Int?,
+    val payee: Int?,
+    val notes: Int?,
+    val id: Int?,
+    val type: Int?,
+)
+
+private val CSV_ID_COLUMNS =
+    setOf(
+        "fitid",
+        "transactionid",
+        "transactionreference",
+        "transactionref",
+        "reference",
+        "referenceid",
+        "bankreference",
+        "traceid",
+        "id",
+    )
+
+private fun resolveCsvColumns(
+    header: List<String>,
+    mapping: StatementCsvColumnMapping,
+): CsvColumns {
+    fun validColumn(index: Int?): Int? = index?.takeIf { it in header.indices }
+    val dateColumn = validColumn(mapping.dateColumn)
+    if (dateColumn == null) {
+        throw StatementImportParseException("Choose the column that contains each transaction date.")
     }
-    if (current.isNotEmpty()) records += current
-    var skipped = 0
-    var firstSkippedReason: String? = null
-    val generatedIds = mutableMapOf<String, Int>()
-    val usedIds = mutableSetOf<String>()
-    val transactions =
-        records.mapIndexedNotNull { index, fields ->
-            val rowNumber = index + 1
-            try {
-                val date = parseStatementDate(fields['D'].orEmpty(), dateOrder)
-                val amount = parseMoney(fields['T'].orEmpty(), currencyFractionDigits, numberFormat)
-                if (amount == 0L) {
-                    skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
-                    return@mapIndexedNotNull null
-                }
-                val payee = fields['P'].orEmpty().ifBlank { "Imported transaction" }.take(200)
-                StatementImportDraft(
-                    date,
-                    amount,
-                    payee,
-                    fields['M']?.take(500),
-                    uniqueImportId("", date, amount, payee, generatedIds, usedIds),
-                )
-            } catch (error: IllegalArgumentException) {
-                skipped++
-                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
-                null
-            }
-        }
-    return StatementParseResult(transactions, skipped, firstSkippedReason)
+    val amountColumn = validColumn(mapping.amountColumn)
+    val debitColumn = validColumn(mapping.debitColumn)
+    val creditColumn = validColumn(mapping.creditColumn)
+    if (amountColumn == null && debitColumn == null && creditColumn == null) {
+        throw StatementImportParseException("The CSV needs an Amount, Debit, or Credit column.")
+    }
+    val normalizedColumns = header.map(::normalizeColumn)
+    val detectedIdColumn = normalizedColumns.indexOfFirst { it in CSV_ID_COLUMNS }.takeIf { it >= 0 }
+    return CsvColumns(
+        date = dateColumn,
+        amount = amountColumn,
+        debit = debitColumn,
+        credit = creditColumn,
+        payee = validColumn(mapping.payeeColumn),
+        notes = validColumn(mapping.notesColumn),
+        id = validColumn(mapping.referenceColumn) ?: detectedIdColumn,
+        type = normalizedColumns.indexOfFirst { it in setOf("type", "transactiontype") }.takeIf { it >= 0 },
+    )
 }
 
-private fun parseOfx(
-    content: String,
+private fun duplicateCsvSourceIds(
+    rows: List<List<String>>,
+    idColumn: Int?,
+): Set<String> =
+    rows
+        .drop(1)
+        .mapNotNull { row -> row.cell(idColumn).takeIf(String::isNotBlank)?.let { it.take(200) } }
+        .groupingBy { it }
+        .eachCount()
+        .filterValues { it > 1 }
+        .keys
+
+private fun csvRowAmount(
+    row: List<String>,
+    columns: CsvColumns,
     currencyFractionDigits: Int,
     numberFormat: String?,
-): StatementParseResult {
-    val records =
-        Regex("(?is)<STMTTRN>(.*?)(?=<STMTTRN>|</BANKTRANLIST>|</STMTRS>|$)")
-            .findAll(content)
-            .map(MatchResult::value)
-            .toList()
-    var skipped = 0
-    var firstSkippedReason: String? = null
-    val generatedIds = mutableMapOf<String, Int>()
-    val usedIds = mutableSetOf<String>()
-    val sourceIds = records.map { ofxField(it, "FITID").take(200) }.filter(String::isNotBlank)
-    val duplicateSourceIds =
-        sourceIds
-            .groupingBy { it }
-            .eachCount()
-            .filterValues { it > 1 }
-            .keys
-    val transactions =
-        records.mapIndexedNotNull { index, record ->
-            val rowNumber = index + 1
-            try {
-                val date = parseStatementDate(ofxField(record, "DTPOSTED"), StatementDateOrder.MONTH_DAY_YEAR)
-                val amount = parseMoney(ofxField(record, "TRNAMT"), currencyFractionDigits, numberFormat)
-                if (amount == 0L) {
-                    skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
-                    return@mapIndexedNotNull null
-                }
-                val payee = ofxField(record, "NAME").ifBlank { ofxField(record, "MEMO") }.ifBlank { "Imported transaction" }.take(200)
-                val sourceId = ofxField(record, "FITID").take(200).takeUnless { it.isBlank() || it in duplicateSourceIds }.orEmpty()
-                StatementImportDraft(
-                    date,
-                    amount,
-                    payee,
-                    ofxField(record, "MEMO").take(500).ifBlank { null },
-                    uniqueImportId(sourceId, date, amount, payee, generatedIds, usedIds),
-                )
-            } catch (error: IllegalArgumentException) {
-                skipped++
-                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
-                null
-            }
-        }
-    return StatementParseResult(transactions, skipped, firstSkippedReason)
+): Long {
+    val debit = parseOptionalMoney(row.cell(columns.debit), currencyFractionDigits, numberFormat)
+    val credit = parseOptionalMoney(row.cell(columns.credit), currencyFractionDigits, numberFormat)
+    if (debit != null || credit != null) return kotlin.math.abs(credit ?: 0L) - kotlin.math.abs(debit ?: 0L)
+    val rawAmount = parseMoney(row.cell(columns.amount), currencyFractionDigits, numberFormat)
+    val type = row.cell(columns.type).lowercase()
+    return if (type.containsAny("debit", "purchase", "withdrawal", "payment", "outflow")) {
+        -kotlin.math.abs(rawAmount)
+    } else {
+        rawAmount
+    }
 }
 
-private fun ofxField(
-    record: String,
-    name: String,
-): String =
-    Regex("(?is)<$name>\\s*([^<\\r\\n]+)")
-        .find(record)
-        ?.groupValues
-        ?.getOrNull(1)
-        ?.trim()
-        .orEmpty()
-
-private fun detectCsvDelimiter(content: String): Char {
+internal fun detectCsvDelimiter(content: String): Char {
     val firstLine = content.substringBefore('\n').substringBefore('\r')
     val counts = mutableMapOf(',' to 0, ';' to 0, '\t' to 0)
     var quoted = false
@@ -558,7 +270,7 @@ private fun detectCsvDelimiter(content: String): Char {
     return counts.maxBy { it.value }.key
 }
 
-private fun parseCsvRows(
+internal fun parseCsvRows(
     content: String,
     delimiter: Char,
 ): List<List<String>> {
@@ -596,259 +308,7 @@ private fun parseCsvRows(
     return rows
 }
 
-private fun normalizeColumn(value: String): String = value.lowercase().filter(Char::isLetterOrDigit)
-
-private fun List<String>.cell(index: Int?): String = index?.let { getOrNull(it)?.trim() }.orEmpty()
-
-private fun parseOptionalMoney(
-    value: String,
-    currencyFractionDigits: Int,
-    numberFormat: String?,
-): Long? = value.takeIf(String::isNotBlank)?.let { parseMoney(it, currencyFractionDigits, numberFormat) }
-
-private fun parseMoney(
-    value: String,
-    currencyFractionDigits: Int,
-    numberFormat: String?,
-): Long {
-    val trimmed = value.trim()
-    if (trimmed.isBlank()) throw StatementImportParseException("An amount is missing. Enter an amount for this row.")
-    val currencyFree = stripCurrencyMarkers(trimmed)
-    val parenthesized = currencyFree.startsWith('(') && currencyFree.endsWith(')')
-    var unsigned = currencyFree.removeSurrounding("(", ")").trim()
-    val trailingMarker =
-        Regex("(?i)\\s*(DR|CR)\\.?$")
-            .find(unsigned)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.uppercase()
-    if (trailingMarker != null) unsigned = unsigned.dropLast(Regex("(?i)\\s*(DR|CR)\\.?$").find(unsigned)?.value?.length ?: 0).trim()
-    val trailingMinus = unsigned.endsWith('-') || unsigned.endsWith('−')
-    if (trailingMinus) unsigned = unsigned.dropLast(1).trim()
-    val leadingMinus = unsigned.startsWith('-') || unsigned.startsWith('−')
-    if (leadingMinus) unsigned = unsigned.drop(1).trim()
-    val leadingPlus = unsigned.startsWith('+')
-    if (leadingPlus) unsigned = unsigned.drop(1).trim()
-    if ((trailingMarker == "CR" || leadingPlus) && (parenthesized || trailingMinus || leadingMinus)) {
-        throw StatementImportParseException("This amount has conflicting signs. Use a single sign.")
-    }
-    val negative = parenthesized || trailingMinus || leadingMinus || trailingMarker == "DR"
-    if (unsigned.any { !it.isDigit() && it != '.' && it != ',' && !it.isWhitespace() }) throw invalidAmount(trimmed)
-    val numeric = unsigned.filter { it.isDigit() || it == '.' || it == ',' }
-    if (numeric.isBlank()) throw invalidAmount(value)
-    val lastSeparator = maxOf(numeric.lastIndexOf('.'), numeric.lastIndexOf(','))
-    val separators = numeric.count { it == '.' || it == ',' }
-    val fractionLength = if (lastSeparator >= 0) numeric.length - lastSeparator - 1 else 0
-    val decimalSeparator =
-        when {
-            lastSeparator < 0 -> null
-            numeric.contains('.') && numeric.contains(',') -> {
-                if (fractionLength !in 1..currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
-                numeric[lastSeparator]
-            }
-            separators > 1 -> {
-                if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
-                null
-            }
-            fractionLength in 1..currencyFractionDigits -> {
-                if (fractionLength == 3 && separators == 1) {
-                    when {
-                        numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) ->
-                            throw invalidAmount(trimmed, "This amount is ambiguous. Remove the grouping mark or include the decimal mark.")
-                        numeric[lastSeparator] == decimalSeparatorFor(numberFormat) -> numeric[lastSeparator]
-                        else -> throw invalidAmount(trimmed, "Check its separators.")
-                    }
-                } else {
-                    numeric[lastSeparator]
-                }
-            }
-            fractionLength == 3 && currencyFractionDigits == 0 -> {
-                when {
-                    numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> null
-                    numeric[lastSeparator] == decimalSeparatorFor(numberFormat) ->
-                        throw invalidAmount(trimmed, "Check its decimal places.")
-                    else -> throw invalidAmount(trimmed, "Check its separators.")
-                }
-            }
-            fractionLength == 3 && currencyFractionDigits != 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
-            else -> throw invalidAmount(trimmed, "Check its decimal places.")
-        }
-    val split = decimalSeparator?.let(numeric::lastIndexOf) ?: -1
-    val wholeText = if (split >= 0) numeric.substring(0, split) else numeric
-    val wholeDigits = wholeText.filter(Char::isDigit)
-    val fractionDigits = if (split >= 0) numeric.substring(split + 1).filter(Char::isDigit) else ""
-    if (fractionDigits.length > currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
-    val scale = decimalScale(currencyFractionDigits)
-    val normalizedFraction = fractionDigits.padEnd(currencyFractionDigits, '0')
-    val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val fraction = normalizedFraction.toLongOrNull() ?: 0L
-    if (whole > (Long.MAX_VALUE - fraction) / scale) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val minorUnits = (whole * scale) + fraction
-    return if (negative) -minorUnits else minorUnits
-}
-
-private fun decimalScale(fractionDigits: Int): Long {
-    var scale = 1L
-    repeat(fractionDigits) { scale *= 10L }
-    return scale
-}
-
-private fun decimalSeparatorFor(numberFormat: String?): Char? =
-    when (numberFormat) {
-        "comma-dot", "comma-dot-in", "apostrophe-dot" -> '.'
-        "dot-comma", "space-comma" -> ','
-        else -> null
-    }
-
-private fun groupingSeparatorFor(numberFormat: String?): Char? =
-    when (numberFormat) {
-        "comma-dot", "comma-dot-in" -> ','
-        "dot-comma" -> '.'
-        else -> null
-    }
-
-private fun stripCurrencyMarkers(value: String): String =
-    value
-        .replace(Regex("(?i)\\b(?:USD|CAD|EUR|GBP|INR|AUD|NZD|JPY|CHF|SGD|HKD)\\b"), "")
-        .filterNot { it in setOf('$', '€', '£', '₹', '¥', '₩') }
-        .trim()
-
-private fun isGroupedInteger(value: String): Boolean {
-    val separator = value.firstOrNull { it == '.' || it == ',' } ?: return true
-    val groups = value.split(separator)
-    return groups.size > 1 && groups.first().length in 1..3 && groups.drop(1).all { it.length == 3 && it.all(Char::isDigit) }
-}
-
-private fun parseStatementDate(
-    value: String,
-    order: StatementDateOrder,
-): String {
-    val dateText = value.trim().substringBefore('T').trim()
-    val numericText = dateText.substringBefore(' ')
-    val yearFirst = Regex("^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})$").matchEntire(numericText)
-    if (yearFirst != null) {
-        val result = formatIsoDate(yearFirst.groupValues[1].toInt(), yearFirst.groupValues[2].toInt(), yearFirst.groupValues[3].toInt())
-        return result.also { validateDate(it, value) }
-    }
-    if (numericText.length >= 8 && numericText.take(8).all(Char::isDigit)) {
-        return "${numericText.take(4)}-${numericText.substring(4, 6)}-${numericText.substring(6, 8)}".also { validateDate(it, value) }
-    }
-    val monthNamed = parseMonthNamedDate(dateText)
-    if (monthNamed != null) return monthNamed.also { validateDate(it, value) }
-    val numeric =
-        Regex("^(\\d{1,2})[./\\\\-](\\d{1,2})[./\\\\-](\\d{2,4})$").matchEntire(numericText)
-            ?: throw invalidDate(value)
-    val first = numeric.groupValues[1].toIntOrNull() ?: throw invalidDate(value)
-    val second = numeric.groupValues[2].toIntOrNull() ?: throw invalidDate(value)
-    var year = numeric.groupValues[3].trimEnd('\'').toIntOrNull() ?: throw invalidDate(value)
-    if (year < 100) year += if (year < 50) 2000 else 1900
-    val month =
-        if (first > 12) {
-            second
-        } else if (order == StatementDateOrder.MONTH_DAY_YEAR) {
-            first
-        } else {
-            second
-        }
-    val day =
-        if (first > 12) {
-            first
-        } else if (order == StatementDateOrder.MONTH_DAY_YEAR) {
-            second
-        } else {
-            first
-        }
-    return formatIsoDate(year, month, day).also { validateDate(it, value) }
-}
-
-private fun parseMonthNamedDate(value: String): String? {
-    val parts =
-        value
-            .replace(',', ' ')
-            .trim()
-            .split(Regex("\\s+"))
-            .take(3)
-    if (parts.size != 3) return null
-    val monthByName =
-        mapOf(
-            "jan" to 1,
-            "january" to 1,
-            "feb" to 2,
-            "february" to 2,
-            "mar" to 3,
-            "march" to 3,
-            "apr" to 4,
-            "april" to 4,
-            "may" to 5,
-            "jun" to 6,
-            "june" to 6,
-            "jul" to 7,
-            "july" to 7,
-            "aug" to 8,
-            "august" to 8,
-            "sep" to 9,
-            "sept" to 9,
-            "september" to 9,
-            "oct" to 10,
-            "october" to 10,
-            "nov" to 11,
-            "november" to 11,
-            "dec" to 12,
-            "december" to 12,
-        )
-    val monthIndex = parts.indexOfFirst { token -> monthByName.containsKey(token.trimEnd('.').lowercase()) }
-    if (monthIndex < 0) return null
-    val month = monthByName.getValue(parts[monthIndex].trimEnd('.').lowercase())
-    val numberParts = parts.filterIndexed { index, _ -> index != monthIndex }
-    if (numberParts.size != 2) return null
-    val yearToken = numberParts.last()
-    var year = yearToken.trimEnd('\'').toIntOrNull() ?: return null
-    val day = numberParts.first().trimEnd('\'').toIntOrNull() ?: return null
-    if (year < 100) year += if (year < 50) 2000 else 1900
-    return formatIsoDate(year, month, day)
-}
-
-private fun invalidDate(value: String) =
-    StatementImportParseException("Couldn’t read the date “${value.take(48)}”. Check the selected date format.")
-
-private fun invalidAmount(
-    value: String,
-    guidance: String = "Use a number such as 12.34.",
-) = StatementImportParseException("Couldn’t read the amount “${value.take(48)}”. $guidance")
-
-private fun validateDate(
-    isoDate: String,
-    input: String,
-) {
-    try {
-        validateIsoDate(isoDate)
-    } catch (_: StatementImportParseException) {
-        throw invalidDate(input)
-    }
-}
-
-private fun formatIsoDate(
-    year: Int,
-    month: Int,
-    day: Int,
-): String = year.toString().padStart(4, '0') + "-" + month.toString().padStart(2, '0') + "-" + day.toString().padStart(2, '0')
-
-private fun validateIsoDate(value: String) {
-    val parts = value.split('-')
-    val year = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val month = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    val day = parts.getOrNull(2)?.toIntOrNull() ?: 0
-    val days =
-        when (month) {
-            2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
-            4, 6, 9, 11 -> 30
-            in 1..12 -> 31
-            else -> 0
-        }
-    if (year !in 1..9999 || day !in 1..days) throw StatementImportParseException("Couldn’t read this date. Check the selected date format.")
-}
-
-private fun uniqueImportId(
+internal fun uniqueImportId(
     preferred: String,
     date: String,
     amount: Long,
@@ -878,5 +338,3 @@ private fun stableImportId(
     }
     return "tandem-import-${hash.toString(16).padStart(16, '0')}-$occurrence"
 }
-
-private fun String.containsAny(vararg values: String): Boolean = values.any(::contains)
