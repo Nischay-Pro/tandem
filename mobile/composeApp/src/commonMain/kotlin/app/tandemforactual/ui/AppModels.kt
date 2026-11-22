@@ -185,7 +185,7 @@ internal enum class AppRoute(
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
     ABOUT("About and help"),
-    MERCHANT_ICON_LICENSES("Icon licenses and sources"),
+    MERCHANT_ICON_LICENSES("Licenses"),
     CHANGE_HISTORY("Change history"),
     DEBT_PAYOFF("Debt payoff"),
     DATA_HEALTH("Budget checkup"),
