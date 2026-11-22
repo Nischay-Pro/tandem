@@ -2,4 +2,11 @@
 <resources>
   <string name="widget_budget_label">Budget</string>
   <string name="widget_budget_description">See what’s ready to assign and add a transaction.</string>
+  <string name="shortcut_add_transaction">Add transaction</string>
+  <string name="shortcut_scan_receipt">Scan a receipt</string>
+  <string name="shortcut_scan_receipt_long">Scan a receipt into a transaction</string>
+  <string name="shortcut_budget_checkup">Budget checkup</string>
+  <string name="shortcut_budget_checkup_long">Find things to fix in your budget</string>
+  <string name="shortcut_accounts">Accounts</string>
+  <string name="shortcut_accounts_long">See your account balances</string>
 </resources>

@@ -678,6 +678,7 @@ fun TandemApp(
         if (!quickAddRequested || !budgetReady) return@LaunchedEffect
         delay(TandemMotion.ROUTE_MILLIS * 2L)
         if (!routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) {
+            if (QuickActionEvents.consumeReceiptScan()) state.receiptScanRequested = true
             newTransaction(null)
             QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
                 fillNewTransaction(
@@ -690,6 +691,21 @@ fun TandemApp(
                 )
             }
         }
+    }
+    val quickDestination by QuickActionEvents.destinationRequested.collectAsState()
+    LaunchedEffect(quickDestination, route, state.selectedBudgetId, state.encryptedPassword.isBlank()) {
+        val budgetReady = state.selectedBudgetId.isNotBlank() && route.isTab() && !needsEncryptedBudgetUnlock(state, route)
+        if (quickDestination == null || !budgetReady) return@LaunchedEffect
+        delay(TandemMotion.ROUTE_MILLIS * 2L)
+        if (routeTransitionInputBlocked) return@LaunchedEffect
+        val target =
+            when (QuickActionEvents.consumeDestination()) {
+                QuickAction.BUDGET_CHECKUP -> AppRoute.DATA_HEALTH
+                QuickAction.ACCOUNTS -> AppRoute.ACCOUNTS
+                else -> null
+            } ?: return@LaunchedEffect
+        state.menuOpen = false
+        if (target in navigationRoutes(state.interfaceMode)) navigation.selectTab(target) else navigation.open(target)
     }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0

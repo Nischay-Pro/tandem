@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_add_transaction"
+    android:shortcutId="new-transaction"
+    android:shortcutLongLabel="@string/shortcut_add_transaction"
+    android:shortcutShortLabel="@string/shortcut_add_transaction">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="app.tandemforactual://open/add-transaction" />
+  </shortcut>
+  <shortcut
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_scan_receipt"
+    android:shortcutId="scan-receipt"
+    android:shortcutLongLabel="@string/shortcut_scan_receipt_long"
+    android:shortcutShortLabel="@string/shortcut_scan_receipt">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="app.tandemforactual://open/scan-receipt" />
+  </shortcut>
+  <shortcut
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_budget_checkup"
+    android:shortcutId="budget-checkup"
+    android:shortcutLongLabel="@string/shortcut_budget_checkup_long"
+    android:shortcutShortLabel="@string/shortcut_budget_checkup">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="app.tandemforactual://open/budget-checkup" />
+  </shortcut>
+  <shortcut
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_accounts"
+    android:shortcutId="accounts"
+    android:shortcutLongLabel="@string/shortcut_accounts_long"
+    android:shortcutShortLabel="@string/shortcut_accounts">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="app.tandemforactual://open/accounts" />
+  </shortcut>
+</shortcuts>
