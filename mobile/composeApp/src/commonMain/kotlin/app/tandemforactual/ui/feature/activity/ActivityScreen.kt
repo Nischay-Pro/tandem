@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -93,7 +94,7 @@ internal fun ActivityScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val activityListState = LocalRouteLazyListState.current ?: rememberLazyListState()
     LaunchedEffect(isLiveBudget, state.selectedBudgetId) {
-        if (isLiveBudget) mobileSession.ensureActivityTransactionsLoaded(state.selectedBudgetId)
+        if (isLiveBudget) mobileSession.activity.ensureActivityTransactionsLoaded(state.selectedBudgetId)
     }
     LaunchedEffect(
         activityListState,
@@ -105,18 +106,18 @@ internal fun ActivityScreen(
             val layout = activityListState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
             val nearEnd = lastVisible >= layout.totalItemsCount - 8 && layout.totalItemsCount > 0
-            nearEnd && mobileSession.hasMoreActivityTransactions && !mobileSession.isLoadingActivityTransactions
+            nearEnd && mobileSession.activity.hasMoreActivityTransactions && !mobileSession.activity.isLoadingActivityTransactions
         }.collect { shouldLoadMore ->
             if (shouldLoadMore) {
-                mobileSession.loadMoreActivityTransactions(state.selectedBudgetId)
+                mobileSession.activity.loadMoreActivityTransactions(state.selectedBudgetId)
             }
         }
     }
     LaunchedEffect(isLiveBudget, state.selectedBudgetId, state.activitySortOrder) {
         if (isLiveBudget && state.activitySortOrder != ActivitySortOrder.NEWEST_FIRST) {
-            mobileSession.ensureActivityTransactionsLoaded(state.selectedBudgetId)
-            while (mobileSession.hasMoreActivityTransactions && mobileSession.activityTransactionPageError == null) {
-                mobileSession.loadMoreActivityTransactions(state.selectedBudgetId)
+            mobileSession.activity.ensureActivityTransactionsLoaded(state.selectedBudgetId)
+            while (mobileSession.activity.hasMoreActivityTransactions && mobileSession.activity.activityTransactionPageError == null) {
+                mobileSession.activity.loadMoreActivityTransactions(state.selectedBudgetId)
             }
         }
     }
@@ -125,7 +126,7 @@ internal fun ActivityScreen(
     var confirmBulkDelete by remember(state.selectedBudgetId) { mutableStateOf(false) }
     var isDeletingSelection by remember(state.selectedBudgetId) { mutableStateOf(false) }
     var isSelectingAll by remember(state.selectedBudgetId) { mutableStateOf(false) }
-    LaunchedEffect(mobileSession.activityTransactionPageGeneration) {
+    LaunchedEffect(mobileSession.activity.activityTransactionPageGeneration) {
         selectionMode = false
         selectedTransactionIds = emptySet()
         confirmBulkDelete = false
@@ -223,7 +224,10 @@ internal fun ActivityScreen(
             item(key = "activity-sort") {
                 ActivitySortControl(state.activitySortOrder) { state.activitySortOrder = it }
             }
-            if (isLiveBudget && mobileSession.activityTransactionPageBudgetId != state.selectedBudgetId && transactions.isEmpty()) {
+            if (isLiveBudget &&
+                mobileSession.activity.activityTransactionPageBudgetId != state.selectedBudgetId &&
+                transactions.isEmpty()
+            ) {
                 item(key = "activity-loading") { SkeletonRows() }
             } else if (transactions.isEmpty()) {
                 item(key = "activity-empty") {
@@ -269,7 +273,14 @@ internal fun ActivityScreen(
                         highlighted = detailInPane && transactionId != null && transactionId == state.selectedTransactionRecordId,
                         onSwipeDelete =
                             if (isLiveBudget && !state.readOnlyMode && !selectionMode && transactionId != null) {
-                                { scope.launch { mobileSession.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)) } }
+                                {
+                                    scope.launch {
+                                        mobileSession.transactions.deleteTransactionsWithUndo(
+                                            state.selectedBudgetId,
+                                            setOf(transactionId),
+                                        )
+                                    }
+                                }
                             } else {
                                 null
                             },
@@ -288,17 +299,19 @@ internal fun ActivityScreen(
                     }
                 }
             }
-            if (isLiveBudget && (mobileSession.isLoadingActivityTransactions || mobileSession.activityTransactionPageError != null)) {
+            if (isLiveBudget &&
+                (mobileSession.activity.isLoadingActivityTransactions || mobileSession.activity.activityTransactionPageError != null)
+            ) {
                 item(key = "activity-page-status") {
-                    if (mobileSession.activityTransactionPageError != null) {
+                    if (mobileSession.activity.activityTransactionPageError != null) {
                         TandemActionButton(
                             "Try again",
                             TandemActionButtonTone.NEUTRAL,
                             modifier = Modifier.fillMaxWidth(),
                             icon = Lucide.RefreshCw,
-                            enabled = !mobileSession.isLoadingActivityTransactions,
-                            loading = mobileSession.isLoadingActivityTransactions,
-                            onClick = { scope.launch { mobileSession.loadMoreActivityTransactions(state.selectedBudgetId) } },
+                            enabled = !mobileSession.activity.isLoadingActivityTransactions,
+                            loading = mobileSession.activity.isLoadingActivityTransactions,
+                            onClick = { scope.launch { mobileSession.activity.loadMoreActivityTransactions(state.selectedBudgetId) } },
                         )
                     } else {
                         Box(Modifier.fillMaxWidth().padding(TandemSpacing.medium), contentAlignment = Alignment.Center) {
@@ -318,7 +331,7 @@ internal fun ActivityScreen(
             val selectableIds = sortedTransactions.mapNotNull(TransactionItem::recordId).toSet()
             val allSelected =
                 selectableIds.isNotEmpty() &&
-                    !mobileSession.hasMoreActivityTransactions &&
+                    !mobileSession.activity.hasMoreActivityTransactions &&
                     selectedTransactionIds.containsAll(selectableIds)
             TransactionSelectionFloatingBar(
                 allSelected = allSelected,
@@ -333,14 +346,14 @@ internal fun ActivityScreen(
                             scope.launch {
                                 isSelectingAll = true
                                 try {
-                                    while (mobileSession.hasMoreActivityTransactions &&
-                                        mobileSession.activityTransactionPageError == null
+                                    while (mobileSession.activity.hasMoreActivityTransactions &&
+                                        mobileSession.activity.activityTransactionPageError == null
                                     ) {
-                                        mobileSession.loadMoreActivityTransactions(state.selectedBudgetId)
+                                        mobileSession.activity.loadMoreActivityTransactions(state.selectedBudgetId)
                                     }
-                                    if (mobileSession.activityTransactionPageError == null) {
+                                    if (mobileSession.activity.activityTransactionPageError == null) {
                                         selectedTransactionIds =
-                                            mobileSession.activityTransactionRecords
+                                            mobileSession.activity.activityTransactionRecords
                                                 .filterNot(BudgetRecordEntity::isParent)
                                                 .mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
                                     }

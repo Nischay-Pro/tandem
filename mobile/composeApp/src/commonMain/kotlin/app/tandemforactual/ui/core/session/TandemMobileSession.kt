@@ -1,10 +1,9 @@
 package app.tandemforactual.ui.core.session
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
@@ -28,17 +27,11 @@ import app.tandemforactual.data.store.BudgetSyncSummary
 import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
 import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import app.tandemforactual.data.store.LocalBudgetRepository
-import app.tandemforactual.data.store.LocalOperationConflictException
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
-import app.tandemforactual.data.store.LocalWriteRequest
-import app.tandemforactual.ui.core.format.TransactionDateValidationStatus
-import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
-import app.tandemforactual.ui.core.format.transactionAmountInputError
-import app.tandemforactual.ui.core.format.transactionDateValidationMessage
-import app.tandemforactual.ui.core.format.validateTransactionDate
+import app.tandemforactual.ui.core.format.signedAmount
+import app.tandemforactual.ui.core.session.activity.ActivityController
 import app.tandemforactual.ui.core.session.banking.BankingController
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
@@ -47,24 +40,18 @@ import app.tandemforactual.ui.core.session.budget.payeeRecordsWithPendingCreates
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
 import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
 import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
+import app.tandemforactual.ui.core.session.conflicts.ConflictController
 import app.tandemforactual.ui.core.session.feedback.BudgetActionRunner
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
-import app.tandemforactual.ui.core.state.AccountActivitySnapshot
+import app.tandemforactual.ui.core.session.transactions.TransactionController
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
-import app.tandemforactual.ui.core.state.booleanValue
-import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
-import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
 import app.tandemforactual.ui.feature.reports.ReportsViewModels
-import app.tandemforactual.ui.feature.rules.signedAmount
-import app.tandemforactual.ui.feature.transactions.ConflictResolutionSync
-import app.tandemforactual.ui.feature.transactions.RepositoryConflictResolutionStore
-import app.tandemforactual.ui.feature.transactions.TransactionConflictResolution
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +61,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -88,11 +74,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
-import kotlin.uuid.Uuid
 
 internal data class SyncPresentationState(
     val isSyncing: Boolean = false,
@@ -283,7 +267,7 @@ internal class TandemMobileSession(
     override val nowEpochMillis: () -> Long,
     private val credentialStore: DeviceCredentialStore? = null,
     budgetMutationQueuePersistenceOverride: BudgetMutationQueuePersistence? = null,
-    private val currentDateIso: () -> String = ::platformTodayIsoDate,
+    override val currentDateIso: () -> String = ::platformTodayIsoDate,
     private val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
     private val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
 ) : SessionHost {
@@ -316,10 +300,19 @@ internal class TandemMobileSession(
     override suspend fun <T> withoutBudgetActionFeedback(action: suspend () -> T): T = feedback.withoutBudgetActionFeedback(action)
 
     /** Budget edits saved on the device and sent to Actual in order. */
-    val budgetQueue: BudgetEditQueue = BudgetEditQueue(this) { budgetEdits }
+    override val budgetQueue: BudgetEditQueue = BudgetEditQueue(this) { budgetEdits }
 
     /** Budget changes: accounts, categories, payees, rules, templates and moves. */
     val budgetEdits: BudgetEdits = BudgetEdits(this, budgetQueue)
+
+    /** Conflicting and uncertain writes. */
+    override val conflicts = ConflictController(this)
+
+    /** Transaction writes and undo. */
+    val transactions = TransactionController(this)
+
+    /** Activity pages and account activity. */
+    val activity = ActivityController(this)
 
     private val mainStorage = database?.let { BudgetStorage(it) }
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
@@ -335,7 +328,7 @@ internal class TandemMobileSession(
     override val preferencesStore: AppPreferencesStore? = database?.let(::AppPreferencesStore)
     override val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal val reportViewModels: ReportsViewModels? get() = storage?.reports
-    private val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
+    override val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
 
     var databaseGeneration by mutableStateOf(0)
         private set
@@ -588,18 +581,6 @@ internal class TandemMobileSession(
     var conflictRecordsByRecordId by mutableStateOf<Map<String, BudgetRecordEntity>>(emptyMap())
         private set
 
-    var checkedWriteOperation by mutableStateOf<OutboxOperationEntity?>(null)
-        private set
-
-    var checkedWriteOperationId by mutableStateOf<String?>(null)
-        private set
-
-    var uncertainWriteCheckError by mutableStateOf<String?>(null)
-        private set
-
-    var uncertainWriteCheckErrorOperationId by mutableStateOf<String?>(null)
-        private set
-
     override var isSavingTransaction by mutableStateOf(false)
         private set
 
@@ -613,12 +594,6 @@ internal class TandemMobileSession(
     override fun reportTransactionWriteMessage(message: String?) {
         transactionWriteMessage = message
     }
-
-    var conflictResolutionFeedback by mutableStateOf<ConflictResolutionFeedback?>(null)
-        private set
-
-    var serverConfirmedConflictOperationId by mutableStateOf<String?>(null)
-        private set
 
     override val scheduleActionEncryptionPasswords: MutableMap<String, String> = mutableMapOf()
 
@@ -644,22 +619,9 @@ internal class TandemMobileSession(
         readOnlyMode = enabled
     }
 
-    fun clearTransactionWriteMessage() {
+    override fun clearTransactionWriteMessage() {
         transactionWriteMessage = null
-        conflictResolutionFeedback = null
-        serverConfirmedConflictOperationId = null
-    }
-
-    fun clearConflictResolutionFeedback() {
-        conflictResolutionFeedback = null
-    }
-
-    private fun reportConflictResolution(
-        operationId: String,
-        message: String,
-    ) {
-        transactionWriteMessage = message
-        conflictResolutionFeedback = ConflictResolutionFeedback(operationId, message)
+        conflicts.clearFeedback()
     }
 
     override fun refuseWriteInReadOnlyMode(): Boolean {
@@ -693,30 +655,6 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
-    val activityTransactionRecords = mutableStateListOf<BudgetRecordEntity>()
-
-    var activityTransactionRecordsVersion by mutableStateOf(0)
-        private set
-
-    var activityTransactionPageBudgetId by mutableStateOf("")
-        private set
-
-    var isLoadingActivityTransactions by mutableStateOf(false)
-        private set
-
-    var hasMoreActivityTransactions by mutableStateOf(true)
-        private set
-
-    var activityTransactionPageError by mutableStateOf<String?>(null)
-        private set
-
-    var activityTransactionPageGeneration by mutableStateOf(0)
-        private set
-
-    private var activityCursorDate: String? = null
-    private var activityCursorId = ""
-    private val activityTransactionPageMutex = Mutex()
-
     var activitySearchRecords by mutableStateOf<List<SearchableBudgetTransaction>>(emptyList())
         private set
 
@@ -747,30 +685,11 @@ internal class TandemMobileSession(
 
     private var selectedBudgetMonthObservationKey by mutableStateOf("")
 
-    var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+    override var accountRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
 
     var accountGroupRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
-
-    private val accountActivitySnapshots = linkedMapOf<String, AccountActivitySnapshot>()
-
-    fun cachedAccountActivity(
-        budgetId: String,
-        accountId: String,
-    ): AccountActivitySnapshot? = accountActivitySnapshots["$budgetId\u001f$accountId"]
-
-    fun cacheAccountActivity(
-        budgetId: String,
-        accountId: String,
-        snapshot: AccountActivitySnapshot,
-    ) {
-        if (budgetId.isBlank() || accountId.isBlank()) return
-        accountActivitySnapshots["$budgetId\u001f$accountId"] = snapshot
-        while (accountActivitySnapshots.size > 8) {
-            accountActivitySnapshots.remove(accountActivitySnapshots.keys.first())
-        }
-    }
 
     var scheduleRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         private set
@@ -995,11 +914,7 @@ internal class TandemMobileSession(
             budgetDisplaySettings = null
             budgetDisplaySettingsBudgetId = null
             transactionRecords = emptyList()
-            activityTransactionRecords.clear()
-            activityTransactionRecordsVersion += 1
-            activityTransactionPageBudgetId = ""
-            activityTransactionPageError = null
-            hasMoreActivityTransactions = false
+            activity.reset()
             activitySearchRecords = emptyList()
             activitySearchRecordsBudgetId = ""
             payeeRecords = emptyList()
@@ -1017,12 +932,8 @@ internal class TandemMobileSession(
             conflictRecordsByRecordId = emptyMap()
             cachedTransactionCount = 0
             syncedTransactionCount = 0
-            checkedWriteOperation = null
-            checkedWriteOperationId = null
-            uncertainWriteCheckError = null
-            uncertainWriteCheckErrorOperationId = null
+            conflicts.reset()
             transactionWriteMessage = null
-            conflictResolutionFeedback = null
             syncComplete = false
             lastSyncSummary = null
             syncPresentation = SyncPresentationState()
@@ -1425,755 +1336,7 @@ internal class TandemMobileSession(
         }
     }
 
-    suspend fun confirmConflictWithServer(
-        budgetId: String,
-        operationId: String,
-        encryptionPassword: String?,
-    ): Boolean {
-        serverConfirmedConflictOperationId = null
-        val summary =
-            synchronize(
-                budgetId = budgetId,
-                encryptionPassword = encryptionPassword,
-                sendQueuedWrites = false,
-                retryQueuedBudgetMutations = false,
-            ) ?: return false
-        val operation = repository?.readPendingWrites(budgetId)?.firstOrNull { it.operationId == operationId }
-        if (operation?.status != "conflict") return false
-        serverConfirmedConflictOperationId = operationId
-        return true
-    }
-
     val canEditRules: Boolean get() = serverCapabilities?.supports("rule-edit") == true
-
-    suspend fun updateTransaction(
-        budgetId: String,
-        transactionId: String,
-        amountText: String,
-        notes: String,
-        originalAmountMinor: Long,
-        transactionType: String,
-        displaySettings: BudgetDisplaySettings? = null,
-        accountId: String? = null,
-        payeeId: String? = null,
-        categoryId: String? = null,
-        date: String? = null,
-        updateDetails: Boolean = false,
-        confirmedFutureDate: String? = null,
-    ): Boolean {
-        transactionWriteMessage = null
-        if (refuseWriteInReadOnlyMode()) return false
-        if (!isCurrentIdentityCacheOwner()) {
-            transactionWriteMessage = "Sign in to the server and account that own this budget before editing a transaction."
-            return false
-        }
-        val enteredAmount = parseAmountMinorUnits(amountText, displaySettings)
-        if (enteredAmount == null) {
-            transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
-            return false
-        }
-        if (enteredAmount < 0) {
-            transactionWriteMessage = "Enter a positive amount."
-            return false
-        }
-        if (enteredAmount > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
-            transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
-            return false
-        }
-        val dateValidation =
-            if (updateDetails) {
-                validateTransactionDate(date.orEmpty(), currentDateIso(), confirmedFutureDate)
-            } else {
-                null
-            }
-        if (dateValidation != null && dateValidation.status != TransactionDateValidationStatus.VALID) {
-            transactionWriteMessage = transactionDateValidationMessage(dateValidation)
-            return false
-        }
-        val requestedDate = dateValidation?.date
-        val localRepository = repository
-        if (localRepository == null) {
-            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
-            return false
-        }
-        val pendingForRecord =
-            localRepository
-                .readPendingWrites(budgetId)
-                .filter { it.recordType == "transaction" && it.recordId == transactionId }
-        val blockingWrite = pendingForRecord.firstOrNull { it.status in setOf("sending", "uncertain", "conflict") }
-        if (blockingWrite != null) {
-            transactionWriteMessage = blockedTransactionEditMessage(blockingWrite.status)
-            return false
-        }
-        val current = localRepository.findRecord(budgetId, "transaction", transactionId)
-        val queuedCreate = queuedTransactionCreateToEdit(pendingForRecord)
-        val editingLocalCreate = queuedCreate != null
-        val baseJson = if (editingLocalCreate) current?.localJson else current?.remoteJson
-        val revision = if (editingLocalCreate) null else current?.remoteRevision
-        if (current == null || current.remoteDeleted || baseJson == null || (!editingLocalCreate && revision.isNullOrBlank())) {
-            transactionWriteMessage = "This transaction isn’t up to date. Sync the budget before editing."
-            return false
-        }
-        val base = runCatching { Json.parseToJsonElement(baseJson).jsonObject }.getOrNull()
-        if (base == null) {
-            transactionWriteMessage = "Tandem couldn’t open this transaction. Sync the budget before editing."
-            return false
-        }
-        val requestedAccountId = if (updateDetails) accountId?.takeIf(String::isNotBlank) else null
-        if (updateDetails && requestedAccountId == null) {
-            transactionWriteMessage = "Choose an account from this budget before saving."
-            return false
-        }
-        if (requestedAccountId != null) {
-            val account = accountRecords.firstOrNull { it.recordId == requestedAccountId }
-            val accountBody = account?.recordBody()
-            if (account == null || accountBody?.booleanValue("closed") == true) {
-                transactionWriteMessage = "Choose an open account from this budget."
-                return false
-            }
-            if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
-                transactionWriteMessage = "Choose an on-budget account for this transaction."
-                return false
-            }
-        }
-        if (updateDetails && payeeId != null && payeeRecords.none { it.recordId == payeeId }) {
-            transactionWriteMessage = "Choose an existing payee or clear the payee field."
-            return false
-        }
-        val transferDestinationId =
-            payeeId
-                ?.let { id -> payeeRecords.firstOrNull { it.recordId == id } }
-                ?.recordBody()
-                ?.stringValue("transfer_acct")
-        if (updateDetails && transactionType == "Transfer" && transferDestinationId.isNullOrBlank()) {
-            transactionWriteMessage = "Choose a destination account for this transfer."
-            return false
-        }
-        if (updateDetails && transactionType == "Transfer" && transferDestinationId == requestedAccountId) {
-            transactionWriteMessage = "Choose a different destination account."
-            return false
-        }
-        if (updateDetails && transactionType != "Transfer" && !transferDestinationId.isNullOrBlank()) {
-            transactionWriteMessage = "Choose Transfer as the transaction type for this payee."
-            return false
-        }
-        val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" }
-        if (updateDetails && requestedCategoryId != null && categoryRecords.none { it.recordId == requestedCategoryId }) {
-            transactionWriteMessage = "Choose a category from this budget before saving."
-            return false
-        }
-        val signedAmount =
-            when (transactionType) {
-                "Income" -> enteredAmount
-                "Transfer" -> if (originalAmountMinor >= 0L) enteredAmount else -enteredAmount
-                else -> -enteredAmount
-            }
-        val patch =
-            buildTransactionEditPatch(
-                base = base,
-                signedAmount = signedAmount,
-                fallbackCurrentAmount = current.amountMinor,
-                notes = notes,
-                details =
-                    if (updateDetails) {
-                        TransactionEditDetails(
-                            accountId = checkNotNull(requestedAccountId),
-                            payeeId = payeeId,
-                            categoryId = requestedCategoryId,
-                            date = checkNotNull(requestedDate),
-                        )
-                    } else {
-                        null
-                    },
-            )
-        if (patch.isEmpty()) {
-            val queuedEditId = queuedTransactionEditToDiscardForNoOp(pendingForRecord, editingLocalCreate)
-            if (queuedEditId != null) {
-                try {
-                    localRepository.discardWrite(queuedEditId)
-                    loadLocalRecords(budgetId)
-                    transactionWriteMessage = "Your transaction matches Actual. Removed the waiting edit."
-                    return true
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    transactionWriteMessage = "This transaction started syncing. Check Pending Changes before changing it."
-                    loadLocalRecords(budgetId)
-                    return false
-                }
-            }
-            transactionWriteMessage = "There are no transaction changes to save."
-            return false
-        }
-
-        isSavingTransaction = true
-        try {
-            val patchJson = JsonObject(patch)
-            val optimistic = JsonObject(base + patch)
-            val operationId = Uuid.random().toString()
-            localRepository.enqueueWrite(
-                LocalWriteRequest(
-                    operationId = operationId,
-                    idempotencyKey = operationId,
-                    budgetId = budgetId,
-                    recordType = "transaction",
-                    recordId = transactionId,
-                    action = if (editingLocalCreate) LocalWriteAction.CREATE else LocalWriteAction.UPDATE,
-                    baseRevision = revision,
-                    baseSnapshotJson = if (editingLocalCreate) null else baseJson,
-                    patchJson = if (editingLocalCreate) optimistic.toString() else patchJson.toString(),
-                    optimisticJson = optimistic.toString(),
-                    createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection = optimistic.toProjection(),
-                ),
-            )
-            transactionWriteMessage = null
-            loadLocalRecords(budgetId)
-            return true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: LocalOperationConflictException) {
-            transactionWriteMessage = pendingTransactionEditMessage()
-            loadLocalRecords(budgetId)
-            return false
-        } catch (error: Exception) {
-            transactionWriteMessage =
-                localStorageFailureMessage(
-                    error,
-                    "Tandem couldn’t save your edit. Check the budget and try again.",
-                )
-            loadLocalRecords(budgetId)
-            return false
-        } finally {
-            isSavingTransaction = false
-        }
-    }
-
-    var undoNotice by mutableStateOf<UndoNotice?>(null)
-        private set
-    private var undoNoticeCount = 0L
-
-    /** Deletes right away and offers an undo while the deletions are still waiting to sync. */
-    suspend fun deleteTransactionsWithUndo(
-        budgetId: String,
-        transactionIds: Set<String>,
-    ): Boolean {
-        val deleted = transactionIds.takeWhile { deleteTransaction(budgetId, it) }.toSet()
-        if (deleted.isNotEmpty()) {
-            val undoable = deleted.filterTo(mutableSetOf()) { queuedTransactionDelete(budgetId, it) != null }
-            undoNoticeCount += 1
-            undoNotice =
-                UndoNotice(
-                    id = undoNoticeCount,
-                    message = if (deleted.size == 1) "Transaction deleted" else "${deleted.size} transactions deleted",
-                    budgetId = budgetId,
-                    transactionIds = undoable,
-                )
-        }
-        return deleted.size == transactionIds.size
-    }
-
-    suspend fun undoTransactionDeletes(notice: UndoNotice) {
-        val localRepository = repository ?: return
-        var restoredAll = true
-        for (transactionId in notice.transactionIds) {
-            val write = queuedTransactionDelete(notice.budgetId, transactionId)
-            if (write == null) restoredAll = false else localRepository.discardWrite(write.operationId)
-        }
-        loadLocalRecords(notice.budgetId)
-        undoNoticeCount += 1
-        undoNotice =
-            if (restoredAll) {
-                null
-            } else {
-                UndoNotice(undoNoticeCount, "Already synced, so it can’t be undone here", notice.budgetId, emptySet())
-            }
-    }
-
-    fun dismissUndoNotice(id: Long) {
-        if (undoNotice?.id == id) undoNotice = null
-    }
-
-    private suspend fun queuedTransactionDelete(
-        budgetId: String,
-        transactionId: String,
-    ): OutboxOperationEntity? =
-        repository
-            ?.readPendingWrites(budgetId)
-            ?.lastOrNull {
-                it.recordType == "transaction" &&
-                    it.recordId == transactionId &&
-                    it.action == LocalWriteAction.DELETE.name &&
-                    it.status == "queued"
-            }
-
-    suspend fun deleteTransaction(
-        budgetId: String,
-        transactionId: String,
-    ): Boolean {
-        transactionWriteMessage = null
-        if (refuseWriteInReadOnlyMode()) return false
-        if (!isCurrentIdentityCacheOwner()) {
-            transactionWriteMessage = "Sign in to the server and account that own this budget before deleting a transaction."
-            return false
-        }
-        val localRepository = repository
-        if (localRepository == null) {
-            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
-            return false
-        }
-        val pendingForRecord =
-            localRepository
-                .readPendingWrites(budgetId)
-                .filter {
-                    it.recordType == "transaction" && it.recordId == transactionId && it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES
-                }.maxByOrNull { it.updatedAtEpochMs }
-        if (pendingForRecord?.action == LocalWriteAction.CREATE.name && pendingForRecord.status == "queued") {
-            isSavingTransaction = true
-            try {
-                localRepository.discardWrite(pendingForRecord.operationId)
-                transactionWriteMessage = null
-                loadLocalRecords(budgetId)
-                return true
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                transactionWriteMessage =
-                    localStorageFailureMessage(
-                        error,
-                        "Tandem couldn’t remove this transaction. Open Pending Changes to check it.",
-                    )
-                loadLocalRecords(budgetId)
-                return false
-            } finally {
-                isSavingTransaction = false
-            }
-        }
-        if (pendingForRecord != null && pendingForRecord.status != "queued") {
-            transactionWriteMessage = "Open Pending Changes to review this transaction before deleting it."
-            return false
-        }
-        val current = localRepository.findRecord(budgetId, "transaction", transactionId)
-        val baseJson = current?.remoteJson
-        val revision = current?.remoteRevision
-        if (current == null || current.remoteDeleted || baseJson == null || revision.isNullOrBlank()) {
-            transactionWriteMessage = "This transaction isn’t up to date. Sync the budget before deleting it."
-            return false
-        }
-
-        isSavingTransaction = true
-        try {
-            val operationId = Uuid.random().toString()
-            localRepository.enqueueWrite(
-                LocalWriteRequest(
-                    operationId = operationId,
-                    idempotencyKey = operationId,
-                    budgetId = budgetId,
-                    recordType = "transaction",
-                    recordId = transactionId,
-                    action = LocalWriteAction.DELETE,
-                    baseRevision = revision,
-                    baseSnapshotJson = baseJson,
-                    patchJson = "{}",
-                    optimisticJson = null,
-                    createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection = null,
-                ),
-            )
-            transactionWriteMessage = null
-            loadLocalRecords(budgetId)
-            return true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            transactionWriteMessage =
-                localStorageFailureMessage(
-                    error,
-                    "Tandem couldn’t delete this transaction. Open Pending Changes to check it.",
-                )
-            loadLocalRecords(budgetId)
-            return false
-        } finally {
-            isSavingTransaction = false
-        }
-    }
-
-    suspend fun createTransaction(
-        budgetId: String,
-        accountId: String,
-        payeeId: String?,
-        categoryId: String?,
-        amountText: String,
-        dateText: String,
-        notes: String,
-        encryptionPassword: String?,
-        displaySettings: BudgetDisplaySettings? = null,
-        isTransfer: Boolean = false,
-        confirmedFutureDate: String? = null,
-    ): Boolean {
-        transactionWriteMessage = null
-        if (refuseWriteInReadOnlyMode()) return false
-        if (!isCurrentIdentityCacheOwner()) {
-            transactionWriteMessage = "Sign in to the server and account that own this budget before adding a transaction."
-            return false
-        }
-        val amount = parseAmountMinorUnits(amountText, displaySettings)
-        if (amount == null) {
-            transactionWriteMessage = transactionAmountInputError(amountText, displaySettings)
-            return false
-        }
-        if (amount == 0L) {
-            transactionWriteMessage = "Enter an amount greater than zero."
-            return false
-        }
-        if (amount == Long.MIN_VALUE || kotlin.math.abs(amount) > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
-            transactionWriteMessage = "Largest amount is ${formatCurrency(MAX_TRANSACTION_AMOUNT_MINOR_UNITS, displaySettings)}."
-            return false
-        }
-        val dateValidation = validateTransactionDate(dateText, currentDateIso(), confirmedFutureDate)
-        if (dateValidation.status != TransactionDateValidationStatus.VALID) {
-            transactionWriteMessage = transactionDateValidationMessage(dateValidation)
-            return false
-        }
-        val date = checkNotNull(dateValidation.date)
-        val localRepository = repository
-        val coordinator = syncCoordinator
-        if (localRepository == null || coordinator == null) {
-            transactionWriteMessage = "Budget data isn’t available on this device. Reopen the budget and try again."
-            return false
-        }
-        val account = accountRecords.firstOrNull { it.recordId == accountId }
-        if (account == null) {
-            transactionWriteMessage = "Choose an account from this budget before saving."
-            return false
-        }
-        val accountBody = account.recordBody()
-        if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
-            transactionWriteMessage = "Choose an on-budget account for this transaction."
-            return false
-        }
-        if (payeeId != null && payeeRecords.none { it.recordId == payeeId }) {
-            transactionWriteMessage = "Choose an existing payee or clear the payee field."
-            return false
-        }
-        val transferDestinationId =
-            payeeId
-                ?.let { id -> payeeRecords.firstOrNull { it.recordId == id } }
-                ?.recordBody()
-                ?.stringValue("transfer_acct")
-        if (isTransfer && transferDestinationId.isNullOrBlank()) {
-            transactionWriteMessage = "Choose a destination account for this transfer."
-            return false
-        }
-        if (isTransfer && transferDestinationId == accountId) {
-            transactionWriteMessage = "Choose a different destination account."
-            return false
-        }
-        if (!isTransfer && !transferDestinationId.isNullOrBlank()) {
-            transactionWriteMessage = "Choose Transfer as the transaction type for this payee."
-            return false
-        }
-        val categoryIsPending =
-            categoryId != null &&
-                budgetQueue.budgetReorderQueue.moves.any {
-                    it.budgetId == budgetId &&
-                        it.itemId == categoryId &&
-                        it.kind in setOf(BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE)
-                }
-        if (categoryId != null && categoryRecords.none { it.recordId == categoryId } && !categoryIsPending) {
-            transactionWriteMessage = "Choose a category from this budget before saving."
-            return false
-        }
-        val transactionId = "tandem:${Uuid.random()}"
-        val operationId = Uuid.random().toString()
-        val requestedCategoryId = categoryId.takeUnless { isTransfer }
-        val patch =
-            buildJsonObject {
-                put("account", account.recordId)
-                put("amount", amount)
-                put("date", date)
-                put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
-                put("category", requestedCategoryId?.let(::JsonPrimitive) ?: JsonNull)
-                put("notes", notes)
-                put("cleared", false)
-            }
-        val optimistic =
-            buildJsonObject {
-                put("id", transactionId)
-                put("account", account.recordId)
-                put("amount", amount)
-                put("date", date)
-                put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
-                put("category", categoryId?.let(::JsonPrimitive) ?: JsonNull)
-                put("notes", notes)
-                put("cleared", false)
-                put("reconciled", JsonNull)
-                put("importedId", JsonNull)
-                put("importedPayee", JsonNull)
-                put("startingBalance", JsonNull)
-                put("schedule", JsonNull)
-                put("transferId", JsonNull)
-                put("isParent", false)
-                put("isChild", false)
-                put("parentId", JsonNull)
-                put("subtransactions", JsonArray(emptyList()))
-            }
-        isSavingTransaction = true
-        try {
-            localRepository.enqueueWrite(
-                LocalWriteRequest(
-                    operationId = operationId,
-                    idempotencyKey = operationId,
-                    budgetId = budgetId,
-                    recordType = "transaction",
-                    recordId = transactionId,
-                    action = LocalWriteAction.CREATE,
-                    baseRevision = null,
-                    baseSnapshotJson = null,
-                    patchJson = patch.toString(),
-                    optimisticJson = optimistic.toString(),
-                    createdAtEpochMs = nowEpochMillis(),
-                    optimisticProjection =
-                        LocalRecordProjection(
-                            recordDate = date,
-                            accountId = account.recordId,
-                            categoryId = requestedCategoryId,
-                            payeeId = payeeId,
-                            amountMinor = amount,
-                            budgetMonth = date.take(7),
-                        ),
-                ),
-            )
-            val summary =
-                if (budgetQueue.hasPendingTransactionDependency(budgetId)) {
-                    null
-                } else {
-                    synchronize(budgetId, encryptionPassword)
-                }
-            val savedWrite = localRepository.findWrite(operationId)
-            transactionWriteMessage =
-                when (savedWrite?.status) {
-                    "committed" -> "Transaction added to Actual."
-                    "queued" -> "Saved on this device and waiting to sync."
-                    "conflict" -> "This transaction is already in Actual. Sync the budget to check it."
-                    "uncertain", "sending" -> "Tandem couldn’t confirm the save. Check Activity before adding it again."
-                    "rejected" -> "Actual didn’t add this transaction. Review the details and try again."
-                    else ->
-                        if (summary == null) {
-                            "Tandem couldn’t confirm the save. Check Activity before adding it again."
-                        } else {
-                            "The transaction is saved on this device and is waiting to sync."
-                        }
-                }
-            loadLocalRecords(budgetId)
-            return savedWrite?.status in setOf("committed", "queued")
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            transactionWriteMessage =
-                localStorageFailureMessage(
-                    error,
-                    "Tandem couldn’t confirm the save. Check Activity before adding it again.",
-                )
-            loadLocalRecords(budgetId)
-            return false
-        } finally {
-            isSavingTransaction = false
-        }
-    }
-
-    suspend fun resolveConflict(
-        budgetId: String,
-        operationId: String,
-        keepDeviceVersion: Boolean,
-        encryptionPassword: String?,
-        reviewedRevision: String,
-    ) {
-        clearTransactionWriteMessage()
-        if (refuseWriteInReadOnlyMode()) {
-            reportConflictResolution(operationId, transactionWriteMessage ?: "Read-only mode is on.")
-            return
-        }
-        if (isSavingTransaction) {
-            reportConflictResolution(
-                operationId,
-                "A decision is already being saved. Wait for it to finish, then review this change again.",
-            )
-            return
-        }
-        val localRepository = repository
-        if (localRepository == null) {
-            reportConflictResolution(operationId, "Budget data isn’t available on this device. Restart the app and try again.")
-            return
-        }
-        val operation = localRepository.readPendingWrites(budgetId).firstOrNull { it.operationId == operationId }
-        if (operation == null || operation.status != "conflict") {
-            reportConflictResolution(operationId, "This change no longer needs review. Sync the budget to refresh its status.")
-            loadLocalRecords(budgetId)
-            return
-        }
-        isSavingTransaction = true
-        try {
-            val workflow =
-                TransactionConflictResolution(
-                    store = RepositoryConflictResolutionStore(localRepository),
-                    sync =
-                        object : ConflictResolutionSync {
-                            override suspend fun confirmConflictWithServer(
-                                budgetId: String,
-                                operationId: String,
-                                encryptionPassword: String?,
-                            ): Boolean = this@TandemMobileSession.confirmConflictWithServer(budgetId, operationId, encryptionPassword)
-
-                            override suspend fun synchronize(
-                                budgetId: String,
-                                encryptionPassword: String?,
-                                retryQueuedBudgetMutations: Boolean,
-                            ): BudgetSyncSummary? =
-                                this@TandemMobileSession.synchronize(
-                                    budgetId = budgetId,
-                                    encryptionPassword = encryptionPassword,
-                                    retryQueuedBudgetMutations = retryQueuedBudgetMutations,
-                                )
-                        },
-                    nowEpochMillis = nowEpochMillis,
-                )
-            reportConflictResolution(
-                operationId,
-                workflow.resolve(
-                    budgetId,
-                    operationId,
-                    keepDeviceVersion,
-                    encryptionPassword,
-                    reviewedRevision,
-                ),
-            )
-            loadLocalRecords(budgetId)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            reportConflictResolution(
-                operationId,
-                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again.",
-            )
-            loadLocalRecords(budgetId)
-        } finally {
-            isSavingTransaction = false
-        }
-    }
-
-    suspend fun discardWrite(
-        budgetId: String,
-        operationId: String,
-        encryptionPassword: String? = null,
-    ) {
-        transactionWriteMessage = null
-        clearUncertainWriteCheck()
-        if (refuseWriteInReadOnlyMode()) return
-        val localRepository = repository ?: return
-        val operation = localRepository.findWrite(operationId)
-        if (operation?.status == "uncertain" && operation.recordType != "budget-mutation") {
-            if (operation.recordType != "transaction") {
-                uncertainWriteCheckError = "Tandem couldn’t confirm that this change was removed. It remains on this device."
-                uncertainWriteCheckErrorOperationId = operationId
-                return
-            }
-            val coordinator = syncCoordinator
-            if (coordinator == null || !isCurrentIdentityCacheOwner()) {
-                uncertainWriteCheckError =
-                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Sign in to the server and try again."
-                uncertainWriteCheckErrorOperationId = operationId
-                checkedWriteOperation = operation
-                checkedWriteOperationId = operationId
-                return
-            }
-            isSavingTransaction = true
-            try {
-                val result =
-                    apiClient.withExclusiveSession {
-                        coordinator.discardUncertainWrite(
-                            budgetId,
-                            operationId,
-                        )
-                    }
-                if (result.status == app.tandemforactual.data.store.RemoteOperationStatus.REJECTED &&
-                    result.errorCode == "discarded-by-user"
-                ) {
-                    loadLocalRecords(budgetId)
-                    checkedWriteOperation = localRepository.findWrite(operationId)
-                    checkedWriteOperationId = operationId
-                    transactionWriteMessage = discardedPendingWriteMessage("uncertain")
-                    return
-                }
-
-                val summary =
-                    synchronize(
-                        budgetId = budgetId,
-                        encryptionPassword = encryptionPassword,
-                        sendQueuedWrites = false,
-                        reconcileUncertainOperationId = operationId,
-                    )
-                checkedWriteOperation = localRepository.findWrite(operationId)
-                checkedWriteOperationId = operationId
-                if (checkedWriteOperation?.status == "uncertain") {
-                    uncertainWriteCheckError =
-                        if (summary == null) {
-                            "Tandem couldn’t confirm that this edit was removed. " +
-                                "It remains on this device. Check the connection and try again."
-                        } else {
-                            "Tandem still can’t confirm whether Actual saved this edit. " +
-                                "It remains on this device. Check status before removing it."
-                        }
-                    uncertainWriteCheckErrorOperationId = operationId
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                checkedWriteOperation = localRepository.findWrite(operationId)
-                checkedWriteOperationId = operationId
-                uncertainWriteCheckError =
-                    "Tandem couldn’t confirm that this edit was removed. It remains on this device. Check the connection and try again."
-                uncertainWriteCheckErrorOperationId = operationId
-                loadLocalRecords(budgetId)
-            } finally {
-                isSavingTransaction = false
-            }
-            return
-        }
-        if (operation?.recordType == "budget-mutation" && !budgetQueue.restoreBudgetReorderQueue()) {
-            transactionWriteMessage = "Couldn’t verify this pending change. Try again before removing it."
-            return
-        }
-        localRepository.discardWrite(operationId)
-        if (operation?.recordType == "budget-mutation") {
-            budgetQueue.budgetReorderQueue = budgetQueue.budgetReorderQueue.discardOperation(operationId)
-            if (operation.status != "uncertain") budgetQueue.retryQueuedBudgetReorders()
-        }
-        loadLocalRecords(budgetId)
-        transactionWriteMessage = discardedPendingWriteMessage(operation?.status)
-    }
-
-    suspend fun retryUncertainWrite(
-        budgetId: String,
-        operationId: String,
-        encryptionPassword: String?,
-    ) {
-        transactionWriteMessage = null
-        clearUncertainWriteCheck()
-        if (refuseWriteInReadOnlyMode()) return
-        val localRepository = repository ?: return
-        when (localRepository.findWrite(operationId)?.status) {
-            "uncertain" -> localRepository.retryUncertainWrite(operationId)
-            "queued" -> Unit
-            else -> {
-                transactionWriteMessage = "This edit is no longer waiting for confirmation. Refresh Pending Changes."
-                loadLocalRecords(budgetId)
-                return
-            }
-        }
-        synchronize(budgetId, encryptionPassword)
-        loadLocalRecords(budgetId)
-    }
 
     /** Each budget's sync state on this device; an encrypted budget that isn't open keeps its state locked. */
     suspend fun budgetSyncOverview(openBudgetId: String): List<BudgetSyncOverview> {
@@ -2211,59 +1374,6 @@ internal class TandemMobileSession(
         if (planning.syncStatus == PlanningSyncStatus.WAITING) planning.sync(budgetId)
     }
 
-    suspend fun checkUncertainWriteStatus(
-        budgetId: String,
-        operationId: String,
-        encryptionPassword: String?,
-    ) {
-        if (isSyncing) return
-        clearUncertainWriteCheck()
-        val summary =
-            synchronize(
-                budgetId = budgetId,
-                encryptionPassword = encryptionPassword,
-                sendQueuedWrites = false,
-                reconcileUncertainOperationId = operationId,
-            )
-        if (summary == null) {
-            checkedWriteOperationId = operationId
-            uncertainWriteCheckError = syncError ?: "Tandem couldn’t check this change. Try again."
-            uncertainWriteCheckErrorOperationId = operationId
-            return
-        }
-
-        checkedWriteOperationId = operationId
-        summary.operationStatusErrorCode?.takeIf { it != "operation_not_found" }?.let { statusErrorCode ->
-            uncertainWriteCheckError =
-                apiFailureMessage(
-                    errorCode = statusErrorCode,
-                    httpStatus = apiFailureHttpStatus(statusErrorCode, null),
-                    context = ApiFailureContext.SYNC,
-                    fallback = "Tandem couldn’t confirm this change’s status. Check the connection, then try again.",
-                )
-            uncertainWriteCheckErrorOperationId = operationId
-        }
-        try {
-            checkedWriteOperation = repository?.findWrite(operationId)
-            if (checkedWriteOperation == null) {
-                uncertainWriteCheckError = "This edit is no longer waiting to sync."
-                uncertainWriteCheckErrorOperationId = operationId
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            uncertainWriteCheckError = "Couldn’t check this edit’s status on this device."
-            uncertainWriteCheckErrorOperationId = operationId
-        }
-    }
-
-    private fun clearUncertainWriteCheck() {
-        checkedWriteOperation = null
-        checkedWriteOperationId = null
-        uncertainWriteCheckError = null
-        uncertainWriteCheckErrorOperationId = null
-    }
-
     override suspend fun loadLocalRecords(budgetId: String) {
         val localRepository = repository ?: return
         if (!isCurrentIdentityCacheOwner()) {
@@ -2288,7 +1398,7 @@ internal class TandemMobileSession(
         budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
         pendingWrites = localRepository.readPendingWrites(budgetId)
         conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
-        refreshActivityTransactionPages(budgetId)
+        activity.refreshActivityTransactionPages(budgetId)
     }
 
     private suspend fun findConflictRecords(
@@ -2303,115 +1413,6 @@ internal class TandemMobileSession(
             }
         }
         return records
-    }
-
-    suspend fun loadMoreActivityTransactions(
-        budgetId: String,
-        reset: Boolean = false,
-    ) {
-        val localRepository = repository ?: return
-        if (budgetId.isBlank()) return
-        if (!isCurrentIdentityCacheOwner()) {
-            clearCachedBudgetPresentation()
-            return
-        }
-        activityTransactionPageMutex.lock()
-        try {
-            if (reset || activityTransactionPageBudgetId != budgetId) {
-                Snapshot.withMutableSnapshot {
-                    activityTransactionPageBudgetId = budgetId
-                    activityTransactionRecords.clear()
-                    activityTransactionRecordsVersion += 1
-                    activityTransactionPageGeneration += 1
-                }
-                activityCursorDate = null
-                activityCursorId = ""
-                hasMoreActivityTransactions = true
-                activityTransactionPageError = null
-            }
-            if (!hasMoreActivityTransactions) return
-            isLoadingActivityTransactions = true
-            activityTransactionPageError = null
-            try {
-                val page =
-                    localRepository.findTransactionPage(
-                        budgetId = budgetId,
-                        cursorDate = activityCursorDate,
-                        cursorId = activityCursorId,
-                        limit = ACTIVITY_TRANSACTION_PAGE_SIZE,
-                    )
-                if (activityTransactionPageBudgetId != budgetId) return
-                val knownIds = activityTransactionRecords.asSequence().map(BudgetRecordEntity::recordId).toHashSet()
-                val newRecords = page.filterNot { it.recordId in knownIds }
-                if (newRecords.isNotEmpty()) {
-                    Snapshot.withMutableSnapshot {
-                        activityTransactionRecords.addAll(newRecords)
-                        activityTransactionRecordsVersion += 1
-                    }
-                }
-                page.lastOrNull()?.let { last ->
-                    activityCursorDate = last.recordDate
-                    activityCursorId = last.recordId
-                }
-                hasMoreActivityTransactions = page.size == ACTIVITY_TRANSACTION_PAGE_SIZE
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                activityTransactionPageError = "Couldn’t load older transactions. Try again."
-            } finally {
-                isLoadingActivityTransactions = false
-            }
-        } finally {
-            activityTransactionPageMutex.unlock()
-        }
-    }
-
-    private suspend fun refreshActivityTransactionPages(budgetId: String) {
-        if (activityTransactionPageBudgetId != budgetId) return
-        val localRepository = repository ?: return
-        activityTransactionPageMutex.lock()
-        try {
-            if (activityTransactionPageBudgetId != budgetId) return
-            val refreshLimit = activityTransactionRefreshLimit(activityTransactionRecords.size)
-            val previouslyLoaded = activityTransactionRecords.toList()
-            val previouslyHadMore = hasMoreActivityTransactions
-            isLoadingActivityTransactions = true
-            try {
-                val refreshed = localRepository.findTransactionPage(budgetId = budgetId, limit = refreshLimit)
-                if (activityTransactionPageBudgetId != budgetId) return
-                val merged = mergeRefreshedActivityTransactions(previouslyLoaded, refreshed, pageIsComplete = refreshed.size < refreshLimit)
-                Snapshot.withMutableSnapshot {
-                    activityTransactionRecords.clear()
-                    activityTransactionRecords.addAll(merged)
-                    activityTransactionRecordsVersion += 1
-                }
-                merged.lastOrNull()?.let { last ->
-                    activityCursorDate = last.recordDate
-                    activityCursorId = last.recordId
-                } ?: run {
-                    activityCursorDate = null
-                    activityCursorId = ""
-                }
-                hasMoreActivityTransactions = previouslyHadMore || refreshed.size == refreshLimit
-                activityTransactionPageError = null
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                activityTransactionPageError = "Couldn’t refresh transactions. Try again."
-            } finally {
-                isLoadingActivityTransactions = false
-            }
-        } finally {
-            activityTransactionPageMutex.unlock()
-        }
-    }
-
-    suspend fun ensureActivityTransactionsLoaded(budgetId: String) {
-        if (activityTransactionPageBudgetId != budgetId) {
-            loadMoreActivityTransactions(budgetId, reset = true)
-        } else if (activityTransactionRecords.isEmpty() && hasMoreActivityTransactions && activityTransactionPageError == null) {
-            loadMoreActivityTransactions(budgetId)
-        }
     }
 
     fun observeAccountActivityRecords(
@@ -2615,7 +1616,7 @@ internal class TandemMobileSession(
         }
     }
 
-    private fun clearCachedBudgetPresentation() {
+    override fun clearCachedBudgetPresentation() {
         budgets = emptyList()
         cachedBudgets = emptyList()
         budgetCatalogLoaded = false
@@ -2626,11 +1627,7 @@ internal class TandemMobileSession(
         budgetDisplaySettingsBudgetId = null
         localSyncState = null
         transactionRecords = emptyList()
-        activityTransactionRecords.clear()
-        activityTransactionRecordsVersion += 1
-        activityTransactionPageBudgetId = ""
-        activityTransactionPageError = null
-        hasMoreActivityTransactions = false
+        activity.reset()
         activitySearchRecords = emptyList()
         activitySearchRecordsBudgetId = ""
         payeeRecords = emptyList()

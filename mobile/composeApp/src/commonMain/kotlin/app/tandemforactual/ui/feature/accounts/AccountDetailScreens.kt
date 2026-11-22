@@ -152,16 +152,21 @@ internal fun AccountDetailScreen(
     var accountActivity by
         remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
             mutableStateOf(
-                mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.transactions.orEmpty(),
+                mobileSession.activity
+                    .cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())
+                    ?.transactions
+                    .orEmpty(),
             )
         }
     var accountActivityOffset by
         remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
-            mutableStateOf(mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.offset ?: 0)
+            mutableStateOf(mobileSession.activity.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.offset ?: 0)
         }
     var accountActivityHasMore by
         remember(mobileSession, state.selectedBudgetId, liveAccount?.id) {
-            mutableStateOf(mobileSession.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.hasMore ?: false)
+            mutableStateOf(
+                mobileSession.activity.cachedAccountActivity(state.selectedBudgetId, liveAccount?.id.orEmpty())?.hasMore ?: false,
+            )
         }
     var loadingOlderAccountActivity by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
     var clearedAccountBalanceMinor by remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf<Long?>(null) }
@@ -349,7 +354,7 @@ internal fun AccountDetailScreen(
             val hasMore = records.size == ACCOUNT_RECONCILIATION_PAGE_SIZE
             accountActivity = nextActivity
             accountActivityHasMore = hasMore
-            mobileSession.cacheAccountActivity(
+            mobileSession.activity.cacheAccountActivity(
                 state.selectedBudgetId,
                 accountId,
                 AccountActivitySnapshot(nextActivity, accountActivityOffset, hasMore),

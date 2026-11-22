@@ -20,7 +20,6 @@ cross-feature CategoryDetailScreen -> reports
 cross-feature CategoryDetailScreen -> transactions
 cross-feature CategoryGroupScreens -> accounts
 cross-feature CategoryInsights -> transactions
-cross-feature ConflictScreens -> transactions
 cross-feature CurrencyScreens -> accounts
 cross-feature CustomReportScreens -> insights
 cross-feature DataAndAboutScreens -> auth
@@ -87,6 +86,7 @@ function-size Buttons.ReorderDragHandle
 function-size CategoryDetailScreen.CategoryDetailScreen
 function-size CategoryGroupScreens.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
+function-size ConflictController.discardWrite
 function-size ConflictScreens.BudgetMutationReviewScreen
 function-size ConflictScreens.ConflictInboxScreen
 function-size ConflictScreens.ConflictReviewScreen
@@ -145,19 +145,18 @@ function-size SyncCenterScreen.PendingChangesScreen
 function-size SyncCenterScreen.SyncCenterScreen
 function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
-function-size TandemMobileSession.createTransaction
-function-size TandemMobileSession.deleteTransaction
-function-size TandemMobileSession.discardWrite
 function-size TandemMobileSession.signOutAndClearLocalData
 function-size TandemMobileSession.synchronizeSerialized
-function-size TandemMobileSession.updateTransaction
 function-size TandemTheme.TandemTheme
 function-size TransactionActionComponents.TransactionRow
 function-size TransactionConflictResolution.resolve
+function-size TransactionCreate.createTransaction
+function-size TransactionDelete.deleteTransaction
 function-size TransactionDetailScreen.TransactionDetailScreen
 function-size TransactionFieldTemplates.TextFieldCard
 function-size TransactionFormScreen.TransactionFormScreen
 function-size TransactionSelectorScreens.TransactionDatePickerDialog
+function-size TransactionUpdate.updateTransaction
 function-size WhatIfScreen.WhatIfScreen
 layering AppModels -> app
 layering AppModels -> feature.activity
@@ -168,8 +167,6 @@ layering AppState -> feature.transactions
 layering DragReorderUpdate -> feature.budget
 layering IosDeviceAuthenticator -> feature.auth
 layering TandemMobileSession -> feature.reports
-layering TandemMobileSession -> feature.rules
-layering TandemMobileSession -> feature.transactions
 layering TandemTheme -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions

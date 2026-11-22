@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.transactions
+package app.tandemforactual.ui.core.session.conflicts
 
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity

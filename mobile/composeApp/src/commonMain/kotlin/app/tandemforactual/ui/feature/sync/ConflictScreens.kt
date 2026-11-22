@@ -53,6 +53,7 @@ import app.tandemforactual.ui.core.session.budget.retryBudgetMutation
 import app.tandemforactual.ui.core.session.budgetMutationCanRetry
 import app.tandemforactual.ui.core.session.budgetMutationNeedsRefresh
 import app.tandemforactual.ui.core.session.budgetMutationStatusLabel
+import app.tandemforactual.ui.core.session.conflicts.conflictReviewRevision
 import app.tandemforactual.ui.core.session.decodeBudgetReorderQueue
 import app.tandemforactual.ui.core.session.isRejectedBudgetOrderRequest
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -92,7 +93,6 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import app.tandemforactual.ui.feature.transactions.conflictReviewRevision
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
@@ -548,14 +548,14 @@ internal fun ConflictReviewScreen(
     var serverCheckAttempt by rememberSaveable(operation?.operationId) { mutableStateOf(0) }
     LaunchedEffect(operation?.operationId, serverCheckAttempt) {
         operation?.let {
-            mobileSession.confirmConflictWithServer(
+            mobileSession.conflicts.confirmConflictWithServer(
                 state.selectedBudgetId,
                 it.operationId,
                 state.encryptedPassword.takeIf(String::isNotBlank),
             )
         }
     }
-    val serverConfirmed = operation != null && mobileSession.serverConfirmedConflictOperationId == operation.operationId
+    val serverConfirmed = operation != null && mobileSession.conflicts.serverConfirmedConflictOperationId == operation.operationId
     val record =
         operation?.let { item ->
             mobileSession.conflictRecordsByRecordId[item.recordId]
@@ -638,7 +638,7 @@ internal fun ConflictReviewScreen(
         if (operation == null) {
             val nextConflict = openConflicts.firstOrNull()
             val feedback =
-                mobileSession.conflictResolutionFeedback
+                mobileSession.conflicts.conflictResolutionFeedback
                     ?.takeIf { it.operationId == state.selectedConflictOperationId }
                     ?.message
             SyncPageHeading(eyebrow = "Sync", title = "Choice saved.", detail = null)
@@ -705,7 +705,7 @@ internal fun ConflictReviewScreen(
                 )
                 if (reviewRevisionChanged) {
                     SecondaryButton("Review latest version", enabled = !latestRevision.isNullOrBlank()) {
-                        mobileSession.clearConflictResolutionFeedback()
+                        mobileSession.conflicts.clearConflictResolutionFeedback()
                         reviewedRevision = latestRevision
                     }
                 }
@@ -800,7 +800,7 @@ internal fun ConflictReviewScreen(
                     ConflictCompareTable(comparisons, actualLabel)
                 }
             }
-            mobileSession.conflictResolutionFeedback
+            mobileSession.conflicts.conflictResolutionFeedback
                 ?.takeIf { it.operationId == operation.operationId }
                 ?.let { feedback -> BodyText(feedback.message) }
             Text(
@@ -890,13 +890,13 @@ internal fun UncertainWriteScreen(
                 mobileSession.pendingWrites.firstOrNull { it.status == "uncertain" }
             }
         val checkedOperation =
-            mobileSession.checkedWriteOperation?.takeIf {
+            mobileSession.conflicts.checkedWriteOperation?.takeIf {
                 it.operationId == state.selectedConflictOperationId ||
-                    (state.selectedConflictOperationId.isBlank() && it.operationId == mobileSession.checkedWriteOperationId)
+                    (state.selectedConflictOperationId.isBlank() && it.operationId == mobileSession.conflicts.checkedWriteOperationId)
             }
         val operation = checkedOperation ?: pendingOperation
         val transaction = operation?.let { write -> liveTransactions.firstOrNull { it.recordId == write.recordId } }
-        val isChecked = operation != null && mobileSession.checkedWriteOperationId == operation.operationId
+        val isChecked = operation != null && mobileSession.conflicts.checkedWriteOperationId == operation.operationId
         val isNotFound =
             operation != null &&
                 isChecked &&
@@ -904,8 +904,8 @@ internal fun UncertainWriteScreen(
                 isUncertainWriteOperationNotFound(operation.lastErrorCode)
         val checkError =
             operation?.let { checked ->
-                mobileSession.uncertainWriteCheckError.takeIf {
-                    mobileSession.uncertainWriteCheckErrorOperationId == checked.operationId
+                mobileSession.conflicts.uncertainWriteCheckError.takeIf {
+                    mobileSession.conflicts.uncertainWriteCheckErrorOperationId == checked.operationId
                 }
             }
         UncertainWriteDetailsScreen(

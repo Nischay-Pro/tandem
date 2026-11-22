@@ -1,7 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.transactions
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatSignedCurrency
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -305,7 +305,7 @@ internal suspend fun deleteTransactionSelection(
     mobileSession: TandemMobileSession,
     budgetId: String,
     transactionIds: Set<String>,
-): Boolean = mobileSession.deleteTransactionsWithUndo(budgetId, transactionIds)
+): Boolean = mobileSession.transactions.deleteTransactionsWithUndo(budgetId, transactionIds)
 
 /** A past transaction copied into a new one dated today. */
 internal data class AddAgainDraft(

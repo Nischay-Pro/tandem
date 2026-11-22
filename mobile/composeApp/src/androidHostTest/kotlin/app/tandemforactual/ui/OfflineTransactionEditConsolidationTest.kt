@@ -1,5 +1,4 @@
 package app.tandemforactual.ui
-
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.api.client.TandemApiClient
@@ -8,6 +7,7 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.blockedTransactionEditMessage
+import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -41,7 +41,7 @@ class OfflineTransactionEditConsolidationTest {
                 val session = TandemMobileSession(TandemApiClient(), database, { 100L })
 
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "11.00",
@@ -56,7 +56,7 @@ class OfflineTransactionEditConsolidationTest {
                 repository.returnWriteToQueue(first.operationId, "network-unavailable")
 
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "12.00",
@@ -129,7 +129,7 @@ class OfflineTransactionEditConsolidationTest {
                 )
                 val session = TandemMobileSession(TandemApiClient(), database, { 100L })
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "11.00",
@@ -141,7 +141,7 @@ class OfflineTransactionEditConsolidationTest {
                 repository.claimNextWrite(BUDGET_ID)
 
                 val saved =
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "12.00",
@@ -174,7 +174,7 @@ class OfflineTransactionEditConsolidationTest {
                 )
                 val session = TandemMobileSession(TandemApiClient(), database, { 100L })
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "11.00",
@@ -202,7 +202,7 @@ class OfflineTransactionEditConsolidationTest {
                 )
 
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "14.00",
@@ -257,7 +257,7 @@ class OfflineTransactionEditConsolidationTest {
                 )
                 val session = TandemMobileSession(TandemApiClient(), database, { 100L })
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "11.00",
@@ -271,7 +271,7 @@ class OfflineTransactionEditConsolidationTest {
                 repository.returnWriteToQueue(first.operationId, "network-unavailable")
 
                 assertTrue(
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = BUDGET_ID,
                         transactionId = TRANSACTION_ID,
                         amountText = "10.00",

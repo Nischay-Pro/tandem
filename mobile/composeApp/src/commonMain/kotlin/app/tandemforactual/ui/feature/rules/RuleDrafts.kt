@@ -1,6 +1,6 @@
 package app.tandemforactual.ui.feature.rules
-
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.format.signedAmount
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -226,16 +226,6 @@ private fun RuleConditionDraft.problem(parseAmount: (String) -> Long?): String? 
         op == "matches" && runCatching { Regex(text) }.isFailure -> "Enter a valid pattern for “${field.label}”."
         else -> null
     }
-}
-
-internal fun signedAmount(
-    text: String,
-    parseAmount: (String) -> Long?,
-): Long? {
-    val trimmed = text.trim()
-    val negative = trimmed.startsWith("-") || trimmed.startsWith("−")
-    val magnitude = parseAmount(trimmed.trimStart('-', '−').trim()) ?: return null
-    return if (negative) -magnitude.absoluteValue else magnitude
 }
 
 private fun RuleActionDraft.problem(): String? =

@@ -17,6 +17,7 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.format.signedAmount
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
 import app.tandemforactual.ui.core.session.budget.applyBudgetTemplate
 import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
@@ -41,10 +42,13 @@ import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
+import app.tandemforactual.ui.core.session.transactions.createTransaction
+import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
+import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
+import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
-import app.tandemforactual.ui.feature.rules.signedAmount
 import app.tandemforactual.ui.feature.sync.canOfferUncertainWriteRecoveryActions
 import app.tandemforactual.ui.feature.sync.isBudgetMutationReviewable
 import app.tandemforactual.ui.feature.sync.isUncertainWriteOperationNotFound
@@ -237,7 +241,7 @@ class TandemMobileSessionTest {
                 assertNotNull(localPayeeId)
 
                 assertTrue(
-                    session.createTransaction(
+                    session.transactions.createTransaction(
                         budgetId = "budget-1",
                         accountId = "account-1",
                         payeeId = localPayeeId,
@@ -250,7 +254,7 @@ class TandemMobileSessionTest {
                 )
 
                 assertTrue(
-                    session.createTransaction(
+                    session.transactions.createTransaction(
                         budgetId = "budget-1",
                         accountId = "account-1",
                         payeeId = localPayeeId,
@@ -313,28 +317,28 @@ class TandemMobileSessionTest {
                 val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
                 session.loadLocalRecords("budget-1")
 
-                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")), session.transactionWriteMessage)
-                val notice = assertNotNull(session.undoNotice)
+                assertTrue(session.transactions.deleteTransactionsWithUndo("budget-1", setOf("txn-1")), session.transactionWriteMessage)
+                val notice = assertNotNull(session.transactions.undoNotice)
                 assertEquals("Transaction deleted", notice.message)
                 assertEquals(setOf("txn-1"), notice.transactionIds)
                 assertTrue(repository.readPendingWrites("budget-1").any { it.action == "DELETE" && it.status == "queued" })
 
-                session.undoTransactionDeletes(notice)
-                assertNull(session.undoNotice)
+                session.transactions.undoTransactionDeletes(notice)
+                assertNull(session.transactions.undoNotice)
                 assertTrue(repository.readPendingWrites("budget-1").none { it.action == "DELETE" && it.status == "queued" })
                 assertEquals(listOf("txn-1"), session.transactionRecords.map { it.recordId })
 
-                assertTrue(session.deleteTransactionsWithUndo("budget-1", setOf("txn-1")))
-                val second = assertNotNull(session.undoNotice)
+                assertTrue(session.transactions.deleteTransactionsWithUndo("budget-1", setOf("txn-1")))
+                val second = assertNotNull(session.transactions.undoNotice)
                 repository
                     .readPendingWrites(
                         "budget-1",
                     ).filter { it.status == "queued" }
                     .forEach { repository.discardWrite(it.operationId) }
-                session.undoTransactionDeletes(second)
-                assertEquals("Already synced, so it can’t be undone here", session.undoNotice?.message)
-                session.dismissUndoNotice(assertNotNull(session.undoNotice).id)
-                assertNull(session.undoNotice)
+                session.transactions.undoTransactionDeletes(second)
+                assertEquals("Already synced, so it can’t be undone here", session.transactions.undoNotice?.message)
+                session.transactions.dismissUndoNotice(assertNotNull(session.transactions.undoNotice).id)
+                assertNull(session.transactions.undoNotice)
             } finally {
                 database.close()
             }
@@ -992,7 +996,7 @@ class TandemMobileSessionTest {
                     session.budgetQueue.budgetReorderMovesFor("budget-1", "category-1").map { it.operationId },
                 )
 
-                session.discardWrite("budget-1", mutation.operationId)
+                session.conflicts.discardWrite("budget-1", mutation.operationId)
 
                 assertEquals("discarded", repository.findWrite(mutation.operationId)?.status)
                 assertFalse(isBudgetMutationReviewable(repository.findWrite(mutation.operationId)?.status.orEmpty()))
@@ -1242,7 +1246,7 @@ class TandemMobileSessionTest {
                 session.restoreStoredSession()
 
                 val saved =
-                    session.updateTransaction(
+                    session.transactions.updateTransaction(
                         budgetId = "budget-1",
                         transactionId = "txn-1",
                         amountText = "12.00",
@@ -1354,11 +1358,11 @@ class TandemMobileSessionTest {
                 )
             val overLimit = formatAmount(MAX_TRANSACTION_AMOUNT_MINOR_UNITS + 1)
 
-            session.updateTransaction("budget-1", "transaction-1", overLimit, "note", -100, "Spending")
+            session.transactions.updateTransaction("budget-1", "transaction-1", overLimit, "note", -100, "Spending")
             assertTrue(session.transactionWriteMessage.orEmpty().startsWith("Largest amount is"))
 
             assertFalse(
-                session.createTransaction(
+                session.transactions.createTransaction(
                     "budget-1",
                     "account-1",
                     null,
@@ -1384,7 +1388,7 @@ class TandemMobileSessionTest {
                 )
 
             assertFalse(
-                session.createTransaction(
+                session.transactions.createTransaction(
                     "budget-1",
                     "account-1",
                     null,
@@ -1398,7 +1402,7 @@ class TandemMobileSessionTest {
             assertEquals("Choose a date on or after ${displayTransactionDate("1995-01-01")}.", session.transactionWriteMessage)
 
             assertFalse(
-                session.updateTransaction(
+                session.transactions.updateTransaction(
                     budgetId = "budget-1",
                     transactionId = "transaction-1",
                     amountText = "1.00",
@@ -1416,7 +1420,7 @@ class TandemMobileSessionTest {
                 for (create in listOf(true, false)) {
                     if (create) {
                         assertFalse(
-                            session.createTransaction(
+                            session.transactions.createTransaction(
                                 "budget-1",
                                 "account-1",
                                 null,
@@ -1429,7 +1433,7 @@ class TandemMobileSessionTest {
                         )
                     } else {
                         assertFalse(
-                            session.updateTransaction(
+                            session.transactions.updateTransaction(
                                 budgetId = "budget-1",
                                 transactionId = "transaction-1",
                                 amountText = "1.00",
@@ -1447,7 +1451,7 @@ class TandemMobileSessionTest {
             }
 
             assertFalse(
-                session.createTransaction(
+                session.transactions.createTransaction(
                     "budget-1",
                     "account-1",
                     null,
@@ -1462,7 +1466,7 @@ class TandemMobileSessionTest {
             assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)
 
             assertFalse(
-                session.updateTransaction(
+                session.transactions.updateTransaction(
                     budgetId = "budget-1",
                     transactionId = "transaction-1",
                     amountText = "1.00",
@@ -1478,7 +1482,7 @@ class TandemMobileSessionTest {
             assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)
 
             assertFalse(
-                session.createTransaction(
+                session.transactions.createTransaction(
                     "budget-1",
                     "account-1",
                     null,
@@ -1493,7 +1497,7 @@ class TandemMobileSessionTest {
             assertEquals("Budget data isn’t available on this device. Reopen the budget and try again.", session.transactionWriteMessage)
 
             assertFalse(
-                session.updateTransaction(
+                session.transactions.updateTransaction(
                     budgetId = "budget-1",
                     transactionId = "transaction-1",
                     amountText = "1.00",
@@ -1521,11 +1525,11 @@ class TandemMobileSessionTest {
             session.setReadOnlyMode(true)
             val readOnlyMessage = "Read-only mode is on. Turn it off before changing this data."
 
-            session.updateTransaction("budget-1", "transaction-1", "1.00", "note", -100, "Spending")
+            session.transactions.updateTransaction("budget-1", "transaction-1", "1.00", "note", -100, "Spending")
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
             assertFalse(
-                session.createTransaction(
+                session.transactions.createTransaction(
                     "budget-1",
                     "account-1",
                     null,
@@ -1538,13 +1542,13 @@ class TandemMobileSessionTest {
             )
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
-            session.resolveConflict("budget-1", "operation-1", true, null, reviewedRevision = "revision-1")
+            session.conflicts.resolveConflict("budget-1", "operation-1", true, null, reviewedRevision = "revision-1")
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
-            session.discardWrite("budget-1", "operation-1")
+            session.conflicts.discardWrite("budget-1", "operation-1")
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
 
-            session.retryUncertainWrite("budget-1", "operation-1", null)
+            session.conflicts.retryUncertainWrite("budget-1", "operation-1", null)
             assertEquals(readOnlyMessage, session.transactionWriteMessage)
         }
 

@@ -120,6 +120,10 @@ import app.tandemforactual.ui.core.session.budget.processQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.budget.requestBudgetOrderFlush
 import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
+import app.tandemforactual.ui.core.session.transactions.createTransaction
+import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
+import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
+import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -1122,8 +1126,8 @@ fun TandemApp(
     var liveTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
     var liveActivityTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
     val transactionRecords = mobileSession.transactionRecords
-    val activityTransactionRecords = mobileSession.activityTransactionRecords
-    val activityTransactionRecordsVersion = mobileSession.activityTransactionRecordsVersion
+    val activityTransactionRecords = mobileSession.activity.activityTransactionRecords
+    val activityTransactionRecordsVersion = mobileSession.activity.activityTransactionRecordsVersion
     val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
     val accountRecords = mobileSession.budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
     val payeeRecords = mobileSession.payeeRecords
@@ -1441,7 +1445,7 @@ fun TandemApp(
         if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
                 val saved =
-                    mobileSession.updateTransaction(
+                    mobileSession.transactions.updateTransaction(
                         budgetId = state.selectedBudgetId,
                         transactionId = transactionId,
                         amountText = state.transactionAmount,
@@ -1485,7 +1489,7 @@ fun TandemApp(
         val transactionId = state.selectedTransactionRecordId
         if (!state.readOnlyMode && transactionId.isNotBlank() && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
-                onComplete(mobileSession.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)))
+                onComplete(mobileSession.transactions.deleteTransactionsWithUndo(state.selectedBudgetId, setOf(transactionId)))
             }
         } else {
             onComplete(false)
@@ -1501,7 +1505,7 @@ fun TandemApp(
                 } ?: state.transactionAmount
             coroutineScope.launch {
                 val created =
-                    mobileSession.createTransaction(
+                    mobileSession.transactions.createTransaction(
                         budgetId = state.selectedBudgetId,
                         accountId = state.newTransactionAccountId,
                         payeeId = state.newTransactionPayeeId.takeIf { it.isNotBlank() },
@@ -1526,7 +1530,7 @@ fun TandemApp(
     val resolveConflict: (String, Boolean, String) -> Unit = { operationId, keepDeviceVersion, reviewedRevision ->
         if (!mobileSession.isSavingTransaction) {
             coroutineScope.launch {
-                mobileSession.resolveConflict(
+                mobileSession.conflicts.resolveConflict(
                     budgetId = state.selectedBudgetId,
                     operationId = operationId,
                     keepDeviceVersion = keepDeviceVersion,
@@ -1538,7 +1542,7 @@ fun TandemApp(
     }
     val discardWrite: (String) -> Unit = { operationId ->
         coroutineScope.launch {
-            mobileSession.discardWrite(
+            mobileSession.conflicts.discardWrite(
                 state.selectedBudgetId,
                 operationId,
                 state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1547,7 +1551,7 @@ fun TandemApp(
     }
     val retryUncertainWrite: (String) -> Unit = { operationId ->
         coroutineScope.launch {
-            mobileSession.retryUncertainWrite(
+            mobileSession.conflicts.retryUncertainWrite(
                 state.selectedBudgetId,
                 operationId,
                 state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1557,7 +1561,7 @@ fun TandemApp(
     val checkUncertainWriteStatus: (String) -> Unit = { operationId ->
         if (!mobileSession.isSyncing) {
             coroutineScope.launch {
-                mobileSession.checkUncertainWriteStatus(
+                mobileSession.conflicts.checkUncertainWriteStatus(
                     state.selectedBudgetId,
                     operationId,
                     state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -2168,7 +2172,7 @@ fun TandemApp(
                 }
             }
         }
-        val undoNotice = mobileSession.undoNotice
+        val undoNotice = mobileSession.transactions.undoNotice
         val undoAboveTabBar =
             !usesRailNavigation(
                 with(LocalDensity.current) {
@@ -2181,7 +2185,7 @@ fun TandemApp(
         LaunchedEffect(undoNotice?.id) {
             val shown = undoNotice ?: return@LaunchedEffect
             delay(UNDO_NOTICE_MILLIS)
-            mobileSession.dismissUndoNotice(shown.id)
+            mobileSession.transactions.dismissUndoNotice(shown.id)
         }
         Box(
             Modifier
@@ -2201,8 +2205,8 @@ fun TandemApp(
                         notice.message,
                         InlineMessageKind.INFO,
                         actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
-                        onAction = { coroutineScope.launch { mobileSession.undoTransactionDeletes(notice) } },
-                        onDismiss = { mobileSession.dismissUndoNotice(notice.id) },
+                        onAction = { coroutineScope.launch { mobileSession.transactions.undoTransactionDeletes(notice) } },
+                        onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
                     )
                 }
             }
