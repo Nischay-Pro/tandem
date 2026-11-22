@@ -47,6 +47,7 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.platformWeekday
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
+import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -191,11 +192,11 @@ internal fun UpcomingSchedulesScreen(
     }
     val selectedSchedule = schedules.firstOrNull { it.id == selectedScheduleId }
     val pendingScheduleActions =
-        selectedSchedule?.let { mobileSession.pendingScheduleActionsFor(state.selectedBudgetId, it.id) }.orEmpty()
+        selectedSchedule?.let { mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, it.id) }.orEmpty()
     val pendingActionBlocksChoice =
         pendingScheduleActions.size > 1 ||
             pendingScheduleActions.any { pendingAction ->
-                selectedSchedule != null && !mobileSession.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
+                selectedSchedule != null && !mobileSession.schedules.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
             }
     val dateValue =
         remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
@@ -267,21 +268,21 @@ internal fun UpcomingSchedulesScreen(
         } else {
             items(schedules.size, key = { index -> schedules[index].id }) { index ->
                 val schedule = schedules[index]
-                val pendingActions = mobileSession.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
+                val pendingActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
                 SurfaceCard {
                     pendingActions.forEach { pendingAction ->
                         InlineMessage(
-                            text = mobileSession.scheduleActionStatusMessage(pendingAction),
+                            text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
                             kind =
                                 if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
                                     InlineMessageKind.WARNING
                                 } else {
                                     InlineMessageKind.INFO
                                 },
-                            actionLabel = mobileSession.scheduleActionStatusActionLabel(pendingAction),
+                            actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction),
                             onAction =
-                                if (mobileSession.scheduleActionStatusActionLabel(pendingAction) != null) {
-                                    { mobileSession.performScheduleActionStatusAction(pendingAction) }
+                                if (mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction) != null) {
+                                    { mobileSession.schedules.performScheduleActionStatusAction(pendingAction) }
                                 } else {
                                     null
                                 },
@@ -670,7 +671,7 @@ internal fun UpcomingSchedulesScreen(
                                         }
                                     scope.launch {
                                         val saved =
-                                            mobileSession.manageBudgetSchedule(
+                                            mobileSession.schedules.manageBudgetSchedule(
                                                 state.selectedBudgetId,
                                                 selectedSchedule.id,
                                                 "edit",
@@ -693,12 +694,12 @@ internal fun UpcomingSchedulesScreen(
                             budgetActionFeedbackMessage(mobileSession)
                             pendingScheduleActions.forEach { pending ->
                                 InlineMessage(
-                                    text = mobileSession.scheduleActionStatusMessage(pending),
+                                    text = mobileSession.schedules.scheduleActionStatusMessage(pending),
                                     kind = InlineMessageKind.WARNING,
-                                    actionLabel = mobileSession.scheduleActionStatusActionLabel(pending),
+                                    actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pending),
                                     onAction =
-                                        if (mobileSession.scheduleActionStatusActionLabel(pending) != null) {
-                                            { mobileSession.performScheduleActionStatusAction(pending) }
+                                        if (mobileSession.schedules.scheduleActionStatusActionLabel(pending) != null) {
+                                            { mobileSession.schedules.performScheduleActionStatusAction(pending) }
                                         } else {
                                             null
                                         },
@@ -714,7 +715,7 @@ internal fun UpcomingSchedulesScreen(
                             ) {
                                 scope.launch {
                                     val posted =
-                                        mobileSession.manageBudgetSchedule(
+                                        mobileSession.schedules.manageBudgetSchedule(
                                             state.selectedBudgetId,
                                             selectedSchedule.id,
                                             "post",
@@ -736,7 +737,7 @@ internal fun UpcomingSchedulesScreen(
                                 ) {
                                     scope.launch {
                                         val skipped =
-                                            mobileSession.manageBudgetSchedule(
+                                            mobileSession.schedules.manageBudgetSchedule(
                                                 state.selectedBudgetId,
                                                 selectedSchedule.id,
                                                 "skip",
@@ -794,7 +795,7 @@ internal fun UpcomingSchedulesScreen(
             onConfirm = {
                 scope.launch {
                     val deleted =
-                        mobileSession.manageBudgetSchedule(
+                        mobileSession.schedules.manageBudgetSchedule(
                             state.selectedBudgetId,
                             selectedSchedule.id,
                             "delete",

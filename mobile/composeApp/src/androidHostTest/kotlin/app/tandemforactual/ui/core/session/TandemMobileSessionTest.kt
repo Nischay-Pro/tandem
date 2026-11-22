@@ -18,6 +18,7 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
@@ -61,7 +62,7 @@ class TandemMobileSessionTest {
 
                 assertFalse(session.isAuthenticated)
                 assertTrue(
-                    session.manageBudgetSchedule(
+                    session.schedules.manageBudgetSchedule(
                         budgetId = "budget-1",
                         scheduleId = "schedule-post",
                         action = "post",
@@ -71,7 +72,7 @@ class TandemMobileSessionTest {
                     ),
                 )
                 assertTrue(
-                    session.manageBudgetSchedule(
+                    session.schedules.manageBudgetSchedule(
                         budgetId = "budget-1",
                         scheduleId = "schedule-skip",
                         action = "skip",
@@ -81,7 +82,7 @@ class TandemMobileSessionTest {
                     ),
                 )
                 assertTrue(
-                    session.manageBudgetSchedule(
+                    session.schedules.manageBudgetSchedule(
                         budgetId = "budget-1",
                         scheduleId = "schedule-edit",
                         action = "edit",
@@ -91,7 +92,7 @@ class TandemMobileSessionTest {
                     ),
                 )
                 assertTrue(
-                    session.manageBudgetSchedule(
+                    session.schedules.manageBudgetSchedule(
                         budgetId = "budget-1",
                         scheduleId = "schedule-delete",
                         action = "delete",

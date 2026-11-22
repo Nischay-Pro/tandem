@@ -45,8 +45,11 @@ class ArchitectureTest {
             baselineFile.appendText(violations.sorted().joinToString("") { "$rule $it\n" })
             return
         }
-        val fresh = violations.map { "$rule $it" }.filterNot { it in baseline }
+        val current = violations.map { "$rule $it" }.toSet()
+        val fresh = current.filterNot { it in baseline }
         if (fresh.isNotEmpty()) fail("New $rule violations:\n" + fresh.joinToString("\n"))
+        val fixed = baseline.filter { it.startsWith("$rule ") && it !in current }
+        if (fixed.isNotEmpty()) fail("Fixed $rule violations; remove them from architecture-baseline.txt:\n" + fixed.joinToString("\n"))
     }
 
     @Test

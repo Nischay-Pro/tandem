@@ -263,7 +263,7 @@ fun TandemApp(
         mobileSession.processQueuedBudgetReorders()
     }
     LaunchedEffect(mobileSession) {
-        mobileSession.processQueuedScheduleActions()
+        mobileSession.schedules.processQueuedScheduleActions()
     }
     LaunchedEffect(mobileSession) {
         mobileSession.scheduleOpenIdProofExpiry()
@@ -932,14 +932,14 @@ fun TandemApp(
         appResumeEvents.collect {
             accessibilitySettingsRevision += 1
             mobileSession.retryQueuedBudgetReorders()
-            mobileSession.retryQueuedScheduleActions()
+            mobileSession.schedules.retryQueuedScheduleActions()
             automaticSyncRequest.value()
         }
     }
     LaunchedEffect(networkRestoredEvents) {
         networkRestoredEvents.collect {
             mobileSession.retryQueuedBudgetReorders()
-            mobileSession.retryQueuedScheduleActions()
+            mobileSession.schedules.retryQueuedScheduleActions()
             if (lastAutomaticSyncBudgetId == state.selectedBudgetId) lastAutomaticSyncAtEpochMillis = null
             automaticSyncRequest.value()
         }
@@ -1162,11 +1162,11 @@ fun TandemApp(
         mobileSession.scheduleRecords,
         mobileSession.payeeRecords,
         accountRecords,
-        mobileSession.pendingScheduleActions,
+        mobileSession.schedules.pendingScheduleActions,
     ) {
         val schedules = mobileSession.scheduleRecords
         val payees = mobileSession.payeeRecords
-        val pendingScheduleActions = mobileSession.pendingScheduleActions
+        val pendingScheduleActions = mobileSession.schedules.pendingScheduleActions
         liveSchedules =
             withContext(Dispatchers.Default) {
                 liveScheduleSummaries(schedules, payees, accountRecords, pendingScheduleActions)
