@@ -166,7 +166,7 @@ internal fun SyncCenterActions(
     SectionCard("Fix sync problems") {
         if (retryableCount > 0) {
             ListRow(
-                if (busy) "Retrying…" else "Retry failed",
+                if (busy) "Trying again…" else "Try again",
                 "Sends unconfirmed edits again and retries bank links and planning sync",
                 retryableCount.toString(),
                 leading = RowLeading.Icon(Lucide.RotateCcw),
