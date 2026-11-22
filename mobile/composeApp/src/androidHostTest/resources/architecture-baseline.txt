@@ -69,8 +69,6 @@ function-size AccountSummaryCard.AccountSummaryCard
 function-size ActivitySearch.activitySearchSuggestions
 function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
-function-size BankBrowserLinkSheet.BanksStep
-function-size BankConnectionsScreen.BankConnectionsScreen
 function-size BottomNavigation.BottomNavigation
 function-size BudgetChooserScreen.BudgetChooserScreen
 function-size BudgetEditRecovery.correctRejectedCategoryRename
@@ -157,7 +155,6 @@ layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
 size ActivitySearch
 size AppState
-size BankBrowserLinkSheet
 size BudgetReorderQueue
 size BudgetScreen
 size CategoryDetailScreen

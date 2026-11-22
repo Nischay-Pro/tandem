@@ -11,9 +11,6 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,23 +51,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Unlink
 import com.composables.icons.lucide.WalletCards
-import kotlinx.coroutines.launch
-
-private sealed interface ProviderState {
-    data object Idle : ProviderState
-
-    data object Loading : ProviderState
-
-    data object NotSetUp : ProviderState
-
-    data class Failed(
-        val message: String,
-    ) : ProviderState
-
-    data class Ready(
-        val accounts: List<BankProviderAccount>,
-    ) : ProviderState
-}
 
 /** Links budget accounts to the bank providers set up on the Actual server, grouped by where each provider works. */
 @Composable
@@ -82,40 +62,11 @@ internal fun BankConnectionsScreen(
     val scope = rememberCoroutineScope()
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     val linked = mobileSession.banking.bankLinks
-    var reload by remember { mutableIntStateOf(0) }
-    val providerStates = remember { mutableStateMapOf<String, ProviderState>() }
-    var linking by remember { mutableStateOf<Pair<BankProvider, BankProviderAccount>?>(null) }
-    var managing by remember { mutableStateOf<LinkedAccount?>(null) }
-    var relinkFor by remember { mutableStateOf<LinkedAccount?>(null) }
-    var browserProvider by remember { mutableStateOf<BrowserBankProvider?>(null) }
-    LaunchedEffect(state.selectedBudgetId, reload) {
+    val ui = remember { BankConnectionsState() }
+    LaunchedEffect(state.selectedBudgetId, ui.reload) {
         runCatching { mobileSession.banking.loadLinkedAccounts(state.selectedBudgetId, password) }
     }
-
-    fun linkTo(
-        target: LinkedAccount,
-        provider: BankProvider,
-        providerAccount: BankProviderAccount,
-    ) {
-        scope.launch {
-            if (mobileSession.banking.linkBankAccount(state.selectedBudgetId, target.id, provider, providerAccount, password)) reload++
-        }
-    }
-
-    fun loadAccounts(provider: BankProvider) {
-        if (provider is BrowserBankProvider) {
-            browserProvider = provider
-            return
-        }
-        providerStates[provider.source] = ProviderState.Loading
-        scope.launch {
-            providerStates[provider.source] =
-                runCatching { mobileSession.banking.loadBankProviderAccounts(provider) }.fold(
-                    { accounts -> accounts?.let { ProviderState.Ready(it) } ?: ProviderState.NotSetUp },
-                    { ProviderState.Failed("Couldn’t reach ${provider.displayName} through your Actual server.") },
-                )
-        }
-    }
+    val actions = BankConnectionsActions(ui, scope, state, mobileSession, password)
     val palette = tandemPalette
     PageColumn(verticalSpacing = TandemSpacing.large) {
         Text(
@@ -123,168 +74,105 @@ internal fun BankConnectionsScreen(
             color = palette.muted,
             fontSize = TandemTypography.compactBody,
         )
-        SectionCard("Linked accounts", if (linked.isEmpty()) "No accounts are linked yet" else "${linked.size} syncing with a bank") {
-            linked.forEachIndexed { index, account ->
-                if (index > 0) DividerLine()
-                val provider = BankProviders.forSource(account.source)
-                val now = mobileSession.nowEpochMillis()
-                ListRow(
-                    account.name,
-                    listOfNotNull(
-                        provider.displayName,
-                        account.bankName,
-                        account.lastSyncMillis.let { last ->
-                            when {
-                                account.failure != null -> "Last sync failed"
-                                last == null -> "Not synced yet"
-                                else -> "Synced ${platformFormatDateAtEpochMilliseconds(last)}"
-                            }
-                        },
-                    ).distinct().joinToString(" · "),
-                    leading = RowLeading.Icon(Lucide.WalletCards),
-                    options = ListRowOptions(badge = bankLinkBadge(account, now)),
-                    onClick = { managing = account },
-                )
-            }
-            if (linked.isNotEmpty()) {
-                TandemActionButton(
-                    "Sync linked accounts",
-                    TandemActionButtonTone.PRIMARY,
-                    Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                    icon = Lucide.RefreshCw,
-                    enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
-                    loading = mobileSession.isPerformingBudgetAction,
-                ) { scope.launch { mobileSession.banking.runBankSync(state.selectedBudgetId, password) } }
-            }
-        }
-        relinkFor?.let { target ->
+        LinkedAccountsSection(state, mobileSession, linked, onManage = { ui.managing = it }, onSync = actions::syncLinkedAccounts)
+        ui.relinkFor?.let { target ->
             InlineMessage(
                 "Choose the bank account ${target.name} should sync from.",
                 InlineMessageKind.INFO,
-                onDismiss = { relinkFor = null },
+                onDismiss = { ui.relinkFor = null },
             )
         }
-        BankProviders.all.groupBy { it.regions.joinToString(" & ") { region -> region.displayName } }.forEach { (regionLabel, providers) ->
-            Text(regionLabel.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
-            providers.forEach { provider ->
-                ProviderCard(
-                    provider,
-                    providerStates[provider.source] ?: ProviderState.Idle,
-                    linked,
-                    liveAccounts,
-                    { loadAccounts(provider) },
-                    relinking = relinkFor != null,
-                ) { providerAccount ->
-                    val target = relinkFor
-                    if (target == null) {
-                        linking = provider to providerAccount
-                    } else {
-                        relinkFor = null
-                        linkTo(target, provider, providerAccount)
-                    }
-                }
-            }
-        }
+        BankProviderSections(
+            ui.providerStates,
+            linked,
+            liveAccounts,
+            relinking = ui.relinkFor != null,
+            onLoad = actions::loadAccounts,
+            onLink = actions::pickProviderAccount,
+        )
     }
-    val managed = managing
-    TandemChoiceDialog(visible = managed != null, onDismissRequest = { managing = null }) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                TandemModalHeader(managed?.name.orEmpty(), onClose = { managing = null }, leadingIcon = Lucide.Landmark)
-                managed?.failure?.let {
-                    val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
-                    Text(
-                        "Last sync failed because ${bankFailureLabel(it)}. " +
-                            if (browser) {
-                                "Sign in at the bank again to reconnect it."
-                            } else {
-                                "Reconnect it in Actual’s web app, or link a different account."
-                            },
-                        color = palette.negative,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
-                ListRow(
-                    if (managed != null && BankProviders.forSource(managed.source) is BrowserBankProvider) {
-                        "Sign in at the bank again"
-                    } else {
-                        "Link to a different bank account"
-                    },
-                    "Keeps this budget account and its history",
-                    leading = RowLeading.Icon(Lucide.Link),
-                    onClick = {
-                        val account = managed ?: return@ListRow
-                        managing = null
-                        relinkFor = account
-                        loadAccounts(BankProviders.forSource(account.source))
-                    },
-                )
-                ListRow(
-                    "Unlink",
-                    "Stops syncing. Transactions already imported stay.",
-                    leading = RowLeading.Icon(Lucide.Unlink),
-                    options = ListRowOptions(trailingColor = palette.negative),
-                    onClick = {
-                        val account = managed ?: return@ListRow
-                        managing = null
-                        scope.launch {
-                            if (mobileSession.banking.unlinkBankAccount(state.selectedBudgetId, account.id, password)) reload++
-                        }
-                    },
-                )
-            }
-        }
-    }
+    ManageBankLinkDialog(ui.managing, onDismiss = { ui.managing = null }, onRelink = actions::relink, onUnlink = actions::unlink)
     BankBrowserLinkSheet(
-        browserProvider,
+        ui.browserProvider,
         mobileSession,
         onDismiss = {
-            browserProvider = null
-            relinkFor = null
+            ui.browserProvider = null
+            ui.relinkFor = null
         },
     ) { provider, providerAccount ->
-        browserProvider = null
-        val target = relinkFor
-        if (target == null) {
-            linking = provider to providerAccount
-        } else {
-            relinkFor = null
-            linkTo(target, provider, providerAccount)
+        ui.browserProvider = null
+        actions.pickProviderAccount(provider, providerAccount)
+    }
+    LinkBankAccountDialog(ui.linking, liveAccounts, linked, onDismiss = { ui.linking = null }, onPick = actions::linkInto)
+}
+
+/** The budget accounts already linked to a bank, with a button to sync them. */
+@Composable
+private fun LinkedAccountsSection(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    linked: List<LinkedAccount>,
+    onManage: (LinkedAccount) -> Unit,
+    onSync: () -> Unit,
+) {
+    SectionCard("Linked accounts", if (linked.isEmpty()) "No accounts are linked yet" else "${linked.size} syncing with a bank") {
+        linked.forEachIndexed { index, account ->
+            if (index > 0) DividerLine()
+            val provider = BankProviders.forSource(account.source)
+            val now = mobileSession.nowEpochMillis()
+            ListRow(
+                account.name,
+                listOfNotNull(
+                    provider.displayName,
+                    account.bankName,
+                    account.lastSyncMillis.let { last ->
+                        when {
+                            account.failure != null -> "Last sync failed"
+                            last == null -> "Not synced yet"
+                            else -> "Synced ${platformFormatDateAtEpochMilliseconds(last)}"
+                        }
+                    },
+                ).distinct().joinToString(" · "),
+                leading = RowLeading.Icon(Lucide.WalletCards),
+                options = ListRowOptions(badge = bankLinkBadge(account, now)),
+                onClick = { onManage(account) },
+            )
+        }
+        if (linked.isNotEmpty()) {
+            TandemActionButton(
+                "Sync linked accounts",
+                TandemActionButtonTone.PRIMARY,
+                Modifier.fillMaxWidth().padding(TandemSpacing.medium),
+                icon = Lucide.RefreshCw,
+                enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+                loading = mobileSession.isPerformingBudgetAction,
+            ) { onSync() }
         }
     }
-    val target = linking
-    TandemChoiceDialog(visible = target != null, onDismissRequest = { linking = null }) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                TandemModalHeader("Link ${target?.second?.name.orEmpty()}", onClose = { linking = null }, leadingIcon = Lucide.Landmark)
-                Text("Choose the budget account it should sync into.", color = palette.muted, fontSize = TandemTypography.compactBody)
-                liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }.forEach { account ->
-                    ListRow(
-                        account.name,
-                        if (account.offBudget) "Off budget" else "On budget",
-                        leading =
-                            RowLeading.Icon(
-                                Lucide.WalletCards,
-                            ),
-                        onClick = {
-                            val (provider, providerAccount) = target ?: return@ListRow
-                            linking = null
-                            scope.launch {
-                                if (mobileSession.banking.linkBankAccount(
-                                        state.selectedBudgetId,
-                                        account.id,
-                                        provider,
-                                        providerAccount,
-                                        password,
-                                    )
-                                ) {
-                                    reload++
-                                }
-                            }
-                        },
-                    )
-                }
-            }
+}
+
+/** Each bank provider, grouped under the regions it serves. */
+@Composable
+private fun BankProviderSections(
+    providerStates: Map<String, BankProviderState>,
+    linked: List<LinkedAccount>,
+    liveAccounts: List<LiveAccountSummary>,
+    relinking: Boolean,
+    onLoad: (BankProvider) -> Unit,
+    onLink: (BankProvider, BankProviderAccount) -> Unit,
+) {
+    val palette = tandemPalette
+    BankProviders.all.groupBy { it.regions.joinToString(" & ") { region -> region.displayName } }.forEach { (regionLabel, providers) ->
+        Text(regionLabel.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
+        providers.forEach { provider ->
+            ProviderCard(
+                provider,
+                providerStates[provider.source] ?: BankProviderState.Idle,
+                linked,
+                liveAccounts,
+                { onLoad(provider) },
+                relinking = relinking,
+            ) { providerAccount -> onLink(provider, providerAccount) }
         }
     }
 }
@@ -292,7 +180,7 @@ internal fun BankConnectionsScreen(
 @Composable
 private fun ProviderCard(
     provider: BankProvider,
-    providerState: ProviderState,
+    providerState: BankProviderState,
     linked: List<LinkedAccount>,
     liveAccounts: List<LiveAccountSummary>,
     onLoad: () -> Unit,
@@ -304,20 +192,27 @@ private fun ProviderCard(
         provider.displayName,
         when {
             browser -> "Sign in at your bank in the browser, then choose which accounts to link."
-            providerState is ProviderState.NotSetUp -> "Not set up on your Actual server yet. Add it in Actual’s settings."
-            providerState is ProviderState.Failed -> providerState.message
+            providerState is BankProviderState.NotSetUp -> "Not set up on your Actual server yet. Add it in Actual’s settings."
+            providerState is BankProviderState.Failed -> providerState.message
             else -> "Accounts your Actual server can see"
         },
         when {
             browser -> if (relinking) "Sign in again" else "Link a bank"
-            providerState is ProviderState.Ready -> null
-            providerState is ProviderState.Loading -> "Loading…"
-            providerState is ProviderState.Idle -> "Show accounts"
+            providerState is BankProviderState.Ready -> null
+            providerState is BankProviderState.Loading -> "Loading…"
+            providerState is BankProviderState.Idle -> "Show accounts"
             else -> "Check again"
         },
-        onClick = if (!browser && (providerState is ProviderState.Ready || providerState is ProviderState.Loading)) null else onLoad,
+        onClick =
+            if (!browser &&
+                (providerState is BankProviderState.Ready || providerState is BankProviderState.Loading)
+            ) {
+                null
+            } else {
+                onLoad
+            },
     ) {
-        if (providerState is ProviderState.Ready) {
+        if (providerState is BankProviderState.Ready) {
             if (providerState.accounts.isEmpty()) {
                 ListRow("No accounts found", options = ListRowOptions(showChevron = false), leading = RowLeading.None)
             }
@@ -361,5 +256,59 @@ internal fun bankLinkBadge(
         last == null || nowMillis - last > STALE_AFTER_MILLIS ->
             RowBadge(Lucide.Clock, palette.warning, "Bank sync is behind")
         else -> RowBadge(Lucide.Link, palette.positive, "Linked to a bank")
+    }
+}
+
+/** Options for one linked account: relink it to another bank account or unlink it. */
+@Composable
+private fun ManageBankLinkDialog(
+    managed: LinkedAccount?,
+    onDismiss: () -> Unit,
+    onRelink: (LinkedAccount) -> Unit,
+    onUnlink: (LinkedAccount) -> Unit,
+) {
+    val palette = tandemPalette
+    TandemChoiceDialog(visible = managed != null, onDismissRequest = onDismiss) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                TandemModalHeader(managed?.name.orEmpty(), onClose = onDismiss, leadingIcon = Lucide.Landmark)
+                managed?.failure?.let {
+                    val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
+                    Text(
+                        "Last sync failed because ${bankFailureLabel(it)}. " +
+                            if (browser) {
+                                "Sign in at the bank again to reconnect it."
+                            } else {
+                                "Reconnect it in Actual’s web app, or link a different account."
+                            },
+                        color = palette.negative,
+                        fontSize = TandemTypography.compactBody,
+                    )
+                }
+                ListRow(
+                    if (managed != null && BankProviders.forSource(managed.source) is BrowserBankProvider) {
+                        "Sign in at the bank again"
+                    } else {
+                        "Link to a different bank account"
+                    },
+                    "Keeps this budget account and its history",
+                    leading = RowLeading.Icon(Lucide.Link),
+                    onClick = {
+                        val account = managed ?: return@ListRow
+                        onRelink(account)
+                    },
+                )
+                ListRow(
+                    "Unlink",
+                    "Stops syncing. Transactions already imported stay.",
+                    leading = RowLeading.Icon(Lucide.Unlink),
+                    options = ListRowOptions(trailingColor = palette.negative),
+                    onClick = {
+                        val account = managed ?: return@ListRow
+                        onUnlink(account)
+                    },
+                )
+            }
+        }
     }
 }
