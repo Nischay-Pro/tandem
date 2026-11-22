@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -114,6 +116,11 @@ internal fun TransactionFormScreen(
             var notesFocused by remember { mutableStateOf(false) }
             val focusManager = LocalFocusManager.current
             val routeScrollState = LocalRouteScrollState.current
+            LaunchedEffect(notesFocused) {
+                if (notesFocused) {
+                    routeScrollState?.let { scroll -> snapshotFlow { scroll.maxValue }.collect { scroll.scrollTo(it) } }
+                }
+            }
             val compactSave by remember(routeScrollState) {
                 derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
             }
@@ -152,13 +159,15 @@ internal fun TransactionFormScreen(
                 }
 
             var scanningReceipt by remember { mutableStateOf(false) }
+            var receiptPreview by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
             var showReceiptMenu by remember { mutableStateOf(false) }
             var receiptMessage by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
             val scanScope = rememberCoroutineScope()
             val receiptScanner =
                 rememberReceiptScanner(
-                    onStarted = {
+                    onStarted = { preview ->
                         scanningReceipt = true
+                        if (preview != null) receiptPreview = preview
                         receiptMessage = null
                     },
                 ) { result ->
@@ -180,6 +189,15 @@ internal fun TransactionFormScreen(
                             }
                     }
                 }
+
+            LaunchedEffect(state.receiptScanRequested) {
+                if (state.receiptScanRequested) {
+                    state.receiptScanRequested = false
+                    delay(TandemMotion.ROUTE_MILLIS.toLong())
+                    keypadVisible = false
+                    if (receiptScanner.canTakePhoto) showReceiptMenu = true else receiptScanner.choosePhoto()
+                }
+            }
 
             fun setAmount(minorUnits: Long) {
                 val magnitude = transactionAmountInputMagnitude(minorUnits)
@@ -304,12 +322,12 @@ internal fun TransactionFormScreen(
                 }
             }
 
-            Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().imePadding()) {
                 PageColumn(
                     verticalSpacing = 14.dp,
                     modifier =
                         Modifier
-                            .imePadding()
+                            .weight(1f)
                             .clickable(
                                 enabled = keypadVisible || notesFocused,
                                 interactionSource = remember { MutableInteractionSource() },
@@ -418,36 +436,9 @@ internal fun TransactionFormScreen(
                             },
                         ),
                     )
-                    Spacer(Modifier.height(if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp))
+                    Spacer(Modifier.height(TandemSpacing.large))
                 }
-                if (keypadVisible) {
-                    TransactionAmountKeypad(
-                        onDigit = ::enterDigit,
-                        onDelete = {
-                            if (enterNewOperand) {
-                                calculatorAccumulator = null
-                                calculatorOperator = null
-                            }
-                            val current = transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
-                            setAmount(removeAmountDigit(current))
-                            amountEntryMessage = null
-                            enterNewOperand = false
-                        },
-                        onOperator = ::chooseOperator,
-                        onEquals = ::calculate,
-                        onDone = {
-                            dismissKeypad()
-                        },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .imePadding()
-                        .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT else 12.dp),
-                ) {
+                Box(Modifier.fillMaxWidth().padding(bottom = if (keypadVisible) 0.dp else 12.dp)) {
                     Row(
                         Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -471,7 +462,28 @@ internal fun TransactionFormScreen(
                         )
                     }
                 }
+                if (keypadVisible) {
+                    TransactionAmountKeypad(
+                        onDigit = ::enterDigit,
+                        onDelete = {
+                            if (enterNewOperand) {
+                                calculatorAccumulator = null
+                                calculatorOperator = null
+                            }
+                            val current = transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount))
+                            setAmount(removeAmountDigit(current))
+                            amountEntryMessage = null
+                            enterNewOperand = false
+                        },
+                        onOperator = ::chooseOperator,
+                        onEquals = ::calculate,
+                        onDone = {
+                            dismissKeypad()
+                        },
+                    )
+                }
             }
+            ReceiptScanOverlay(scanningReceipt, receiptPreview)
             TransactionAccountPickerDialog(
                 visible = showAccountPicker,
                 liveAccounts,
@@ -572,6 +584,11 @@ internal fun TransactionFormScreen(
                 }?.let(state::formatCurrency)
         val focusManager = LocalFocusManager.current
         val routeScrollState = LocalRouteScrollState.current
+        LaunchedEffect(notesFocused) {
+            if (notesFocused) {
+                routeScrollState?.let { scroll -> snapshotFlow { scroll.maxValue }.collect { scroll.scrollTo(it) } }
+            }
+        }
         val compactSave by remember(routeScrollState) {
             derivedStateOf { (routeScrollState?.value ?: 0) > 72 }
         }
@@ -704,12 +721,12 @@ internal fun TransactionFormScreen(
                 savedFeedback = false
             }
         }
-        Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().imePadding()) {
             PageColumn(
                 verticalSpacing = 14.dp,
                 modifier =
                     Modifier
-                        .imePadding()
+                        .weight(1f)
                         .clickable(
                             enabled = keypadVisible || notesFocused,
                             interactionSource = remember { MutableInteractionSource() },
@@ -785,38 +802,9 @@ internal fun TransactionFormScreen(
                         },
                     ),
                 )
-                Spacer(Modifier.height(if (keypadVisible) AMOUNT_KEYPAD_HEIGHT + 68.dp else 76.dp))
+                Spacer(Modifier.height(TandemSpacing.large))
             }
-            if (keypadVisible) {
-                TransactionAmountKeypad(
-                    onDigit = ::enterEditDigit,
-                    onDelete = {
-                        if (enterNewOperand) {
-                            calculatorAccumulator = null
-                            calculatorOperator = null
-                        }
-                        val current =
-                            transactionAmountInputMagnitude(
-                                state.parseAmountMinorUnits(state.transactionAmount)
-                                    ?: state.selectedTransactionAmountMinor,
-                            )
-                        setEditAmount(removeAmountDigit(current))
-                        amountEntryMessage = null
-                        enterNewOperand = false
-                    },
-                    onOperator = ::chooseEditOperator,
-                    onEquals = ::calculateEditAmount,
-                    onDone = ::dismissEditKeypad,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .imePadding()
-                    .padding(bottom = if (keypadVisible) AMOUNT_KEYPAD_HEIGHT else 12.dp),
-            ) {
+            Box(Modifier.fillMaxWidth().padding(bottom = if (keypadVisible) 0.dp else 12.dp)) {
                 Row(
                     Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -842,6 +830,28 @@ internal fun TransactionFormScreen(
                         )
                     }
                 }
+            }
+            if (keypadVisible) {
+                TransactionAmountKeypad(
+                    onDigit = ::enterEditDigit,
+                    onDelete = {
+                        if (enterNewOperand) {
+                            calculatorAccumulator = null
+                            calculatorOperator = null
+                        }
+                        val current =
+                            transactionAmountInputMagnitude(
+                                state.parseAmountMinorUnits(state.transactionAmount)
+                                    ?: state.selectedTransactionAmountMinor,
+                            )
+                        setEditAmount(removeAmountDigit(current))
+                        amountEntryMessage = null
+                        enterNewOperand = false
+                    },
+                    onOperator = ::chooseEditOperator,
+                    onEquals = ::calculateEditAmount,
+                    onDone = ::dismissEditKeypad,
+                )
             }
         }
         TransactionAccountPickerDialog(

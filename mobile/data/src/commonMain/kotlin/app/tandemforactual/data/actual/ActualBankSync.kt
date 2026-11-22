@@ -1,5 +1,6 @@
 package app.tandemforactual.data.actual
 
+import app.tandemforactual.data.regions.global.bank.BankProviders
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +21,8 @@ data class LinkedAccount(
     val bankId: String?,
     val bankName: String?,
     val startDate: String,
+    val lastSyncMillis: Long? = null,
+    val failure: String? = null,
 )
 
 /**
@@ -51,11 +54,26 @@ class ActualBankSync(
         writer.update("accounts", accountId, mapOf("account_id" to providerAccountId, "bank" to bank, "account_sync_source" to source))
     }
 
+    /** `unlink-account`: drops the bank link but keeps the account and its transactions. */
+    fun unlinkAccount(accountId: String) =
+        writer.update(
+            "accounts",
+            accountId,
+            mapOf(
+                "account_id" to null,
+                "bank" to null,
+                "balance_current" to null,
+                "balance_available" to null,
+                "balance_limit" to null,
+                "account_sync_source" to null,
+            ),
+        )
+
     /** `accountsBankSync`'s account list: open accounts with a bank link. */
     fun linkedAccounts(): List<LinkedAccount> =
         db
             .query(
-                "SELECT a.id, a.name, a.account_id, a.account_sync_source, b.bank_id, b.name AS bank_name FROM accounts a " +
+                "SELECT a.id, a.name, a.account_id, a.account_sync_source, a.last_sync, b.bank_id, b.name AS bank_name FROM accounts a " +
                     "LEFT JOIN banks b ON a.bank = b.id WHERE a.tombstone = 0 AND a.closed = 0 AND b.bank_id IS NOT NULL " +
                     "AND a.account_id IS NOT NULL ORDER BY a.offbudget, a.sort_order",
             ).map {
@@ -63,11 +81,12 @@ class ActualBankSync(
                 LinkedAccount(
                     id,
                     it["name"] as String,
-                    it["account_sync_source"] as String? ?: "goCardless",
+                    BankProviders.forSource(it["account_sync_source"] as String?).source,
                     it["account_id"] as String,
                     it["bank_id"] as String?,
                     it["bank_name"] as String?,
                     startDate(id),
+                    (it["last_sync"] as String?)?.toLongOrNull(),
                 )
             }
 
@@ -115,10 +134,10 @@ class ActualBankSync(
         }
         if (initial) {
             val balance =
-                when (account.source) {
-                    "simpleFin", "enableBanking" -> transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
-                    "pluggyai", "akahu" -> transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
-                    else -> current ?: 0
+                if (BankProviders.forSource(account.source).startsFromCurrentBalance) {
+                    current ?: 0
+                } else {
+                    transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
                 }
             val date = transactions.lastOrNull()?.let { (it["date"] as? JsonPrimitive)?.contentOrNull } ?: today()
             val payee = startingBalancePayee()
@@ -149,7 +168,14 @@ class ActualBankSync(
         }
         return writer.batch {
             val result = options(if (pref("sync-import-transactions-${account.id}", true)) rows else emptyList())
-            if (current != null) writer.update("accounts", account.id, mapOf("balance_current" to current))
+            writer.update(
+                "accounts",
+                account.id,
+                buildMap {
+                    if (current != null) put("balance_current", current)
+                    put("last_sync", writer.nowMillis().toString())
+                },
+            )
             result
         }
     }

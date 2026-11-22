@@ -189,6 +189,59 @@ class ActualBudgetReader(
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+    /** Every transaction between two dates as CSV, in Actual's export columns, newest first. */
+    fun exportCsv(
+        from: String,
+        to: String,
+    ): String {
+        val rows =
+            db.query(
+                "SELECT t.date, a.name AS account, p.name AS payee, c.name AS category, t.amount, t.notes, t.cleared, t.reconciled " +
+                    "FROM v_transactions t LEFT JOIN accounts a ON a.id = t.account LEFT JOIN payees p ON p.id = t.payee " +
+                    "LEFT JOIN categories c ON c.id = t.category WHERE t.is_parent = 0 AND t.date >= ? AND t.date <= ? " +
+                    "ORDER BY t.date DESC, t.sort_order DESC",
+                ActualDates.toInt(from),
+                ActualDates.toInt(to),
+            )
+
+        fun cell(value: Any?): String {
+            val text = value?.toString().orEmpty()
+            return if (text.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + text.replace("\"", "\"\"") + "\"" else text
+        }
+        val lines =
+            rows.map { row ->
+                val amount = (row["amount"] as Number).toLong()
+                listOf(
+                    ActualDates.fromInt((row["date"] as Number).toLong()),
+                    row["account"],
+                    row["payee"],
+                    row["category"],
+                    (if (amount < 0) "-" else "") + (kotlin.math.abs(amount) / 100) + "." +
+                        (kotlin.math.abs(amount) % 100).toString().padStart(2, '0'),
+                    row["notes"],
+                    if ((row["reconciled"] as Number?)?.toLong() ==
+                        1L
+                    ) {
+                        "Reconciled"
+                    } else if ((row["cleared"] as Number?)?.toLong() == 1L) {
+                        "Cleared"
+                    } else {
+                        "Not cleared"
+                    },
+                ).joinToString(",", transform = ::cell)
+            }
+        return (listOf("Date,Account,Payee,Category,Amount,Notes,Status") + lines).joinToString("\n") + "\n"
+    }
+
+    /** Money put into an account each calendar year: deposits and transfers in, without its starting balance. */
+    fun inflowsByYear(accountId: String): Map<Int, Long> =
+        db
+            .query(
+                "SELECT date / 10000 AS year, sum(amount) AS total FROM v_transactions WHERE account = ? AND amount > 0 " +
+                    "AND is_parent = 0 AND starting_balance_flag = 0 GROUP BY date / 10000 ORDER BY year",
+                accountId,
+            ).associate { (it["year"] as Number).toInt() to (it["total"] as Number).toLong() }
+
     /** One transaction record with its revision, by Actual id or Tandem id. */
     fun transactionRecord(id: String): ActualRecord? =
         transaction(id)?.let { ActualRecord("transaction", it.str("id"), it, Sha256.hex(stringifyJson(it))) }

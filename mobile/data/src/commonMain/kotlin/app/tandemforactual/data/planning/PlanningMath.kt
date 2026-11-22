@@ -6,6 +6,24 @@ data class PayoffEstimate(
     val totalInterestMinor: Long,
 )
 
+data class DebtInput(
+    val id: String,
+    val balanceMinor: Long,
+    val aprBasisPoints: Int,
+    val minimumMinor: Long,
+)
+
+enum class PayoffStrategy { AVALANCHE, SNOWBALL }
+
+/** A month-by-month payoff: when each debt is cleared, the total interest, and the remaining balance after each month. */
+data class DebtPlan(
+    val months: Int,
+    val totalInterestMinor: Long,
+    val payoffMonth: Map<String, Int>,
+    val order: List<String>,
+    val balances: List<Long>,
+)
+
 object PlanningMath {
     private const val MAX_MONTHS = 600
 
@@ -32,6 +50,58 @@ object PlanningMath {
             if (months > MAX_MONTHS) return null
         }
         return PayoffEstimate(months, interest)
+    }
+
+    /**
+     * Pays every minimum each month and puts [extraMinor], plus minimums freed by debts already paid off, on the target
+     * debt: highest APR first for avalanche, smallest balance first for snowball. Null when the payments never cover the
+     * interest or the plan would run past fifty years.
+     */
+    fun plan(
+        debts: List<DebtInput>,
+        extraMinor: Long,
+        strategy: PayoffStrategy,
+    ): DebtPlan? {
+        val order =
+            when (strategy) {
+                PayoffStrategy.AVALANCHE ->
+                    debts.sortedWith(
+                        compareByDescending<DebtInput> { it.aprBasisPoints }.thenBy { it.balanceMinor },
+                    )
+                PayoffStrategy.SNOWBALL -> debts.sortedWith(compareBy<DebtInput> { it.balanceMinor }.thenByDescending { it.aprBasisPoints })
+            }.map { it.id }
+        val balance = debts.associate { it.id to it.balanceMinor.coerceAtLeast(0) }.toMutableMap()
+        val budget = debts.sumOf { it.minimumMinor } + extraMinor.coerceAtLeast(0)
+        val payoffMonth = balance.filterValues { it == 0L }.mapValues { 0 }.toMutableMap()
+        val balances = mutableListOf<Long>()
+        var interest = 0L
+        var month = 0
+        while (balance.values.any { it > 0 }) {
+            month++
+            if (month > MAX_MONTHS) return null
+            var available = budget
+            var charged = 0L
+            for (debt in debts) {
+                val owed = balance.getValue(debt.id)
+                if (owed == 0L) continue
+                val charge = roundDiv(owed * debt.aprBasisPoints, 120_000)
+                charged += charge
+                val pay = minOf(owed + charge, debt.minimumMinor)
+                balance[debt.id] = owed + charge - pay
+                available -= pay
+            }
+            if (available <= 0 && charged >= budget) return null
+            interest += charged
+            for (id in order) {
+                if (available <= 0) break
+                val pay = minOf(balance.getValue(id), available)
+                balance[id] = balance.getValue(id) - pay
+                available -= pay
+            }
+            balance.filterValues { it == 0L }.keys.forEach { payoffMonth.getOrPut(it) { month } }
+            balances += balance.values.sum()
+        }
+        return DebtPlan(month, interest, payoffMonth, order, balances)
     }
 
     /** How much to set aside each month to reach [targetMinor] from [savedMinor] in [monthsLeft] months, rounded up. */

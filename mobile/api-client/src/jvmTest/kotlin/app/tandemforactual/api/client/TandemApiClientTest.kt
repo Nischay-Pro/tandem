@@ -3,12 +3,15 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -54,7 +57,8 @@ class TandemApiClientTest {
             val stored = checkNotNull(client.exportStoredSession())
             client.forgetSession()
             assertFalse(client.isAuthenticated)
-            val restored = client(files = null)
+            val openIdServer = FakeActualServer()
+            val restored = client(openIdServer, files = null)
             assertEquals(device, restored.restoreStoredSession(stored))
             assertTrue(restored.isAuthenticated)
             assertFailsWith<TandemApiProtocolException> { restored.restoreStoredSession("nope") }
@@ -67,13 +71,14 @@ class TandemApiClientTest {
             assertFalse(restored.refreshLocalServer())
             restored.useExternalServerAfterLocalFailure()
             assertEquals(1, restored.withExclusiveSession { 1 })
+            assertEquals("https://idp.example/authorize", restored.startActualOpenIdSignIn(url, "d", "c", "state"))
+            assertEquals("$OPEN_ID_RETURN/state", openIdServer.openIdReturnUrl)
+            assertEquals("actual:${java.net.URI(url).host}", restored.completeActualOpenIdSignIn(url, "session", "v").principalId)
             assertEquals(
-                "openid_unsupported",
-                assertFailsWith<TandemApiException> { restored.startActualOpenIdSignIn(url, "d", "c", "s") }.errorCode,
-            )
-            assertEquals(
-                "openid_unsupported",
-                assertFailsWith<TandemApiException> { restored.completeActualOpenIdSignIn(url, "c", "v") }.errorCode,
+                "invalid_credentials",
+                assertFailsWith<TandemApiException> {
+                    restored.completeActualOpenIdSignIn(url, "expired", "v")
+                }.errorCode,
             )
             restored.revokeCurrentDevice()
             assertFalse(restored.isAuthenticated)
@@ -286,6 +291,22 @@ class TandemApiClientTest {
             )
             server.bankDownload = """{"status":"ok","data":{"error_type":"ITEM_ERROR","error_code":"ITEM_LOGIN_REQUIRED"}}"""
             assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+            client.budgetLinkedAccounts("group", null).first { it.id == checking }.let { linked ->
+                assertEquals("item_login_required", linked.failure)
+                kotlin.test.assertNotNull(linked.lastSyncMillis)
+            }
+            val providers = client.bankProviderAccounts(SimpleFin)!!
+            assertEquals(BankProviderAccount("SF-9", "Rewards Card", "Credit Union", "cu.example", "-42.10"), providers.first())
+            assertEquals("org-1", providers[1].bankId)
+            assertEquals("", providers[2].bankId)
+            client.linkBudgetBankAccount("group", checking, SimpleFin, providers.first(), null)
+            assertEquals("SF-9", client.budgetLinkedAccounts("group", null).first { it.id == checking }.providerAccountId)
+            client.unlinkBudgetBankAccount("group", checking, null)
+            assertTrue(client.budgetLinkedAccounts("group", null).none { it.id == checking })
+            server.simpleFinAccounts = """{"status":"ok","data":{"error_code":"INVALID_ACCESS_TOKEN"}}"""
+            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.bankProviderAccounts(SimpleFin) }.errorCode)
+            server.simpleFinConfigured = false
+            assertNull(client.bankProviderAccounts(SimpleFin))
             val statement = listOf(StatementImportItem("2026-11-20", -1_234, "corner shop", "first", "stmt-1"))
             assertEquals(0, client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1"), null).existingImportedIds.size)
             assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
@@ -295,6 +316,26 @@ class TandemApiClientTest {
             )
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
+            assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
+            assertTrue(
+                client
+                    .previewBudgetRule(
+                        "group",
+                        kotlinx.serialization.json.Json
+                            .parseToJsonElement(
+                                """{"conditionsOp":"or","conditions":[{"op":"gt","field":"amount","type":"number","value":-100000000}]}""",
+                            ).jsonObject,
+                        null,
+                    ).isNotEmpty(),
+            )
+            assertTrue(client.exportBudgetTransactions("group", "2000-01-01", "2099-12-31", null).startsWith("Date,Account"))
+            assertTrue(
+                client
+                    .budgetAccountInflows("group", listOf(checking), null)
+                    .getValue(checking)
+                    .values
+                    .all { it > 0 },
+            )
             val history = client.budgetChangeHistory("group", null)
             val latest = history.changes.first()
             assertEquals(history.deviceNode, latest.node)

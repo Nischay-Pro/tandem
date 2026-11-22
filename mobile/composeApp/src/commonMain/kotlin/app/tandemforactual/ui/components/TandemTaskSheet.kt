@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -56,12 +57,12 @@ internal fun TandemTaskSheet(
         Dialog(
             onDismissRequest = onDismissRequest,
             properties =
-                DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    dismissOnBackPress = dismissOnBackPress,
-                ),
+                edgeToEdgeDialogProperties(dismissOnBackPress),
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Box(
+                Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
                 AnimatedVisibility(
                     modifier = Modifier.fillMaxWidth(),
                     visibleState = visibleState,
@@ -69,7 +70,7 @@ internal fun TandemTaskSheet(
                     exit = tandemSheetExit(tandemReduceMotion),
                 ) {
                     if (fullScreen) {
-                        Box(Modifier.fillMaxSize().background(tandemPalette.background)) {
+                        Box(Modifier.fillMaxSize().background(tandemPalette.background).safeDrawingPadding()) {
                             content()
                         }
                     } else {
@@ -80,3 +81,6 @@ internal fun TandemTaskSheet(
         }
     }
 }
+
+/** Dialog properties that let the sheet draw behind the system bars and the keyboard, so it can pad for them itself. */
+internal expect fun edgeToEdgeDialogProperties(dismissOnBackPress: Boolean): DialogProperties

@@ -636,6 +636,17 @@ internal fun ScreenContent(
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
         AppRoute.CHANGE_HISTORY -> ChangeHistoryScreen(state, mobileSession)
+        AppRoute.BANK_CONNECTIONS -> BankConnectionsScreen(state, mobileSession, liveAccounts)
+        AppRoute.REIMBURSEMENTS -> ReimbursementsScreen(state, mobileSession)
+        AppRoute.RETIREMENT -> RetirementScreen(state, navigation, mobileSession, liveAccounts)
+        AppRoute.RETIREMENT_SETUP -> RetirementSetupScreen(state, navigation, mobileSession, liveAccounts)
+        AppRoute.RETIREMENT_MATCH -> MatchEditorScreen(state, navigation, mobileSession)
+        AppRoute.WHAT_IF -> WhatIfScreen(state, mobileSession, liveAccounts, liveBudgetMonth, liveTransactions)
+        AppRoute.EXPORT -> ExportScreen(state, mobileSession)
+        AppRoute.CASH_FLOW -> CashFlowScreen(state, liveAccounts, liveSchedules)
+        AppRoute.MONTHLY_REVIEW -> MonthlyReviewScreen(state, liveBudgetMonth, liveTransactions)
+        AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)
+        AppRoute.DEBT_PAYOFF -> DebtPayoffScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
     }
 }
 

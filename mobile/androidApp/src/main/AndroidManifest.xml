@@ -12,6 +12,7 @@
     android:theme="@style/Theme.Tandem">
     <activity
       android:name=".MainActivity"
+      android:windowSoftInputMode="adjustResize"
       android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
@@ -23,7 +24,7 @@
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="app.tandemforactual" android:host="signin" android:path="/complete" />
+        <data android:scheme="app.tandemforactual" android:host="signin" android:pathPrefix="/complete" />
       </intent-filter>
       <intent-filter android:label="Add to Tandem">
         <action android:name="android.intent.action.SEND" />

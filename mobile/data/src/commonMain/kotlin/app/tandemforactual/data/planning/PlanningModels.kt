@@ -1,5 +1,9 @@
 package app.tandemforactual.data.planning
 
+import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
+import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
+import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -50,6 +54,9 @@ data class SavingsGoal(
     }
 }
 
+/** What an account with a negative balance is: a revolving card, an installment loan, or not a debt at all. */
+enum class DebtKind { UNSPECIFIED, CARD, LOAN, NOT_DEBT }
+
 /**
  * A debt account's terms as the person entered them. An unknown APR or minimum stays unknown, so estimates are only
  * made from what was actually supplied.
@@ -62,6 +69,9 @@ data class DebtTerms(
     val dueDay: Int? = null,
     val promoAprBasisPoints: Int? = null,
     val promoEndsOn: String? = null,
+    val kind: DebtKind = DebtKind.UNSPECIFIED,
+    /** A card whose full statement balance is paid each month, so it never carries interest. */
+    val paysInFull: Boolean = false,
 ) {
     val aprProvenance: Provenance get() = if (aprBasisPoints == null) Provenance.UNKNOWN else Provenance.USER_SUPPLIED
 
@@ -73,6 +83,8 @@ data class DebtTerms(
             "dueDay" to dueDay.json(),
             "promoAprBasisPoints" to promoAprBasisPoints.json(),
             "promoEndsOn" to promoEndsOn.json(),
+            "kind" to (if (kind == DebtKind.UNSPECIFIED) JsonNull else JsonPrimitive(kind.name)),
+            "paysInFull" to (if (paysInFull) JsonPrimitive(true) else JsonNull),
         )
 
     companion object {
@@ -89,9 +101,133 @@ data class DebtTerms(
             dueDay = body.int("dueDay"),
             promoAprBasisPoints = body.int("promoAprBasisPoints"),
             promoEndsOn = body.text("promoEndsOn"),
+            kind = DebtKind.entries.firstOrNull { it.name == body.text("kind") } ?: DebtKind.UNSPECIFIED,
+            paysInFull = body.text("paysInFull") == "true",
         )
     }
 }
+
+/** Planning choices that apply to the whole budget, such as which countries' accounts and rules to use. */
+data class PlanningSettings(
+    val regions: List<String> = emptyList(),
+) {
+    fun toJson(): JsonObject = jsonOf("regions" to JsonArray(regions.map(::JsonPrimitive)))
+
+    companion object {
+        const val TYPE = "planning.settings"
+        const val ID = "settings"
+
+        fun fromJson(body: JsonObject) =
+            PlanningSettings((body["regions"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull })
+    }
+}
+
+/** Money someone owes back for a purchase, keyed by the Actual transaction it came from. */
+data class Reimbursement(
+    val transactionId: String,
+    val amountMinor: Long,
+    val from: String? = null,
+    val description: String? = null,
+    val date: String? = null,
+    val receivedOn: String? = null,
+) {
+    val received get() = receivedOn != null
+
+    fun toJson(): JsonObject =
+        jsonOf(
+            "amountMinor" to JsonPrimitive(amountMinor),
+            "from" to from.json(),
+            "description" to description.json(),
+            "date" to date.json(),
+            "receivedOn" to receivedOn.json(),
+        )
+
+    companion object {
+        const val TYPE = "planning.reimbursement"
+
+        fun fromJson(
+            transactionId: String,
+            body: JsonObject,
+        ) = Reimbursement(
+            transactionId = transactionId,
+            amountMinor = body.long("amountMinor") ?: 0,
+            from = body.text("from"),
+            description = body.text("description"),
+            date = body.text("date"),
+            receivedOn = body.text("receivedOn"),
+        )
+    }
+}
+
+/** What the person entered for one retirement plan; the plan's limits come from its region pack. */
+data class RetirementProfile(
+    val planId: String,
+    /** The Actual account this plan's money sits in; contributions are read from its deposits. */
+    val accountId: String? = null,
+    val age: Int? = null,
+    val family: Boolean = false,
+    val contributedMinor: Long = 0,
+    val year: Int? = null,
+    val salaryMinor: Long? = null,
+    val contributionBasisPoints: Int? = null,
+    val match: EmployerMatch? = null,
+) {
+    fun toJson(): JsonObject =
+        jsonOf(
+            "accountId" to accountId.json(),
+            "age" to age.json(),
+            "family" to JsonPrimitive(family),
+            "contributedMinor" to JsonPrimitive(contributedMinor),
+            "year" to year.json(),
+            "salaryMinor" to salaryMinor.json(),
+            "contributionBasisPoints" to contributionBasisPoints.json(),
+            "match" to (match?.let(::matchJson) ?: JsonNull),
+        )
+
+    companion object {
+        const val TYPE = "planning.retirement"
+
+        fun fromJson(
+            planId: String,
+            body: JsonObject,
+        ) = RetirementProfile(
+            planId = planId,
+            accountId = body.text("accountId"),
+            age = body.int("age"),
+            family = body.text("family") == "true",
+            contributedMinor = body.long("contributedMinor") ?: 0,
+            year = body.int("year"),
+            salaryMinor = body.long("salaryMinor"),
+            contributionBasisPoints = body.int("contributionBasisPoints"),
+            match = (body["match"] as? JsonObject)?.let(::matchFrom),
+        )
+    }
+}
+
+private fun matchJson(match: EmployerMatch): JsonObject =
+    jsonOf(
+        "capMinor" to match.capMinor.json(),
+        "tiers" to
+            JsonArray(
+                match.tiers.map { tier ->
+                    jsonOf(
+                        "rate" to JsonPrimitive(tier.rateBasisPoints),
+                        "band" to JsonPrimitive(tier.band.name),
+                        "size" to JsonPrimitive(tier.size),
+                    )
+                },
+            ),
+    )
+
+private fun matchFrom(body: JsonObject): EmployerMatch =
+    EmployerMatch(
+        (body["tiers"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val tier = element as? JsonObject ?: return@mapNotNull null
+            val band = MatchBand.entries.firstOrNull { it.name == tier.text("band") } ?: return@mapNotNull null
+            MatchTier(tier.int("rate") ?: 0, band, tier.long("size") ?: 0)
+        },
+        body.long("capMinor"),
+    )
 
 private fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
 

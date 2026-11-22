@@ -5,11 +5,16 @@ import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
+import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -80,7 +85,6 @@ private val errorMessages =
         "sign_in_required" to "Sign in to open your budgets.",
         "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
         "invalid_credentials" to "That password doesn’t match this Actual server. Check the password.",
-        "openid_unsupported" to "Sign in with your Actual password. OpenID sign-in isn’t available in Tandem yet.",
         "budget_unavailable" to "This budget isn’t on the Actual server any more.",
         "encrypted_budget" to "Tandem can’t open encrypted budgets yet.",
         "file_has_reset" to "This budget’s sync history was reset in Actual. Remove it from this device and open it again.",
@@ -218,20 +222,44 @@ class TandemApiClient(
             signedIn
         }
 
+    /**
+     * Asks Actual for the provider's sign-in page. Actual sends the browser back to the return address with `/openid-cb?token=`
+     * appended; the address carries [callbackState] so only a sign-in this device started can complete.
+     */
     @Suppress("UNUSED_PARAMETER")
     suspend fun startActualOpenIdSignIn(
         serverUrl: String,
         deviceName: String,
         codeChallenge: String,
         callbackState: String,
-    ): String = throw TandemApiException("openid_unsupported")
+    ): String =
+        sessionMutex.withLock {
+            val client = ActualServerClient(http, parse(serverUrl).toString())
+            call { client.startOpenId("$OPEN_ID_RETURN/$callbackState") }
+        }
 
+    /** Finishes OpenID sign-in with the session token Actual returned, as Actual's own web app does. */
     @Suppress("UNUSED_PARAMETER")
     suspend fun completeActualOpenIdSignIn(
         serverUrl: String,
         code: String,
         codeVerifier: String,
-    ): AuthenticatedDevice = throw TandemApiException("openid_unsupported")
+    ): AuthenticatedDevice =
+        sessionMutex.withLock {
+            closeBudgets()
+            val client = connect(serverUrl)
+            client.token = code
+            if (!call { client.validate() }) throw TandemApiException("invalid_credentials", 401)
+            val files = call { client.listFiles() }
+            val signedIn =
+                AuthenticatedDevice(
+                    deviceId = newId(),
+                    principalId = "actual:${parse(serverUrl).host}",
+                    budgetIds = files.filter { !it.deleted }.mapNotNull { it.groupId },
+                )
+            device = signedIn
+            signedIn
+        }
 
     suspend fun listBudgets(): List<BudgetCatalogItem> =
         sessionMutex.withLock {
@@ -357,11 +385,69 @@ class TandemApiClient(
             BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
         }
 
+    /** Deposits and transfers into each account by calendar year, keyed by account id; the first year shows when saving began. */
+    suspend fun budgetAccountInflows(
+        budgetId: String,
+        accountIds: List<String>,
+        encryptionPassword: String?,
+    ): Map<String, Map<Int, Long>> =
+        call {
+            val budget = budget(budgetId, encryptionPassword)
+            accountIds.associateWith { budget.inflowsByYear(it) }
+        }
+
+    suspend fun exportBudgetTransactions(
+        budgetId: String,
+        from: String,
+        to: String,
+        encryptionPassword: String?,
+    ): String = call { budget(budgetId, encryptionPassword).exportCsv(from, to) }
+
+    suspend fun previewBudgetRule(
+        budgetId: String,
+        rule: JsonObject,
+        encryptionPassword: String?,
+    ): List<HealthRow> = call { budget(budgetId, encryptionPassword).previewRule(rule) }
+
+    suspend fun budgetDataHealth(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<HealthIssue> = call { budget(budgetId, encryptionPassword).dataHealth(today()) }
+
     suspend fun undoBudgetChange(
         budgetId: String,
         changeId: String,
         encryptionPassword: String?,
     ): UndoResult = call { budget(budgetId, encryptionPassword).undoChange(changeId) }
+
+    /** The provider's accounts, or null when the provider isn't set up on the Actual server. */
+    suspend fun bankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? =
+        sessionMutex.withLock {
+            val client = requireServer()
+            call { if (client.bankConfigured(provider)) client.bankAccounts(provider) else null }
+        }
+
+    suspend fun budgetLinkedAccounts(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<LinkedAccount> = call { budget(budgetId, encryptionPassword).linkedAccounts(today()) }
+
+    suspend fun linkBudgetBankAccount(
+        budgetId: String,
+        accountId: String,
+        provider: BankProvider,
+        account: BankProviderAccount,
+        encryptionPassword: String?,
+    ) = edit(
+        budgetId,
+        encryptionPassword,
+    ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
+
+    suspend fun unlinkBudgetBankAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ) = edit(budgetId, encryptionPassword) { it.unlinkBankAccount(accountId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun runBudgetBankSync(
@@ -743,3 +829,5 @@ data class BudgetChangeHistory(
     val deviceNode: String,
     val changes: List<ChangeSet>,
 )
+
+const val OPEN_ID_RETURN = "app.tandemforactual://signin/complete"

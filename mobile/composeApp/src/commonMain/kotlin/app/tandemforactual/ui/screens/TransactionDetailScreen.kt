@@ -159,6 +159,7 @@ internal fun TransactionDetailScreen(
                 trailing = state.transactionNotes.ifBlank { "No notes" },
             )
         }
+        ReimbursementCard(state, mobileSession, navigation)
         PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) {
             navigation.open(AppRoute.EDIT_TRANSACTION)
         }

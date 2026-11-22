@@ -33,22 +33,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.components.AnimatedReveal
 import app.tandemforactual.ui.components.Badge
-import app.tandemforactual.ui.components.BodyText
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.DividerLine
 import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
+import app.tandemforactual.ui.components.ListRowOptions
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.platformAppVersionName
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Package
 import com.composables.icons.lucide.Share2
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Trash2
@@ -190,108 +190,117 @@ internal fun MerchantIconLicensesScreen(
     loadError: String?,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    val normalizedQuery = query.trim()
+
+    fun matches(vararg text: String) = normalizedQuery.isEmpty() || text.any { it.contains(normalizedQuery, ignoreCase = true) }
+    val libraries = OPEN_SOURCE_LIBRARIES.filter { matches(it.name, it.purpose, it.license) }
+    val filteredNotices =
+        remember(merchantIconCatalog, normalizedQuery) {
+            merchantIconCatalog?.notices.orEmpty().filter { matches(it.title, it.license, it.registryUrl, it.brandUrl) }
+        }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        Heading("Icon licenses and sources")
-        when {
-            loadError != null -> BodyText(loadError)
-            merchantIconCatalog == null -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.CenterVertically) {
-                    TandemLoadingIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = tandemPalette.accent,
-                        strokeWidth = 2.dp,
+        TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Library, icon, license or source"))
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = TandemSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
+            item(key = "project") {
+                SectionCard("Tandem") {
+                    ListRow(
+                        "Tandem for Actual",
+                        "This app",
+                        "AGPL-3.0",
+                        leading = RowLeading.Icon(Lucide.Info),
+                        options = ListRowOptions(showChevron = false),
                     )
-                    BodyText("Loading icons")
                 }
             }
-            else -> {
-                TextFieldCard(
-                    "Search",
-                    query,
-                    { query = it },
-                    TextFieldOptions(placeholder = "Name, license, or source"),
-                )
-                val filteredNotices =
-                    remember(merchantIconCatalog, query) {
-                        val normalizedQuery = query.trim()
-                        merchantIconCatalog.notices.filter { notice ->
-                            normalizedQuery.isEmpty() ||
-                                notice.title.contains(normalizedQuery, ignoreCase = true) ||
-                                notice.license.contains(normalizedQuery, ignoreCase = true) ||
-                                notice.registryUrl.contains(normalizedQuery, ignoreCase = true) ||
-                                notice.brandUrl.contains(normalizedQuery, ignoreCase = true)
+            if (libraries.isNotEmpty()) {
+                item(key = "libraries") {
+                    SectionCard("Open-source libraries", "${libraries.size} used directly by the app") {
+                        libraries.forEachIndexed { index, library ->
+                            if (index > 0) DividerLine()
+                            ListRow(
+                                library.name,
+                                library.purpose,
+                                library.license,
+                                leading = RowLeading.Icon(Lucide.Package),
+                                options = ListRowOptions(showChevron = false),
+                            )
                         }
                     }
+                }
+            }
+            item(key = "icons-heading") {
                 Text(
-                    "${filteredNotices.size} of ${merchantIconCatalog.notices.size} icons",
+                    when {
+                        loadError != null -> loadError
+                        merchantIconCatalog == null -> "Loading icons…"
+                        else -> "Icons · ${filteredNotices.size} of ${merchantIconCatalog.notices.size}"
+                    },
+                    Modifier.padding(top = TandemSpacing.medium),
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.label,
                 )
-                if (filteredNotices.isEmpty()) {
-                    EmptyState("No icons match", "Try another search.")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        contentPadding = PaddingValues(bottom = 16.dp),
+            }
+            if (merchantIconCatalog != null && filteredNotices.isEmpty() && libraries.isEmpty()) {
+                item(key = "empty") { EmptyState("Nothing matches", "Try another search.") }
+            }
+            items(filteredNotices, key = { it.resourceName }) { notice ->
+                SurfaceCard(
+                    modifier =
+                        Modifier.animateItem(
+                            fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                            placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
+                            fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                        ),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(TandemSpacing.medium),
                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
-                        items(filteredNotices, key = { it.resourceName }) { notice ->
-                            SurfaceCard(
-                                modifier =
-                                    Modifier.animateItem(
-                                        fadeInSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-                                        placementSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
-                                        fadeOutSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-                                    ),
-                            ) {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(TandemSpacing.medium),
-                                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Image(
-                                            painter = painterResource(notice.resource),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(34.dp),
-                                            contentScale = ContentScale.Fit,
-                                        )
-                                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                                            Text(
-                                                notice.title,
-                                                color = tandemPalette.text,
-                                                fontSize = TandemTypography.body,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                            Text(
-                                                notice.license.replace("Fair Use", "fair use", ignoreCase = true),
-                                                color = tandemPalette.muted,
-                                                fontSize = TandemTypography.label,
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        "Registry source: ${notice.registryUrl}",
-                                        color = tandemPalette.muted,
-                                        fontSize = TandemTypography.micro,
-                                        lineHeight = TandemTypography.tightLineHeight,
-                                        modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
-                                    )
-                                    if (notice.brandUrl.isNotBlank()) {
-                                        Text(
-                                            "Brand site: ${notice.brandUrl}",
-                                            color = tandemPalette.muted,
-                                            fontSize = TandemTypography.micro,
-                                            lineHeight = TandemTypography.tightLineHeight,
-                                        )
-                                    }
-                                }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Image(
+                                painter = painterResource(notice.resource),
+                                contentDescription = null,
+                                modifier = Modifier.size(34.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
+                                Text(
+                                    notice.title,
+                                    color = tandemPalette.text,
+                                    fontSize = TandemTypography.body,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    notice.license.replace("Fair Use", "fair use", ignoreCase = true),
+                                    color = tandemPalette.muted,
+                                    fontSize = TandemTypography.label,
+                                )
                             }
+                        }
+                        Text(
+                            "Registry source: ${notice.registryUrl}",
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.micro,
+                            lineHeight = TandemTypography.tightLineHeight,
+                            modifier = Modifier.semantics { contentDescription = "Registry source URL: ${notice.registryUrl}" },
+                        )
+                        if (notice.brandUrl.isNotBlank()) {
+                            Text(
+                                "Brand site: ${notice.brandUrl}",
+                                color = tandemPalette.muted,
+                                fontSize = TandemTypography.micro,
+                                lineHeight = TandemTypography.tightLineHeight,
+                            )
                         }
                     }
                 }
@@ -342,32 +351,11 @@ internal fun AboutScreen(
             DividerLine()
             ListRow("Open-source license", "GNU AGPL-3.0-or-later")
         }
-        SectionCard("Open-source libraries", "Direct mobile-app dependencies and licenses") {
-            ListRow("Kotlin and kotlinx", "Kotlin, Coroutines and Serialization · Apache-2.0")
-            DividerLine()
-            ListRow("Compose Multiplatform and resources", "Apache-2.0")
-            DividerLine()
-            ListRow("Ktor", "Apache-2.0")
-            DividerLine()
-            ListRow("AndroidX Room and SQLite", "Apache-2.0")
-            DividerLine()
-            ListRow("SQLCipher", "Encrypted budget storage on Android and iOS · BSD-style")
-            DividerLine()
-            ListRow(
-                "AndroidX platform libraries",
-                "Activity Compose, Biometric, Fragment, WorkManager and SplashScreen · Apache-2.0",
-            )
-            DividerLine()
-            ListRow("Compose Icons", "MIT")
-            DividerLine()
-            ListRow("Lucide icon artwork", "ISC")
-            DividerLine()
-            ListRow("TheSVG icon package", "Build-time catalog and tooling · MIT")
-        }
         CrashReportsSection()
         SurfaceCard {
             ListRow(
-                "View icon licenses and sources",
+                "Open-source licenses",
+                "Libraries, models and icons",
                 leading = RowLeading.Icon(Lucide.Info),
                 onClick = { navigation.open(AppRoute.MERCHANT_ICON_LICENSES) },
             )
@@ -403,3 +391,30 @@ private fun CrashReportsSection() {
         }
     }
 }
+
+internal data class OpenSourceLibrary(
+    val name: String,
+    val purpose: String,
+    val license: String,
+)
+
+internal val OPEN_SOURCE_LIBRARIES =
+    listOf(
+        OpenSourceLibrary("Kotlin", "Language and standard library", "Apache-2.0"),
+        OpenSourceLibrary("kotlinx.coroutines", "Background work", "Apache-2.0"),
+        OpenSourceLibrary("kotlinx.serialization", "Reading and writing JSON", "Apache-2.0"),
+        OpenSourceLibrary("Compose Multiplatform", "Interface on Android and iOS", "Apache-2.0"),
+        OpenSourceLibrary("Ktor", "Talking to your Actual server", "Apache-2.0"),
+        OpenSourceLibrary("cryptography-kotlin", "Encrypted budgets and planning data", "Apache-2.0"),
+        OpenSourceLibrary("SQLCipher", "Encrypted storage on the device", "BSD-3-Clause"),
+        OpenSourceLibrary("AndroidX Room and SQLite", "On-device database", "Apache-2.0"),
+        OpenSourceLibrary("AndroidX Activity, Fragment and Biometric", "App lock and screens on Android", "Apache-2.0"),
+        OpenSourceLibrary("AndroidX WorkManager", "Background sync on Android", "Apache-2.0"),
+        OpenSourceLibrary("AndroidX WindowManager", "Foldable and tablet layouts", "Apache-2.0"),
+        OpenSourceLibrary("AndroidX SplashScreen and ProfileInstaller", "Startup on Android", "Apache-2.0"),
+        OpenSourceLibrary("LiteRT", "Runs receipt scanning on the device", "Apache-2.0"),
+        OpenSourceLibrary("PaddleOCR PP-OCRv6", "Receipt text detection and recognition models", "Apache-2.0"),
+        OpenSourceLibrary("Compose Icons", "Icon components", "MIT"),
+        OpenSourceLibrary("Lucide", "Icon artwork", "ISC"),
+        OpenSourceLibrary("TheSVG", "Merchant icon catalog, at build time", "MIT"),
+    )

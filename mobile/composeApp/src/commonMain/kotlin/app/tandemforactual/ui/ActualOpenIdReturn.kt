@@ -7,23 +7,12 @@ internal data class ActualOpenIdReturn(
     val state: String,
 )
 
-/** Extracts only Tandem's one-use code and pending-login state from its private-use URI. */
+/** Actual returns `…/complete/<state>/openid-cb?token=<session>`; only that exact shape with a pending state is accepted. */
 internal fun actualOpenIdReturn(uri: String): ActualOpenIdReturn? {
-    if (!uri.startsWith("$OPEN_ID_CALLBACK_URI?")) return null
     if ('#' in uri) return null
-
-    val query = uri.substringAfter('?', missingDelimiterValue = "")
-    if (query.isEmpty()) return null
-    val values = mutableMapOf<String, String>()
-    for (parameter in query.split('&')) {
-        val separator = parameter.indexOf('=')
-        if (separator <= 0) return null
-        val key = parameter.substring(0, separator)
-        if (key !in setOf("code", "state") || key in values) return null
-        values[key] = parameter.substring(separator + 1)
-    }
-    if (values.size != 2) return null
-    val code = values["code"]?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{43}")) } ?: return null
-    val state = values["state"]?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{43}")) } ?: return null
-    return ActualOpenIdReturn(code, state)
+    val match = openIdReturnPattern.matchEntire(uri) ?: return null
+    return ActualOpenIdReturn(match.groupValues[2], match.groupValues[1])
 }
+
+private val openIdReturnPattern =
+    Regex("${Regex.escape(OPEN_ID_CALLBACK_URI)}/([A-Za-z0-9_-]{43})/openid-cb\\?token=([A-Za-z0-9_.-]{8,256})")

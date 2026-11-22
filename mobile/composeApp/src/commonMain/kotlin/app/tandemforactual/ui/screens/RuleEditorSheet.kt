@@ -201,6 +201,7 @@ private fun RuleEditorContent(
                         },
                     )
                 }
+                RulePreview(state, mobileSession, draft)
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
                 PrimaryButton(
@@ -489,3 +490,42 @@ internal fun RuleChoiceField(
 }
 
 private const val SEARCH_THRESHOLD = 8
+
+/** Shows which existing transactions the rule's conditions match while it's being edited. */
+@Composable
+private fun RulePreview(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    draft: RuleDraft,
+) {
+    var matches by remember { mutableStateOf<List<app.tandemforactual.data.actual.HealthRow>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(draft) {
+        kotlinx.coroutines.delay(400)
+        val body = draft.toPreviewBody { text -> state.parseAmountMinorUnits(text) }
+        matches =
+            body?.let { mobileSession.previewRule(state.selectedBudgetId, it, state.encryptedPassword.takeIf { p -> p.isNotBlank() }) }
+    }
+    val found = matches ?: return
+    SectionCard(
+        when (found.size) {
+            0 -> "Matches no transactions yet"
+            1 -> "Matches 1 transaction"
+            50 -> "Matches 50 or more transactions"
+            else -> "Matches ${found.size} transactions"
+        },
+        "Newest first, from this budget",
+    ) {
+        Column {
+            found.take(5).forEachIndexed { index, row ->
+                if (index > 0) DividerLine()
+                ListRow(
+                    row.name ?: "No payee",
+                    listOfNotNull(row.date?.let(::formatLiveDate), row.account).joinToString(" · "),
+                    row.amount?.let(state::formatCurrency),
+                    leading = RowLeading.None,
+                    options = ListRowOptions(showChevron = false, dense = true),
+                )
+            }
+        }
+    }
+}

@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CancellationException
@@ -27,7 +28,7 @@ import java.io.File
 
 @Composable
 internal actual fun rememberReceiptScanner(
-    onStarted: () -> Unit,
+    onStarted: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
     onResult: (ReceiptScanResult) -> Unit,
 ): ReceiptScanner {
     val context = LocalContext.current
@@ -36,8 +37,16 @@ internal actual fun rememberReceiptScanner(
     val result = rememberUpdatedState(onResult)
     var photoUri by rememberSaveable { mutableStateOf<String?>(null) }
     val read: (Uri) -> Unit = { uri ->
-        started.value()
-        scope.launch { result.value(readReceipt(context, uri)) }
+        started.value(null)
+        scope.launch {
+            val photo = withContext(Dispatchers.Default) { runCatching { loadUpright(context, uri) }.getOrNull() }
+            if (photo == null) {
+                result.value(ReceiptScanResult(null, "Couldn’t open this photo. Choose another one."))
+                return@launch
+            }
+            started.value(photo.asImageBitmap())
+            result.value(readReceipt(context, photo))
+        }
     }
     val camera =
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
@@ -68,17 +77,9 @@ internal actual fun rememberReceiptScanner(
 
 private suspend fun readReceipt(
     context: Context,
-    uri: Uri,
+    photo: Bitmap,
 ): ReceiptScanResult =
     withContext(Dispatchers.Default) {
-        val photo =
-            try {
-                loadUpright(context, uri)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                null
-            } ?: return@withContext ReceiptScanResult(null, "Couldn’t open this photo. Choose another one.")
         try {
             ReceiptReader(context).use { reader -> ReceiptScanResult(reader.read(photo)) }
         } catch (error: CancellationException) {
@@ -87,8 +88,6 @@ private suspend fun readReceipt(
             ReceiptScanResult(null, "Receipt reading isn’t available on this device.")
         } catch (_: Exception) {
             ReceiptScanResult(null, "Couldn’t read this receipt. Try a sharper photo.")
-        } finally {
-            photo.recycle()
         }
     }
 

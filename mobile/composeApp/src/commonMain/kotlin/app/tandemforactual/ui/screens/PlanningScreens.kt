@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,11 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.DebtKind
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.components.DividerLine
+import app.tandemforactual.ui.components.FilterPills
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.ListRow
@@ -283,16 +287,33 @@ internal fun DebtTermsSheet(
     var apr by remember(account) { mutableStateOf(terms?.aprBasisPoints?.let { formatRateBasisPoints(it).removeSuffix("%") }.orEmpty()) }
     var minimum by remember(account) { mutableStateOf(terms?.minimumPaymentMinor?.let { formatAmount(it, settings) }.orEmpty()) }
     var dueDay by remember(account) { mutableStateOf(terms?.dueDay?.toString().orEmpty()) }
+    var kind by remember(account) { mutableStateOf(terms?.kind ?: DebtKind.UNSPECIFIED) }
+    var paysInFull by remember(account) { mutableStateOf(terms?.paysInFull == true) }
     var error by remember(account) { mutableStateOf<String?>(null) }
     TandemTaskSheet(visible = account != null, onDismissRequest = onDismiss, onDismissed = {}) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
+                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+            ) {
                 TandemModalHeader(account?.name.orEmpty(), onClose = onDismiss)
                 Text(
                     "Used only on this device to estimate payoff. Leave anything you don’t know blank.",
                     color = palette.muted,
                     fontSize = TandemTypography.compactBody,
                 )
+                FilterPills(
+                    listOf(DebtKind.CARD to "Credit card", DebtKind.LOAN to "Loan", DebtKind.NOT_DEBT to "Not a debt"),
+                    kind,
+                    { kind = it },
+                )
+                if (kind == DebtKind.CARD) {
+                    FilterPills(
+                        listOf(false to "I carry a balance", true to "I pay it in full each month"),
+                        paysInFull,
+                        { paysInFull = it },
+                    )
+                }
                 TextFieldCard("APR (%)", apr, { apr = it.take(6) }, TextFieldOptions(placeholder = "19.99"))
                 TextFieldCard("Minimum payment", minimum, { minimum = it }, settings.amountOptions())
                 TextFieldCard(
@@ -314,7 +335,17 @@ internal fun DebtTermsSheet(
                             else -> null
                         }
                     if (error == null && account != null) {
-                        onSave(DebtTerms(terms?.id ?: Uuid.random().toString(), account.id, rate, payment, day))
+                        onSave(
+                            DebtTerms(
+                                terms?.id ?: Uuid.random().toString(),
+                                account.id,
+                                rate,
+                                payment,
+                                day,
+                                kind = kind,
+                                paysInFull = kind == DebtKind.CARD && paysInFull,
+                            ),
+                        )
                     }
                 }
             }

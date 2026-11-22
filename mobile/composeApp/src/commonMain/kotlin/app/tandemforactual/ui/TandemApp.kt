@@ -1698,6 +1698,24 @@ fun TandemApp(
                                             .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
                                 )
                             }
+                            if (visibleRoute in QUICK_ADD_TABS &&
+                                state.selectedBudgetId.isNotBlank() &&
+                                !needsEncryptedBudgetUnlock(state, visibleRoute)
+                            ) {
+                                val addCompact by
+                                    remember(routeScrollState, routeLazyListState) {
+                                        derivedStateOf { routeScrollState.value > 72 || routeLazyListState.firstVisibleItemIndex > 0 }
+                                    }
+                                FloatingTransactionAction(
+                                    compact = addCompact,
+                                    enabled = !state.readOnlyMode,
+                                    onClick = { navigation.newTransaction(null) },
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
+                                )
+                            }
                         }
                         if (includeChrome && visibleRoute.isTab() && !useRail) {
                             BottomNavigation(visibleRoute, navigation.selectTab)
@@ -2105,10 +2123,17 @@ fun TandemApp(
                     scheduleCount = liveSchedules.size,
                     payeeCount = mobileSession.payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null },
                     conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
+                    reimbursementsOwedMinor = mobileSession.reimbursements.filterNot { it.received }.sumOf { it.amountMinor },
+                    formatMoney = state::formatCurrency,
                     readOnly = state.readOnlyMode,
                     open = openFromMenu,
                     onAddTransaction = {
                         state.menuOpen = false
+                        navigation.newTransaction(null)
+                    },
+                    onScanReceipt = {
+                        state.menuOpen = false
+                        state.receiptScanRequested = true
                         navigation.newTransaction(null)
                     },
                     onManageBanks = {
@@ -2156,6 +2181,8 @@ fun TandemApp(
     }
 }
 
+private val QUICK_ADD_TABS = setOf(AppRoute.HOME, AppRoute.ACTIVITY, AppRoute.ACCOUNTS)
+
 internal fun AppRoute.isTab(): Boolean =
     this == AppRoute.HOME ||
         this == AppRoute.BUDGET ||
@@ -2182,6 +2209,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,
         AppRoute.CHOOSE_CATEGORY,
+        AppRoute.RETIREMENT_SETUP,
         -> false
         else -> true
     }

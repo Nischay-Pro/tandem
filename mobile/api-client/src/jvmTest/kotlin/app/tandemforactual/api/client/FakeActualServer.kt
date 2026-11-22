@@ -29,6 +29,12 @@ internal class FakeActualServer {
     var merkle = MerkleTrie.fromJson(initial.merkle)
     var password = "test"
     var bankDownload = """{"status":"ok","data":{}}"""
+    var openIdReturnUrl: String? = null
+    var simpleFinConfigured = true
+    var simpleFinAccounts =
+        """{"status":"ok","data":{"accounts":[{"id":"SF-9","name":"Rewards Card","balance":"-42.10",""" +
+            """"org":{"name":"Credit Union","domain":"cu.example"}},{"id":"SF-10","name":"Plain","org":{"id":"org-1"}},""" +
+            """{"name":"Bare"}]}}"""
     var syncFailure: String? = null
     var syncCalls = 0
     var extension = false
@@ -61,6 +67,12 @@ internal class FakeActualServer {
                         } else {
                             respond("", HttpStatusCode.NotFound)
                         }
+                    "/account/validate" ->
+                        if (request.headers["x-actual-token"] == "session") {
+                            respond("""{"status":"ok","data":{"validated":true}}""")
+                        } else {
+                            respond("""{"status":"error","reason":"unauthorized"}""", HttpStatusCode.Unauthorized)
+                        }
                     "/account/needs-bootstrap" -> respond("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""")
                     "/account/login-methods" ->
                         respond(
@@ -68,7 +80,10 @@ internal class FakeActualServer {
                         )
                     "/account/login" -> {
                         val body = (request.body as TextContent).text
-                        if ("\"password\":\"$password\"" in body) {
+                        if ("\"loginMethod\":\"openid\"" in body) {
+                            openIdReturnUrl = Regex("\"returnUrl\":\"([^\"]+)\"").find(body)?.groupValues?.get(1)
+                            respond("""{"status":"ok","data":{"returnUrl":"https://idp.example/authorize"}}""")
+                        } else if ("\"password\":\"$password\"" in body) {
                             respond("""{"status":"ok","data":{"token":"session"}}""")
                         } else {
                             respond("""{"status":"error","reason":"invalid-password"}""", HttpStatusCode.BadRequest)
@@ -133,6 +148,8 @@ internal class FakeActualServer {
                         )
                     }
                     "/simplefin/transactions" -> respond(bankDownload)
+                    "/simplefin/status" -> respond("""{"status":"ok","data":{"configured":$simpleFinConfigured}}""")
+                    "/simplefin/accounts" -> respond(simpleFinAccounts)
                     else -> error("Unexpected path ${request.url.encodedPath}")
                 }
             },

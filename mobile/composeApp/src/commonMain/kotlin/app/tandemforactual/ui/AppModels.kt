@@ -185,8 +185,19 @@ internal enum class AppRoute(
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
     ABOUT("About and help"),
-    MERCHANT_ICON_LICENSES("Icon licenses and sources"),
+    MERCHANT_ICON_LICENSES("Licenses"),
     CHANGE_HISTORY("Change history"),
+    DEBT_PAYOFF("Debt payoff"),
+    DATA_HEALTH("Budget checkup"),
+    CASH_FLOW("Cash flow"),
+    MONTHLY_REVIEW("Monthly review"),
+    BANK_CONNECTIONS("Bank connections"),
+    RETIREMENT("Retirement & savings"),
+    REIMBURSEMENTS("Reimbursements"),
+    RETIREMENT_SETUP("Retirement accounts"),
+    RETIREMENT_MATCH("Employer match"),
+    WHAT_IF("What if"),
+    EXPORT("Export & backup"),
 }
 
 internal enum class MainCloudStatus {

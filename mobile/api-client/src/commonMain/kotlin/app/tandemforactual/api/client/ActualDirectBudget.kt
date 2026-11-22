@@ -5,14 +5,19 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualChangeHistory
+import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.ActualRuleEngine
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
@@ -133,16 +138,28 @@ class ActualDirectBudget private constructor(
         sync()
         val accounts = locked { ActualBankSync(writer, { today }).linkedAccounts() }
         var changed = 0
+        var firstFailure: ActualServerException? = null
         for (account in accounts) {
-            val download = server.bankTransactions(account, fileId)
+            val download =
+                try {
+                    server.bankTransactions(account, fileId).also { bankFailures.remove(account.id) }
+                } catch (error: ActualServerException) {
+                    if (!error.reason.startsWith("bank-sync-")) throw error
+                    bankFailures[account.id] = account.providerAccountId to error.reason.removePrefix("bank-sync-")
+                    firstFailure = firstFailure ?: error
+                    continue
+                }
             locked {
                 val result = ActualBankSync(writer, { today }).apply(account, download)
                 changed += result.added.size + result.updated.size
             }
         }
         sync()
+        firstFailure?.let { throw it }
         return changed
     }
+
+    private val bankFailures = mutableMapOf<String, Pair<String, String>>()
 
     /** Which of these statement ids the account already holds, so an import can say how many rows are new. */
     suspend fun importedIds(
@@ -161,6 +178,25 @@ class ActualDirectBudget private constructor(
         }
 
     val deviceNode: String get() = clock.clock.timestamp.node
+
+    suspend fun linkedAccounts(today: String): List<LinkedAccount> =
+        locked {
+            ActualBankSync(writer, { today }).linkedAccounts().map { linked ->
+                linked.copy(failure = bankFailures[linked.id]?.takeIf { it.first == linked.providerAccountId }?.second)
+            }
+        }
+
+    suspend fun exportCsv(
+        from: String,
+        to: String,
+    ): String = locked { reader.exportCsv(from, to) }
+
+    suspend fun inflowsByYear(accountId: String): Map<Int, Long> = locked { reader.inflowsByYear(accountId) }
+
+    suspend fun previewRule(rule: JsonObject): List<HealthRow> =
+        locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
+
+    suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
 
     suspend fun changeHistory(limit: Int): List<ChangeSet> =
         locked {

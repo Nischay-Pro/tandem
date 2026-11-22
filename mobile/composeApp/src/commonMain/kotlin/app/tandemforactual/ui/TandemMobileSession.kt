@@ -17,6 +17,9 @@ import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
@@ -27,9 +30,14 @@ import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
+import app.tandemforactual.data.planning.PlanningSettings
 import app.tandemforactual.data.planning.PlanningStore
 import app.tandemforactual.data.planning.PlanningSync
+import app.tandemforactual.data.planning.Reimbursement
+import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -273,6 +281,12 @@ internal class TandemMobileSession(
         private set
     var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
         private set
+    var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
+    var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
+    var planningSettings by mutableStateOf(PlanningSettings())
+
+    /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
+    var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
 
     private fun planningStore(budgetId: String): PlanningStore? =
         storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, { planningKeyring.cipherFor(budgetId) }, nowEpochMillis) }
@@ -323,6 +337,82 @@ internal class TandemMobileSession(
         planningKeyring.setRecoveryKey(budgetId, key)
         syncPlanning(budgetId)
     }
+
+    suspend fun saveReimbursement(
+        budgetId: String,
+        reimbursement: Reimbursement,
+    ) {
+        planningStore(budgetId)?.save(reimbursement)
+    }
+
+    suspend fun deleteReimbursement(
+        budgetId: String,
+        transactionId: String,
+    ) {
+        planningStore(budgetId)?.deleteReimbursement(transactionId)
+    }
+
+    suspend fun saveRetirementProfile(
+        budgetId: String,
+        profile: RetirementProfile,
+    ) {
+        planningStore(budgetId)?.save(profile)
+    }
+
+    /** Saves the wizard's answers in one go: the chosen countries and the plans kept, removing plans no longer picked. */
+    suspend fun saveRetirementSetup(
+        budgetId: String,
+        regions: List<String>,
+        profiles: List<RetirementProfile>,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        store.save(PlanningSettings(regions))
+        retirementProfiles.filter { old -> profiles.none { it.planId == old.planId } }.forEach { store.deleteRetirementProfile(it.planId) }
+        profiles.forEach { store.save(it) }
+    }
+
+    suspend fun loadAccountInflows(
+        budgetId: String,
+        accountIds: List<String>,
+        encryptionPassword: String?,
+    ): Map<String, Map<Int, Long>> =
+        try {
+            apiClient.budgetAccountInflows(budgetId, accountIds, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+    suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
+
+    /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
+    var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
+
+    suspend fun loadLinkedAccounts(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<LinkedAccount> = apiClient.budgetLinkedAccounts(budgetId, encryptionPassword).also { bankLinks = it }
+
+    suspend fun linkBankAccount(
+        budgetId: String,
+        accountId: String,
+        provider: BankProvider,
+        account: BankProviderAccount,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t link this account. Try again.") {
+            apiClient.linkBudgetBankAccount(budgetId, accountId, provider, account, encryptionPassword)
+        }
+
+    suspend fun unlinkBankAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t unlink this account. Try again.") {
+            apiClient.unlinkBudgetBankAccount(budgetId, accountId, encryptionPassword)
+        }
 
     suspend fun saveSavingsGoal(
         budgetId: String,
@@ -3525,6 +3615,55 @@ internal class TandemMobileSession(
             null
         }
 
+    suspend fun exportTransactions(
+        budgetId: String,
+        from: String,
+        to: String,
+        encryptionPassword: String?,
+    ): String? =
+        try {
+            apiClient.exportBudgetTransactions(budgetId, from, to, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    /** Writes every planning record back from a backup; records already on the device with the same id are replaced. */
+    suspend fun restorePlanning(
+        budgetId: String,
+        records: List<Triple<String, String, kotlinx.serialization.json.JsonObject>>,
+    ): Int {
+        val store = planningStore(budgetId) ?: return 0
+        records.forEach { (id, type, body) -> store.put(id, type, body) }
+        return records.size
+    }
+
+    suspend fun previewRule(
+        budgetId: String,
+        rule: kotlinx.serialization.json.JsonObject,
+        encryptionPassword: String?,
+    ): List<HealthRow>? =
+        try {
+            apiClient.previewBudgetRule(budgetId, rule, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    suspend fun loadDataHealth(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<HealthIssue>? =
+        try {
+            apiClient.budgetDataHealth(budgetId, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
     suspend fun undoChange(
         budgetId: String,
         changeId: String,
@@ -3547,7 +3686,11 @@ internal class TandemMobileSession(
             encryptionPassword,
             "Couldn’t sync transactions from Actual. Check the bank connection and try again.",
         ) {
-            apiClient.runBudgetBankSync(budgetId, encryptionPassword)
+            try {
+                apiClient.runBudgetBankSync(budgetId, encryptionPassword)
+            } finally {
+                runCatching { loadLinkedAccounts(budgetId, encryptionPassword) }
+            }
         }
 
     suspend fun createBudgetAccount(
@@ -5561,6 +5704,9 @@ internal class TandemMobileSession(
             planningStore(budgetId)?.let { planning ->
                 launch { planning.savingsGoals().collect { savingsGoals = it } }
                 launch { planning.debtTerms().collect { debtTerms = it } }
+                launch { planning.retirementProfiles().collect { retirementProfiles = it } }
+                launch { planning.reimbursements().collect { reimbursements = it } }
+                launch { planning.settings().collect { planningSettings = it } }
             }
         }
     }

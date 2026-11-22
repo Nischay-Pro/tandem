@@ -422,6 +422,36 @@ class ActualRuleEngine(
         }
     }
 
+    /** Ids of the newest transactions a rule's conditions match, newest first, like Actual's rule preview. */
+    fun preview(
+        wire: JsonObject,
+        limit: Int = 50,
+    ): List<String> {
+        val loaded = ActualRules.load(listOf(RuleWire.row(wire)), emptyMap()).firstOrNull() ?: return emptyList()
+        val parsed = parseRule(JsonObject(loaded + ("actions" to JsonArray(emptyList()))))
+        return db
+            .query("SELECT * FROM v_transactions WHERE is_parent = 0 ORDER BY date DESC, sort_order DESC LIMIT 5000")
+            .asSequence()
+            .filter { row ->
+                val fields =
+                    mapOf(
+                        "id" to row["id"],
+                        "date" to ActualDates.fromInt((row["date"] as Number).toLong()),
+                        "amount" to row["amount"],
+                        "payee" to row["payee"],
+                        "account" to row["account"],
+                        "category" to row["category"],
+                        "notes" to row["notes"],
+                        "imported_payee" to row["imported_payee"],
+                        "cleared" to row["cleared"],
+                        "reconciled" to row["reconciled"],
+                    )
+                matches(parsed, prepare(fields))
+            }.take(limit)
+            .map { it["id"] as String }
+            .toList()
+    }
+
     /** `runRules`: applies every matching rule in rank order, as Actual does when posting or importing a transaction. */
     fun run(
         transaction: Map<String, Any?>,
