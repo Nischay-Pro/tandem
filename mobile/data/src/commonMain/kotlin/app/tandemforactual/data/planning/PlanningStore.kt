@@ -105,6 +105,20 @@ class PlanningStore(
 
     suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
 
+    fun customReports(): Flow<List<CustomReport>> =
+        observe(CustomReport.TYPE).map { list -> list.map { (id, body) -> CustomReport.fromJson(id, body) }.sortedBy { it.name.lowercase() } }
+
+    suspend fun save(report: CustomReport) = put(report.id, CustomReport.TYPE, report.toJson())
+
+    suspend fun deleteCustomReport(id: String) = delete(id, CustomReport.TYPE)
+
+    fun savedSearches(): Flow<List<SavedSearch>> =
+        observe(SavedSearch.TYPE).map { list -> list.map { (id, body) -> SavedSearch.fromJson(id, body) }.sortedBy { it.name.lowercase() } }
+
+    suspend fun save(search: SavedSearch) = put(search.id, SavedSearch.TYPE, search.toJson())
+
+    suspend fun deleteSavedSearch(id: String) = delete(id, SavedSearch.TYPE)
+
     companion object {
         const val SCHEMA_VERSION = 1
     }
