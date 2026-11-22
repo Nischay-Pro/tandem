@@ -63,14 +63,10 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
-function-size AccountDetailScreen.AccountDetailScreen
 function-size AccountEdits.markTransactionsReconciled
-function-size AccountOptionsScreen.AccountOptionsScreen
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
-function-size AccountsScreen.AccountsScreen
 function-size ActivitySearch.activitySearchSuggestions
-function-size AppHeader.AppHeader
 function-size AppLockGate.EncryptedBudgetUnlock
 function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
@@ -82,7 +78,6 @@ function-size BudgetChooserScreen.BudgetChooserScreen
 function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
-function-size BudgetMutationReviewScreen.BudgetMutationReviewScreen
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetScreen.BudgetCategoryCard
 function-size BudgetScreen.BudgetScreen
@@ -92,7 +87,6 @@ function-size CategoryGroupScreen.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
-function-size ConflictReviewScreen.ConflictReviewScreen
 function-size CurrencyScreens.ExchangeRatesScreen
 function-size CustomReportScreen.CustomReportScreen
 function-size CustomReportScreen.ReportControls
@@ -114,7 +108,6 @@ function-size ListRow.ListRow
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
-function-size ManagePayeesScreen.ManagePayeesScreen
 function-size MatchEditorScreen.MatchEditorScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
@@ -149,8 +142,6 @@ function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
 function-size StatementImportDialog.StatementImportDialog
-function-size SyncCenterScreen.SyncCenterScreen
-function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
 function-size TandemThemeScreen.TandemTheme
 function-size TextFieldCard.TextFieldCard
@@ -176,26 +167,20 @@ layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
-size AccountDetailScreen
-size AccountsScreen
 size ActivitySearch
-size AppHeader
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
 size BudgetScreen
 size CategoryDetailScreen
 size CategoryGroupScreen
-size ConflictReviewScreen
 size CustomReportScreen
 size LiveBudgetModels
-size ManagePayeesScreen
 size PersonalizeScreen
 size ReportModels
 size ReportsScreenParts
 size RuleEditorSheet
 size StatementImport
-size SyncCenterScreen
 size SyncCenterScreenParts
 size TandemApp
 size TandemMobileSession
