@@ -25,10 +25,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import app.tandemforactual.ui.core.state.reorderItemToIndex
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
-import app.tandemforactual.ui.feature.budget.reorderItemToIndex
 
 internal data class DragReorderUpdate(
     val itemOrder: List<String>,

@@ -32,8 +32,8 @@ import app.tandemforactual.ui.core.session.resumeAfterConnection
 import app.tandemforactual.ui.core.session.shouldKeepBudgetMutationQueued
 import app.tandemforactual.ui.core.session.statusFor
 import app.tandemforactual.ui.core.session.waitForConnection
-import app.tandemforactual.ui.feature.budget.itemTargetIdAfterMove
-import app.tandemforactual.ui.feature.budget.reorderItemToIndex
+import app.tandemforactual.ui.core.state.itemTargetIdAfterMove
+import app.tandemforactual.ui.core.state.reorderItemToIndex
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

@@ -17,6 +17,8 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.incomeCategoryIds
+import app.tandemforactual.ui.core.state.rememberBudgetTransactions
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -26,8 +28,6 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.feature.insights.incomeCategoryIds
-import app.tandemforactual.ui.feature.insights.rememberBudgetTransactions
 import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus

@@ -33,6 +33,7 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.core.state.monthMoneyIn
 import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -286,33 +287,4 @@ private fun WhereItWentSection(
             }
         }
     }
-}
-
-/**
- * Money in for the selected month: income categories without starting balances, plus deposits that aren't categorized yet,
- * and the month's transactions used for counts.
- */
-internal fun monthMoneyIn(
-    state: AppState,
-    month: LiveBudgetMonthSummary?,
-    transactions: List<TransactionItem>,
-): Pair<Long, List<TransactionItem>> {
-    val incomeCategories =
-        month
-            ?.groups
-            .orEmpty()
-            .filter { it.isIncome }
-            .flatMap { it.categories }
-    val startingBalances = incomeCategories.filter { it.name == "Starting Balances" }.map { it.id }.toSet()
-    val monthTransactions =
-        transactions.filter {
-            it.dateIso.startsWith(state.selectedMonthId) &&
-                !it.isTransfer &&
-                it.categoryId !in startingBalances &&
-                it.payee != "Starting Balance"
-        }
-    val income =
-        incomeCategories.filterNot { it.id in startingBalances }.sumOf { it.activityMinor } +
-            monthTransactions.filter { it.amountMinorUnits > 0 && it.categoryId.isNullOrBlank() }.sumOf { it.amountMinorUnits }
-    return income to monthTransactions
 }

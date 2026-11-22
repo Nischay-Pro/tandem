@@ -1,16 +1,7 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature AccountsScreen -> banking
-cross-feature AccountsScreen -> budget
-cross-feature BankConnectionsScreen -> sync
-cross-feature CustomReportScreen -> insights
-cross-feature CustomReportScreens -> insights
-cross-feature CustomReportsScreen -> insights
-cross-feature HomeLayoutScreen -> budget
 cross-feature HomeScreen -> planning
 cross-feature SettingsScreen -> planning
-cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
-cross-feature WhatIfScreen -> insights
 function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork
 function-size data:ActualBudgetEdits.setOrders
@@ -24,7 +15,6 @@ function-size data:LocalBudgetRepository.replaceBudgetMutationQueue
 function-size data:PlanningSync.sync
 layering AppState -> app
 layering AppState -> feature.reports
-layering DragReorderUpdate -> feature.budget
 layering RouteNavigation -> app
 layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app

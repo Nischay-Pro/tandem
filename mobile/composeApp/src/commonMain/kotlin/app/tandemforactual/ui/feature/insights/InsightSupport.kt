@@ -9,25 +9,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.planning.TrendDirection
 import app.tandemforactual.ui.core.format.wholePercent
-import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.observeActivitySearchRecords
-import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.core.state.booleanValue
-import app.tandemforactual.ui.core.state.recordBody
-import app.tandemforactual.ui.core.state.recordName
-import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -36,51 +26,6 @@ import com.composables.icons.lucide.ArrowDownRight
 import com.composables.icons.lucide.ArrowUpRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Minus
-
-/** The open budget's transactions as stored on the device, or null until they've loaded. */
-@Composable
-internal fun rememberBudgetTransactions(
-    state: AppState,
-    mobileSession: TandemMobileSession,
-): List<SearchableBudgetTransaction>? {
-    val budgetId = state.selectedBudgetId
-    LaunchedEffect(budgetId, mobileSession.databaseGeneration) {
-        if (budgetId.isNotBlank()) mobileSession.observeActivitySearchRecords(budgetId)
-    }
-    return mobileSession.activitySearchRecords.takeIf { mobileSession.activitySearchRecordsBudgetId == budgetId && budgetId.isNotBlank() }
-}
-
-/** Ids of categories that hold income, either flagged themselves or sitting in an income group. */
-internal fun TandemMobileSession.incomeCategoryIds(): Set<String> {
-    val incomeGroups =
-        categoryGroupRecords
-            .filter { it.recordBody()?.booleanValue("is_income") == true }
-            .mapTo(mutableSetOf()) { it.recordId }
-    return categoryRecords
-        .filter { record ->
-            val body = record.recordBody()
-            body?.booleanValue("is_income") == true ||
-                (body?.stringValue("group") ?: body?.stringValue("cat_group") ?: body?.stringValue("group_id")) in incomeGroups
-        }.mapTo(mutableSetOf()) { it.recordId }
-}
-
-@Composable
-internal fun TandemMobileSession.rememberRecordNames(): RecordNames =
-    remember(categoryRecords, payeeRecords, accountRecords) {
-        RecordNames(
-            categoryRecords.mapNotNull { r -> r.recordName()?.let { r.recordId to it } }.toMap(),
-            payeeRecords.mapNotNull { r -> r.recordName()?.let { r.recordId to it } }.toMap(),
-            accountRecords.mapNotNull { r -> r.recordName()?.let { r.recordId to it } }.toMap(),
-        )
-    }
-
-internal data class RecordNames(
-    val categories: Map<String, String>,
-    val payees: Map<String, String>,
-    val accounts: Map<String, String>,
-) {
-    fun category(id: String?): String = id?.takeIf { it.isNotEmpty() }?.let { categories[it] ?: "Deleted category" } ?: "Uncategorized"
-}
 
 /** Spending going up reads as a warning and going down as good news. */
 @Composable

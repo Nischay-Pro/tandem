@@ -40,6 +40,7 @@ import app.tandemforactual.ui.core.state.HomeLayoutItem
 import app.tandemforactual.ui.core.state.HomeModule
 import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.homeLayout
+import app.tandemforactual.ui.core.state.reorderItemToIndex
 import app.tandemforactual.ui.core.state.withHomeLayout
 import app.tandemforactual.ui.core.state.withSuggestedHome
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
@@ -60,7 +61,6 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import app.tandemforactual.ui.feature.budget.reorderItemToIndex
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_layout_advanced_only
 import app.tandemforactual.ui.generated.resources.home_layout_detail

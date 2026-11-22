@@ -29,6 +29,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.monthMoneyIn
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -41,7 +42,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.insights.monthMoneyIn
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank

@@ -4,10 +4,12 @@ package app.tandemforactual.ui.feature.sync
 
 import androidx.compose.runtime.Composable
 import app.tandemforactual.data.regions.global.bank.BankProviders
+import app.tandemforactual.ui.core.format.bankFailureLabel
 import app.tandemforactual.ui.core.format.formatMomentAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
+import app.tandemforactual.ui.core.ui.bankLinkBadge
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -15,7 +17,6 @@ import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.banking.bankLinkBadge
 import app.tandemforactual.ui.feature.planning.planningSyncDetail
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
@@ -112,16 +113,6 @@ internal fun SyncCenterBankLinks(
         }
     }
 }
-
-/** Plain words for the bank error codes Actual's providers return. */
-internal fun bankFailureLabel(code: String): String =
-    when (code.uppercase()) {
-        "ITEM_LOGIN_REQUIRED", "INVALID_ACCESS_TOKEN" -> "the bank needs you to sign in again"
-        "RATE_LIMIT_EXCEEDED" -> "the bank asked to wait before syncing again"
-        "ACCOUNT_NEEDS_ATTENTION" -> "the bank needs attention"
-        "NO_ACCOUNTS", "ACCOUNT_MISSING" -> "the bank no longer shares this account"
-        else -> code.lowercase().replace('_', ' ')
-    }
 
 /** Where Tandem's optional extension service stands for this budget's planning details. */
 @Composable
