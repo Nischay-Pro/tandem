@@ -23,6 +23,7 @@ import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.planning.SharedBill
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.platform.rememberFileSharer
 import app.tandemforactual.ui.core.platform.rememberStatementFilePicker
@@ -182,6 +183,7 @@ private fun planningBackup(session: TandemMobileSession): String {
             session.planning.debtTerms.map { Triple(it.id, DebtTerms.TYPE, it.toJson()) } +
             session.planning.retirementProfiles.map { Triple(it.planId, RetirementProfile.TYPE, it.toJson()) } +
             session.planning.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
+            session.planning.sharedBills.map { Triple(it.id, SharedBill.TYPE, it.toJson()) } +
             session.planning.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
             session.planning.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))

@@ -86,6 +86,25 @@ class ActualRuleEngineTest {
         }
 
     @Test
+    fun findsPaymentsCarryingATag() {
+        val db = fixtureDb()
+        val account = db.first("SELECT id FROM accounts WHERE tombstone = 0")!!["id"]
+        db.execute(
+            "INSERT INTO transactions (id, acct, amount, date, notes, isParent, isChild, tombstone, cleared, sort_order) VALUES " +
+                "('zelle-1', ?, 4000, 20261103, 'Zelle #phone-plan #alex', 0, 0, 0, 1, 1), " +
+                "('zelle-2', ?, 4000, 20261104, '#phone-plan2', 0, 0, 0, 1, 2), " +
+                "('zelle-3', ?, 4000, 20250104, '#phone-plan', 0, 0, 0, 1, 3)",
+            account,
+            account,
+            account,
+        )
+        val found = ActualBudgetReader(db).taggedPayments("phone-plan", "2026-01-01")
+        assertEquals(listOf("zelle-1"), found.map { it.id })
+        assertEquals("2026-11-03", found.single().date)
+        assertEquals(4000, found.single().amountMinor)
+    }
+
+    @Test
     fun previewsWhichTransactionsARuleMatches() {
         val db = fixtureDb()
         val engine = ActualRuleEngine(db) { error("unused") }

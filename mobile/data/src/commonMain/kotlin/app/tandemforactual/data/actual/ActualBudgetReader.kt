@@ -1,5 +1,6 @@
 package app.tandemforactual.data.actual
 
+import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -256,6 +257,27 @@ class ActualBudgetReader(
                     "AND is_parent = 0 AND starting_balance_flag = 0 GROUP BY date / 10000 ORDER BY year",
                 accountId,
             ).associate { (it["year"] as Number).toInt() to (it["total"] as Number).toLong() }
+
+    /** Money-in transactions on or after [fromDate] whose notes carry `#`[tag], newest first. */
+    fun taggedPayments(
+        tag: String,
+        fromDate: String,
+    ): List<TaggedPayment> =
+        db
+            .query(
+                "SELECT id, date, amount, notes FROM v_transactions WHERE amount > 0 AND is_parent = 0 AND date >= ? AND notes LIKE ? " +
+                    "ORDER BY date DESC",
+                fromDate.replace("-", "").toInt(),
+                "%#$tag%",
+            ).map { row ->
+                val date = (row["date"] as Number).toInt().toString()
+                TaggedPayment(
+                    row["id"] as String,
+                    "${date.take(4)}-${date.substring(4, 6)}-${date.drop(6)}",
+                    (row["amount"] as Number).toLong(),
+                    row["notes"] as String,
+                )
+            }.filter { it.hasTag(tag) }
 
     /** One transaction record with its revision, by Actual id or Tandem id. */
     fun transactionRecord(id: String): ActualRecord? =

@@ -8,12 +8,14 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.budgetAccountInflows
 import app.tandemforactual.api.client.budgetChangeHistory
 import app.tandemforactual.api.client.budgetDataHealth
+import app.tandemforactual.api.client.budgetTaggedPayments
 import app.tandemforactual.api.client.exportBudgetTransactions
 import app.tandemforactual.api.client.previewBudgetRule
 import app.tandemforactual.api.client.undoBudgetChange
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
@@ -38,6 +40,20 @@ internal class InsightsController(
             throw error
         } catch (_: Exception) {
             emptyMap()
+        }
+
+    suspend fun loadTaggedPayments(
+        budgetId: String,
+        tag: String,
+        fromDate: String,
+        encryptionPassword: String?,
+    ): List<TaggedPayment>? =
+        try {
+            apiClient.budgetTaggedPayments(budgetId, tag, fromDate, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
         }
 
     suspend fun loadChangeHistory(

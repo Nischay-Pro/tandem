@@ -19,6 +19,7 @@ import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.planning.SharedBill
 import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import kotlinx.coroutines.CancellationException
@@ -40,6 +41,7 @@ internal class PlanningController(
         private set
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
+    var sharedBills by mutableStateOf<List<SharedBill>>(emptyList())
     var settings by mutableStateOf(PlanningSettings())
     var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
         private set
@@ -133,6 +135,20 @@ internal class PlanningController(
     ) {
         keyring.setRecoveryKey(budgetId, key)
         sync(budgetId)
+    }
+
+    suspend fun saveSharedBill(
+        budgetId: String,
+        bill: SharedBill,
+    ) {
+        planningStore(budgetId)?.save(bill)
+    }
+
+    suspend fun deleteSharedBill(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteSharedBill(id)
     }
 
     suspend fun saveReimbursement(
@@ -232,6 +248,7 @@ internal class PlanningController(
         launch { store.debtTerms().collect { debtTerms = it } }
         launch { store.retirementProfiles().collect { retirementProfiles = it } }
         launch { store.reimbursements().collect { reimbursements = it } }
+        launch { store.sharedBills().collect { sharedBills = it } }
         launch { store.settings().collect { settings = it } }
         launch {
             store.accountCurrencies().collect { list ->
