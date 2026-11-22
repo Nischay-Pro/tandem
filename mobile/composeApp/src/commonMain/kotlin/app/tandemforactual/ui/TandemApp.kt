@@ -667,22 +667,14 @@ fun TandemApp(
         if (!routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) {
             newTransaction(null)
             QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
-                shared.amountMinor?.let { state.transactionAmount = state.formatAmount(it) }
-                if (shared.isIncome) state.transactionType = "Income"
-                val payees = mobileSession.payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
-                val payee = matchSharedPayee(shared.payeeHint, payees)
-                if (payee != null) {
-                    state.newTransactionPayeeId = payee.first
-                    state.transactionPayee = payee.second
-                    mobileSession.suggestedCategoryForPayee(state.selectedBudgetId, payee.first)?.let { categoryId ->
-                        mobileSession.categoryRecords.firstOrNull { it.recordId == categoryId }?.recordName()?.let { name ->
-                            state.newTransactionCategoryId = categoryId
-                            state.transactionCategory = name
-                        }
-                    }
-                } else {
-                    state.transactionNotes = shared.original.take(200)
-                }
+                fillNewTransaction(
+                    state,
+                    mobileSession,
+                    shared.amountMinor,
+                    shared.payeeHint,
+                    isIncome = shared.isIncome,
+                    unmatchedNote = shared.original,
+                )
             }
         }
     }
@@ -2082,8 +2074,8 @@ fun TandemApp(
             )
         }
         BudgetSwitchSplash(
-            state.modeSwitchTarget?.let { if (it == InterfaceMode.ADVANCED) "Advanced mode" else "Minimal mode" }
-                ?: state.selectedBudget.takeIf { state.budgetSwitchSplashId != null },
+            state.selectedBudget.takeIf { state.modeSwitchTarget == null && state.budgetSwitchSplashId != null },
+            state.modeSwitchTarget,
         )
         AppLockGate(
             state = state,

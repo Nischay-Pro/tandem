@@ -609,7 +609,7 @@ private fun AccountHeaderMenu(
 }
 
 @Composable
-private fun TandemHeaderMenu(
+internal fun TandemHeaderMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
@@ -635,7 +635,7 @@ private fun TandemHeaderMenu(
 }
 
 @Composable
-private fun HeaderMenuAction(
+internal fun HeaderMenuAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

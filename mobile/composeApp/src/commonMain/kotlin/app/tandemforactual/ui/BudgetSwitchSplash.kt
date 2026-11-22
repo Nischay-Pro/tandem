@@ -30,22 +30,38 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Covers the app while a budget opens, so its data can settle before it is shown. */
 @Composable
-internal fun BudgetSwitchSplash(budgetName: String?) {
+internal fun BudgetSwitchSplash(
+    budgetName: String?,
+    mode: InterfaceMode? = null,
+) {
+    var shownName by remember { mutableStateOf(budgetName) }
+    var shownMode by remember { mutableStateOf(mode) }
+    if (budgetName != null || mode != null) {
+        shownName = budgetName
+        shownMode = mode
+    }
     AnimatedVisibility(
-        visible = budgetName != null,
+        visible = budgetName != null || mode != null,
         enter = fadeIn(tween(TandemMotion.CONTROL_MILLIS)),
         exit = fadeOut(tween(TandemMotion.ROUTE_MILLIS)),
     ) {
@@ -72,10 +88,30 @@ internal fun BudgetSwitchSplash(budgetName: String?) {
                         scaleY = scale
                         alpha = 0.7f + 0.3f * phase
                     },
-                    contentDescription = "Opening budget",
+                    contentDescription = if (shownMode != null) "Tandem" else "Opening budget",
                 )
+                val target = shownMode
+                if (target != null) {
+                    val alloFamily = tandemAlloFamily()
+                    Text(
+                        buildAnnotatedString {
+                            append("TANDEM ")
+                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append(if (target == InterfaceMode.ADVANCED) "ADVANCED" else "MINIMAL")
+                            }
+                        },
+                        color = palette.text,
+                        fontFamily = alloFamily,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 3.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                    return@Column
+                }
                 Text(
-                    budgetName.orEmpty(),
+                    shownName.orEmpty(),
                     Modifier.padding(horizontal = 32.dp),
                     color = palette.muted,
                     fontSize = TandemTypography.body,
