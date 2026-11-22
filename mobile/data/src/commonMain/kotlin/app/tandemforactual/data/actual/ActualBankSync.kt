@@ -1,5 +1,6 @@
 package app.tandemforactual.data.actual
 
+import app.tandemforactual.data.regions.global.bank.BankProviders
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +52,21 @@ class ActualBankSync(
         writer.update("accounts", accountId, mapOf("account_id" to providerAccountId, "bank" to bank, "account_sync_source" to source))
     }
 
+    /** `unlink-account`: drops the bank link but keeps the account and its transactions. */
+    fun unlinkAccount(accountId: String) =
+        writer.update(
+            "accounts",
+            accountId,
+            mapOf(
+                "account_id" to null,
+                "bank" to null,
+                "balance_current" to null,
+                "balance_available" to null,
+                "balance_limit" to null,
+                "account_sync_source" to null,
+            ),
+        )
+
     /** `accountsBankSync`'s account list: open accounts with a bank link. */
     fun linkedAccounts(): List<LinkedAccount> =
         db
@@ -63,7 +79,7 @@ class ActualBankSync(
                 LinkedAccount(
                     id,
                     it["name"] as String,
-                    it["account_sync_source"] as String? ?: "goCardless",
+                    BankProviders.forSource(it["account_sync_source"] as String?).source,
                     it["account_id"] as String,
                     it["bank_id"] as String?,
                     it["bank_name"] as String?,
@@ -115,10 +131,10 @@ class ActualBankSync(
         }
         if (initial) {
             val balance =
-                when (account.source) {
-                    "simpleFin", "enableBanking" -> transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
-                    "pluggyai", "akahu" -> transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
-                    else -> current ?: 0
+                if (BankProviders.forSource(account.source).startsFromCurrentBalance) {
+                    current ?: 0
+                } else {
+                    transactions.fold(current ?: 0) { total, t -> total - amountOf(t) }
                 }
             val date = transactions.lastOrNull()?.let { (it["date"] as? JsonPrimitive)?.contentOrNull } ?: today()
             val payee = startingBalancePayee()

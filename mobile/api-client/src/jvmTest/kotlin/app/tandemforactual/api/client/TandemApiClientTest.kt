@@ -3,6 +3,8 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
@@ -288,6 +290,18 @@ class TandemApiClientTest {
             )
             server.bankDownload = """{"status":"ok","data":{"error_type":"ITEM_ERROR","error_code":"ITEM_LOGIN_REQUIRED"}}"""
             assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+            val providers = client.bankProviderAccounts(SimpleFin)!!
+            assertEquals(BankProviderAccount("SF-9", "Rewards Card", "Credit Union", "cu.example", "-42.10"), providers.first())
+            assertEquals("org-1", providers[1].bankId)
+            assertEquals("", providers[2].bankId)
+            client.linkBudgetBankAccount("group", checking, SimpleFin, providers.first(), null)
+            assertEquals("SF-9", client.budgetLinkedAccounts("group", null).first { it.id == checking }.providerAccountId)
+            client.unlinkBudgetBankAccount("group", checking, null)
+            assertTrue(client.budgetLinkedAccounts("group", null).none { it.id == checking })
+            server.simpleFinAccounts = """{"status":"ok","data":{"error_code":"INVALID_ACCESS_TOKEN"}}"""
+            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.bankProviderAccounts(SimpleFin) }.errorCode)
+            server.simpleFinConfigured = false
+            assertNull(client.bankProviderAccounts(SimpleFin))
             val statement = listOf(StatementImportItem("2026-11-20", -1_234, "corner shop", "first", "stmt-1"))
             assertEquals(0, client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1"), null).existingImportedIds.size)
             assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))

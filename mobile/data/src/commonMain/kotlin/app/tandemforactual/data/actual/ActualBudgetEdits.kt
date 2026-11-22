@@ -36,6 +36,8 @@ class ActualBudgetEdits(
         bankName: String?,
     ) = ActualBankSync(writer, today).linkAccount(accountId, source, providerAccountId, bankId, bankName)
 
+    fun unlinkBankAccount(accountId: String) = ActualBankSync(writer, today).unlinkAccount(accountId)
+
     /** `transactions-import`: reconciles statement rows into an account the way Actual does. */
     fun importTransactions(
         accountId: String,

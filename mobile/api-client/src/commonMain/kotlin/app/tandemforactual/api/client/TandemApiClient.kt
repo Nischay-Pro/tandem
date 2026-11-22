@@ -8,9 +8,12 @@ import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
+import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -391,6 +394,35 @@ class TandemApiClient(
         changeId: String,
         encryptionPassword: String?,
     ): UndoResult = call { budget(budgetId, encryptionPassword).undoChange(changeId) }
+
+    /** The provider's accounts, or null when the provider isn't set up on the Actual server. */
+    suspend fun bankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? =
+        sessionMutex.withLock {
+            val client = requireServer()
+            call { if (client.bankConfigured(provider)) client.bankAccounts(provider) else null }
+        }
+
+    suspend fun budgetLinkedAccounts(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<LinkedAccount> = call { budget(budgetId, encryptionPassword).linkedAccounts(today()) }
+
+    suspend fun linkBudgetBankAccount(
+        budgetId: String,
+        accountId: String,
+        provider: BankProvider,
+        account: BankProviderAccount,
+        encryptionPassword: String?,
+    ) = edit(
+        budgetId,
+        encryptionPassword,
+    ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
+
+    suspend fun unlinkBudgetBankAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ) = edit(budgetId, encryptionPassword) { it.unlinkBankAccount(accountId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun runBudgetBankSync(

@@ -15,6 +15,7 @@ import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
@@ -163,6 +164,8 @@ class ActualDirectBudget private constructor(
         }
 
     val deviceNode: String get() = clock.clock.timestamp.node
+
+    suspend fun linkedAccounts(today: String): List<LinkedAccount> = locked { ActualBankSync(writer, { today }).linkedAccounts() }
 
     suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
 

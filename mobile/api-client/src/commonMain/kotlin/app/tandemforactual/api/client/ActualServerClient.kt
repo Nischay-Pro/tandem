@@ -4,6 +4,9 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncRequest
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
+import app.tandemforactual.data.regions.global.bank.BankProviders
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -176,56 +179,37 @@ class ActualServerClient(
         return response.bodyAsBytes()
     }
 
+    /** Whether the provider is set up on the server, through its standard `status` route. */
+    suspend fun bankConfigured(provider: BankProvider): Boolean =
+        (bankPost(provider.statusRoute, "{}")["configured"] as? JsonPrimitive)?.content == "true"
+
+    /** The provider's accounts the server can see, through its standard `accounts` route. */
+    suspend fun bankAccounts(provider: BankProvider): List<BankProviderAccount> =
+        provider.parseAccounts(bankPost(provider.accountsRoute, "{}"))
+
     /** Asks the Actual server for an account's transactions from its bank provider; the server holds the provider secrets. */
     suspend fun bankTransactions(
         account: LinkedAccount,
         fileId: String,
     ): JsonObject {
-        val (path, body) =
-            when (account.source) {
-                "simpleFin" ->
-                    "simplefin" to
-                        buildJsonObject {
-                            put("accountId", account.providerAccountId)
-                            put("startDate", account.startDate)
-                        }
-                "pluggyai" ->
-                    "pluggyai" to
-                        buildJsonObject {
-                            put("accountId", account.providerAccountId)
-                            put("startDate", account.startDate)
-                        }
-                "akahu" ->
-                    "akahu" to
-                        buildJsonObject {
-                            put("accountId", account.providerAccountId)
-                            put("startDate", account.startDate)
-                        }
-                "enableBanking" ->
-                    "enablebanking" to
-                        buildJsonObject {
-                            put("accountId", account.providerAccountId)
-                            put("startDate", account.startDate)
-                            put("aspspName", account.bankName)
-                        }
-                else ->
-                    "gocardless" to
-                        buildJsonObject {
-                            put("requisitionId", account.bankId)
-                            put("accountId", account.providerAccountId)
-                            put("startDate", account.startDate)
-                            put("includeBalance", true)
-                        }
-            }
+        val provider = BankProviders.forSource(account.source)
+        return bankPost(provider.transactionsRoute, provider.transactionsRequest(account).toString(), fileId)
+    }
+
+    private suspend fun bankPost(
+        route: String,
+        body: String,
+        fileId: String? = null,
+    ): JsonObject {
         val data =
             json(
-                http.post("$base/$path/transactions") {
+                http.post("$base/$route") {
                     auth()
-                    header("x-actual-file-id", fileId)
+                    fileId?.let { header("x-actual-file-id", it) }
                     contentType(ContentType.Application.Json)
-                    setBody(body.toString())
+                    setBody(body)
                 },
-            ).getValue("data").jsonObject
+            )["data"]?.jsonObject ?: JsonObject(emptyMap())
         (data["error_code"] as? JsonPrimitive)?.let { throw ActualServerException("bank-sync-${it.content.lowercase()}") }
         return data
     }

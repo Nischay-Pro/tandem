@@ -171,5 +171,8 @@ class ActualBankSyncTest {
         assertEquals(20261121L, start["date"])
         assertEquals("Starting Balance", db.first("SELECT name FROM payees WHERE id = ?", start["payee"])!!["name"])
         assertTrue(start["category"] != null)
+        ActualBudgetEdits(writer, { "2026-11-21" }).unlinkBankAccount(empty)
+        assertTrue(sync.linkedAccounts().none { it.id == empty })
+        assertEquals(null, db.first("SELECT account_sync_source FROM accounts WHERE id = ?", empty)!!["account_sync_source"])
     }
 }
