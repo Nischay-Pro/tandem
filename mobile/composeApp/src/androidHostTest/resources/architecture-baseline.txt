@@ -161,7 +161,6 @@ function-size TransactionConflictResolution.resolve
 function-size TransactionCreate.createTransaction
 function-size TransactionDelete.deleteTransaction
 function-size TransactionDetailScreen.TransactionDetailScreen
-function-size TransactionFormScreen.TransactionFormScreen
 function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
@@ -204,5 +203,4 @@ size SyncCenterScreen
 size SyncCenterScreenParts
 size TandemApp
 size TandemMobileSession
-size TransactionFormScreen
 size UpcomingSchedulesScreen
