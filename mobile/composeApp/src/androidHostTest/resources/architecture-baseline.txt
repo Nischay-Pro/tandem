@@ -70,7 +70,6 @@ function-size ActivitySearch.activitySearchSuggestions
 function-size AppLockGate.EncryptedBudgetUnlock
 function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
-function-size AreaChart.AreaChart
 function-size BankBrowserLinkSheet.BanksStep
 function-size BankConnectionsScreen.BankConnectionsScreen
 function-size BottomNavigation.BottomNavigation
@@ -94,7 +93,6 @@ function-size DataHealthScreen.DataHealthScreen
 function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
 function-size ExportScreen.ExportScreen
-function-size FeedbackMessageView.FeedbackMessageView
 function-size FirstSyncScreen.FirstSyncScreen
 function-size GoalTimelineScreen.GoalTimelineScreen
 function-size HomeLayoutScreen.HomeLayoutRow
@@ -104,7 +102,6 @@ function-size HomeScreen.HomeScreen
 function-size HouseholdScreen.HouseholdScreen
 function-size InsightScreens.MonthlyReviewScreen
 function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
-function-size ListRow.ListRow
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
@@ -112,14 +109,11 @@ function-size MatchEditorScreen.MatchEditorScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
-function-size PageTemplates.PageLazyColumnContent
 function-size PendingChangesScreen.PendingChangesScreen
 function-size PersonalizeScreen.ModePreviewCard
-function-size PrivacyAmountText.PrivacyAmountText
 function-size QueueStateCompletion.complete
 function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
-function-size ReorderDragHandle.ReorderDragHandle
 function-size ReportDetailScreen.ReportDetailScreen
 function-size ReportsScreen.ReportCard
 function-size ReportsScreen.ReportsScreen
@@ -127,7 +121,6 @@ function-size ReportsScreenParts.ReportCanvas
 function-size ReportsScreenParts.reportSelectionAt
 function-size RetirementScreen.PlanCard
 function-size RetirementSetupScreen.RetirementSetupScreen
-function-size Rows.SectionCardLayout
 function-size RuleEditorSheet.RuleConditionEditor
 function-size RuleEditorSheet.RuleEditorContent
 function-size ScheduleDatePickerDialog.ScheduleDatePickerDialog
@@ -143,8 +136,6 @@ function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
 function-size StatementImportDialog.StatementImportDialog
 function-size TandemApp.TandemApp
-function-size TandemThemeScreen.TandemTheme
-function-size TextFieldCard.TextFieldCard
 function-size TransactionActionComponents.TransactionRow
 function-size TransactionConflictResolution.resolve
 function-size TransactionCreate.createTransaction

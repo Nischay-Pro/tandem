@@ -3,7 +3,9 @@
 package app.tandemforactual.ui.design.theme
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.Colors
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Typography
 import androidx.compose.material.darkColors
@@ -38,22 +40,7 @@ internal fun TandemTheme(
             reduceMotion = reduceMotion || !animateThemeChanges,
             durationMillis = TandemMotion.COLOR_MILLIS,
         )
-    val animatedPalette =
-        TandemPalette(
-            background = animateColorAsState(palette.background, colorSpec, label = "theme-background").value,
-            surface = animateColorAsState(palette.surface, colorSpec, label = "theme-surface").value,
-            raised = animateColorAsState(palette.raised, colorSpec, label = "theme-raised").value,
-            border = animateColorAsState(palette.border, colorSpec, label = "theme-border").value,
-            text = animateColorAsState(palette.text, colorSpec, label = "theme-text").value,
-            muted = animateColorAsState(palette.muted, colorSpec, label = "theme-muted").value,
-            accent = animateColorAsState(palette.accent, colorSpec, label = "theme-accent").value,
-            accentContent = animateColorAsState(palette.accentContent, colorSpec, label = "theme-accent-content").value,
-            accentSurface = animateColorAsState(palette.accentSurface, colorSpec, label = "theme-accent-surface").value,
-            positive = animateColorAsState(palette.positive, colorSpec, label = "theme-positive").value,
-            syncing = animateColorAsState(palette.syncing, colorSpec, label = "theme-syncing").value,
-            warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
-            negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
-        )
+    val animatedPalette = animatedTandemPalette(palette, colorSpec)
 
     CompositionLocalProvider(
         LocalInterfaceMode provides interfaceMode,
@@ -62,38 +49,7 @@ internal fun TandemTheme(
     ) {
         val interFamily = tandemInterFamily()
         val materialTypography = remember(interFamily) { Typography(defaultFontFamily = interFamily) }
-        val materialColors =
-            if (dark) {
-                darkColors(
-                    primary = animatedPalette.accent,
-                    primaryVariant = animatedPalette.accent,
-                    secondary = animatedPalette.accent,
-                    secondaryVariant = animatedPalette.accent,
-                    background = animatedPalette.background,
-                    surface = animatedPalette.raised,
-                    error = animatedPalette.negative,
-                    onPrimary = animatedPalette.accentContent,
-                    onSecondary = animatedPalette.accentContent,
-                    onBackground = animatedPalette.text,
-                    onSurface = animatedPalette.text,
-                    onError = Color.White,
-                )
-            } else {
-                lightColors(
-                    primary = animatedPalette.accent,
-                    primaryVariant = animatedPalette.accent,
-                    secondary = animatedPalette.accent,
-                    secondaryVariant = animatedPalette.accent,
-                    background = animatedPalette.background,
-                    surface = animatedPalette.raised,
-                    error = animatedPalette.negative,
-                    onPrimary = animatedPalette.accentContent,
-                    onSecondary = animatedPalette.accentContent,
-                    onBackground = animatedPalette.text,
-                    onSurface = animatedPalette.text,
-                    onError = Color.White,
-                )
-            }
+        val materialColors = tandemMaterialColors(dark, animatedPalette)
         if (language == null) {
             MaterialTheme(colors = materialColors, typography = materialTypography, content = content)
         } else {
@@ -105,3 +61,60 @@ internal fun TandemTheme(
         }
     }
 }
+
+@Composable
+private fun animatedTandemPalette(
+    palette: TandemPalette,
+    colorSpec: AnimationSpec<Color>,
+): TandemPalette =
+    TandemPalette(
+        background = animateColorAsState(palette.background, colorSpec, label = "theme-background").value,
+        surface = animateColorAsState(palette.surface, colorSpec, label = "theme-surface").value,
+        raised = animateColorAsState(palette.raised, colorSpec, label = "theme-raised").value,
+        border = animateColorAsState(palette.border, colorSpec, label = "theme-border").value,
+        text = animateColorAsState(palette.text, colorSpec, label = "theme-text").value,
+        muted = animateColorAsState(palette.muted, colorSpec, label = "theme-muted").value,
+        accent = animateColorAsState(palette.accent, colorSpec, label = "theme-accent").value,
+        accentContent = animateColorAsState(palette.accentContent, colorSpec, label = "theme-accent-content").value,
+        accentSurface = animateColorAsState(palette.accentSurface, colorSpec, label = "theme-accent-surface").value,
+        positive = animateColorAsState(palette.positive, colorSpec, label = "theme-positive").value,
+        syncing = animateColorAsState(palette.syncing, colorSpec, label = "theme-syncing").value,
+        warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
+        negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
+    )
+
+private fun tandemMaterialColors(
+    dark: Boolean,
+    animatedPalette: TandemPalette,
+): Colors =
+    if (dark) {
+        darkColors(
+            primary = animatedPalette.accent,
+            primaryVariant = animatedPalette.accent,
+            secondary = animatedPalette.accent,
+            secondaryVariant = animatedPalette.accent,
+            background = animatedPalette.background,
+            surface = animatedPalette.raised,
+            error = animatedPalette.negative,
+            onPrimary = animatedPalette.accentContent,
+            onSecondary = animatedPalette.accentContent,
+            onBackground = animatedPalette.text,
+            onSurface = animatedPalette.text,
+            onError = Color.White,
+        )
+    } else {
+        lightColors(
+            primary = animatedPalette.accent,
+            primaryVariant = animatedPalette.accent,
+            secondary = animatedPalette.accent,
+            secondaryVariant = animatedPalette.accent,
+            background = animatedPalette.background,
+            surface = animatedPalette.raised,
+            error = animatedPalette.negative,
+            onPrimary = animatedPalette.accentContent,
+            onSecondary = animatedPalette.accentContent,
+            onBackground = animatedPalette.text,
+            onSurface = animatedPalette.text,
+            onError = Color.White,
+        )
+    }

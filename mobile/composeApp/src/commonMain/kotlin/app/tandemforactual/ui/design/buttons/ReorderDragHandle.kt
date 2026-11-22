@@ -72,24 +72,7 @@ internal fun ReorderDragHandle(
             }
         }
     val actionList =
-        buildList {
-            if (enabled && canMoveUp) {
-                add(
-                    CustomAccessibilityAction("Move $itemName up") {
-                        latestMoveUp()
-                        true
-                    },
-                )
-            }
-            if (enabled && canMoveDown) {
-                add(
-                    CustomAccessibilityAction("Move $itemName down") {
-                        latestMoveDown()
-                        true
-                    },
-                )
-            }
-        }
+        reorderAccessibilityActions(itemName, enabled, canMoveUp, canMoveDown, { latestMoveUp() }, { latestMoveDown() })
     val reorderSemantics =
         Modifier.semantics(mergeDescendants = true) {
             contentDescription = "Drag to reorder $itemName"
@@ -120,3 +103,30 @@ internal fun ReorderDragHandle(
         Icon(Lucide.GripVertical, contentDescription = null, modifier = Modifier.size(21.dp), tint = tandemPalette.muted)
     }
 }
+
+private fun reorderAccessibilityActions(
+    itemName: String,
+    enabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    latestMoveUp: () -> Unit,
+    latestMoveDown: () -> Unit,
+): List<CustomAccessibilityAction> =
+    buildList {
+        if (enabled && canMoveUp) {
+            add(
+                CustomAccessibilityAction("Move $itemName up") {
+                    latestMoveUp()
+                    true
+                },
+            )
+        }
+        if (enabled && canMoveDown) {
+            add(
+                CustomAccessibilityAction("Move $itemName down") {
+                    latestMoveDown()
+                    true
+                },
+            )
+        }
+    }

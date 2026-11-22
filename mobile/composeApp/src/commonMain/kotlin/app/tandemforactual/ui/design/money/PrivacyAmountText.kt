@@ -56,35 +56,60 @@ internal fun PrivacyAmountText(
             maxLines = maxLines,
             overflow = overflow,
         )
-        return
+    } else {
+        MaskedAmountText(text, modifier, resolvedColor, fontSize, fontWeight, textAlign, maxLines, overflow, fractionDigits)
     }
+}
 
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-    var tapReveal by remember { mutableStateOf(false) }
-    var revealRequest by remember { mutableIntStateOf(0) }
-    var wasHovered by remember { mutableStateOf(false) }
-    LaunchedEffect(revealRequest) {
-        if (revealRequest > 0) {
-            delay(PRIVACY_AMOUNT_TAP_REVEAL_MILLIS)
-            tapReveal = false
-        }
-    }
-    LaunchedEffect(isHovered) {
-        if (isHovered) {
-            wasHovered = true
-        } else if (wasHovered) {
-            wasHovered = false
-            tapReveal = false
-        }
-    }
-
-    val hidden = !isHovered && !tapReveal
+/** Tap/hover reveal state of a masked amount. */
+private class PrivacyRevealState {
+    var tapReveal by mutableStateOf(false)
+    var revealRequest by mutableIntStateOf(0)
+    var wasHovered by mutableStateOf(false)
 
     fun revealBriefly() {
         tapReveal = true
         revealRequest += 1
     }
+}
+
+@Composable
+private fun rememberPrivacyRevealState(isHovered: Boolean): PrivacyRevealState {
+    val state = remember { PrivacyRevealState() }
+    LaunchedEffect(state.revealRequest) {
+        if (state.revealRequest > 0) {
+            delay(PRIVACY_AMOUNT_TAP_REVEAL_MILLIS)
+            state.tapReveal = false
+        }
+    }
+    LaunchedEffect(isHovered) {
+        if (isHovered) {
+            state.wasHovered = true
+        } else if (state.wasHovered) {
+            state.wasHovered = false
+            state.tapReveal = false
+        }
+    }
+    return state
+}
+
+/** Amount shown as a mask until hovered or tapped. */
+@Composable
+private fun MaskedAmountText(
+    text: String,
+    modifier: Modifier,
+    resolvedColor: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight?,
+    textAlign: TextAlign?,
+    maxLines: Int,
+    overflow: TextOverflow,
+    fractionDigits: Int,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val reveal = rememberPrivacyRevealState(isHovered)
+    val hidden = !isHovered && !reveal.tapReveal
     val actionLabel = if (hidden) "Reveal amount" else "Hide amount"
     Text(
         text = if (hidden) AnnotatedString(PRIVACY_AMOUNT_MASK) else amountAnnotatedString(text, fractionDigits),
@@ -98,9 +123,9 @@ internal fun PrivacyAmountText(
                     onClickLabel = actionLabel,
                     onClick = {
                         if (hidden) {
-                            revealBriefly()
+                            reveal.revealBriefly()
                         } else {
-                            tapReveal = false
+                            reveal.tapReveal = false
                         }
                     },
                 ).clearAndSetSemantics {
@@ -109,9 +134,9 @@ internal fun PrivacyAmountText(
                     stateDescription = if (hidden) "Hidden. Tap to reveal briefly." else "Visible temporarily."
                     onClick(actionLabel) {
                         if (hidden) {
-                            revealBriefly()
+                            reveal.revealBriefly()
                         } else {
-                            tapReveal = false
+                            reveal.tapReveal = false
                         }
                         true
                     }
