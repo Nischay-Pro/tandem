@@ -27,7 +27,10 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.planning.AccountCurrency
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.DeviceName
+import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningSettings
@@ -303,6 +306,44 @@ internal class TandemMobileSession(
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var planningSettings by mutableStateOf(PlanningSettings())
+    var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
+        private set
+    var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    suspend fun saveAccountCurrency(
+        budgetId: String,
+        accountId: String,
+        currency: String,
+    ) {
+        planningStore(budgetId)?.save(AccountCurrency(accountId, currency))
+    }
+
+    suspend fun saveExchangeRate(
+        budgetId: String,
+        rate: ExchangeRate,
+    ) {
+        planningStore(budgetId)?.save(rate)
+    }
+
+    suspend fun deleteExchangeRate(
+        budgetId: String,
+        rate: ExchangeRate,
+    ) {
+        planningStore(budgetId)?.deleteExchangeRate(rate)
+    }
+
+    /** Names this device's Actual node, so change history on every device can say which device made an edit. */
+    suspend fun nameDevice(
+        budgetId: String,
+        node: String,
+        name: String,
+    ) {
+        if (node.isBlank() || name.isBlank()) return
+        planningStore(budgetId)?.save(DeviceName(node, name.trim().take(40)))
+    }
 
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
@@ -5793,6 +5834,13 @@ internal class TandemMobileSession(
                 launch { planning.retirementProfiles().collect { retirementProfiles = it } }
                 launch { planning.reimbursements().collect { reimbursements = it } }
                 launch { planning.settings().collect { planningSettings = it } }
+                launch {
+                    planning.accountCurrencies().collect { list ->
+                        accountCurrencies = list.associate { it.accountId to it.currency }
+                    }
+                }
+                launch { planning.exchangeRates().collect { exchangeRates = it } }
+                launch { planning.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
             }
         }
     }

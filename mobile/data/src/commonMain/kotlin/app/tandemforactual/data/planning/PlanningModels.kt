@@ -25,9 +25,12 @@ data class SavingsGoal(
     val targetDate: String? = null,
     val categoryId: String? = null,
     val accountId: String? = null,
+    /** False keeps the goal on this device instead of sharing it with everyone on the budget. */
+    val shared: Boolean = true,
 ) {
     fun toJson(): JsonObject =
         jsonOf(
+            PRIVATE to privateFlag(shared),
             "name" to JsonPrimitive(name),
             "targetMinor" to JsonPrimitive(targetMinor),
             "currency" to JsonPrimitive(currency),
@@ -50,6 +53,7 @@ data class SavingsGoal(
             targetDate = body.text("targetDate"),
             categoryId = body.text("categoryId"),
             accountId = body.text("accountId"),
+            shared = !isPrivate(body),
         )
     }
 }
@@ -72,6 +76,7 @@ data class DebtTerms(
     val kind: DebtKind = DebtKind.UNSPECIFIED,
     /** A card whose full statement balance is paid each month, so it never carries interest. */
     val paysInFull: Boolean = false,
+    val shared: Boolean = true,
 ) {
     val aprProvenance: Provenance get() = if (aprBasisPoints == null) Provenance.UNKNOWN else Provenance.USER_SUPPLIED
 
@@ -85,6 +90,7 @@ data class DebtTerms(
             "promoEndsOn" to promoEndsOn.json(),
             "kind" to (if (kind == DebtKind.UNSPECIFIED) JsonNull else JsonPrimitive(kind.name)),
             "paysInFull" to (if (paysInFull) JsonPrimitive(true) else JsonNull),
+            PRIVATE to privateFlag(shared),
         )
 
     companion object {
@@ -103,6 +109,7 @@ data class DebtTerms(
             promoEndsOn = body.text("promoEndsOn"),
             kind = DebtKind.entries.firstOrNull { it.name == body.text("kind") } ?: DebtKind.UNSPECIFIED,
             paysInFull = body.text("paysInFull") == "true",
+            shared = !isPrivate(body),
         )
     }
 }
@@ -156,6 +163,65 @@ data class Reimbursement(
             date = body.text("date"),
             receivedOn = body.text("receivedOn"),
         )
+    }
+}
+
+/** The currency an Actual account holds. Actual has no per-account currency, so Tandem keeps it as planning data. */
+data class AccountCurrency(
+    val accountId: String,
+    val currency: String,
+) {
+    val id: String get() = "currency:$accountId"
+
+    fun toJson(): JsonObject = jsonOf("accountId" to JsonPrimitive(accountId), "currency" to JsonPrimitive(currency))
+
+    companion object {
+        const val TYPE = "planning.account_currency"
+
+        fun fromJson(body: JsonObject) = AccountCurrency(body.text("accountId").orEmpty(), body.text("currency").orEmpty())
+    }
+}
+
+/** One exchange rate the person entered: one [from] is worth [rate] of [to], as of [asOf]. */
+data class ExchangeRate(
+    val from: String,
+    val to: String,
+    val rate: String,
+    val asOf: String,
+) {
+    val id: String get() = "fx:$from:$to"
+
+    val value: Double? get() = rate.toDoubleOrNull()?.takeIf { it > 0 && it.isFinite() }
+
+    fun toJson(): JsonObject =
+        jsonOf(
+            "from" to JsonPrimitive(from),
+            "to" to JsonPrimitive(to),
+            "rate" to JsonPrimitive(rate),
+            "asOf" to JsonPrimitive(asOf),
+        )
+
+    companion object {
+        const val TYPE = "planning.exchange_rate"
+
+        fun fromJson(body: JsonObject) =
+            ExchangeRate(body.text("from").orEmpty(), body.text("to").orEmpty(), body.text("rate").orEmpty(), body.text("asOf").orEmpty())
+    }
+}
+
+/** A name for one device's changes, so change history can say who made an edit. Shared with the household. */
+data class DeviceName(
+    val node: String,
+    val name: String,
+) {
+    val id: String get() = "device:$node"
+
+    fun toJson(): JsonObject = jsonOf("node" to JsonPrimitive(node), "name" to JsonPrimitive(name))
+
+    companion object {
+        const val TYPE = "planning.device_name"
+
+        fun fromJson(body: JsonObject) = DeviceName(body.text("node").orEmpty(), body.text("name").orEmpty())
     }
 }
 
@@ -228,6 +294,13 @@ private fun matchFrom(body: JsonObject): EmployerMatch =
         },
         body.long("capMinor"),
     )
+
+/** The body field that keeps a planning record on this device; [PlanningSync] never uploads such records. */
+const val PRIVATE = "private"
+
+fun isPrivate(body: JsonObject): Boolean = (body[PRIVATE] as? JsonPrimitive)?.contentOrNull == "true"
+
+private fun privateFlag(shared: Boolean): JsonElement = if (shared) JsonNull else JsonPrimitive(true)
 
 private fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
 
