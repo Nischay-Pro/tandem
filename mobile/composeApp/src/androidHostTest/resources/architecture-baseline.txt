@@ -57,6 +57,7 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature WhatIfScreen -> insights
 function-size AccountDetailScreens.AccountDetailScreen
 function-size AccountDetailScreens.StatementImportDialog
+function-size AccountEdits.markTransactionsReconciled
 function-size AccountListScreens.AccountSummaryCard
 function-size AccountListScreens.AccountsScreen
 function-size AccountManagementScreens.AccountOptionsScreen
@@ -73,6 +74,9 @@ function-size AppScreenRouter.ScreenContent
 function-size AreaChart.AreaChart
 function-size BankBrowserLinkSheet.BanksStep
 function-size BankConnectionsScreen.BankConnectionsScreen
+function-size BudgetEditRecovery.correctRejectedCategoryRename
+function-size BudgetEditRecovery.retryBudgetMutation
+function-size BudgetEditSender.processQueuedBudgetReorders
 function-size BudgetReorderQueue.complete
 function-size BudgetReorderQueue.enqueue
 function-size BudgetReorderQueue.failHead
@@ -141,13 +145,9 @@ function-size SyncCenterScreen.PendingChangesScreen
 function-size SyncCenterScreen.SyncCenterScreen
 function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
-function-size TandemMobileSession.correctRejectedCategoryRename
 function-size TandemMobileSession.createTransaction
 function-size TandemMobileSession.deleteTransaction
 function-size TandemMobileSession.discardWrite
-function-size TandemMobileSession.markTransactionsReconciled
-function-size TandemMobileSession.processQueuedBudgetReorders
-function-size TandemMobileSession.retryBudgetMutation
 function-size TandemMobileSession.signOutAndClearLocalData
 function-size TandemMobileSession.synchronizeSerialized
 function-size TandemMobileSession.updateTransaction

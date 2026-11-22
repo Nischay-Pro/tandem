@@ -37,6 +37,9 @@ import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.createBudgetRule
+import app.tandemforactual.ui.core.session.budget.deleteBudgetRule
+import app.tandemforactual.ui.core.session.budget.editBudgetRule
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
@@ -233,9 +236,9 @@ private fun RuleEditorContent(
                     scope.launch {
                         val saved =
                             if (ruleId.isBlank()) {
-                                mobileSession.createBudgetRule(state.selectedBudgetId, body, password)
+                                mobileSession.budgetEdits.createBudgetRule(state.selectedBudgetId, body, password)
                             } else {
-                                mobileSession.editBudgetRule(state.selectedBudgetId, ruleId, body, password)
+                                mobileSession.budgetEdits.editBudgetRule(state.selectedBudgetId, ruleId, body, password)
                             }
                         if (saved) onDone()
                     }
@@ -256,7 +259,7 @@ private fun RuleEditorContent(
             onDismissRequest = { confirmDelete = false },
             onConfirm = {
                 scope.launch {
-                    val deleted = mobileSession.deleteBudgetRule(state.selectedBudgetId, ruleId, password)
+                    val deleted = mobileSession.budgetEdits.deleteBudgetRule(state.selectedBudgetId, ruleId, password)
                     confirmDelete = false
                     if (deleted) onDone()
                 }

@@ -58,6 +58,11 @@ import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.DragReorderState
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
+import app.tandemforactual.ui.core.session.budget.budgetReorderStatus
+import app.tandemforactual.ui.core.session.budget.clearBudgetReorderMessage
+import app.tandemforactual.ui.core.session.budget.createBudgetAccount
+import app.tandemforactual.ui.core.session.budget.moveBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.budgetOrderForScreen
 import app.tandemforactual.ui.core.session.dragReorderItemModifier
@@ -585,9 +590,10 @@ internal fun AccountsScreen(
     }
     val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
     val serverAccountOrder = remember(liveAccounts) { sortAccountsForList(liveAccounts).map { it.id } }
-    val accountOrderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, "accounts")
+    val accountOrderStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, "accounts")
     val queuedAccountMoves =
         mobileSession
+            .budgetQueue
             .budgetReorderMovesFor(state.selectedBudgetId, "accounts")
             .filter { it.kind == BudgetReorderKind.MOVE_ACCOUNT }
     val queuedAccountOrder = budgetOrderForScreen(serverAccountOrder, accountOrderStatus, queuedAccountMoves)
@@ -604,8 +610,9 @@ internal fun AccountsScreen(
             ?: dragReorder.currentOrder(
                 budgetOrderForScreen(
                     serverAccountOrder,
-                    mobileSession.budgetReorderStatus(state.selectedBudgetId, "accounts"),
+                    mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, "accounts"),
                     mobileSession
+                        .budgetQueue
                         .budgetReorderMovesFor(state.selectedBudgetId, "accounts")
                         .filter { it.kind == BudgetReorderKind.MOVE_ACCOUNT },
                 ),
@@ -622,8 +629,8 @@ internal fun AccountsScreen(
         if (nextGroupOrder == currentGroupOrder) return
         val nextFullOrder = reorderAccountsWithinSlots(currentOrder, movableAccountIds, nextGroupOrder)
         scope.launch {
-            mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
-            mobileSession.moveBudgetAccount(
+            mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
+            mobileSession.budgetEdits.moveBudgetAccount(
                 state.selectedBudgetId,
                 accountId,
                 itemTargetIdAfterMove(nextGroupOrder, accountId),
@@ -845,7 +852,7 @@ internal fun AccountsScreen(
 
                         fun startDrag() {
                             selectedAccountOrderId = account.id
-                            mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
+                            mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
                             mobileSession.feedback.clearBudgetActionMessage()
                             val fullOrder = latestAccountOrder()
                             dragReorder.start(
@@ -868,7 +875,7 @@ internal fun AccountsScreen(
                                 if (result.itemId == account.id && result.finalOrder != result.startingOrder) {
                                     scope.launch {
                                         val saved =
-                                            mobileSession.moveBudgetAccount(
+                                            mobileSession.budgetEdits.moveBudgetAccount(
                                                 state.selectedBudgetId,
                                                 result.itemId,
                                                 itemTargetIdAfterMove(result.finalOrder, result.itemId),
@@ -1081,7 +1088,7 @@ internal fun AccountsScreen(
                     ) {
                         scope.launch {
                             val created =
-                                mobileSession.createBudgetAccount(
+                                mobileSession.budgetEdits.createBudgetAccount(
                                     state.selectedBudgetId,
                                     newAccountName,
                                     newAccountOffBudget,

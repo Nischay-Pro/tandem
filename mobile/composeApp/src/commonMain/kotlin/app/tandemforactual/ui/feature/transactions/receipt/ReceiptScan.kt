@@ -3,6 +3,7 @@ import androidx.compose.runtime.Composable
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.matchSharedPayee
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatLiveDate
@@ -185,7 +186,7 @@ internal suspend fun fillNewTransaction(
     }
     state.newTransactionPayeeId = payee.first
     state.transactionPayee = payee.second
-    mobileSession.suggestedCategoryForPayee(state.selectedBudgetId, payee.first)?.let { categoryId ->
+    mobileSession.budgetEdits.suggestedCategoryForPayee(state.selectedBudgetId, payee.first)?.let { categoryId ->
         mobileSession.categoryRecords.firstOrNull { it.recordId == categoryId }?.recordName()?.let { name ->
             state.newTransactionCategoryId = categoryId
             state.transactionCategory = name

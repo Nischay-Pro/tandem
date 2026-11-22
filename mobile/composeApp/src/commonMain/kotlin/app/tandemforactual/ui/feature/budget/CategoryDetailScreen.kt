@@ -45,6 +45,12 @@ import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryDelete
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryMoveToGroup
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryRename
+import app.tandemforactual.ui.core.session.budget.moveBudgetMoney
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -327,7 +333,7 @@ internal fun CategoryDetailScreen(
                         leadingIcon = Lucide.RefreshCw,
                     ) { enabled ->
                         scope.launch {
-                            mobileSession.setBudgetCategoryCarryover(
+                            mobileSession.budgetEdits.setBudgetCategoryCarryover(
                                 state.selectedBudgetId,
                                 category.id,
                                 state.selectedMonthId,
@@ -432,7 +438,7 @@ internal fun CategoryDetailScreen(
                         ) {
                             scope.launch {
                                 val saved =
-                                    mobileSession.setBudgetCategoryAmount(
+                                    mobileSession.budgetEdits.setBudgetCategoryAmount(
                                         state.selectedBudgetId,
                                         category.id,
                                         state.selectedMonthId,
@@ -540,7 +546,7 @@ internal fun CategoryDetailScreen(
                         ) {
                             scope.launch {
                                 val moved =
-                                    mobileSession.moveBudgetMoney(
+                                    mobileSession.budgetEdits.moveBudgetMoney(
                                         state.selectedBudgetId,
                                         state.selectedMonthId,
                                         moveMoneyFromId,
@@ -708,7 +714,7 @@ internal fun CategoryDetailScreen(
                                 val currentGroupId = selectedGroup?.id ?: state.selectedCategoryGroupId
                                 if (editCategoryGroupId != currentGroupId) {
                                     saved =
-                                        mobileSession.enqueueBudgetCategoryMoveToGroup(
+                                        mobileSession.budgetQueue.enqueueBudgetCategoryMoveToGroup(
                                             state.selectedBudgetId,
                                             category.id,
                                             editCategoryGroupId,
@@ -718,7 +724,7 @@ internal fun CategoryDetailScreen(
                                 }
                                 if (saved && editName.trim() != category.name) {
                                     saved =
-                                        mobileSession.enqueueBudgetCategoryRename(
+                                        mobileSession.budgetQueue.enqueueBudgetCategoryRename(
                                             state.selectedBudgetId,
                                             category.id,
                                             editName,
@@ -879,7 +885,7 @@ internal fun CategoryDetailScreen(
             onConfirm = {
                 scope.launch {
                     val deleted =
-                        mobileSession.enqueueBudgetCategoryDelete(
+                        mobileSession.budgetQueue.enqueueBudgetCategoryDelete(
                             state.selectedBudgetId,
                             category.id,
                             deleteDestinationId,
@@ -1051,7 +1057,7 @@ private fun CategoryInsightsSection(
                 onClick = {
                     if (!mobileSession.isPerformingBudgetAction) {
                         scope.launch {
-                            mobileSession.setBudgetCategoryAmount(
+                            mobileSession.budgetEdits.setBudgetCategoryAmount(
                                 state.selectedBudgetId,
                                 category.id,
                                 monthId,

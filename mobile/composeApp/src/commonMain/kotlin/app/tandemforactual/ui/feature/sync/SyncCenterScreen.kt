@@ -56,6 +56,9 @@ import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.SyncRecovery
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.budgetMutationReviewsFor
+import app.tandemforactual.ui.core.session.budget.deviceWriteHistory
+import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
 import app.tandemforactual.ui.core.session.budgetMutationFailureMessage
 import app.tandemforactual.ui.core.session.budgetMutationStatusLabel
 import app.tandemforactual.ui.core.session.decodeBudgetReorderQueue
@@ -183,8 +186,8 @@ internal fun SyncCenterScreen(
         mobileSession.pendingWrites.filter {
             it.budgetId == state.selectedBudgetId && it.recordType == "transaction" && it.status in setOf("queued", "sending")
         }
-    val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
-    val budgetMutationReviews = mobileSession.budgetMutationReviewsFor(state.selectedBudgetId)
+    val budgetMutations = mobileSession.budgetQueue.pendingBudgetMutationsFor(state.selectedBudgetId)
+    val budgetMutationReviews = mobileSession.budgetQueue.budgetMutationReviewsFor(state.selectedBudgetId)
     val scheduleActions =
         mobileSession.pendingWrites.filter {
             it.budgetId == state.selectedBudgetId &&
@@ -392,7 +395,7 @@ private fun DeviceWriteHistory(
 ) {
     val budgetId = state.selectedBudgetId
     val history by produceState(emptyList<OutboxOperationEntity>(), budgetId, mobileSession.pendingWrites, mobileSession.localSyncState) {
-        value = mobileSession.deviceWriteHistory(budgetId)
+        value = mobileSession.budgetEdits.deviceWriteHistory(budgetId)
     }
     var showAll by rememberSaveable(budgetId) { mutableStateOf(false) }
     if (history.isEmpty()) return
@@ -468,7 +471,7 @@ internal fun PendingChangesScreen(
                 it.recordType == "schedule-action" &&
                 it.status in setOf("queued", "sending")
         }
-    val budgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
+    val budgetMutations = mobileSession.budgetQueue.pendingBudgetMutationsFor(state.selectedBudgetId)
     val pendingCount = transactions.size + schedules.size + budgetMutations.size
 
     PageLazyColumn {

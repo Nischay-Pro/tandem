@@ -23,6 +23,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.createBudgetPayee
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryCreate
+import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -418,7 +421,7 @@ internal fun ScreenContent(
                                                     if (!mobileSession.isPerformingBudgetAction) {
                                                         scope.launch {
                                                             val payeeId =
-                                                                mobileSession.createBudgetPayee(
+                                                                mobileSession.budgetEdits.createBudgetPayee(
                                                                     state.selectedBudgetId,
                                                                     newName,
                                                                     state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -448,7 +451,7 @@ internal fun ScreenContent(
                     state.newTransactionPayeeId = if (isLiveBudget) item.id else ""
                     if (isLiveBudget && !selectingTransferDestination && state.newTransactionCategoryId.isBlank()) {
                         scope.launch {
-                            val categoryId = mobileSession.suggestedCategoryForPayee(state.selectedBudgetId, item.id)
+                            val categoryId = mobileSession.budgetEdits.suggestedCategoryForPayee(state.selectedBudgetId, item.id)
                             val categoryName = mobileSession.categoryRecords.firstOrNull { it.recordId == categoryId }?.recordName()
                             if (categoryId != null && categoryName != null && state.newTransactionCategoryId.isBlank()) {
                                 state.newTransactionCategoryId = categoryId
@@ -620,7 +623,7 @@ internal fun ScreenContent(
                                                 mobileSession.feedback.clearBudgetActionMessage()
                                                 scope.launch {
                                                     val categoryId =
-                                                        mobileSession.enqueueBudgetCategoryCreate(
+                                                        mobileSession.budgetQueue.enqueueBudgetCategoryCreate(
                                                             state.selectedBudgetId,
                                                             createGroupId,
                                                             newName,

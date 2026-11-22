@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.closeBudgetAccount
+import app.tandemforactual.ui.core.session.budget.renameBudgetAccount
+import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -314,7 +317,7 @@ internal fun AccountOptionsScreen(
                         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                         onClick = {
                             scope.launch {
-                                if (mobileSession.reopenBudgetAccount(
+                                if (mobileSession.budgetEdits.reopenBudgetAccount(
                                         state.selectedBudgetId,
                                         liveAccount.id,
                                         state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -392,7 +395,7 @@ internal fun AccountOptionsScreen(
                             loading = mobileSession.isPerformingBudgetAction,
                         ) {
                             scope.launch {
-                                if (mobileSession.renameBudgetAccount(
+                                if (mobileSession.budgetEdits.renameBudgetAccount(
                                         state.selectedBudgetId,
                                         account.id,
                                         renameValue,
@@ -447,7 +450,7 @@ internal fun AccountOptionsScreen(
             onConfirm = {
                 scope.launch {
                     val closed =
-                        mobileSession.closeBudgetAccount(
+                        mobileSession.budgetEdits.closeBudgetAccount(
                             state.selectedBudgetId,
                             liveAccount.id,
                             transferAccountId.takeIf(String::isNotBlank),

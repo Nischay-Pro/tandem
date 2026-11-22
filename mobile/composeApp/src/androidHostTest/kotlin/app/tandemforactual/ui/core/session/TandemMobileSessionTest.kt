@@ -1,5 +1,4 @@
 package app.tandemforactual.ui.core.session
-
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.api.client.StatementImportItem
@@ -18,6 +17,29 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
+import app.tandemforactual.ui.core.session.budget.applyBudgetTemplate
+import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
+import app.tandemforactual.ui.core.session.budget.closeBudgetAccount
+import app.tandemforactual.ui.core.session.budget.copyBudgetMonth
+import app.tandemforactual.ui.core.session.budget.correctRejectedCategoryRename
+import app.tandemforactual.ui.core.session.budget.createBudgetAccount
+import app.tandemforactual.ui.core.session.budget.createBudgetPayee
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryGroupCreate
+import app.tandemforactual.ui.core.session.budget.holdBudgetForNextMonth
+import app.tandemforactual.ui.core.session.budget.importStatementTransactions
+import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
+import app.tandemforactual.ui.core.session.budget.moveBudgetAccount
+import app.tandemforactual.ui.core.session.budget.moveBudgetMoney
+import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
+import app.tandemforactual.ui.core.session.budget.pendingCategoryBudgetOverrides
+import app.tandemforactual.ui.core.session.budget.previewStatementImportTransactions
+import app.tandemforactual.ui.core.session.budget.renameBudgetAccount
+import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
+import app.tandemforactual.ui.core.session.budget.resetBudgetHold
+import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -136,7 +158,7 @@ class TandemMobileSessionTest {
                 val session = TandemMobileSession(apiClient, database, { 1_000L })
                 assertFalse(session.isAuthenticated)
 
-                val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
+                val localPayeeId = session.budgetEdits.createBudgetPayee("budget-1", "Corner Market", null)
 
                 assertNotNull(localPayeeId)
                 assertTrue(localPayeeId.startsWith("local-payee-"))
@@ -148,7 +170,7 @@ class TandemMobileSessionTest {
 
                 val restoredSession = TandemMobileSession(apiClient, database, { 1_000L })
                 assertFalse(restoredSession.isAuthenticated)
-                assertTrue(restoredSession.restoreBudgetReorderQueue())
+                assertTrue(restoredSession.budgetQueue.restoreBudgetReorderQueue())
                 restoredSession.loadLocalRecords("budget-1")
 
                 assertEquals(localPayeeId, restoredSession.payeeRecords.single().recordId)
@@ -211,7 +233,7 @@ class TandemMobileSessionTest {
 
                 assertFalse(session.isAuthenticated)
                 session.loadLocalRecords("budget-1")
-                val localPayeeId = session.createBudgetPayee("budget-1", "Corner Market", null)
+                val localPayeeId = session.budgetEdits.createBudgetPayee("budget-1", "Corner Market", null)
                 assertNotNull(localPayeeId)
 
                 assertTrue(
@@ -342,19 +364,19 @@ class TandemMobileSessionTest {
                 val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
                 assertFalse(session.isAuthenticated)
 
-                assertTrue(session.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 12_500, null))
-                assertTrue(session.setBudgetCategoryCarryover("budget-1", "category-1", "2026-11", true, null))
-                assertTrue(session.copyBudgetMonth("budget-1", "2026-11", null))
-                assertTrue(session.applyBudgetTemplate("budget-1", "2026-11", listOf("category-1" to 9_000), null))
-                assertTrue(session.holdBudgetForNextMonth("budget-1", "2026-11", 500, null))
-                assertTrue(session.resetBudgetHold("budget-1", "2026-11", null))
-                assertTrue(session.moveBudgetMoney("budget-1", "2026-11", "category-1", "category-2", 250, null))
-                assertTrue(session.createBudgetAccount("budget-1", "Travel card", false, null, null))
-                assertTrue(session.closeBudgetAccount("budget-1", "account-1", null, null, null))
-                assertTrue(session.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
-                assertTrue(session.reopenBudgetAccount("budget-1", "account-1", null))
+                assertTrue(session.budgetEdits.setBudgetCategoryAmount("budget-1", "category-1", "2026-11", 12_500, null))
+                assertTrue(session.budgetEdits.setBudgetCategoryCarryover("budget-1", "category-1", "2026-11", true, null))
+                assertTrue(session.budgetEdits.copyBudgetMonth("budget-1", "2026-11", null))
+                assertTrue(session.budgetEdits.applyBudgetTemplate("budget-1", "2026-11", listOf("category-1" to 9_000), null))
+                assertTrue(session.budgetEdits.holdBudgetForNextMonth("budget-1", "2026-11", 500, null))
+                assertTrue(session.budgetEdits.resetBudgetHold("budget-1", "2026-11", null))
+                assertTrue(session.budgetEdits.moveBudgetMoney("budget-1", "2026-11", "category-1", "category-2", 250, null))
+                assertTrue(session.budgetEdits.createBudgetAccount("budget-1", "Travel card", false, null, null))
+                assertTrue(session.budgetEdits.closeBudgetAccount("budget-1", "account-1", null, null, null))
+                assertTrue(session.budgetEdits.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
+                assertTrue(session.budgetEdits.reopenBudgetAccount("budget-1", "account-1", null))
                 assertTrue(
-                    session.moveBudgetAccount(
+                    session.budgetEdits.moveBudgetAccount(
                         "budget-1",
                         "account-1",
                         "account-2",
@@ -362,12 +384,12 @@ class TandemMobileSessionTest {
                         desiredOrder = listOf("account-2", "account-1"),
                     ),
                 )
-                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "rename", "Corner Market", null, null))
-                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null))
-                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, null))
-                assertTrue(session.manageBudgetPayee("budget-1", "payee-1", "default-category", null, null, null, "category-1"))
+                assertTrue(session.budgetEdits.manageBudgetPayee("budget-1", "payee-1", "rename", "Corner Market", null, null))
+                assertTrue(session.budgetEdits.manageBudgetPayee("budget-1", "payee-1", "merge", null, "payee-2", null))
+                assertTrue(session.budgetEdits.manageBudgetPayee("budget-1", "payee-1", "delete", null, null, null))
+                assertTrue(session.budgetEdits.manageBudgetPayee("budget-1", "payee-1", "default-category", null, null, null, "category-1"))
                 assertTrue(
-                    session.importStatementTransactions(
+                    session.budgetEdits.importStatementTransactions(
                         "budget-1",
                         "account-1",
                         listOf(StatementImportItem("2026-11-01", -1_250, "Corner Market", null, "import-1")),
@@ -401,8 +423,14 @@ class TandemMobileSessionTest {
                     operations.map { it.kind }.toSet(),
                 )
                 assertTrue(queued.all { it.status == "queued" })
-                assertEquals(9_000L, session.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
-                assertEquals("Travel card", session.accountRecordsWithPendingCreates("budget-1", emptyList()).single().displayName)
+                assertEquals(9_000L, session.budgetQueue.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
+                assertEquals(
+                    "Travel card",
+                    session.budgetQueue
+                        .accountRecordsWithPendingCreates("budget-1", emptyList())
+                        .single()
+                        .displayName,
+                )
             } finally {
                 database.close()
             }
@@ -455,7 +483,7 @@ class TandemMobileSessionTest {
                 )
                 assertEquals("Try again", session.feedback.budgetActionMessageActionLabel)
 
-                val preview = session.previewStatementImportTransactions("budget-1", "account-1", listOf("import-1"), null)
+                val preview = session.budgetEdits.previewStatementImportTransactions("budget-1", "account-1", listOf("import-1"), null)
                 assertFalse(preview.serverChecked)
                 assertFalse(session.isServerReachable)
                 assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
@@ -958,17 +986,17 @@ class TandemMobileSessionTest {
                 repository.markBudgetMutationUncertain(mutation.operationId, "operation_uncertain")
                 val session = TandemMobileSession(TandemApiClient(), database, { 200L })
 
-                assertTrue(session.restoreBudgetReorderQueue())
+                assertTrue(session.budgetQueue.restoreBudgetReorderQueue())
                 assertEquals(
                     listOf(mutation.operationId),
-                    session.budgetReorderMovesFor("budget-1", "category-1").map { it.operationId },
+                    session.budgetQueue.budgetReorderMovesFor("budget-1", "category-1").map { it.operationId },
                 )
 
                 session.discardWrite("budget-1", mutation.operationId)
 
                 assertEquals("discarded", repository.findWrite(mutation.operationId)?.status)
                 assertFalse(isBudgetMutationReviewable(repository.findWrite(mutation.operationId)?.status.orEmpty()))
-                assertTrue(session.budgetReorderMovesFor("budget-1", "category-1").isEmpty())
+                assertTrue(session.budgetQueue.budgetReorderMovesFor("budget-1", "category-1").isEmpty())
                 assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
                 assertTrue(session.transactionWriteMessage?.contains("Actual may already have saved it") == true)
             } finally {
@@ -1023,13 +1051,13 @@ class TandemMobileSessionTest {
                         budgetMutationQueuePersistenceOverride = persistence,
                     )
 
-                assertFalse(session.restoreBudgetReorderQueue())
+                assertFalse(session.budgetQueue.restoreBudgetReorderQueue())
                 assertEquals(listOf("operation-1"), repository.readBudgetMutationQueue().items.map { it.operationId })
 
-                assertTrue(session.restoreBudgetReorderQueue())
+                assertTrue(session.budgetQueue.restoreBudgetReorderQueue())
                 assertEquals(
                     listOf("operation-1"),
-                    session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
+                    session.budgetQueue.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
                 )
             } finally {
                 database.close()
@@ -1073,11 +1101,11 @@ class TandemMobileSessionTest {
                     budgetMutationQueuePersistenceOverride = persistence,
                 )
 
-            assertTrue(session.restoreBudgetReorderQueue())
+            assertTrue(session.budgetQueue.restoreBudgetReorderQueue())
 
             assertEquals(
                 listOf("first-operation", "second-operation"),
-                session.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
+                session.budgetQueue.budgetReorderMovesFor("budget-1", "group-1").map { it.operationId },
             )
         }
 
@@ -1093,7 +1121,7 @@ class TandemMobileSessionTest {
                     budgetMutationQueuePersistenceOverride = persistence,
                 )
 
-            val localGroupId = originalSession.enqueueBudgetCategoryGroupCreate("budget-1", "Travel", false, emptyList(), null)
+            val localGroupId = originalSession.budgetQueue.enqueueBudgetCategoryGroupCreate("budget-1", "Travel", false, emptyList(), null)
 
             assertTrue(localGroupId != null)
             assertEquals(1, persistence.items.size)
@@ -1106,8 +1134,8 @@ class TandemMobileSessionTest {
                     nowEpochMillis = { 20L },
                     budgetMutationQueuePersistenceOverride = persistence,
                 )
-            assertTrue(restartedSession.restoreBudgetReorderQueue())
-            assertEquals(1, restartedSession.budgetReorderMovesFor("budget-1", BUDGET_GROUP_ORDER_SCOPE).size)
+            assertTrue(restartedSession.budgetQueue.restoreBudgetReorderQueue())
+            assertEquals(1, restartedSession.budgetQueue.budgetReorderMovesFor("budget-1", BUDGET_GROUP_ORDER_SCOPE).size)
         }
 
     @Test
@@ -1154,7 +1182,7 @@ class TandemMobileSessionTest {
                 val session = TandemMobileSession(TandemApiClient(), database, { 200L })
 
                 assertTrue(
-                    session.correctRejectedCategoryRename(
+                    session.budgetQueue.correctRejectedCategoryRename(
                         budgetId = "budget-1",
                         operationId = rejectedRename.operationId,
                         correctedName = "Home",
@@ -1171,7 +1199,7 @@ class TandemMobileSessionTest {
                 assertTrue(replacement.operationId != rejectedRename.operationId)
                 assertEquals(
                     listOf(replacement.operationId, laterChange.operationId),
-                    session.pendingBudgetMutationsFor("budget-1").map { it.operationId },
+                    session.budgetQueue.pendingBudgetMutationsFor("budget-1").map { it.operationId },
                 )
             } finally {
                 database.close()

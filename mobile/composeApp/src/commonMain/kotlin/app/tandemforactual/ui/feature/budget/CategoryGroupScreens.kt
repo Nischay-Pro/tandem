@@ -33,6 +33,20 @@ import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.DragReorderState
 import app.tandemforactual.ui.core.session.HIDDEN_CATEGORY_SCOPE_SUFFIX
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
+import app.tandemforactual.ui.core.session.budget.budgetReorderStatus
+import app.tandemforactual.ui.core.session.budget.categoryGroupVisibilityOverridesFor
+import app.tandemforactual.ui.core.session.budget.categoryVisibilityOverridesFor
+import app.tandemforactual.ui.core.session.budget.clearBudgetReorderMessage
+import app.tandemforactual.ui.core.session.budget.deletedCategoryIdsFor
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryCreate
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryGroupDelete
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryGroupRename
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryGroupVisibilityChange
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryVisibilityChange
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetReorder
+import app.tandemforactual.ui.core.session.budget.resolveCategoryGroupId
+import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.budgetOrderForScreen
 import app.tandemforactual.ui.core.session.dragReorderItemModifier
@@ -131,7 +145,7 @@ internal fun CategoryGroupScreen(
     }
     val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
     val groups = liveBudgetMonth?.groups.orEmpty()
-    val selectedGroupId = mobileSession.resolveCategoryGroupId(state.selectedBudgetId, state.selectedCategoryGroupId)
+    val selectedGroupId = mobileSession.budgetQueue.resolveCategoryGroupId(state.selectedBudgetId, state.selectedCategoryGroupId)
     val group = groups.firstOrNull { it.id == selectedGroupId } ?: groups.firstOrNull()
     var showHidden by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var selectedCategoryOrderId by rememberSaveable(state.selectedBudgetId, group?.id) { mutableStateOf<String?>(null) }
@@ -165,8 +179,8 @@ internal fun CategoryGroupScreen(
                         (body?.stringValue("group") ?: body?.stringValue("group_id")) == group?.id
                 }
         }
-    val queuedCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId)
-    val categoryMoveStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, categoryScopeId)
+    val queuedCategoryMoves = mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId)
+    val categoryMoveStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, categoryScopeId)
     val serverCategoryOrder = group?.categories.orEmpty().map { it.id }
     val queuedCategoryOrder = budgetOrderForScreen(serverCategoryOrder, categoryMoveStatus, queuedCategoryMoves)
     val dragReorder = remember(state.selectedBudgetId, group?.id) { DragReorderState() }
@@ -182,8 +196,8 @@ internal fun CategoryGroupScreen(
         dragReorder.currentOrder(
             budgetOrderForScreen(
                 serverCategoryOrder,
-                mobileSession.budgetReorderStatus(state.selectedBudgetId, categoryScopeId),
-                mobileSession.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId),
+                mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, categoryScopeId),
+                mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, categoryScopeId),
             ),
         )
 
@@ -194,10 +208,10 @@ internal fun CategoryGroupScreen(
         val oldOrder = currentCategoryOrder()
         val nextOrder = reorderItemToIndex(oldOrder, itemId, oldOrder.indexOf(itemId) + direction)
         if (oldOrder == nextOrder) return
-        mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
+        mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
         mobileSession.feedback.clearBudgetActionMessage()
         scope.launch {
-            mobileSession.enqueueBudgetReorder(
+            mobileSession.budgetQueue.enqueueBudgetReorder(
                 state.selectedBudgetId,
                 categoryScopeId,
                 BudgetReorderKind.CATEGORY,
@@ -210,14 +224,17 @@ internal fun CategoryGroupScreen(
         }
     }
     val hiddenGroupRecords =
-        remember(mobileSession.categoryGroupRecords, mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)) {
-            val visibilityOverrides = mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
+        remember(
+            mobileSession.categoryGroupRecords,
+            mobileSession.budgetQueue.categoryGroupVisibilityOverridesFor(state.selectedBudgetId),
+        ) {
+            val visibilityOverrides = mobileSession.budgetQueue.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
             mobileSession.categoryGroupRecords.filter { record ->
                 visibilityOverrides[record.recordId] ?: (record.recordBody()?.booleanValue("hidden") == true)
             }
         }
-    val categoryVisibilityOverrides = mobileSession.categoryVisibilityOverridesFor(state.selectedBudgetId)
-    val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
+    val categoryVisibilityOverrides = mobileSession.budgetQueue.categoryVisibilityOverridesFor(state.selectedBudgetId)
+    val deletedCategoryIds = mobileSession.budgetQueue.deletedCategoryIdsFor(state.selectedBudgetId)
     val hiddenCategoryRecords =
         remember(mobileSession.categoryRecords, group?.id, categoryVisibilityOverrides, deletedCategoryIds) {
             mobileSession.categoryRecords.filter { record ->
@@ -228,8 +245,8 @@ internal fun CategoryGroupScreen(
             }
         }
     val hiddenCategoryScopeId = "${group?.id.orEmpty()}$HIDDEN_CATEGORY_SCOPE_SUFFIX"
-    val queuedHiddenCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId)
-    val hiddenCategoryMoveStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId)
+    val queuedHiddenCategoryMoves = mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId)
+    val hiddenCategoryMoveStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId)
     val queuedHiddenCategoryOrder =
         budgetOrderForScreen(
             hiddenCategoryRecords.map { it.recordId },
@@ -242,8 +259,8 @@ internal fun CategoryGroupScreen(
     fun latestQueuedHiddenCategoryOrder(): List<String> =
         budgetOrderForScreen(
             hiddenCategoryRecords.map { it.recordId },
-            mobileSession.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId),
-            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId),
+            mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, hiddenCategoryScopeId),
+            mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, hiddenCategoryScopeId),
         )
     val orderedHiddenCategoryRecords =
         remember(hiddenCategoryRecords, hiddenCategoryOrder) {
@@ -292,7 +309,7 @@ internal fun CategoryGroupScreen(
                             actionLabel = "Try again".takeIf { categoryMoveStatus.pendingCount > 0 },
                             onAction =
                                 {
-                                    mobileSession.retryQueuedBudgetReorders(
+                                    mobileSession.budgetQueue.retryQueuedBudgetReorders(
                                         state.selectedBudgetId,
                                         state.encryptedPassword.takeIf(String::isNotBlank),
                                     )
@@ -322,7 +339,7 @@ internal fun CategoryGroupScreen(
 
                     fun startDrag() {
                         selectedCategoryOrderId = category.id
-                        mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
+                        mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
                         mobileSession.feedback.clearBudgetActionMessage()
                         dragReorder.start(currentCategoryOrder(), category.id)
                     }
@@ -338,7 +355,7 @@ internal fun CategoryGroupScreen(
                             if (result.itemId == category.id && result.finalOrder != result.startingOrder) {
                                 scope.launch {
                                     val saved =
-                                        mobileSession.enqueueBudgetReorder(
+                                        mobileSession.budgetQueue.enqueueBudgetReorder(
                                             state.selectedBudgetId,
                                             categoryScopeId,
                                             BudgetReorderKind.CATEGORY,
@@ -422,7 +439,7 @@ internal fun CategoryGroupScreen(
                                     onToggleHidden = {
                                         scope.launch {
                                             val saved =
-                                                mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                                mobileSession.budgetQueue.enqueueBudgetCategoryVisibilityChange(
                                                     budgetId = state.selectedBudgetId,
                                                     categoryId = category.id,
                                                     groupId = categoryScopeId,
@@ -462,7 +479,7 @@ internal fun CategoryGroupScreen(
                                     actionLabel = "Try again".takeIf { hiddenCategoryMoveStatus.pendingCount > 0 },
                                     onAction =
                                         {
-                                            mobileSession.retryQueuedBudgetReorders(
+                                            mobileSession.budgetQueue.retryQueuedBudgetReorders(
                                                 state.selectedBudgetId,
                                                 state.encryptedPassword.takeIf(String::isNotBlank),
                                             )
@@ -476,9 +493,9 @@ internal fun CategoryGroupScreen(
 
                             fun saveHiddenOrder(nextOrder: List<String>) {
                                 if (nextOrder == latestQueuedHiddenCategoryOrder()) return
-                                mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
+                                mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
                                 scope.launch {
-                                    mobileSession.enqueueBudgetReorder(
+                                    mobileSession.budgetQueue.enqueueBudgetReorder(
                                         state.selectedBudgetId,
                                         hiddenCategoryScopeId,
                                         BudgetReorderKind.CATEGORY,
@@ -502,7 +519,7 @@ internal fun CategoryGroupScreen(
 
                             fun startHiddenDrag() {
                                 selectedCategoryOrderId = hidden.recordId
-                                mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
+                                mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
                                 mobileSession.feedback.clearBudgetActionMessage()
                                 hiddenDrag.start(hiddenDrag.currentOrder(latestQueuedHiddenCategoryOrder()), hidden.recordId)
                             }
@@ -516,7 +533,7 @@ internal fun CategoryGroupScreen(
                                 if (result.itemId != hidden.recordId || result.finalOrder == result.startingOrder) return
                                 scope.launch {
                                     val saved =
-                                        mobileSession.enqueueBudgetReorder(
+                                        mobileSession.budgetQueue.enqueueBudgetReorder(
                                             state.selectedBudgetId,
                                             hiddenCategoryScopeId,
                                             BudgetReorderKind.CATEGORY,
@@ -564,7 +581,7 @@ internal fun CategoryGroupScreen(
                                                     selectedCategoryOrderId = null
                                                 } else {
                                                     scope.launch {
-                                                        mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                                        mobileSession.budgetQueue.enqueueBudgetCategoryVisibilityChange(
                                                             budgetId = state.selectedBudgetId,
                                                             categoryId = hidden.recordId,
                                                             groupId = group.id,
@@ -588,7 +605,7 @@ internal fun CategoryGroupScreen(
                                             onToggleHidden = {
                                                 scope.launch {
                                                     val saved =
-                                                        mobileSession.enqueueBudgetCategoryVisibilityChange(
+                                                        mobileSession.budgetQueue.enqueueBudgetCategoryVisibilityChange(
                                                             budgetId = state.selectedBudgetId,
                                                             categoryId = hidden.recordId,
                                                             groupId = group.id,
@@ -615,7 +632,7 @@ internal fun CategoryGroupScreen(
                                     trailing = "Show",
                                     onClick = {
                                         scope.launch {
-                                            mobileSession.enqueueBudgetCategoryGroupVisibilityChange(
+                                            mobileSession.budgetQueue.enqueueBudgetCategoryGroupVisibilityChange(
                                                 state.selectedBudgetId,
                                                 hidden.recordId,
                                                 hidden = false,
@@ -669,7 +686,7 @@ internal fun CategoryGroupScreen(
             onDismiss = { showGroupDialog = false },
             onSave = {
                 scope.launch {
-                    if (mobileSession.enqueueBudgetCategoryGroupRename(
+                    if (mobileSession.budgetQueue.enqueueBudgetCategoryGroupRename(
                             state.selectedBudgetId,
                             group.id,
                             groupNameDraft,
@@ -737,7 +754,7 @@ internal fun CategoryGroupScreen(
                 onConfirm = {
                     scope.launch {
                         val deleted =
-                            mobileSession.enqueueBudgetCategoryGroupDelete(
+                            mobileSession.budgetQueue.enqueueBudgetCategoryGroupDelete(
                                 state.selectedBudgetId,
                                 group.id,
                                 deleteGroupDestinationId
@@ -776,7 +793,7 @@ internal fun CategoryGroupScreen(
             onDismiss = { showCreateCategoryDialog = false },
             onSave = {
                 scope.launch {
-                    if (mobileSession.enqueueBudgetCategoryCreate(
+                    if (mobileSession.budgetQueue.enqueueBudgetCategoryCreate(
                             state.selectedBudgetId,
                             group.id,
                             newCategoryName,

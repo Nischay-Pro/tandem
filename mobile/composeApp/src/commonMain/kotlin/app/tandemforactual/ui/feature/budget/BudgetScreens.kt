@@ -61,6 +61,17 @@ import app.tandemforactual.ui.core.session.BUDGET_GROUP_ORDER_SCOPE
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.DragReorderState
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.applyBudgetTemplate
+import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
+import app.tandemforactual.ui.core.session.budget.budgetReorderStatus
+import app.tandemforactual.ui.core.session.budget.clearBudgetReorderMessage
+import app.tandemforactual.ui.core.session.budget.copyBudgetMonth
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryGroupCreate
+import app.tandemforactual.ui.core.session.budget.enqueueBudgetReorder
+import app.tandemforactual.ui.core.session.budget.holdBudgetForNextMonth
+import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
+import app.tandemforactual.ui.core.session.budget.resetBudgetHold
+import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.budgetOrderForScreen
 import app.tandemforactual.ui.core.session.dragReorderItemModifier
@@ -265,12 +276,13 @@ internal fun BudgetScreen(
     val sectionSpacing = if (compact) 10.dp else 16.dp
     val pendingDeletedGroupIds =
         mobileSession
+            .budgetQueue
             .pendingBudgetMutationsFor(state.selectedBudgetId)
             .filter { it.kind == BudgetReorderKind.DELETE_CATEGORY_GROUP }
             .mapTo(mutableSetOf()) { it.itemId }
     val groups = liveBudgetMonth?.groups.orEmpty().filterNot { it.id in pendingDeletedGroupIds }
-    val queuedGroupMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
-    val groupReorderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+    val queuedGroupMoves = mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+    val groupReorderStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
     val groupDrag = remember(state.selectedBudgetId, state.selectedMonthId) { DragReorderState() }
     val queuedGroupOrder =
         budgetOrderForScreen(
@@ -317,15 +329,15 @@ internal fun BudgetScreen(
     fun latestQueuedGroupOrder(): List<String> =
         budgetOrderForScreen(
             groups.map { it.id },
-            mobileSession.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
-            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
+            mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
+            mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE),
         )
 
     fun latestQueuedCategoryOrder(group: LiveCategoryGroupSummary): List<String> =
         budgetOrderForScreen(
             group.categories.map { it.id },
-            mobileSession.budgetReorderStatus(state.selectedBudgetId, group.id),
-            mobileSession.budgetReorderMovesFor(state.selectedBudgetId, group.id),
+            mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, group.id),
+            mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, group.id),
         )
 
     fun saveGroupOrder(
@@ -341,10 +353,10 @@ internal fun BudgetScreen(
             return
         }
         scope.launch {
-            mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
+            mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
             mobileSession.feedback.clearBudgetActionMessage()
             val saved =
-                mobileSession.enqueueBudgetReorder(
+                mobileSession.budgetQueue.enqueueBudgetReorder(
                     state.selectedBudgetId,
                     BUDGET_GROUP_ORDER_SCOPE,
                     BudgetReorderKind.CATEGORY_GROUP,
@@ -444,7 +456,7 @@ internal fun BudgetScreen(
                             actionLabel = "Try again".takeIf { groupReorderStatus.pendingCount > 0 },
                             onAction =
                                 {
-                                    mobileSession.retryQueuedBudgetReorders(
+                                    mobileSession.budgetQueue.retryQueuedBudgetReorders(
                                         state.selectedBudgetId,
                                         state.encryptedPassword.takeIf(String::isNotBlank),
                                     )
@@ -703,8 +715,8 @@ internal fun BudgetScreen(
                     val groupExpanded = selectedGroupOrderId == null && !state.isBudgetSectionCollapsed(groupSectionKey)
                     val isReordering = selectedGroupOrderId == group.id
                     val groupIndex = displayGroups.indexOfFirst { it.id == group.id }
-                    val categoryOrderStatus = mobileSession.budgetReorderStatus(state.selectedBudgetId, group.id)
-                    val queuedCategoryMoves = mobileSession.budgetReorderMovesFor(state.selectedBudgetId, group.id)
+                    val categoryOrderStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, group.id)
+                    val queuedCategoryMoves = mobileSession.budgetQueue.budgetReorderMovesFor(state.selectedBudgetId, group.id)
                     val serverCategoryOrder = group.categories.map { it.id }
                     val queuedCategoryOrder = budgetOrderForScreen(serverCategoryOrder, categoryOrderStatus, queuedCategoryMoves)
                     val categoryOrderIds =
@@ -892,7 +904,7 @@ internal fun BudgetScreen(
                                 selectedGroupOrderId = null
                                 selectedBudgetCategoryGroupId = group.id
                                 selectedBudgetCategoryOrderId = category.id
-                                mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, group.id)
+                                mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, group.id)
                                 mobileSession.feedback.clearBudgetActionMessage()
                                 budgetCategoryDrag.start(budgetCategoryDrag.currentOrder(latestQueuedCategoryOrder(group)), category.id)
                             }
@@ -908,7 +920,7 @@ internal fun BudgetScreen(
                                     if (result.itemId == category.id && result.finalOrder != result.startingOrder) {
                                         scope.launch {
                                             val saved =
-                                                mobileSession.enqueueBudgetReorder(
+                                                mobileSession.budgetQueue.enqueueBudgetReorder(
                                                     state.selectedBudgetId,
                                                     group.id,
                                                     BudgetReorderKind.CATEGORY,
@@ -929,7 +941,7 @@ internal fun BudgetScreen(
                                 val nextOrder = reorderItemToIndex(currentOrder, category.id, currentOrder.indexOf(category.id) + direction)
                                 if (nextOrder == currentOrder) return
                                 scope.launch {
-                                    mobileSession.enqueueBudgetReorder(
+                                    mobileSession.budgetQueue.enqueueBudgetReorder(
                                         state.selectedBudgetId,
                                         group.id,
                                         BudgetReorderKind.CATEGORY,
@@ -1098,7 +1110,7 @@ internal fun BudgetScreen(
                     ) {
                         scope.launch {
                             val copied =
-                                mobileSession.copyBudgetMonth(
+                                mobileSession.budgetEdits.copyBudgetMonth(
                                     state.selectedBudgetId,
                                     state.selectedMonthId,
                                     state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1194,7 +1206,7 @@ internal fun BudgetScreen(
                                     ) {
                                         scope.launch {
                                             val applied =
-                                                mobileSession.applyBudgetTemplate(
+                                                mobileSession.budgetEdits.applyBudgetTemplate(
                                                     state.selectedBudgetId,
                                                     state.selectedMonthId,
                                                     template.assignments,
@@ -1414,7 +1426,7 @@ internal fun BudgetScreen(
                             if (heldForNextMonthMinor > 0) {
                                 scope.launch {
                                     val reset =
-                                        mobileSession.resetBudgetHold(
+                                        mobileSession.budgetEdits.resetBudgetHold(
                                             state.selectedBudgetId,
                                             state.selectedMonthId,
                                             state.encryptedPassword.takeIf { it.isNotBlank() },
@@ -1442,7 +1454,7 @@ internal fun BudgetScreen(
                         ) {
                             scope.launch {
                                 val held =
-                                    mobileSession.holdBudgetForNextMonth(
+                                    mobileSession.budgetEdits.holdBudgetForNextMonth(
                                         state.selectedBudgetId,
                                         state.selectedMonthId,
                                         parsedHoldAmount,
@@ -1462,7 +1474,7 @@ internal fun BudgetScreen(
             title = "New category group",
             name = categoryGroupNameDraft,
             onNameChange = { categoryGroupNameDraft = it },
-            busy = isCreatingCategoryGroup || mobileSession.isPersistingBudgetMutation,
+            busy = isCreatingCategoryGroup || mobileSession.budgetQueue.isPersistingBudgetMutation,
             message = mobileSession.budgetActionMessage,
             messageKind = mobileSession.feedback.budgetActionMessageKind,
             messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
@@ -1487,7 +1499,7 @@ internal fun BudgetScreen(
                     isCreatingCategoryGroup = true
                     scope.launch {
                         try {
-                            if (mobileSession.enqueueBudgetCategoryGroupCreate(
+                            if (mobileSession.budgetQueue.enqueueBudgetCategoryGroupCreate(
                                     state.selectedBudgetId,
                                     categoryGroupNameDraft,
                                     newCategoryGroupIsIncome,

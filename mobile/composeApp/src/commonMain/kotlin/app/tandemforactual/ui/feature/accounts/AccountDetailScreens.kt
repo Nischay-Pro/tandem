@@ -48,6 +48,9 @@ import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.platform.PickedStatementFile
 import app.tandemforactual.ui.core.platform.rememberStatementFilePicker
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.importStatementTransactions
+import app.tandemforactual.ui.core.session.budget.markTransactionsReconciled
+import app.tandemforactual.ui.core.session.budget.previewStatementImportTransactions
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.userFacingMessage
 import app.tandemforactual.ui.core.state.AccountActivitySnapshot
@@ -289,7 +292,7 @@ internal fun AccountDetailScreen(
         statementImportPreviewLoading = true
         try {
             statementImportPreview =
-                mobileSession.previewStatementImportTransactions(
+                mobileSession.budgetEdits.previewStatementImportTransactions(
                     state.selectedBudgetId,
                     liveAccount.id,
                     parsed.transactions.map { it.importedId },
@@ -484,7 +487,7 @@ internal fun AccountDetailScreen(
         val didReconcile: (() -> Unit) -> Unit = { closeAfterSuccess ->
             scope.launch {
                 if (
-                    mobileSession.markTransactionsReconciled(
+                    mobileSession.budgetEdits.markTransactionsReconciled(
                         state.selectedBudgetId,
                         liveAccount.id,
                         reconciliationCandidates.mapNotNull { it.recordId }.toSet(),
@@ -556,7 +559,7 @@ internal fun AccountDetailScreen(
             onImport = { parsed ->
                 scope.launch {
                     val imported =
-                        mobileSession.importStatementTransactions(
+                        mobileSession.budgetEdits.importStatementTransactions(
                             state.selectedBudgetId,
                             liveAccount.id,
                             parsed.toStatementImportItems(),

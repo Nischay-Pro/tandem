@@ -47,6 +47,9 @@ import app.tandemforactual.ui.core.format.formatDate
 import app.tandemforactual.ui.core.format.formatSignedCurrency
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.clearBudgetMutationCorrectionMessage
+import app.tandemforactual.ui.core.session.budget.correctRejectedCategoryRename
+import app.tandemforactual.ui.core.session.budget.retryBudgetMutation
 import app.tandemforactual.ui.core.session.budgetMutationCanRetry
 import app.tandemforactual.ui.core.session.budgetMutationNeedsRefresh
 import app.tandemforactual.ui.core.session.budgetMutationStatusLabel
@@ -1205,7 +1208,7 @@ internal fun BudgetMutationReviewScreen(
                         },
                         enabled =
                             !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
-                    ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                    ) { mobileSession.budgetQueue.retryBudgetMutation(operation.operationId) }
                     if (!budgetMutationNeedsRefresh(operation.lastErrorCode) && !budgetMutationCanRetry(operation.lastErrorCode)) {
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
@@ -1222,22 +1225,22 @@ internal fun BudgetMutationReviewScreen(
                                 { correctedName = it },
                                 TextFieldOptions(placeholder = itemName),
                             )
-                            mobileSession.budgetMutationCorrectionMessage?.let {
+                            mobileSession.budgetQueue.budgetMutationCorrectionMessage?.let {
                                 InlineMessage(it, InlineMessageKind.ERROR)
                             }
                             PrimaryButton(
-                                if (mobileSession.isCorrectingBudgetMutation) "Saving correction" else "Save correction",
+                                if (mobileSession.budgetQueue.isCorrectingBudgetMutation) "Saving correction" else "Save correction",
                                 enabled =
                                     !state.readOnlyMode &&
-                                        !mobileSession.isCorrectingBudgetMutation &&
+                                        !mobileSession.budgetQueue.isCorrectingBudgetMutation &&
                                         correctedName.trim().isNotBlank() &&
                                         correctedName.trim() != mutation.name &&
                                         (mutation.requiresEncryptionPassword.not() || state.encryptedPassword.isNotBlank()),
-                                loading = mobileSession.isCorrectingBudgetMutation,
+                                loading = mobileSession.budgetQueue.isCorrectingBudgetMutation,
                             ) {
                                 scope.launch {
                                     val saved =
-                                        mobileSession.correctRejectedCategoryRename(
+                                        mobileSession.budgetQueue.correctRejectedCategoryRename(
                                             budgetId = operation.budgetId,
                                             operationId = operation.operationId,
                                             correctedName = correctedName,
@@ -1248,10 +1251,10 @@ internal fun BudgetMutationReviewScreen(
                             }
                             SecondaryButton(
                                 "Cancel correction",
-                                enabled = !mobileSession.isCorrectingBudgetMutation,
+                                enabled = !mobileSession.budgetQueue.isCorrectingBudgetMutation,
                                 onClick = {
                                     showRenameCorrection = false
-                                    mobileSession.clearBudgetMutationCorrectionMessage()
+                                    mobileSession.budgetQueue.clearBudgetMutationCorrectionMessage()
                                 },
                             )
                         } else {
@@ -1262,7 +1265,7 @@ internal fun BudgetMutationReviewScreen(
                                         (!mutation.requiresEncryptionPassword || state.encryptedPassword.isNotBlank()),
                             ) {
                                 correctedName = mutation.name.orEmpty()
-                                mobileSession.clearBudgetMutationCorrectionMessage()
+                                mobileSession.budgetQueue.clearBudgetMutationCorrectionMessage()
                                 showRenameCorrection = true
                             }
                             SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
@@ -1272,14 +1275,14 @@ internal fun BudgetMutationReviewScreen(
                             "Try again",
                             enabled =
                                 !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
-                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                        ) { mobileSession.budgetQueue.retryBudgetMutation(operation.operationId) }
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     } else {
                         PrimaryButton(
                             if (budgetMutationNeedsRefresh(operation.lastErrorCode)) "Refresh budget" else "Check Actual",
                             enabled =
                                 !state.readOnlyMode && !(mutation?.requiresEncryptionPassword == true && state.encryptedPassword.isBlank()),
-                        ) { mobileSession.retryBudgetMutation(operation.operationId) }
+                        ) { mobileSession.budgetQueue.retryBudgetMutation(operation.operationId) }
                         SecondaryButton("Discard change", enabled = !state.readOnlyMode) { confirmDiscard = true }
                     }
                 }

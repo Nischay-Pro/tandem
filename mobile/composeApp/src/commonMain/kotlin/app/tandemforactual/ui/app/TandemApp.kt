@@ -100,6 +100,25 @@ import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.actualOpenIdReturn
+import app.tandemforactual.ui.core.session.budget.accountClosedOverridesFor
+import app.tandemforactual.ui.core.session.budget.accountNameOverridesFor
+import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
+import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
+import app.tandemforactual.ui.core.session.budget.categoryGroupIdOverridesFor
+import app.tandemforactual.ui.core.session.budget.categoryGroupNameOverridesFor
+import app.tandemforactual.ui.core.session.budget.categoryGroupVisibilityOverridesFor
+import app.tandemforactual.ui.core.session.budget.categoryNameOverridesFor
+import app.tandemforactual.ui.core.session.budget.categoryVisibilityOverridesFor
+import app.tandemforactual.ui.core.session.budget.deletedCategoryIdsFor
+import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
+import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
+import app.tandemforactual.ui.core.session.budget.pendingCategoryBudgetOverrides
+import app.tandemforactual.ui.core.session.budget.pendingCategoryCarryoverOverrides
+import app.tandemforactual.ui.core.session.budget.pendingCategoryCreatesFor
+import app.tandemforactual.ui.core.session.budget.pendingCategoryGroupCreatesFor
+import app.tandemforactual.ui.core.session.budget.processQueuedBudgetReorders
+import app.tandemforactual.ui.core.session.budget.requestBudgetOrderFlush
+import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -260,7 +279,7 @@ fun TandemApp(
         }
     LaunchedEffect(mobileSession) {
         if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
-        mobileSession.processQueuedBudgetReorders()
+        mobileSession.budgetQueue.processQueuedBudgetReorders()
     }
     LaunchedEffect(mobileSession) {
         mobileSession.schedules.processQueuedScheduleActions()
@@ -931,14 +950,14 @@ fun TandemApp(
     LaunchedEffect(appResumeEvents) {
         appResumeEvents.collect {
             accessibilitySettingsRevision += 1
-            mobileSession.retryQueuedBudgetReorders()
+            mobileSession.budgetQueue.retryQueuedBudgetReorders()
             mobileSession.schedules.retryQueuedScheduleActions()
             automaticSyncRequest.value()
         }
     }
     LaunchedEffect(networkRestoredEvents) {
         networkRestoredEvents.collect {
-            mobileSession.retryQueuedBudgetReorders()
+            mobileSession.budgetQueue.retryQueuedBudgetReorders()
             mobileSession.schedules.retryQueuedScheduleActions()
             if (lastAutomaticSyncBudgetId == state.selectedBudgetId) lastAutomaticSyncAtEpochMillis = null
             automaticSyncRequest.value()
@@ -1106,7 +1125,7 @@ fun TandemApp(
     val activityTransactionRecords = mobileSession.activityTransactionRecords
     val activityTransactionRecordsVersion = mobileSession.activityTransactionRecordsVersion
     val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
-    val accountRecords = mobileSession.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
+    val accountRecords = mobileSession.budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
     val displaySettings = mobileSession.budgetDisplaySettings
@@ -1150,8 +1169,8 @@ fun TandemApp(
                 )
             }
     }
-    val accountNameOverrides = mobileSession.accountNameOverridesFor(state.selectedBudgetId)
-    val accountClosedOverrides = mobileSession.accountClosedOverridesFor(state.selectedBudgetId)
+    val accountNameOverrides = mobileSession.budgetQueue.accountNameOverridesFor(state.selectedBudgetId)
+    val accountClosedOverrides = mobileSession.budgetQueue.accountClosedOverridesFor(state.selectedBudgetId)
     LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides) {
         liveAccounts =
             withContext(Dispatchers.Default) {
@@ -1173,17 +1192,21 @@ fun TandemApp(
             }
     }
     var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
-    val categoryVisibilityOverrides = mobileSession.categoryVisibilityOverridesFor(state.selectedBudgetId)
-    val categoryGroupNameOverrides = mobileSession.categoryGroupNameOverridesFor(state.selectedBudgetId)
-    val categoryNameOverrides = mobileSession.categoryNameOverridesFor(state.selectedBudgetId)
-    val categoryGroupIdOverrides = mobileSession.categoryGroupIdOverridesFor(state.selectedBudgetId)
-    val categoryGroupVisibilityOverrides = mobileSession.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
-    val deletedCategoryIds = mobileSession.deletedCategoryIdsFor(state.selectedBudgetId)
-    val pendingCategoryGroups = mobileSession.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
-    val pendingCategories = mobileSession.pendingCategoryCreatesFor(state.selectedBudgetId)
-    val pendingBudgetMutations = mobileSession.pendingBudgetMutationsFor(state.selectedBudgetId)
-    val categoryBudgetOverrides = mobileSession.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId)
-    val categoryCarryoverOverrides = mobileSession.pendingCategoryCarryoverOverrides(state.selectedBudgetId, state.selectedMonthId)
+    val categoryVisibilityOverrides = mobileSession.budgetQueue.categoryVisibilityOverridesFor(state.selectedBudgetId)
+    val categoryGroupNameOverrides = mobileSession.budgetQueue.categoryGroupNameOverridesFor(state.selectedBudgetId)
+    val categoryNameOverrides = mobileSession.budgetQueue.categoryNameOverridesFor(state.selectedBudgetId)
+    val categoryGroupIdOverrides = mobileSession.budgetQueue.categoryGroupIdOverridesFor(state.selectedBudgetId)
+    val categoryGroupVisibilityOverrides = mobileSession.budgetQueue.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
+    val deletedCategoryIds = mobileSession.budgetQueue.deletedCategoryIdsFor(state.selectedBudgetId)
+    val pendingCategoryGroups = mobileSession.budgetQueue.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
+    val pendingCategories = mobileSession.budgetQueue.pendingCategoryCreatesFor(state.selectedBudgetId)
+    val pendingBudgetMutations = mobileSession.budgetQueue.pendingBudgetMutationsFor(state.selectedBudgetId)
+    val categoryBudgetOverrides = mobileSession.budgetQueue.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId)
+    val categoryCarryoverOverrides =
+        mobileSession.budgetQueue.pendingCategoryCarryoverOverrides(
+            state.selectedBudgetId,
+            state.selectedMonthId,
+        )
     LaunchedEffect(
         mobileSession.selectedBudgetMonthRecord,
         mobileSession.categoryRecords,
@@ -1401,7 +1424,7 @@ fun TandemApp(
     }
     val syncNow: () -> Unit = {
         // Send reorders held on the device instead of waiting for the next periodic flush.
-        mobileSession.requestBudgetOrderFlush()
+        mobileSession.budgetQueue.requestBudgetOrderFlush()
         if (!mobileSession.isSyncing && state.selectedBudgetId.isNotBlank()) {
             coroutineScope.launch {
                 mobileSession.synchronize(
@@ -1624,8 +1647,8 @@ fun TandemApp(
                 persistedSyncStatus = mobileSession.localSyncState?.status,
                 pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
                 hasSuccessfulSync = mobileSession.localSyncState?.lastSyncedAtEpochMs != null,
-                hasPendingBudgetChanges = mobileSession.pendingBudgetMutationCount(state.selectedBudgetId) > 0,
-                budgetChangesWaitingForConnection = mobileSession.budgetMutationsWaitingForConnection(state.selectedBudgetId),
+                hasPendingBudgetChanges = mobileSession.budgetQueue.pendingBudgetMutationCount(state.selectedBudgetId) > 0,
+                budgetChangesWaitingForConnection = mobileSession.budgetQueue.budgetMutationsWaitingForConnection(state.selectedBudgetId),
             )
         val renderHeader: @Composable (AppRoute) -> Unit = { headerRoute ->
             if (headerRoute != AppRoute.WELCOME && headerRoute != AppRoute.STARTUP) {
