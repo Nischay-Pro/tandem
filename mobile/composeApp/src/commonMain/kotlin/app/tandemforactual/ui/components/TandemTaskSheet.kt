@@ -57,11 +57,7 @@ internal fun TandemTaskSheet(
         Dialog(
             onDismissRequest = onDismissRequest,
             properties =
-                DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    dismissOnBackPress = dismissOnBackPress,
-                    decorFitsSystemWindows = false,
-                ),
+                edgeToEdgeDialogProperties(dismissOnBackPress),
         ) {
             Box(
                 Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
@@ -85,3 +81,6 @@ internal fun TandemTaskSheet(
         }
     }
 }
+
+/** Dialog properties that let the sheet draw behind the system bars and the keyboard, so it can pad for them itself. */
+internal expect fun edgeToEdgeDialogProperties(dismissOnBackPress: Boolean): DialogProperties
