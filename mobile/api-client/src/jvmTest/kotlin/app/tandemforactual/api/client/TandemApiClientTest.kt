@@ -295,6 +295,14 @@ class TandemApiClientTest {
             )
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
+            val history = client.budgetChangeHistory("group", null)
+            val latest = history.changes.first()
+            assertEquals(history.deviceNode, latest.node)
+            assertTrue(client.undoBudgetChange("group", latest.id, null).reverted > 0)
+            assertEquals(
+                "change_not_found",
+                assertFailsWith<TandemApiException> { client.undoBudgetChange("group", "missing", null) }.errorCode,
+            )
             assertTrue(server.messages.size > 300)
 
             client.retireBudget("group")

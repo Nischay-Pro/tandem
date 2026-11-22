@@ -28,6 +28,10 @@ android {
   namespace = "app.tandemforactual.android"
   compileSdk = 37
 
+  androidResources {
+    noCompress += "tflite"
+  }
+
   defaultConfig {
     applicationId = "app.tandemforactual.android"
     minSdk = 26

@@ -186,6 +186,7 @@ internal enum class AppRoute(
     LOCAL_DATA("Local data and storage"),
     ABOUT("About and help"),
     MERCHANT_ICON_LICENSES("Icon licenses and sources"),
+    CHANGE_HISTORY("Change history"),
 }
 
 internal enum class MainCloudStatus {

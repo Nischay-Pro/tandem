@@ -635,6 +635,7 @@ internal fun ScreenContent(
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, navigation)
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
+        AppRoute.CHANGE_HISTORY -> ChangeHistoryScreen(state, mobileSession)
     }
 }
 

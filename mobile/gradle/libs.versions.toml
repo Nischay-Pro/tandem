@@ -17,6 +17,7 @@ serialization = "1.13.0"
 androidxTest = "1.7.0"
 androidxTestExtJunit = "1.3.0"
 activityCompose = "1.13.0"
+litert = "2.3.2"
 windowManager = "1.5.0"
 desugarJdkLibs = "2.1.5"
 workManager = "2.12.0"
@@ -70,6 +71,7 @@ biometric = { module = "androidx.biometric:biometric", version.ref = "biometric"
 fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 activityCompose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+litert = { module = "com.google.ai.edge.litert:litert", version.ref = "litert" }
 windowManager = { module = "androidx.window:window", version.ref = "windowManager" }
 desugarJdkLibs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }

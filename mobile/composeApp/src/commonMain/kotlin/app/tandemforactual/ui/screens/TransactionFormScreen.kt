@@ -23,6 +23,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,15 +43,21 @@ import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
+import app.tandemforactual.ui.components.TandemActionButton
+import app.tandemforactual.ui.components.TandemActionButtonTone
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.stringValue
 import com.composables.icons.lucide.CalendarDays
+import com.composables.icons.lucide.Camera
+import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Scan
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal fun selectTransactionType(
     state: AppState,
@@ -142,6 +149,36 @@ internal fun TransactionFormScreen(
                     isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
                 } else {
                     state.transactionCategory.isNotBlank()
+                }
+
+            var scanningReceipt by remember { mutableStateOf(false) }
+            var showReceiptMenu by remember { mutableStateOf(false) }
+            var receiptMessage by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
+            val scanScope = rememberCoroutineScope()
+            val receiptScanner =
+                rememberReceiptScanner(
+                    onStarted = {
+                        scanningReceipt = true
+                        receiptMessage = null
+                    },
+                ) { result ->
+                    val lines = result.lines
+                    if (lines == null) {
+                        scanningReceipt = false
+                        receiptMessage = (result.errorMessage ?: "Couldn’t read this receipt.") to InlineMessageKind.ERROR
+                        return@rememberReceiptScanner
+                    }
+                    val receipt = parseReceiptText(lines, platformTodayIsoDate())
+                    scanScope.launch {
+                        fillNewTransaction(state, mobileSession, receipt.amountMinor, receipt.merchant, receipt.date)
+                        scanningReceipt = false
+                        receiptMessage =
+                            if (receipt.isEmpty) {
+                                "No total found. Try a flatter, well-lit photo." to InlineMessageKind.WARNING
+                            } else {
+                                "Filled in from the receipt. Check the details before saving." to InlineMessageKind.SUCCESS
+                            }
+                    }
                 }
 
             fun setAmount(minorUnits: Long) {
@@ -301,6 +338,35 @@ internal fun TransactionFormScreen(
                             onBeforeOpen = ::dismissKeypad,
                             onSelect = { type -> selectTransactionType(state, type) },
                         )
+                    }
+                    if (state.transactionType != "Transfer") {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            TandemActionButton(
+                                if (scanningReceipt) "Reading receipt…" else "Scan receipt",
+                                TandemActionButtonTone.NEUTRAL,
+                                Modifier.widthIn(min = 168.dp),
+                                icon = Lucide.Scan,
+                                loading = scanningReceipt,
+                            ) {
+                                dismissKeypad()
+                                if (receiptScanner.canTakePhoto) showReceiptMenu = true else receiptScanner.choosePhoto()
+                            }
+                            TandemHeaderMenu(expanded = showReceiptMenu, onDismiss = { showReceiptMenu = false }) {
+                                HeaderMenuAction(Lucide.Camera, "Take a photo") {
+                                    showReceiptMenu = false
+                                    receiptScanner.takePhoto()
+                                }
+                                HeaderMenuAction(Lucide.Image, "Choose a photo") {
+                                    showReceiptMenu = false
+                                    receiptScanner.choosePhoto()
+                                }
+                            }
+                        }
+                        AnimatedReveal(visible = receiptMessage != null) {
+                            receiptMessage?.let { (text, kind) ->
+                                InlineMessage(text, kind, owner = FeedbackMessageOwner.Action("transaction.receipt"))
+                            }
+                        }
                     }
                     SectionCard(title = "") {
                         if (state.transactionType == "Transfer") {

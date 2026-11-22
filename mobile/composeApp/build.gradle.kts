@@ -111,6 +111,7 @@ kotlin {
     }
     androidMain.dependencies {
       implementation(libs.activityCompose)
+      implementation(libs.litert)
     }
     getByName("androidHostTest") {
       dependencies {

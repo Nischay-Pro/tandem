@@ -4,8 +4,10 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
+import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
+import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.database.ActualBudgetFiles
 import io.ktor.client.HttpClient
@@ -344,6 +346,22 @@ class TandemApiClient(
         val budget = budget(budgetId, password)
         return call { budget.edit(today(), block) }
     }
+
+    suspend fun budgetChangeHistory(
+        budgetId: String,
+        encryptionPassword: String?,
+        limit: Int = 60,
+    ): BudgetChangeHistory =
+        call {
+            val budget = budget(budgetId, encryptionPassword)
+            BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
+        }
+
+    suspend fun undoBudgetChange(
+        budgetId: String,
+        changeId: String,
+        encryptionPassword: String?,
+    ): UndoResult = call { budget(budgetId, encryptionPassword).undoChange(changeId) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun runBudgetBankSync(
@@ -719,3 +737,9 @@ class TandemApiClient(
 }
 
 private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")
+
+/** The budget's recent edits, and which device id is this one so the list can say "This device". */
+data class BudgetChangeHistory(
+    val deviceNode: String,
+    val changes: List<ChangeSet>,
+)

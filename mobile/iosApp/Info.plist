@@ -51,6 +51,8 @@
     <key>UIApplicationSupportsMultipleScenes</key>
     <false/>
   </dict>
+  <key>NSCameraUsageDescription</key>
+  <string>Take a photo of a receipt to fill in a transaction. The photo stays on this device.</string>
   <key>NSFaceIDUsageDescription</key>
   <string>Tandem uses Face ID to unlock your encrypted budgets and the app.</string>
   <key>UIApplicationShortcutItems</key>

@@ -10,12 +10,14 @@ import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.api.client.BudgetChangeHistory
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.ServerCapabilities
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -3509,6 +3511,31 @@ internal class TandemMobileSession(
         if (operation?.status != "conflict") return false
         serverConfirmedConflictOperationId = operationId
         return true
+    }
+
+    suspend fun loadChangeHistory(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): BudgetChangeHistory? =
+        try {
+            apiClient.budgetChangeHistory(budgetId, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    suspend fun undoChange(
+        budgetId: String,
+        changeId: String,
+        encryptionPassword: String?,
+    ): UndoResult? {
+        var result: UndoResult? = null
+        val done =
+            performBudgetAction(budgetId, encryptionPassword, "Couldn’t undo this change. Try again.") {
+                result = apiClient.undoBudgetChange(budgetId, changeId, encryptionPassword)
+            }
+        return result.takeIf { done }
     }
 
     suspend fun runBankSync(

@@ -4,7 +4,6 @@ package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
@@ -20,11 +19,9 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SecondaryButton
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.SurfaceCard
-import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_more
 import app.tandemforactual.ui.generated.resources.home_set_up
-import app.tandemforactual.ui.generated.resources.nav_settings
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.LiveBudgetMonthSummary
 import app.tandemforactual.ui.model.LiveScheduleSummary
@@ -32,7 +29,6 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Inbox
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Settings
 import org.jetbrains.compose.resources.stringResource
 
 /** What Home can show from the data on this device. */
@@ -80,13 +76,6 @@ internal fun HomeScreen(
         isRefreshing = mobileSession.isSyncing,
         onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
     ) {
-        if (AppRoute.SETTINGS !in navigationRoutes(state.interfaceMode)) {
-            item(key = "home-header") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TandemIconButton(Lucide.Settings, stringResource(Res.string.nav_settings)) { navigation.selectTab(AppRoute.SETTINGS) }
-                }
-            }
-        }
         if (mobileSession.syncError != null && !mobileSession.isSyncing) {
             item(key = "home-sync") {
                 SyncNoticeCard(Lucide.CircleAlert, tandemPalette.warning, "Needs attention", mobileSession.syncError.orEmpty(), {

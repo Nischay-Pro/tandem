@@ -105,6 +105,7 @@ import com.composables.icons.lucide.Hash
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Menu
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
@@ -294,8 +295,15 @@ internal fun AppHeader(
     syncCaption: String? = null,
     onRefreshBudgets: (() -> Unit)? = null,
     refreshingBudgets: Boolean = false,
+    onOpenMenu: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
+    val menuButton: @Composable () -> Unit = {
+        if (onOpenMenu != null && route.isTab()) {
+            TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.surface, onClick = onOpenMenu)
+            Spacer(Modifier.width(TandemSpacing.medium))
+        }
+    }
     var headerMenuExpanded by rememberSaveable(route) { mutableStateOf(false) }
     val headerFontScale = LocalDensity.current.fontScale
     val budgetHeaderSlotHeight = maxOf(88.dp, 88.dp * headerFontScale)
@@ -350,6 +358,7 @@ internal fun AppHeader(
                     modifier = Modifier.padding(bottom = 4.dp).heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    menuButton()
                     Column(Modifier.weight(1f)) {
                         Text(
                             headerTitle,
@@ -445,6 +454,7 @@ internal fun AppHeader(
                 TandemBackButton(onClick = onBack)
                 Spacer(Modifier.width(6.dp))
             }
+            menuButton()
             Column(
                 modifier =
                     Modifier.weight(1f).clickable(
@@ -609,7 +619,7 @@ private fun AccountHeaderMenu(
 }
 
 @Composable
-private fun TandemHeaderMenu(
+internal fun TandemHeaderMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
@@ -635,7 +645,7 @@ private fun TandemHeaderMenu(
 }
 
 @Composable
-private fun HeaderMenuAction(
+internal fun HeaderMenuAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
@@ -848,6 +858,7 @@ internal fun SideNavigationRail(
     layouts: List<WorkspaceLayout> = emptyList(),
     layout: WorkspaceLayout = WorkspaceLayout.SINGLE,
     onLayout: (WorkspaceLayout) -> Unit = {},
+    onOpenMenu: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val items =
@@ -862,6 +873,7 @@ internal fun SideNavigationRail(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly,
     ) {
+        if (onOpenMenu != null) TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
         items.forEach { (route, label) ->
             val active = route == selected
             val tabColor by
