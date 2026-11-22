@@ -11,6 +11,8 @@ import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
+import app.tandemforactual.ui.core.session.DeviceCredentialStore
+import app.tandemforactual.ui.core.session.TandemMobileSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Test

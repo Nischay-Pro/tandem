@@ -8,7 +8,7 @@ import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.data.store.overspendingAlert
-import app.tandemforactual.ui.SyncNetwork
+import app.tandemforactual.ui.core.session.SyncNetwork
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker

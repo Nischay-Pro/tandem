@@ -121,6 +121,7 @@ kotlin {
         implementation(libs.composeUiTestJunit4)
         implementation(libs.composeUiTestManifest)
         implementation(libs.robolectric)
+        implementation(libs.konsist)
       }
     }
   }

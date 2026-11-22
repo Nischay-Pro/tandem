@@ -1,5 +1,9 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.feature.onboarding.completeServerAddress
+import app.tandemforactual.ui.feature.onboarding.recentServerAddresses
+import app.tandemforactual.ui.feature.onboarding.rememberRecentServerAddress
+import app.tandemforactual.ui.feature.onboarding.serverAddressSuggestions
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

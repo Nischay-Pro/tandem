@@ -20,6 +20,15 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.feature.sync.ConflictCompareTable
+import app.tandemforactual.ui.feature.sync.ConflictFieldComparison
+import app.tandemforactual.ui.feature.sync.ConflictVersionCard
+import app.tandemforactual.ui.feature.sync.SyncPageHeading
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

@@ -1,5 +1,9 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPaletteFor
+import app.tandemforactual.ui.design.theme.wcagContrastRatio
 import kotlin.test.Test
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue

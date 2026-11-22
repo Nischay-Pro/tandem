@@ -1,7 +1,13 @@
 package app.tandemforactual.ui
-
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavedSearchFilter
+import app.tandemforactual.ui.feature.activity.ActivitySearchField
+import app.tandemforactual.ui.feature.activity.ActivitySearchFilter
+import app.tandemforactual.ui.feature.activity.SavedActivitySearch
+import app.tandemforactual.ui.feature.activity.activityFilters
+import app.tandemforactual.ui.feature.activity.summary
+import app.tandemforactual.ui.feature.activity.toSavedSearch
+import app.tandemforactual.ui.feature.reports.summary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

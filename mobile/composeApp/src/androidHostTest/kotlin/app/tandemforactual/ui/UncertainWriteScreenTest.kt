@@ -6,6 +6,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.feature.sync.UncertainWriteDetailsScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

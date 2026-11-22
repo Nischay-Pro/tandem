@@ -1,6 +1,8 @@
 package app.tandemforactual.ui
 
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.app.usesRailNavigation
+import app.tandemforactual.ui.design.templates.readablePadding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

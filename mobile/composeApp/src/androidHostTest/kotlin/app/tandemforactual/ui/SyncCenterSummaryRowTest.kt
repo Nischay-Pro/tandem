@@ -4,6 +4,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.feature.sync.SyncCountTile
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
 import org.junit.Rule

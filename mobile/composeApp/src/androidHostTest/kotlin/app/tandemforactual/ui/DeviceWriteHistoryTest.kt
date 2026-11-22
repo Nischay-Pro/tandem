@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.state.deviceWriteActionLabel
+import app.tandemforactual.ui.core.state.deviceWriteStatusLabel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

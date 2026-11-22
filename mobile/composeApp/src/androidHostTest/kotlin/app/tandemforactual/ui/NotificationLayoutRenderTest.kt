@@ -8,6 +8,16 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.state.AppNavigation
+import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.feature.home.HomeScreen
+import app.tandemforactual.ui.feature.home.PersonalizeScreen
+import app.tandemforactual.ui.feature.onboarding.WelcomeScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.app.hingeSplit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

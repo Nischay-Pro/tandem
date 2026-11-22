@@ -2,6 +2,10 @@ package app.tandemforactual.ui
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.feature.onboarding.SignInTransportWarning
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

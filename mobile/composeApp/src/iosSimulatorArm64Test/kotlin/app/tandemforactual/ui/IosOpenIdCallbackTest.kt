@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.session.ActualOpenIdReturn
+import app.tandemforactual.ui.core.session.actualOpenIdReturn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

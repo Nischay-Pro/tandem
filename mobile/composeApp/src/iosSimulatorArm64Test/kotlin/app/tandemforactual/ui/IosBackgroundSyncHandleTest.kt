@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.platform.IosBackgroundSyncHandle
 import kotlinx.coroutines.Job
 import kotlin.test.Test
 import kotlin.test.assertTrue

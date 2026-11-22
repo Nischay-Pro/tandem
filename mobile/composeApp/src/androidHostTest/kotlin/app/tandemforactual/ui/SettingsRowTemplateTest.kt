@@ -6,6 +6,16 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.state.AppNavigation
+import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.templates.ToggleRow
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemLayout
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.feature.settings.SettingsScreen
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner

@@ -1,0 +1,220 @@
+# Existing violations. Remove lines as code is fixed; never add new ones.
+cross-feature AccountDetailScreens -> budget
+cross-feature AccountDetailScreens -> currency
+cross-feature AccountDetailScreens -> transactions
+cross-feature AccountListScreens -> banking
+cross-feature AccountListScreens -> budget
+cross-feature AccountListScreens -> currency
+cross-feature AccountManagementScreens -> currency
+cross-feature ActivityScreen -> budget
+cross-feature ActivityScreen -> transactions
+cross-feature ActivitySearch -> budget
+cross-feature ActivitySearch -> transactions
+cross-feature ActivitySearchScreen -> transactions
+cross-feature AppLock -> sync
+cross-feature BankConnectionsScreen -> sync
+cross-feature BudgetScreens -> schedules
+cross-feature BudgetScreens -> transactions
+cross-feature CategoryDetailScreen -> activity
+cross-feature CategoryDetailScreen -> reports
+cross-feature CategoryDetailScreen -> transactions
+cross-feature CategoryGroupScreens -> accounts
+cross-feature CategoryInsights -> transactions
+cross-feature ConflictScreens -> transactions
+cross-feature CurrencyScreens -> accounts
+cross-feature CustomReportScreens -> insights
+cross-feature DataAndAboutScreens -> auth
+cross-feature DataHealthScreen -> transactions
+cross-feature DeviceSettingsScreens -> auth
+cross-feature GoalTimelineScreen -> insights
+cross-feature HomeLayoutScreen -> budget
+cross-feature HomeScreen -> planning
+cross-feature HomeScreen -> schedules
+cross-feature HomeScreen -> transactions
+cross-feature InsightScreens -> planning
+cross-feature OnboardingScreens -> auth
+cross-feature PayeeAndRulesScreens -> activity
+cross-feature PayeeAndRulesScreens -> schedules
+cross-feature PersonalizeScreens -> onboarding
+cross-feature ReimbursementScreens -> planning
+cross-feature ReportsScreen -> transactions
+cross-feature RetirementSetupScreen -> onboarding
+cross-feature RuleEditorSheet -> activity
+cross-feature ScheduleScreens -> budget
+cross-feature ScheduleScreens -> rules
+cross-feature ScheduleScreens -> transactions
+cross-feature SettingsScreen -> planning
+cross-feature SpendingForecastScreen -> budget
+cross-feature SpendingForecastScreen -> reports
+cross-feature SpendingForecastScreen -> transactions
+cross-feature SyncCenterScreen -> auth
+cross-feature SyncCenterScreen -> transactions
+cross-feature SyncCenterSections -> banking
+cross-feature SyncCenterSections -> planning
+cross-feature TransactionDetailScreen -> reimbursements
+cross-feature TransactionSelectorScreens -> budget
+cross-feature TransactionSyncStatus -> sync
+cross-feature WhatIfScreen -> insights
+function-size AccountDetailScreens.AccountDetailScreen
+function-size AccountDetailScreens.StatementImportDialog
+function-size AccountListScreens.AccountSummaryCard
+function-size AccountListScreens.AccountsScreen
+function-size AccountManagementScreens.AccountOptionsScreen
+function-size AccountManagementScreens.AccountReconcileDialog
+function-size ActivityScreen.ActivityScreen
+function-size ActivitySearch.activitySearchSuggestions
+function-size ActivitySearchScreen.ActivitySearchScreen
+function-size AppLock.EncryptedBudgetUnlock
+function-size AppMenu.AppMenu
+function-size AppNavigation.AppHeader
+function-size AppNavigation.BottomNavigation
+function-size AppNavigation.NavigationGlyph
+function-size AppScreenRouter.ScreenContent
+function-size AreaChart.AreaChart
+function-size BankBrowserLinkSheet.BanksStep
+function-size BankConnectionsScreen.BankConnectionsScreen
+function-size BudgetReorderQueue.complete
+function-size BudgetReorderQueue.enqueue
+function-size BudgetReorderQueue.failHead
+function-size BudgetScreens.BudgetCategoryCard
+function-size BudgetScreens.BudgetScreen
+function-size BudgetSwitchSplash.AdvancedModeSwitch
+function-size Buttons.ReorderDragHandle
+function-size CategoryDetailScreen.CategoryDetailScreen
+function-size CategoryGroupScreens.CategoryGroupScreen
+function-size ChangeHistoryScreen.ChangeHistoryScreen
+function-size ConflictScreens.BudgetMutationReviewScreen
+function-size ConflictScreens.ConflictInboxScreen
+function-size ConflictScreens.ConflictReviewScreen
+function-size ConflictScreens.UncertainWriteDetailsScreen
+function-size CurrencyScreens.ExchangeRatesScreen
+function-size CustomReportScreens.CustomReportScreen
+function-size CustomReportScreens.ReportControls
+function-size DataAndAboutScreens.LocalDataScreen
+function-size DataAndAboutScreens.MerchantIconLicensesScreen
+function-size DataHealthScreen.DataHealthScreen
+function-size DebtPayoffScreen.DebtPayoffScreen
+function-size DeviceSettingsScreens.NotificationsScreen
+function-size DeviceSettingsScreens.SecurityScreen
+function-size DeviceSettingsScreens.ServerDeviceScreen
+function-size ExportScreen.ExportScreen
+function-size Feedback.FeedbackMessageView
+function-size GoalTimelineScreen.GoalTimelineScreen
+function-size HomeLayoutScreen.HomeLayoutRow
+function-size HomeLayoutScreen.HomeLayoutScreen
+function-size HomeScreen.HomeEntryCard
+function-size HomeScreen.HomeScreen
+function-size HouseholdScreen.HouseholdScreen
+function-size InsightScreens.MonthlyReviewScreen
+function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
+function-size LiveBudgetModels.liveBudgetMonthSummary
+function-size LiveBudgetModels.liveScheduleSummaries
+function-size MatchEditorScreen.MatchEditorScreen
+function-size OnboardingScreens.BudgetChooserScreen
+function-size OnboardingScreens.FirstSyncScreen
+function-size OnboardingScreens.ServerAddressScreen
+function-size OnboardingScreens.SignInScreen
+function-size PageTemplates.PageLazyColumnContent
+function-size PayeeAndRulesScreens.BudgetRulesScreen
+function-size PayeeAndRulesScreens.ManagePayeesScreen
+function-size PersonalizeScreens.ModePreviewCard
+function-size PlanningScreens.DebtTermsSheet
+function-size PrivacyAmountText.PrivacyAmountText
+function-size ReportsScreen.ReportCanvas
+function-size ReportsScreen.ReportCard
+function-size ReportsScreen.ReportDetailScreen
+function-size ReportsScreen.ReportsScreen
+function-size ReportsScreen.reportSelectionAt
+function-size RetirementScreen.PlanCard
+function-size RetirementSetupScreen.RetirementSetupScreen
+function-size Rows.ListRow
+function-size Rows.SectionCardLayout
+function-size RuleEditorSheet.RuleConditionEditor
+function-size RuleEditorSheet.RuleEditorContent
+function-size ScheduleScreens.ScheduleDatePickerDialog
+function-size ScheduleScreens.UpcomingSchedulesScreen
+function-size SettingsScreen.SettingsScreen
+function-size SpendingForecastScreen.SpendingForecastScreen
+function-size SpendingTrendsScreen.SpendingTrendsScreen
+function-size StatementImport.parseCsv
+function-size SyncCenterScreen.PendingChangesScreen
+function-size SyncCenterScreen.SyncCenterScreen
+function-size SyncCenterScreen.SyncOverviewCard
+function-size TandemApp.TandemApp
+function-size TandemMobileSession.correctRejectedCategoryRename
+function-size TandemMobileSession.createTransaction
+function-size TandemMobileSession.deleteTransaction
+function-size TandemMobileSession.discardWrite
+function-size TandemMobileSession.markTransactionsReconciled
+function-size TandemMobileSession.performBudgetAction
+function-size TandemMobileSession.processQueuedBudgetReorders
+function-size TandemMobileSession.processQueuedScheduleActions
+function-size TandemMobileSession.retryBudgetMutation
+function-size TandemMobileSession.signOutAndClearLocalData
+function-size TandemMobileSession.synchronizeSerialized
+function-size TandemMobileSession.updateTransaction
+function-size TandemTheme.TandemTheme
+function-size TransactionActionComponents.TransactionRow
+function-size TransactionConflictResolution.resolve
+function-size TransactionDetailScreen.TransactionDetailScreen
+function-size TransactionFieldTemplates.TextFieldCard
+function-size TransactionFormScreen.TransactionFormScreen
+function-size TransactionSelectorScreens.TransactionDatePickerDialog
+function-size WhatIfScreen.WhatIfScreen
+layering AppModels -> app
+layering AppModels -> feature.activity
+layering AppState -> app
+layering AppState -> feature.activity
+layering AppState -> feature.reports
+layering AppState -> feature.transactions
+layering DragReorderUpdate -> feature.budget
+layering IosDeviceAuthenticator -> feature.auth
+layering TandemMobileSession -> feature.reports
+layering TandemMobileSession -> feature.rules
+layering TandemMobileSession -> feature.transactions
+layering TandemTheme -> app
+layering TransactionDateValidation -> feature.budget
+layering TransactionDateValidation -> feature.transactions
+size AccountDetailScreens
+size AccountListScreens
+size AccountManagementScreens
+size ActivityScreen
+size ActivitySearch
+size ActivitySearchScreen
+size AppLock
+size AppMenu
+size AppModels
+size AppNavigation
+size AppScreenRouter
+size AppState
+size BankBrowserLinkSheet
+size BudgetReorderQueue
+size BudgetScreens
+size Buttons
+size CategoryDetailScreen
+size CategoryGroupScreens
+size ChangeHistoryScreen
+size ConflictScreens
+size CustomReportScreens
+size DataAndAboutScreens
+size DeviceSettingsScreens
+size Feedback
+size LiveBudgetModels
+size OnboardingScreens
+size PayeeAndRulesScreens
+size PersonalizeScreens
+size PlanningScreens
+size ReportModels
+size ReportsScreen
+size Rows
+size RuleEditorSheet
+size ScheduleScreens
+size SettingsRowTemplates
+size SettingsScreen
+size StatementImport
+size SyncCenterScreen
+size TandemApp
+size TandemMobileSession
+size TandemTheme
+size TransactionFieldTemplates
+size TransactionFormScreen

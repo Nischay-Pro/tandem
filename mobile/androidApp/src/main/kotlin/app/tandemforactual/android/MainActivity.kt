@@ -1,19 +1,19 @@
 package app.tandemforactual.android
 
-import app.tandemforactual.ui.ScreenshotScript
+import app.tandemforactual.ui.app.ScreenshotScript
 import android.content.pm.ApplicationInfo
 import kotlinx.coroutines.launch
-import app.tandemforactual.ui.WindowHinge
+import app.tandemforactual.ui.app.WindowHinge
 import androidx.window.layout.WindowLayoutInfo
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.FoldingFeature
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
-import app.tandemforactual.ui.QuickActionEvents
+import app.tandemforactual.ui.app.QuickActionEvents
 import androidx.core.content.pm.ShortcutManagerCompat
-import app.tandemforactual.ui.SyncNetwork
-import app.tandemforactual.ui.NetworkKind
+import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.NetworkKind
 import android.net.NetworkCapabilities
 import android.Manifest
 import android.app.NotificationManager
@@ -39,8 +39,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
-import app.tandemforactual.ui.TandemApp
-import app.tandemforactual.ui.AuthReturnEvents
+import app.tandemforactual.ui.app.TandemApp
+import app.tandemforactual.ui.app.AuthReturnEvents
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 

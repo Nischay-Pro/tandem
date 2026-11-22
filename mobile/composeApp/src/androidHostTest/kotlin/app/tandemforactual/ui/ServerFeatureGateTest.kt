@@ -1,6 +1,8 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.api.client.ServerCapabilities
+import app.tandemforactual.ui.core.session.BudgetReorderKind
+import app.tandemforactual.ui.core.session.missingServerFeature
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

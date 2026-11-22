@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.session.crashReportText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

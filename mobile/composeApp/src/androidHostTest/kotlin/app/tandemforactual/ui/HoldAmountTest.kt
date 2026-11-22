@@ -1,5 +1,7 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.feature.budget.holdAmountAllowed
+import app.tandemforactual.ui.feature.budget.suggestedHoldAmount
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

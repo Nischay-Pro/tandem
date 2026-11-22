@@ -14,7 +14,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.fragment.app.FragmentActivity
-import app.tandemforactual.ui.DeviceAuthenticator
+import app.tandemforactual.ui.feature.auth.DeviceAuthenticator
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom

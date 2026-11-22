@@ -14,6 +14,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.TandemLayout
+import app.tandemforactual.ui.design.theme.TandemTheme
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.feature.accounts.AccountListItemUi
+import app.tandemforactual.ui.feature.accounts.AccountSummaryCard
+import app.tandemforactual.ui.feature.accounts.reorderAccountsWithinSlots
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
