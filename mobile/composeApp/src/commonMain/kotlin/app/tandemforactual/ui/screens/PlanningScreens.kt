@@ -413,7 +413,7 @@ internal fun RecoveryKeySheet(
     val palette = tandemPalette
     var entered by remember(visible) { mutableStateOf("") }
     var error by remember(visible) { mutableStateOf<String?>(null) }
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
+    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}, secure = true) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader("Planning recovery key", onClose = onDismiss)

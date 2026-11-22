@@ -107,6 +107,14 @@ internal object BudgetSystemNotifications {
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(
+                    Notification.Builder(applicationContext, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_tandem_notification)
+                        .setContentTitle(title)
+                        .setContentText("Unlock to see the details.")
+                        .build(),
+                )
                 .build()
         manager.notify(notificationId, notification)
     }
