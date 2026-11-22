@@ -70,7 +70,6 @@ function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size AccountsScreen.AccountsScreen
 function-size ActivitySearch.activitySearchSuggestions
-function-size ActivitySearchScreen.ActivitySearchScreen
 function-size AppHeader.AppHeader
 function-size AppLockGate.EncryptedBudgetUnlock
 function-size AppMenuScreen.AppMenu
@@ -181,7 +180,6 @@ layering TransactionDateValidation -> feature.transactions
 size AccountDetailScreen
 size AccountsScreen
 size ActivitySearch
-size ActivitySearchScreen
 size AppHeader
 size AppState
 size BankBrowserLinkSheet
