@@ -96,18 +96,7 @@ internal fun ReportDetailScreen(
     ) {
         if (kind != ReportKind.NET_WORTH) {
             item(key = "report-detail-period") {
-                ReportPeriodSelector(
-                    monthId = state.reportsMonthId,
-                    mode = periodMode,
-                    rangePreset = rangePreset,
-                    availableMonthIds = mobileSession.budgetMonthIds,
-                    onMonthChange = { state.reportsMonthId = it },
-                    onModeChange = { state.reportsPeriodMode = it.name },
-                    onRangePresetChange = {
-                        state.reportsRangePreset = it.name
-                        it.monthCount?.let { months -> state.reportsRangeMonths = months }
-                    },
-                )
+                ReportsPeriodItem(state, mobileSession.budgetMonthIds, periodMode, rangePreset)
             }
         }
         if (reportHasNoData(kind, data)) {

@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +55,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
@@ -91,87 +93,11 @@ internal fun TransactionDetailScreen(
             else -> "Changes not synced to Actual"
         }
     PageColumn(verticalSpacing = 12.dp) {
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(tandemPalette.raised),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (merchantIcon != null) {
-                        Image(
-                            painter = painterResource(merchantIcon),
-                            contentDescription = null,
-                            modifier = Modifier.size(38.dp).padding(TandemSpacing.extraSmall),
-                            contentScale = ContentScale.Fit,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = categoryIcon,
-                            contentDescription = null,
-                            modifier = Modifier.size(30.dp),
-                            tint = tandemPalette.accent,
-                        )
-                    }
-                }
-            }
-            if (showPayee) {
-                Text(
-                    state.selectedTransactionPayeeName.ifBlank { state.transactionPayee },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.sectionTitle,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(Modifier.size(28.dp))
-                Text(
-                    state.formatCurrency(amount),
-                    modifier = Modifier.weight(1f),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.amount,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Icon(
-                    imageVector = if (isSyncedToActual) Lucide.CloudCheck else Lucide.CloudOff,
-                    contentDescription = syncDescription,
-                    modifier = Modifier.size(28.dp),
-                    tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
-                )
-            }
-        }
+        TransactionDetailHeader(state, amount, merchantIcon, categoryIcon, showPayee, isSyncedToActual, syncDescription)
         AnimatedVisibility(syncOperation != null) {
             syncOperation?.let { TransactionSyncNotice(it, state, navigation) }
         }
-        SectionCard(title = "") {
-            ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = state.transactionAccount)
-            DividerLine()
-            ListRow("Category", leading = RowLeading.Icon(Lucide.Tags), trailing = state.transactionCategory)
-            DividerLine()
-            ListRow(
-                "Date",
-                leading = RowLeading.Icon(Lucide.CalendarDays),
-                trailing = displayTransactionDate(state.transactionDate),
-            )
-            DividerLine()
-            ListRow(
-                "Notes",
-                leading = RowLeading.Icon(Lucide.NotepadText),
-                trailing = state.transactionNotes.ifBlank { "No notes" },
-            )
-        }
+        TransactionDetailFields(state)
         ReimbursementCard(state, mobileSession, navigation)
         PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) {
             navigation.open(AppRoute.EDIT_TRANSACTION)
@@ -182,5 +108,101 @@ internal fun TransactionDetailScreen(
                 state.applyAddAgain(draft)
             }
         }
+    }
+}
+
+/** The merchant or category icon, optional payee, amount and sync state at the top of a transaction. */
+@Composable
+private fun TransactionDetailHeader(
+    state: AppState,
+    amount: Long,
+    merchantIcon: DrawableResource?,
+    categoryIcon: ImageVector,
+    showPayee: Boolean,
+    isSyncedToActual: Boolean,
+    syncDescription: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .background(tandemPalette.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (merchantIcon != null) {
+                    Image(
+                        painter = painterResource(merchantIcon),
+                        contentDescription = null,
+                        modifier = Modifier.size(38.dp).padding(TandemSpacing.extraSmall),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Icon(
+                        imageVector = categoryIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(30.dp),
+                        tint = tandemPalette.accent,
+                    )
+                }
+            }
+        }
+        if (showPayee) {
+            Text(
+                state.selectedTransactionPayeeName.ifBlank { state.transactionPayee },
+                modifier = Modifier.fillMaxWidth(),
+                color = tandemPalette.text,
+                fontSize = TandemTypography.sectionTitle,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.size(28.dp))
+            Text(
+                state.formatCurrency(amount),
+                modifier = Modifier.weight(1f),
+                color = tandemPalette.text,
+                fontSize = TandemTypography.amount,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                imageVector = if (isSyncedToActual) Lucide.CloudCheck else Lucide.CloudOff,
+                contentDescription = syncDescription,
+                modifier = Modifier.size(28.dp),
+                tint = if (isSyncedToActual) tandemPalette.positive else tandemPalette.muted,
+            )
+        }
+    }
+}
+
+/** The account, category, date and notes of a transaction. */
+@Composable
+private fun TransactionDetailFields(state: AppState) {
+    SectionCard(title = "") {
+        ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = state.transactionAccount)
+        DividerLine()
+        ListRow("Category", leading = RowLeading.Icon(Lucide.Tags), trailing = state.transactionCategory)
+        DividerLine()
+        ListRow(
+            "Date",
+            leading = RowLeading.Icon(Lucide.CalendarDays),
+            trailing = displayTransactionDate(state.transactionDate),
+        )
+        DividerLine()
+        ListRow(
+            "Notes",
+            leading = RowLeading.Icon(Lucide.NotepadText),
+            trailing = state.transactionNotes.ifBlank { "No notes" },
+        )
     }
 }

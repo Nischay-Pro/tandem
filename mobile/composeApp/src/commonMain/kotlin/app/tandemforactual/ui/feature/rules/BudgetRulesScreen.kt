@@ -64,61 +64,7 @@ internal fun BudgetRulesScreen(
     val activeRules = remember(rules) { rules.filterNot { it.recordBody()?.booleanValue("tombstone") == true } }
     val summaries =
         remember(activeRules, namesByField) {
-            activeRules.map { rule ->
-                val body = rule.recordBody()
-                val conditions = (body?.get("conditions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
-                val actions = (body?.get("actions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
-                val conditionSummary =
-                    conditions
-                        .joinToString(" · ") { condition ->
-                            val wireField = condition.stringValue("field")
-                            val options = condition["options"] as? JsonObject
-                            val field =
-                                when {
-                                    wireField == "amount" && options?.stringValue("outflow") == "true" -> "Money out"
-                                    wireField == "amount" && options?.stringValue("inflow") == "true" -> "Money in"
-                                    else -> ruleFieldLabel(wireField)
-                                }
-                            val operation = ruleOperatorLabel(condition.stringValue("op") ?: "is")
-                            val value =
-                                when (val raw = condition["value"]) {
-                                    is JsonArray ->
-                                        raw.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(", ") {
-                                            namesByField[wireField]?.get(it)
-                                                ?: it
-                                        }
-                                    is JsonPrimitive -> raw.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
-                                    else -> raw?.toString()
-                                }
-                            listOfNotNull(field, operation, value).joinToString(" ")
-                        }.ifBlank { "Every transaction" }
-                val actionSummary =
-                    actions
-                        .joinToString(" · ") { action ->
-                            val wireField = action.stringValue("field")
-                            val value =
-                                (action["value"] as? JsonPrimitive)?.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
-                            when (action.stringValue("op")) {
-                                "append-notes" -> "Add “$value” to end of notes"
-                                "prepend-notes" -> "Add “$value” to start of notes"
-                                "delete-transaction" -> "Delete transaction"
-                                "link-schedule" -> "Link schedule"
-                                "set-split-amount" -> "Split transaction"
-                                else ->
-                                    when {
-                                        wireField == "cleared" -> if (value == "true") "Mark cleared" else "Mark not cleared"
-                                        else -> "Set ${ruleFieldLabel(wireField).lowercase()} to ${value.orEmpty()}"
-                                    }
-                            }
-                        }.ifBlank { "No actions" }
-                val stage =
-                    when (body?.stringValue("stage")) {
-                        "pre" -> "Runs first"
-                        "post" -> "Runs last"
-                        else -> null
-                    }
-                RuleSummary(rule.recordId, conditionSummary, actionSummary, stage)
-            }
+            activeRules.map { rule -> ruleSummary(rule, namesByField) }
         }
     val visibleRules =
         remember(summaries, searchQuery) {
@@ -130,28 +76,7 @@ internal fun BudgetRulesScreen(
             ActivitySearchInput(searchQuery, onValueChange = { searchQuery = it }, placeholder = "Find a rule")
         }
         item(key = "budget-rules-summary") {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    when {
-                        searchQuery.isBlank() && summaries.size == 1 -> "1 rule"
-                        searchQuery.isBlank() -> "${summaries.size} rules"
-                        else -> "${visibleRules.size} of ${summaries.size} rules"
-                    },
-                    modifier = Modifier.weight(1f),
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.caption,
-                )
-                TandemIconButton(
-                    Lucide.Plus,
-                    "Add rule",
-                    enabled = canAddRules,
-                    tint = tandemPalette.accent,
-                    containerColor = tandemPalette.accentSurface,
-                ) { onOpenRule("") }
-            }
+            RulesCountRow(searchQuery.isBlank(), visibleRules.size, summaries.size, canAddRules) { onOpenRule("") }
         }
         when {
             summaries.isEmpty() ->
@@ -185,6 +110,108 @@ internal fun BudgetRulesScreen(
                     }
                 }
         }
+    }
+}
+
+private fun ruleSummary(
+    rule: BudgetRecordEntity,
+    namesByField: Map<String, Map<String, String>>,
+): RuleSummary {
+    val body = rule.recordBody()
+    val conditions = (body?.get("conditions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+    val actions = (body?.get("actions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+    val conditionSummary = ruleConditionSummary(conditions, namesByField)
+    val actionSummary = ruleActionSummary(actions, namesByField)
+    val stage =
+        when (body?.stringValue("stage")) {
+            "pre" -> "Runs first"
+            "post" -> "Runs last"
+            else -> null
+        }
+    return RuleSummary(rule.recordId, conditionSummary, actionSummary, stage)
+}
+
+private fun ruleConditionSummary(
+    conditions: List<JsonObject>,
+    namesByField: Map<String, Map<String, String>>,
+): String =
+    conditions
+        .joinToString(" · ") { condition ->
+            val wireField = condition.stringValue("field")
+            val options = condition["options"] as? JsonObject
+            val field =
+                when {
+                    wireField == "amount" && options?.stringValue("outflow") == "true" -> "Money out"
+                    wireField == "amount" && options?.stringValue("inflow") == "true" -> "Money in"
+                    else -> ruleFieldLabel(wireField)
+                }
+            val operation = ruleOperatorLabel(condition.stringValue("op") ?: "is")
+            val value =
+                when (val raw = condition["value"]) {
+                    is JsonArray ->
+                        raw.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(", ") {
+                            namesByField[wireField]?.get(it)
+                                ?: it
+                        }
+                    is JsonPrimitive -> raw.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
+                    else -> raw?.toString()
+                }
+            listOfNotNull(field, operation, value).joinToString(" ")
+        }.ifBlank { "Every transaction" }
+
+private fun ruleActionSummary(
+    actions: List<JsonObject>,
+    namesByField: Map<String, Map<String, String>>,
+): String =
+    actions
+        .joinToString(" · ") { action ->
+            val wireField = action.stringValue("field")
+            val value =
+                (action["value"] as? JsonPrimitive)?.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
+            when (action.stringValue("op")) {
+                "append-notes" -> "Add “$value” to end of notes"
+                "prepend-notes" -> "Add “$value” to start of notes"
+                "delete-transaction" -> "Delete transaction"
+                "link-schedule" -> "Link schedule"
+                "set-split-amount" -> "Split transaction"
+                else ->
+                    when {
+                        wireField == "cleared" -> if (value == "true") "Mark cleared" else "Mark not cleared"
+                        else -> "Set ${ruleFieldLabel(wireField).lowercase()} to ${value.orEmpty()}"
+                    }
+            }
+        }.ifBlank { "No actions" }
+
+/** How many rules are shown, and the button to add one. */
+@Composable
+private fun RulesCountRow(
+    searchBlank: Boolean,
+    visibleCount: Int,
+    totalCount: Int,
+    canAddRules: Boolean,
+    onAdd: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            when {
+                searchBlank && totalCount == 1 -> "1 rule"
+                searchBlank -> "$totalCount rules"
+                else -> "$visibleCount of $totalCount rules"
+            },
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.muted,
+            fontSize = TandemTypography.caption,
+        )
+        TandemIconButton(
+            Lucide.Plus,
+            "Add rule",
+            enabled = canAddRules,
+            tint = tandemPalette.accent,
+            containerColor = tandemPalette.accentSurface,
+        ) { onAdd() }
     }
 }
 

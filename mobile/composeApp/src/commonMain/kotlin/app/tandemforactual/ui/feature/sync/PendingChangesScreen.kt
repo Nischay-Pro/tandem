@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -31,6 +32,7 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.formatSignedCurrency
 import app.tandemforactual.ui.core.session.BudgetReorderKind
+import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -117,91 +119,128 @@ internal fun PendingChangesScreen(
             }
         }
 
-        if (transactions.isNotEmpty()) {
-            item(key = "pending-transactions-section") {
-                SyncChangeSection("Activity", transactions.size.toString()) {
-                    transactions.forEachIndexed { index, operation ->
-                        val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                        PendingChangeRow(
-                            title = transaction?.payee ?: "Transaction",
-                            summary = pendingTransactionSummary(operation, transaction, state, mobileSession),
-                            icon = Lucide.Receipt,
-                            showDivider = index > 0,
-                            onClick = {
-                                mobileSession.clearTransactionWriteMessage()
-                                state.selectedConflictOperationId = operation.operationId
-                                navigation.open(AppRoute.UNCERTAIN_WRITE)
-                            },
-                        )
-                    }
-                }
-            }
-        }
+        pendingTransactionItems(transactions, liveTransactions, state, mobileSession, navigation)
 
-        if (schedules.isNotEmpty()) {
-            item(key = "pending-schedules-section") {
-                SyncChangeSection("Scheduled", schedules.size.toString()) {
-                    schedules.forEachIndexed { index, operation ->
-                        val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
-                        PendingChangeRow(
-                            title = schedule?.name ?: "Scheduled payment",
-                            summary = pendingScheduleSummary(operation.action, schedule, state),
-                            icon = Lucide.CalendarClock,
-                            showDivider = index > 0,
-                            onClick = {
-                                state.pendingScheduleToOpenId = operation.recordId
-                                navigation.open(AppRoute.SCHEDULES)
-                            },
-                        )
-                    }
-                }
-            }
-        }
+        pendingScheduleItems(schedules, liveSchedules, state, navigation)
 
-        if (budgetMutations.isNotEmpty()) {
-            item(key = "pending-budget-section") {
-                SyncChangeSection("Budget", budgetMutations.size.toString()) {
-                    budgetMutations.forEachIndexed { index, mutation ->
-                        val operation = mobileSession.pendingWrites.firstOrNull { it.operationId == mutation.operationId }
-                        val itemName = budgetMutationItemName(mutation, operation, mobileSession, liveBudgetMonth)
-                        PendingChangeRow(
-                            title = pendingBudgetMutationTitle(itemName),
-                            summary = budgetMutationPendingSummary(mutation, state, mobileSession),
-                            icon = if (mutation.kind == BudgetReorderKind.MOVE_BUDGET_MONEY) Lucide.ArrowLeftRight else Lucide.WalletCards,
-                            amountChanges = budgetMutationAmountChanges(mutation, state, mobileSession),
-                            showDivider = index > 0,
-                            onClick = {
-                                state.selectedConflictOperationId = mutation.operationId
-                                navigation.open(AppRoute.UNCERTAIN_WRITE)
-                            },
-                        )
-                    }
-                }
-            }
-        }
+        pendingBudgetItems(budgetMutations, liveBudgetMonth, state, mobileSession, navigation)
         if (pendingCount > 0) {
-            item(key = "pending-changes-footer") {
-                Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.positive)
-                        Text("All edits are saved on this device.", color = tandemPalette.muted, fontSize = TandemTypography.compactBody)
-                    }
-                    if (onSyncNow != null) {
-                        PrimaryButton(
-                            if (mobileSession.isSyncing) {
-                                "Syncing…"
-                            } else {
-                                "Sync $pendingCount ${if (pendingCount == 1) "change" else "changes"}"
-                            },
-                            enabled = !mobileSession.isSyncing,
-                            loading = mobileSession.isSyncing,
-                            onClick = onSyncNow,
-                        )
-                    }
-                }
-            }
+            item(key = "pending-changes-footer") { PendingChangesFooter(pendingCount, mobileSession.isSyncing, onSyncNow) }
         }
         item(key = "pending-changes-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+private fun LazyListScope.pendingTransactionItems(
+    transactions: List<OutboxOperationEntity>,
+    liveTransactions: List<TransactionItem>,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+) {
+    if (transactions.isNotEmpty()) {
+        item(key = "pending-transactions-section") {
+            SyncChangeSection("Activity", transactions.size.toString()) {
+                transactions.forEachIndexed { index, operation ->
+                    val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+                    PendingChangeRow(
+                        title = transaction?.payee ?: "Transaction",
+                        summary = pendingTransactionSummary(operation, transaction, state, mobileSession),
+                        icon = Lucide.Receipt,
+                        showDivider = index > 0,
+                        onClick = {
+                            mobileSession.clearTransactionWriteMessage()
+                            state.selectedConflictOperationId = operation.operationId
+                            navigation.open(AppRoute.UNCERTAIN_WRITE)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun LazyListScope.pendingScheduleItems(
+    schedules: List<OutboxOperationEntity>,
+    liveSchedules: List<LiveScheduleSummary>,
+    state: AppState,
+    navigation: AppNavigation,
+) {
+    if (schedules.isNotEmpty()) {
+        item(key = "pending-schedules-section") {
+            SyncChangeSection("Scheduled", schedules.size.toString()) {
+                schedules.forEachIndexed { index, operation ->
+                    val schedule = liveSchedules.firstOrNull { it.id == operation.recordId }
+                    PendingChangeRow(
+                        title = schedule?.name ?: "Scheduled payment",
+                        summary = pendingScheduleSummary(operation.action, schedule, state),
+                        icon = Lucide.CalendarClock,
+                        showDivider = index > 0,
+                        onClick = {
+                            state.pendingScheduleToOpenId = operation.recordId
+                            navigation.open(AppRoute.SCHEDULES)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun LazyListScope.pendingBudgetItems(
+    budgetMutations: List<QueuedBudgetReorder>,
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+) {
+    if (budgetMutations.isNotEmpty()) {
+        item(key = "pending-budget-section") {
+            SyncChangeSection("Budget", budgetMutations.size.toString()) {
+                budgetMutations.forEachIndexed { index, mutation ->
+                    val operation = mobileSession.pendingWrites.firstOrNull { it.operationId == mutation.operationId }
+                    val itemName = budgetMutationItemName(mutation, operation, mobileSession, liveBudgetMonth)
+                    PendingChangeRow(
+                        title = pendingBudgetMutationTitle(itemName),
+                        summary = budgetMutationPendingSummary(mutation, state, mobileSession),
+                        icon = if (mutation.kind == BudgetReorderKind.MOVE_BUDGET_MONEY) Lucide.ArrowLeftRight else Lucide.WalletCards,
+                        amountChanges = budgetMutationAmountChanges(mutation, state, mobileSession),
+                        showDivider = index > 0,
+                        onClick = {
+                            state.selectedConflictOperationId = mutation.operationId
+                            navigation.open(AppRoute.UNCERTAIN_WRITE)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The saved-on-device note and the sync button under the pending changes. */
+@Composable
+private fun PendingChangesFooter(
+    pendingCount: Int,
+    isSyncing: Boolean,
+    onSyncNow: (() -> Unit)?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = tandemPalette.positive)
+            Text("All edits are saved on this device.", color = tandemPalette.muted, fontSize = TandemTypography.compactBody)
+        }
+        if (onSyncNow != null) {
+            PrimaryButton(
+                if (isSyncing) {
+                    "Syncing…"
+                } else {
+                    "Sync $pendingCount ${if (pendingCount == 1) "change" else "changes"}"
+                },
+                enabled = !isSyncing,
+                loading = isSyncing,
+                onClick = onSyncNow,
+            )
+        }
     }
 }
 

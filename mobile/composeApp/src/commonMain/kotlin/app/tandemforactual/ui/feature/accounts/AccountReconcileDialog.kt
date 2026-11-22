@@ -85,7 +85,7 @@ internal fun AccountReconcileDialog(
         } else {
             null
         }
-    val balanceMatches = differenceMinor == 0L
+    val canFinish = canFinishReconciliation(statementMinor, differenceMinor, busy)
     var sheetVisible by remember { mutableStateOf(true) }
     val requestDismiss = { if (!busy) sheetVisible = false }
     TandemTaskSheet(
@@ -99,24 +99,7 @@ internal fun AccountReconcileDialog(
                     Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                    ) {
-                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                        Text(
-                            "Reconcile",
-                            modifier = Modifier.weight(1f),
-                            color = tandemPalette.text,
-                            fontSize = TandemTypography.sectionTitle,
-                            fontFamily = tandemAlloFamily(),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = requestDismiss)
-                    }
+                    ReconcileHeader(busy, requestDismiss)
                     BodyText(accountName)
                     TextFieldCard(
                         "Statement balance",
@@ -134,79 +117,152 @@ internal fun AccountReconcileDialog(
                     if (statementMinor == null) {
                         InlineMessage("Enter your statement balance", InlineMessageKind.INFO)
                     }
-                    SurfaceCard {
-                        Column {
-                            ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
-                            DividerLine()
-                            ListRow(
-                                "Difference",
-                                trailing = differenceMinor?.let(state::formatCurrency) ?: "—",
-                                leading = RowLeading.Icon(Lucide.Check),
-                                options =
-                                    ListRowOptions(
-                                        trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
-                                    ),
-                            )
-                        }
-                    }
-                    if (statementMinor != null) {
-                        InlineMessage(
-                            if (balanceMatches) {
-                                "Cleared transactions match this statement balance."
-                            } else {
-                                "Adjust the selected transactions until the difference is 0."
-                            },
-                            if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
-                        )
-                    }
-                    SectionCard("Transactions", "Select the items on this statement") {
-                        transactions.forEachIndexed { index, transaction ->
-                            val id = transaction.recordId ?: return@forEachIndexed
-                            CheckBoxRow(
-                                transaction.payee,
-                                "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
-                                checked = id in selectedIds,
-                                enabled = !busy,
-                                onChange = { onSelectedChange(id, it) },
-                            )
-                            if (index < transactions.lastIndex) DividerLine()
-                        }
-                        if (hasMoreTransactions) {
-                            if (transactions.isNotEmpty()) DividerLine()
-                            TandemActionButton(
-                                if (loadingMoreTransactions) "Loading…" else "Load older transactions",
-                                TandemActionButtonTone.NEUTRAL,
-                                Modifier.fillMaxWidth(),
-                                enabled = !busy && !loadingMoreTransactions,
-                                loading = loadingMoreTransactions,
-                                onClick = onLoadMoreTransactions,
-                            )
-                        }
-                    }
+                    ReconcileBalanceSummary(state, projectedClearedBalance, differenceMinor, statementMinor != null)
+                    ReconcileTransactionsCard(
+                        state = state,
+                        transactions = transactions,
+                        selectedIds = selectedIds,
+                        busy = busy,
+                        hasMoreTransactions = hasMoreTransactions,
+                        loadingMoreTransactions = loadingMoreTransactions,
+                        onLoadMoreTransactions = onLoadMoreTransactions,
+                        onSelectedChange = onSelectedChange,
+                    )
                 }
                 message?.let { InlineMessage(it, InlineMessageKind.INFO, Modifier.padding(horizontal = TandemSpacing.large)) }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                ) {
-                    TandemActionButton(
-                        "Cancel",
-                        TandemActionButtonTone.NEUTRAL,
-                        Modifier.weight(1f),
-                        enabled = !busy,
-                        onClick = requestDismiss,
-                    )
-                    TandemActionButton(
-                        if (busy) "Working…" else "Mark reconciled",
-                        TandemActionButtonTone.PRIMARY,
-                        Modifier.weight(1f),
-                        icon = Lucide.Check,
-                        enabled = canFinishReconciliation(statementMinor, differenceMinor, busy),
-                        loading = busy,
-                        onClick = { onConfirm(requestDismiss) },
-                    )
-                }
+                ReconcileActions(busy, canFinish, requestDismiss) { onConfirm(requestDismiss) }
             }
         }
+    }
+}
+
+/** The reconcile title and close button. */
+@Composable
+private fun ReconcileHeader(
+    busy: Boolean,
+    onClose: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+        Text(
+            "Reconcile",
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.sectionTitle,
+            fontFamily = tandemAlloFamily(),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onClose)
+    }
+}
+
+/** The projected cleared balance, how far it is from the statement, and whether they match. */
+@Composable
+private fun ReconcileBalanceSummary(
+    state: AppState,
+    projectedClearedBalance: Long?,
+    differenceMinor: Long?,
+    hasStatement: Boolean,
+) {
+    val balanceMatches = differenceMinor == 0L
+    SurfaceCard {
+        Column {
+            ListRow("Cleared balance", trailing = projectedClearedBalance?.let(state::formatCurrency) ?: "Unavailable")
+            DividerLine()
+            ListRow(
+                "Difference",
+                trailing = differenceMinor?.let(state::formatCurrency) ?: "—",
+                leading = RowLeading.Icon(Lucide.Check),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (balanceMatches) tandemPalette.positive else tandemPalette.warning,
+                    ),
+            )
+        }
+    }
+    if (hasStatement) {
+        InlineMessage(
+            if (balanceMatches) {
+                "Cleared transactions match this statement balance."
+            } else {
+                "Adjust the selected transactions until the difference is 0."
+            },
+            if (balanceMatches) InlineMessageKind.SUCCESS else InlineMessageKind.INFO,
+        )
+    }
+}
+
+/** The transactions to tick off against the statement, with a button to load older ones. */
+@Composable
+private fun ReconcileTransactionsCard(
+    state: AppState,
+    transactions: List<TransactionItem>,
+    selectedIds: Set<String>,
+    busy: Boolean,
+    hasMoreTransactions: Boolean,
+    loadingMoreTransactions: Boolean,
+    onLoadMoreTransactions: () -> Unit,
+    onSelectedChange: (String, Boolean) -> Unit,
+) {
+    SectionCard("Transactions", "Select the items on this statement") {
+        transactions.forEachIndexed { index, transaction ->
+            val id = transaction.recordId ?: return@forEachIndexed
+            CheckBoxRow(
+                transaction.payee,
+                "${transaction.dateLabel} · ${state.formatCurrency(transaction.amountMinorUnits)}",
+                checked = id in selectedIds,
+                enabled = !busy,
+                onChange = { onSelectedChange(id, it) },
+            )
+            if (index < transactions.lastIndex) DividerLine()
+        }
+        if (hasMoreTransactions) {
+            if (transactions.isNotEmpty()) DividerLine()
+            TandemActionButton(
+                if (loadingMoreTransactions) "Loading…" else "Load older transactions",
+                TandemActionButtonTone.NEUTRAL,
+                Modifier.fillMaxWidth(),
+                enabled = !busy && !loadingMoreTransactions,
+                loading = loadingMoreTransactions,
+                onClick = onLoadMoreTransactions,
+            )
+        }
+    }
+}
+
+/** The cancel and mark reconciled buttons. */
+@Composable
+private fun ReconcileActions(
+    busy: Boolean,
+    canFinish: Boolean,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        TandemActionButton(
+            "Cancel",
+            TandemActionButtonTone.NEUTRAL,
+            Modifier.weight(1f),
+            enabled = !busy,
+            onClick = onCancel,
+        )
+        TandemActionButton(
+            if (busy) "Working…" else "Mark reconciled",
+            TandemActionButtonTone.PRIMARY,
+            Modifier.weight(1f),
+            icon = Lucide.Check,
+            enabled = canFinish,
+            loading = busy,
+            onClick = onConfirm,
+        )
     }
 }

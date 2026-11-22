@@ -52,44 +52,10 @@ internal fun ConflictInboxScreen(
         }
         return
     }
-    val conflicts =
-        mobileSession.pendingWrites
-            .filter { it.status == "conflict" }
-            .map { operation ->
-                val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
-                val snapshot = conflictSnapshot(operation)
-                val categoryId = snapshot?.stringValue("category")
-                val categoryName =
-                    transaction?.category
-                        ?: categoryId?.let { id ->
-                            mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName()
-                        }
-                        ?: "Uncategorized"
-                ConflictInboxItemUi(
-                    operation.operationId,
-                    conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction",
-                    listOfNotNull(transactionIdentity(operation, transaction, state, mobileSession), categoryName).joinToString(" · "),
-                    transaction?.merchantIcon,
-                    transaction?.categoryIcon,
-                )
-            }
+    val conflicts = conflictInboxItems(state, mobileSession, liveTransactions)
     PageLazyColumn {
         item(key = "conflicts-heading") {
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                SyncPageHeading(
-                    eyebrow = "Sync",
-                    title = if (conflicts.isEmpty()) "Nothing to review." else "Needs review.",
-                    detail =
-                        when (conflicts.size) {
-                            0 -> "Every change on this device matches Actual."
-                            1 -> "One item changed on this device and in Actual. Choose which version to keep."
-                            else -> "${conflicts.size} items changed on this device and in Actual. Choose which version to keep."
-                        },
-                )
-                if (conflicts.isNotEmpty()) {
-                    SyncCountChip("${conflicts.size} to review", tandemPalette.warning)
-                }
-            }
+            ConflictInboxHeading(conflicts.size)
         }
         items(conflicts, key = { "conflict:${it.id}" }) { conflict ->
             SurfaceCard(modifier = tandemListItemModifier(tandemReduceMotion)) {
@@ -125,6 +91,52 @@ internal fun ConflictInboxScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+private fun conflictInboxItems(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    liveTransactions: List<TransactionItem>,
+): List<ConflictInboxItemUi> =
+    mobileSession.pendingWrites
+        .filter { it.status == "conflict" }
+        .map { operation ->
+            val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
+            val snapshot = conflictSnapshot(operation)
+            val categoryId = snapshot?.stringValue("category")
+            val categoryName =
+                transaction?.category
+                    ?: categoryId?.let { id ->
+                        mobileSession.categoryRecords.firstOrNull { it.recordId == id }?.recordName()
+                    }
+                    ?: "Uncategorized"
+            ConflictInboxItemUi(
+                operation.operationId,
+                conflictPayeeTitle(operation, liveTransactions, mobileSession) ?: "Transaction",
+                listOfNotNull(transactionIdentity(operation, transaction, state, mobileSession), categoryName).joinToString(" · "),
+                transaction?.merchantIcon,
+                transaction?.categoryIcon,
+            )
+        }
+
+/** The title, explanation and count chip above the conflicts list. */
+@Composable
+private fun ConflictInboxHeading(count: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SyncPageHeading(
+            eyebrow = "Sync",
+            title = if (count == 0) "Nothing to review." else "Needs review.",
+            detail =
+                when (count) {
+                    0 -> "Every change on this device matches Actual."
+                    1 -> "One item changed on this device and in Actual. Choose which version to keep."
+                    else -> "$count items changed on this device and in Actual. Choose which version to keep."
+                },
+        )
+        if (count > 0) {
+            SyncCountChip("$count to review", tandemPalette.warning)
         }
     }
 }

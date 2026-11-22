@@ -5,14 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -22,10 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -43,7 +38,6 @@ import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SegmentedSelector
-import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -54,8 +48,6 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
-import app.tandemforactual.ui.design.templates.TextFieldCard
-import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.templates.readablePadding
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -63,8 +55,8 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.Trash2
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 @Composable
 internal fun RuleEditorSheet(
@@ -138,77 +130,9 @@ private fun RuleEditorContent(
                     InlineMessageKind.WARNING,
                 )
             } else {
-                SectionCard("Run order") {
-                    Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        SegmentedSelector(RuleStage.entries.map { it.label to (it == draft.stage) }) {
-                            draft = draft.copy(stage = RuleStage.entries[it])
-                        }
-                        Text(draft.stage.detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                    }
-                }
-                SectionCard("If") {
-                    Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        SegmentedSelector(listOf("All match" to draft.matchAll, "Any match" to !draft.matchAll)) {
-                            draft = draft.copy(matchAll = it == 0)
-                        }
-                        Text(
-                            if (draft.matchAll) "Every condition must match the transaction." else "One matching condition is enough.",
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                    Column {
-                        draft.conditions.forEachIndexed { index, condition ->
-                            DividerLine()
-                            RuleConditionEditor(
-                                number = index + 1,
-                                condition = condition,
-                                choices = choices,
-                                removable = draft.conditions.size > 1,
-                                onChange = { next ->
-                                    draft = draft.copy(conditions = draft.conditions.toMutableList().also { it[index] = next })
-                                    error = null
-                                },
-                                onRemove = { draft = draft.copy(conditions = draft.conditions.filterIndexed { i, _ -> i != index }) },
-                            )
-                        }
-                    }
-                    DividerLine()
-                    ListRow(
-                        "Add condition",
-                        leading = RowLeading.Icon(Lucide.Plus),
-                        options = ListRowOptions(dense = true),
-                        onClick = { draft = draft.copy(conditions = draft.conditions + RuleConditionDraft()) },
-                    )
-                }
-                SectionCard("Then") {
-                    Column {
-                        draft.actions.forEachIndexed { index, action ->
-                            if (index > 0) DividerLine()
-                            RuleActionEditor(
-                                number = index + 1,
-                                action = action,
-                                choices = choices,
-                                removable = draft.actions.size > 1,
-                                onChange = { next ->
-                                    draft = draft.copy(actions = draft.actions.toMutableList().also { it[index] = next })
-                                    error = null
-                                },
-                                onRemove = { draft = draft.copy(actions = draft.actions.filterIndexed { i, _ -> i != index }) },
-                            )
-                        }
-                    }
-                    DividerLine()
-                    ListRow(
-                        "Add action",
-                        leading = RowLeading.Icon(Lucide.Plus),
-                        options = ListRowOptions(dense = true),
-                        onClick = {
-                            val unused = RuleActionKind.entries.firstOrNull { kind -> draft.actions.none { it.kind == kind } }
-                            draft = draft.copy(actions = draft.actions + RuleActionDraft(unused ?: RuleActionKind.APPEND_NOTES))
-                        },
-                    )
-                }
+                RuleStageCard(draft) { draft = it }
+                RuleConditionsCard(draft, choices, { draft = it }, { error = null })
+                RuleActionsCard(draft, choices, { draft = it }, { error = null })
                 RulePreview(state, mobileSession, draft)
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.feedback.budgetActionMessageKind) }
@@ -224,13 +148,7 @@ private fun RuleEditorContent(
                             return@PrimaryButton
                         }
                     scope.launch {
-                        val saved =
-                            if (ruleId.isBlank()) {
-                                mobileSession.budgetEdits.createBudgetRule(state.selectedBudgetId, body, password)
-                            } else {
-                                mobileSession.budgetEdits.editBudgetRule(state.selectedBudgetId, ruleId, body, password)
-                            }
-                        if (saved) onDone()
+                        if (saveRule(mobileSession, state.selectedBudgetId, ruleId, body, password)) onDone()
                     }
                 }
             }
@@ -240,22 +158,144 @@ private fun RuleEditorContent(
         }
     }
     if (confirmDelete) {
-        DestructiveConfirmationDialog(
-            title = "Delete this rule?",
-            message = "Actual will stop applying it to new and imported transactions. Transactions it already changed stay as they are.",
-            confirmLabel = "Delete",
-            dismissLabel = "Keep rule",
-            enabled = !busy,
-            onDismissRequest = { confirmDelete = false },
-            onConfirm = {
-                scope.launch {
-                    val deleted = mobileSession.budgetEdits.deleteBudgetRule(state.selectedBudgetId, ruleId, password)
-                    confirmDelete = false
-                    if (deleted) onDone()
-                }
+        DeleteRuleDialog(busy, onDismiss = { confirmDelete = false }) {
+            scope.launch {
+                val deleted = mobileSession.budgetEdits.deleteBudgetRule(state.selectedBudgetId, ruleId, password)
+                confirmDelete = false
+                if (deleted) onDone()
+            }
+        }
+    }
+}
+
+private suspend fun saveRule(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    ruleId: String,
+    body: JsonObject,
+    password: String?,
+): Boolean =
+    if (ruleId.isBlank()) {
+        mobileSession.budgetEdits.createBudgetRule(budgetId, body, password)
+    } else {
+        mobileSession.budgetEdits.editBudgetRule(budgetId, ruleId, body, password)
+    }
+
+/** Chooses whether the rule runs before, with or after the default rules. */
+@Composable
+private fun RuleStageCard(
+    draft: RuleDraft,
+    onDraftChange: (RuleDraft) -> Unit,
+) {
+    SectionCard("Run order") {
+        Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            SegmentedSelector(RuleStage.entries.map { it.label to (it == draft.stage) }) {
+                onDraftChange(draft.copy(stage = RuleStage.entries[it]))
+            }
+            Text(draft.stage.detail, color = tandemPalette.muted, fontSize = TandemTypography.caption)
+        }
+    }
+}
+
+/** The rule's conditions and whether all or any of them must match. */
+@Composable
+private fun RuleConditionsCard(
+    draft: RuleDraft,
+    choices: RuleChoices,
+    onDraftChange: (RuleDraft) -> Unit,
+    onEdited: () -> Unit,
+) {
+    SectionCard("If") {
+        Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            SegmentedSelector(listOf("All match" to draft.matchAll, "Any match" to !draft.matchAll)) {
+                onDraftChange(draft.copy(matchAll = it == 0))
+            }
+            Text(
+                if (draft.matchAll) "Every condition must match the transaction." else "One matching condition is enough.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+            )
+        }
+        Column {
+            draft.conditions.forEachIndexed { index, condition ->
+                DividerLine()
+                RuleConditionEditor(
+                    number = index + 1,
+                    condition = condition,
+                    choices = choices,
+                    removable = draft.conditions.size > 1,
+                    onChange = { next ->
+                        onDraftChange(draft.copy(conditions = draft.conditions.toMutableList().also { it[index] = next }))
+                        onEdited()
+                    },
+                    onRemove = { onDraftChange(draft.copy(conditions = draft.conditions.filterIndexed { i, _ -> i != index })) },
+                )
+            }
+        }
+        DividerLine()
+        ListRow(
+            "Add condition",
+            leading = RowLeading.Icon(Lucide.Plus),
+            options = ListRowOptions(dense = true),
+            onClick = { onDraftChange(draft.copy(conditions = draft.conditions + RuleConditionDraft())) },
+        )
+    }
+}
+
+/** The actions the rule applies to matching transactions. */
+@Composable
+private fun RuleActionsCard(
+    draft: RuleDraft,
+    choices: RuleChoices,
+    onDraftChange: (RuleDraft) -> Unit,
+    onEdited: () -> Unit,
+) {
+    SectionCard("Then") {
+        Column {
+            draft.actions.forEachIndexed { index, action ->
+                if (index > 0) DividerLine()
+                RuleActionEditor(
+                    number = index + 1,
+                    action = action,
+                    choices = choices,
+                    removable = draft.actions.size > 1,
+                    onChange = { next ->
+                        onDraftChange(draft.copy(actions = draft.actions.toMutableList().also { it[index] = next }))
+                        onEdited()
+                    },
+                    onRemove = { onDraftChange(draft.copy(actions = draft.actions.filterIndexed { i, _ -> i != index })) },
+                )
+            }
+        }
+        DividerLine()
+        ListRow(
+            "Add action",
+            leading = RowLeading.Icon(Lucide.Plus),
+            options = ListRowOptions(dense = true),
+            onClick = {
+                val unused = RuleActionKind.entries.firstOrNull { kind -> draft.actions.none { it.kind == kind } }
+                onDraftChange(draft.copy(actions = draft.actions + RuleActionDraft(unused ?: RuleActionKind.APPEND_NOTES)))
             },
         )
     }
+}
+
+/** Confirms deleting the rule being edited. */
+@Composable
+private fun DeleteRuleDialog(
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    DestructiveConfirmationDialog(
+        title = "Delete this rule?",
+        message = "Actual will stop applying it to new and imported transactions. Transactions it already changed stay as they are.",
+        confirmLabel = "Delete",
+        dismissLabel = "Keep rule",
+        enabled = !busy,
+        onDismissRequest = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 internal data class RuleChoices(
@@ -278,152 +318,6 @@ internal fun rememberRuleChoices(mobileSession: TandemMobileSession): RuleChoice
         fun List<BudgetRecordEntity>.named() =
             mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.sortedBy { it.second.lowercase() }
         RuleChoices(mapOf("payee" to payees.named(), "account" to accounts.named(), "category" to categories.named()))
-    }
-}
-
-@Composable
-private fun RuleItemHeader(
-    title: String,
-    removable: Boolean,
-    removeLabel: String,
-    onRemove: () -> Unit,
-) {
-    if (!removable) return
-    Row(
-        Modifier.fillMaxWidth().padding(start = TandemLayout.listRowHorizontalInset, end = TandemSpacing.small, top = TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, Modifier.weight(1f), color = tandemPalette.muted, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold)
-        TandemIconButton(Lucide.Trash2, removeLabel, sizeDp = 36, iconSizeDp = 18, tint = tandemPalette.muted, onClick = onRemove)
-    }
-}
-
-@Composable
-private fun RuleConditionEditor(
-    number: Int,
-    condition: RuleConditionDraft,
-    choices: RuleChoices,
-    removable: Boolean,
-    onChange: (RuleConditionDraft) -> Unit,
-    onRemove: () -> Unit,
-) {
-    Column {
-        RuleItemHeader("Condition $number", removable, "Remove condition $number", onRemove)
-        RuleChoiceField(
-            "Field",
-            condition.field.label,
-            RuleConditionField.entries.map { it.name to it.label },
-            selectedIds = setOf(condition.field.name),
-        ) { onChange(condition.withField(RuleConditionField.valueOf(it.first()))) }
-        DividerLine()
-        RuleChoiceField(
-            "Comparison",
-            ruleOperatorLabel(condition.op),
-            condition.field.ops.map { it to ruleOperatorLabel(it) },
-            selectedIds = setOf(condition.op),
-        ) { onChange(condition.withOp(it.first())) }
-        val field = condition.field
-        if (field.usesIds) {
-            DividerLine()
-            val multiple = condition.op in setOf("oneOf", "notOneOf")
-            val label =
-                condition.ids
-                    .mapNotNull { choices.name(field.wire, it) }
-                    .joinToString(", ")
-                    .ifBlank { "Choose" }
-            RuleChoiceField(
-                field.label,
-                label,
-                choices.options(field.wire),
-                selectedIds = condition.ids.toSet(),
-                multiple = multiple,
-            ) { onChange(condition.copy(ids = it)) }
-        } else {
-            Column(
-                Modifier.padding(start = TandemSpacing.medium, end = TandemSpacing.medium, bottom = TandemSpacing.medium),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                if (field.usesAmount) {
-                    val amountOptions = TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    if (condition.op == "isbetween") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                            Column(Modifier.weight(1f)) {
-                                TextFieldCard("From", condition.amountText, { onChange(condition.copy(amountText = it)) }, amountOptions)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                TextFieldCard(
-                                    "To",
-                                    condition.amountMaxText,
-                                    { onChange(condition.copy(amountMaxText = it)) },
-                                    amountOptions,
-                                )
-                            }
-                        }
-                    } else {
-                        TextFieldCard("Amount", condition.amountText, { onChange(condition.copy(amountText = it)) }, amountOptions)
-                    }
-                    if (field == RuleConditionField.AMOUNT) {
-                        Text(
-                            "Use a minus sign for money out, or choose Money out as the field.",
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                        )
-                    }
-                } else {
-                    TextFieldCard(
-                        if (condition.op == "matches") "Pattern" else "Text",
-                        condition.text,
-                        { onChange(condition.copy(text = it)) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RuleActionEditor(
-    number: Int,
-    action: RuleActionDraft,
-    choices: RuleChoices,
-    removable: Boolean,
-    onChange: (RuleActionDraft) -> Unit,
-    onRemove: () -> Unit,
-) {
-    Column {
-        RuleItemHeader("Action $number", removable, "Remove action $number", onRemove)
-        RuleChoiceField(
-            "Action",
-            action.kind.label,
-            RuleActionKind.entries.map { it.name to it.label },
-            selectedIds = setOf(action.kind.name),
-        ) {
-            val next = RuleActionKind.valueOf(it.first())
-            if (next != action.kind) onChange(RuleActionDraft(next))
-        }
-        val kind = action.kind
-        when {
-            kind == RuleActionKind.SET_CLEARED ->
-                Column(Modifier.padding(start = TandemSpacing.medium, end = TandemSpacing.medium, bottom = TandemSpacing.medium)) {
-                    SegmentedSelector(listOf("Cleared" to action.cleared, "Not cleared" to !action.cleared)) {
-                        onChange(action.copy(cleared = it == 0))
-                    }
-                }
-            kind.usesId -> {
-                DividerLine()
-                val field = kind.field!!
-                RuleChoiceField(
-                    field.replaceFirstChar { it.uppercase() },
-                    choices.name(field, action.id) ?: "Choose",
-                    choices.options(field),
-                    selectedIds = setOfNotNull(action.id.takeIf { it.isNotBlank() }),
-                ) { onChange(action.copy(id = it.first())) }
-            }
-            else ->
-                Column(Modifier.padding(start = TandemSpacing.medium, end = TandemSpacing.medium, bottom = TandemSpacing.medium)) {
-                    TextFieldCard("Notes", action.text, { onChange(action.copy(text = it)) })
-                }
-        }
     }
 }
 

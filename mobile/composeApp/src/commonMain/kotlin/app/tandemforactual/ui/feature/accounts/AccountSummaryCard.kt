@@ -70,14 +70,8 @@ internal fun AccountSummaryCard(
     highlighted: Boolean = false,
     bankBadge: RowBadge? = null,
 ) {
-    val palette = tandemPalette
     val stackBalance = LocalDensity.current.fontScale >= 1.5f
-    val balanceColor =
-        when {
-            account.closed || account.balanceMinor == null || account.balanceMinor == 0L -> palette.muted
-            account.balanceMinor > 0 -> palette.positive
-            else -> palette.negative
-        }
+    val balanceColor = accountBalanceColor(account)
     SurfaceCard(modifier = modifier, highlighted = highlighted) {
         Row(
             modifier =
@@ -101,82 +95,22 @@ internal fun AccountSummaryCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
         ) {
-            Box {
-                Box(
-                    Modifier
-                        .size(TandemLayout.listRowLeadingSize)
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(if (account.closed) palette.surface else palette.raised),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (merchantArtwork != null) {
-                        Image(
-                            painterResource(merchantArtwork),
-                            contentDescription = null,
-                            modifier =
-                                Modifier
-                                    .size(TandemLayout.listRowLogoSize)
-                                    .padding(TandemSpacing.xxSmall)
-                                    .alpha(if (account.closed) 0.48f else 1f),
-                            contentScale = ContentScale.Fit,
-                        )
-                    } else {
-                        Icon(
-                            accountTypeIcon(account.name, account.accountType),
-                            contentDescription = null,
-                            modifier = Modifier.size(TandemLayout.listRowIconSize),
-                            tint = if (account.closed) palette.muted else palette.accent,
-                        )
-                    }
-                }
-                bankBadge?.let { RowBadgeMark(it) }
-            }
-            Column(
+            AccountSummaryIcon(account, merchantArtwork, bankBadge)
+            AccountSummaryText(
+                account = account,
+                showBalance = stackBalance && !isReordering,
+                balanceColor = balanceColor,
+                privacyModeEnabled = privacyModeEnabled,
+                fractionDigits = fractionDigits,
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            ) {
-                Text(
-                    account.name,
-                    color = if (account.closed) palette.muted else palette.text,
-                    fontSize = TandemTypography.body,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    "${account.typeLabel} · ${account.status}",
-                    color = palette.muted,
-                    fontSize = TandemTypography.caption,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (stackBalance && !isReordering) {
-                    AccountBalanceText(
-                        account = account,
-                        color = balanceColor,
-                        privacyModeEnabled = privacyModeEnabled,
-                        fractionDigits = fractionDigits,
-                        modifier = Modifier.fillMaxWidth(),
-                        wrap = true,
-                    )
-                }
-            }
+            )
             if (isReordering) {
-                onEdit?.let { edit ->
-                    TandemIconButton(
-                        Lucide.Pencil,
-                        "Edit ${account.name}",
-                        sizeDp = 40,
-                        iconSizeDp = 18,
-                        enabled = reorderEnabled,
-                        onClick = edit,
-                    )
-                }
-                ReorderDragHandle(
-                    itemName = account.name,
-                    enabled = reorderEnabled && (canMoveUp || canMoveDown),
+                AccountReorderControls(
+                    account = account,
+                    reorderEnabled = reorderEnabled,
                     canMoveUp = canMoveUp,
                     canMoveDown = canMoveDown,
+                    onEdit = onEdit,
                     onMoveUp = onMoveUp,
                     onMoveDown = onMoveDown,
                     onDragStarted = onDragStarted,
@@ -188,6 +122,136 @@ internal fun AccountSummaryCard(
             }
         }
     }
+}
+
+@Composable
+private fun accountBalanceColor(account: AccountListItemUi): Color {
+    val palette = tandemPalette
+    return when {
+        account.closed || account.balanceMinor == null || account.balanceMinor == 0L -> palette.muted
+        account.balanceMinor > 0 -> palette.positive
+        else -> palette.negative
+    }
+}
+
+/** The account's logo or type icon, with its bank badge. */
+@Composable
+private fun AccountSummaryIcon(
+    account: AccountListItemUi,
+    merchantArtwork: DrawableResource?,
+    bankBadge: RowBadge?,
+) {
+    val palette = tandemPalette
+    Box {
+        Box(
+            Modifier
+                .size(TandemLayout.listRowLeadingSize)
+                .clip(RoundedCornerShape(TandemShapes.medium))
+                .background(if (account.closed) palette.surface else palette.raised),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (merchantArtwork != null) {
+                Image(
+                    painterResource(merchantArtwork),
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(TandemLayout.listRowLogoSize)
+                            .padding(TandemSpacing.xxSmall)
+                            .alpha(if (account.closed) 0.48f else 1f),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Icon(
+                    accountTypeIcon(account.name, account.accountType),
+                    contentDescription = null,
+                    modifier = Modifier.size(TandemLayout.listRowIconSize),
+                    tint = if (account.closed) palette.muted else palette.accent,
+                )
+            }
+        }
+        bankBadge?.let { RowBadgeMark(it) }
+    }
+}
+
+/** The account's name, type and status, and its balance when it is stacked under them. */
+@Composable
+private fun AccountSummaryText(
+    account: AccountListItemUi,
+    showBalance: Boolean,
+    balanceColor: Color,
+    privacyModeEnabled: Boolean,
+    fractionDigits: Int,
+    modifier: Modifier,
+) {
+    val palette = tandemPalette
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Text(
+            account.name,
+            color = if (account.closed) palette.muted else palette.text,
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "${account.typeLabel} · ${account.status}",
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (showBalance) {
+            AccountBalanceText(
+                account = account,
+                color = balanceColor,
+                privacyModeEnabled = privacyModeEnabled,
+                fractionDigits = fractionDigits,
+                modifier = Modifier.fillMaxWidth(),
+                wrap = true,
+            )
+        }
+    }
+}
+
+/** The edit button and drag handle shown while accounts are being reordered. */
+@Composable
+private fun AccountReorderControls(
+    account: AccountListItemUi,
+    reorderEnabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onEdit: (() -> Unit)?,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDragStarted: (() -> Unit)?,
+    onDragBy: ((Float) -> Unit)?,
+    onDragStopped: (() -> Unit)?,
+) {
+    onEdit?.let { edit ->
+        TandemIconButton(
+            Lucide.Pencil,
+            "Edit ${account.name}",
+            sizeDp = 40,
+            iconSizeDp = 18,
+            enabled = reorderEnabled,
+            onClick = edit,
+        )
+    }
+    ReorderDragHandle(
+        itemName = account.name,
+        enabled = reorderEnabled && (canMoveUp || canMoveDown),
+        canMoveUp = canMoveUp,
+        canMoveDown = canMoveDown,
+        onMoveUp = onMoveUp,
+        onMoveDown = onMoveDown,
+        onDragStarted = onDragStarted,
+        onDragBy = onDragBy,
+        onDragStopped = onDragStopped,
+    )
 }
 
 @Composable

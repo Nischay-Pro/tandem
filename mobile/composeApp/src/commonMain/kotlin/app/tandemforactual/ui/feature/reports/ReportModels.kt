@@ -3,7 +3,6 @@ import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
-import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.format.formatReportPercentage
 import app.tandemforactual.ui.core.format.formatShortMonth
@@ -14,10 +13,6 @@ import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.log10
-import kotlin.math.pow
 
 internal enum class ReportKind(
     val title: String,
@@ -32,34 +27,6 @@ internal enum class ReportKind(
 internal enum class ReportPeriodMode {
     MONTH,
     RANGE,
-}
-
-internal fun roundedReportAxisValues(
-    minimum: Double,
-    maximum: Double,
-    intervalCount: Int = 4,
-): List<Long> {
-    require(intervalCount > 0)
-    val low = minOf(minimum, maximum)
-    val high = maxOf(minimum, maximum)
-    if (low == 0.0 && high == 0.0) return List(intervalCount + 1) { 0L }
-
-    val rawStep = ((high - low) / intervalCount).coerceAtLeast(1.0)
-    val magnitude = 10.0.pow(floor(log10(rawStep)))
-    val normalizedStep = rawStep / magnitude
-    val roundedStep =
-        when {
-            normalizedStep <= 1.0 -> 1.0
-            normalizedStep <= 2.0 -> 2.0
-            normalizedStep <= 2.5 -> 2.5
-            normalizedStep <= 5.0 -> 5.0
-            else -> 10.0
-        } * magnitude
-    val step = roundedStep.coerceAtLeast(1.0)
-    val first = floor(low / step) * step
-    val last = ceil(high / step) * step
-    val tickCount = ((last - first) / step).toInt() + 1
-    return (0 until tickCount).map { index -> (last - index * step).toLong() }
 }
 
 internal data class CategorySpendingPoint(
@@ -362,42 +329,6 @@ internal fun netWorthPoints(
     }
     return pointsDescending.asReversed()
 }
-
-internal fun categorySpendingSummary(
-    totalMinor: Long,
-    categoryCount: Int,
-    formatCurrency: (Long) -> String,
-    formatCount: (Int) -> String,
-): String = "You spent ${formatCurrency(totalMinor)} across ${formatCount(categoryCount)} categories."
-
-internal fun spendingOverTimeSummary(
-    totalMinor: Long,
-    monthCount: Int,
-    formatCurrency: (Long) -> String,
-    formatCount: (Int) -> String,
-): String {
-    if (monthCount == 0) return "No monthly spending is available for this period."
-    return "Average monthly spending was ${formatCurrency(totalMinor / monthCount)} across ${formatCount(monthCount)} months."
-}
-
-internal fun incomeSpendingSummary(netMinor: Long): String =
-    when {
-        netMinor < 0L -> "You are spending more than you make."
-        netMinor > 0L -> "You are spending less than you make."
-        else -> "You are spending as much as you make."
-    }
-
-internal fun budgetedSpentSummary(
-    budgetedMinor: Long,
-    spentMinor: Long,
-    formatCurrency: (Long) -> String,
-): String = "You spent ${formatCurrency(spentMinor)} of ${formatCurrency(budgetedMinor)} budgeted."
-
-internal fun netWorthSummary(
-    netWorthMinor: Long,
-    month: String,
-    formatCurrency: (Long) -> String,
-): String = "Estimated net worth was ${formatCurrency(netWorthMinor)} at the end of $month."
 
 private data class ReportMonth(
     val year: Int,

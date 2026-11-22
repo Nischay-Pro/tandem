@@ -81,15 +81,7 @@ internal fun RetirementSetupScreen(
 ) {
     val scope = rememberCoroutineScope()
     val existing = mobileSession.planning.retirementProfiles.associateBy { it.planId }
-    val regions =
-        remember {
-            mutableStateListOf<Region>().apply {
-                addAll(
-                    mobileSession.planning.settings.regions
-                        .mapNotNull { code -> Region.entries.firstOrNull { it.name == code } },
-                )
-            }
-        }
+    val regions = remember { mutableStateListOf<Region>().apply { addAll(savedRegions(mobileSession.planning.settings.regions)) } }
     val chosen =
         remember {
             mutableStateMapOf<String, String?>().apply {
@@ -121,106 +113,179 @@ internal fun RetirementSetupScreen(
             }, label = "retirement-step") { current ->
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     when (current) {
-                        SetupStep.Countries -> {
-                            Heading("Where do you save?")
-                            BodyText(
-                                "Pick every country you have retirement or tax-advantaged accounts in. Each has its own accounts and limits.",
+                        SetupStep.Countries -> CountriesStep(regions)
+                        is SetupStep.Country -> CountryStep(current.region, accounts, chosen, navigation)
+                        SetupStep.AboutYou ->
+                            AboutYouStep(
+                                age = age,
+                                onAgeChange = { age = it },
+                                family = family,
+                                onFamilyChange = { family = it },
+                                showFamily = needsFamilyCoverage(chosen.keys),
                             )
-                            RetirementPlans.regions.forEach { region ->
-                                CheckCard(
-                                    region.displayName,
-                                    RetirementPlans.forRegion(region).joinToString(", ") { it.displayName },
-                                    region in regions,
-                                ) {
-                                    if (region in regions) regions.remove(region) else regions.add(region)
-                                }
-                            }
-                            BodyText(
-                                "Somewhere else? More countries are coming; tell us which one you need through Share feedback in the menu.",
-                            )
-                        }
-                        is SetupStep.Country -> {
-                            Heading("Your ${current.region.displayName} accounts")
-                            BodyText("Choose the ones you have, then the Actual account each one is tracked in.")
-                            RetirementPlans.forRegion(current.region).forEach { plan ->
-                                val picked = chosen.containsKey(plan.id)
-                                CheckCard(plan.displayName, plan.description, picked) {
-                                    if (picked) {
-                                        chosen.remove(plan.id)
-                                    } else {
-                                        chosen[plan.id] =
-                                            accounts.firstOrNull { plan.matchesAccount(it.name) }?.id
-                                    }
-                                }
-                                if (picked) {
-                                    Column(
-                                        Modifier.padding(start = TandemSpacing.large),
-                                        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-                                    ) {
-                                        Text("Tracked in Actual as", color = palette.muted, fontSize = TandemTypography.label)
-                                        FilterPills(
-                                            listOf<Pair<String?, String>>(null to "Not in Actual") + accounts.map { it.id to it.name },
-                                            chosen[plan.id],
-                                            { chosen[plan.id] = it },
-                                        )
-                                        if (chosen[plan.id] == null) {
-                                            Text(
-                                                "Connect it through bank sync so Tandem can read your contributions and the years you saved.",
-                                                color = palette.muted,
-                                                fontSize = TandemTypography.label,
-                                            )
-                                            SecondaryButton("Connect it") { navigation.open(AppRoute.BANK_CONNECTIONS) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        SetupStep.AboutYou -> {
-                            Heading("A little about you")
-                            BodyText("Your age sets catch-up limits. It stays in this budget’s encrypted planning data.")
-                            TextFieldCard(
-                                "Your age this year",
-                                age,
-                                { age = it.filter(Char::isDigit).take(3) },
-                                TextFieldOptions(
-                                    placeholder = "Optional",
-                                    keyboardOptions =
-                                        androidx.compose.foundation.text.KeyboardOptions(
-                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                                        ),
-                                ),
-                            )
-                            if (chosen.keys.any { id -> RetirementPlans.byId(id)?.limits?.any { it.familyMinor != null } == true }) {
-                                Text("Health coverage", color = palette.muted, fontSize = TandemTypography.label)
-                                FilterPills(listOf(false to "Just me", true to "Family"), family, { family = it })
-                            }
-                        }
                     }
                 }
             }
         },
         actions = {
-            SetupPrimaryButton(
-                if (step == SetupStep.AboutYou) "Finish" else "Continue",
+            RetirementSetupActions(
+                isLastStep = step == SetupStep.AboutYou,
                 enabled = step != SetupStep.Countries || regions.isNotEmpty(),
+                showBack = stepIndex > 0,
+                onContinue = { stepIndex++ },
+                onBack = { stepIndex-- },
             ) {
-                if (step != SetupStep.AboutYou) {
-                    stepIndex++
-                    return@SetupPrimaryButton
-                }
-                val inRegions = chosen.filterKeys { id -> RetirementPlans.byId(id)?.region in regions }
-                val profiles =
-                    inRegions.map { (id, accountId) ->
-                        (existing[id] ?: RetirementProfile(id)).copy(accountId = accountId, age = age.toIntOrNull(), family = family)
-                    }
+                val profiles = setupProfiles(chosen, regions, existing, age.toIntOrNull(), family)
                 scope.launch {
                     mobileSession.planning.saveRetirementSetup(state.selectedBudgetId, regions.map { it.name }, profiles)
                     navigation.back()
                 }
             }
-            if (stepIndex > 0) SecondaryButton("Back", Modifier.fillMaxWidth()) { stepIndex-- }
         },
     )
+}
+
+/** Continue or finish, plus back once past the first step. */
+@Composable
+private fun RetirementSetupActions(
+    isLastStep: Boolean,
+    enabled: Boolean,
+    showBack: Boolean,
+    onContinue: () -> Unit,
+    onBack: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    SetupPrimaryButton(if (isLastStep) "Finish" else "Continue", enabled = enabled) {
+        if (!isLastStep) {
+            onContinue()
+            return@SetupPrimaryButton
+        }
+        onFinish()
+    }
+    if (showBack) SecondaryButton("Back", Modifier.fillMaxWidth()) { onBack() }
+}
+
+private fun savedRegions(codes: List<String>): List<Region> = codes.mapNotNull { code -> Region.entries.firstOrNull { it.name == code } }
+
+private fun needsFamilyCoverage(planIds: Set<String>): Boolean =
+    planIds.any { id -> RetirementPlans.byId(id)?.limits?.any { it.familyMinor != null } == true }
+
+private fun setupProfiles(
+    chosen: Map<String, String?>,
+    regions: List<Region>,
+    existing: Map<String, RetirementProfile>,
+    age: Int?,
+    family: Boolean,
+): List<RetirementProfile> {
+    val inRegions = chosen.filterKeys { id -> RetirementPlans.byId(id)?.region in regions }
+    return inRegions.map { (id, accountId) ->
+        (existing[id] ?: RetirementProfile(id)).copy(accountId = accountId, age = age, family = family)
+    }
+}
+
+/** Picks every country the person has retirement accounts in. */
+@Composable
+private fun CountriesStep(regions: MutableList<Region>) {
+    Heading("Where do you save?")
+    BodyText(
+        "Pick every country you have retirement or tax-advantaged accounts in. Each has its own accounts and limits.",
+    )
+    RetirementPlans.regions.forEach { region ->
+        CheckCard(
+            region.displayName,
+            RetirementPlans.forRegion(region).joinToString(", ") { it.displayName },
+            region in regions,
+        ) {
+            if (region in regions) regions.remove(region) else regions.add(region)
+        }
+    }
+    BodyText(
+        "Somewhere else? More countries are coming; tell us which one you need through Share feedback in the menu.",
+    )
+}
+
+/** Picks the retirement accounts held in one country. */
+@Composable
+private fun CountryStep(
+    region: Region,
+    accounts: List<LiveAccountSummary>,
+    chosen: MutableMap<String, String?>,
+    navigation: AppNavigation,
+) {
+    Heading("Your ${region.displayName} accounts")
+    BodyText("Choose the ones you have, then the Actual account each one is tracked in.")
+    RetirementPlans.forRegion(region).forEach { plan ->
+        val picked = chosen.containsKey(plan.id)
+        CheckCard(plan.displayName, plan.description, picked) {
+            if (picked) {
+                chosen.remove(plan.id)
+            } else {
+                chosen[plan.id] =
+                    accounts.firstOrNull { plan.matchesAccount(it.name) }?.id
+            }
+        }
+        if (picked) TrackedAccountPicker(plan.id, accounts, chosen, navigation)
+    }
+}
+
+/** Chooses which Actual account tracks a retirement account, or offers to connect one. */
+@Composable
+private fun TrackedAccountPicker(
+    planId: String,
+    accounts: List<LiveAccountSummary>,
+    chosen: MutableMap<String, String?>,
+    navigation: AppNavigation,
+) {
+    val palette = tandemPalette
+    Column(
+        Modifier.padding(start = TandemSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+    ) {
+        Text("Tracked in Actual as", color = palette.muted, fontSize = TandemTypography.label)
+        FilterPills(
+            listOf<Pair<String?, String>>(null to "Not in Actual") + accounts.map { it.id to it.name },
+            chosen[planId],
+            { chosen[planId] = it },
+        )
+        if (chosen[planId] == null) {
+            Text(
+                "Connect it through bank sync so Tandem can read your contributions and the years you saved.",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+            )
+            SecondaryButton("Connect it") { navigation.open(AppRoute.BANK_CONNECTIONS) }
+        }
+    }
+}
+
+/** Asks for the person's age and, when a plan needs it, their health coverage. */
+@Composable
+private fun AboutYouStep(
+    age: String,
+    onAgeChange: (String) -> Unit,
+    family: Boolean,
+    onFamilyChange: (Boolean) -> Unit,
+    showFamily: Boolean,
+) {
+    val palette = tandemPalette
+    Heading("A little about you")
+    BodyText("Your age sets catch-up limits. It stays in this budget’s encrypted planning data.")
+    TextFieldCard(
+        "Your age this year",
+        age,
+        { onAgeChange(it.filter(Char::isDigit).take(3)) },
+        TextFieldOptions(
+            placeholder = "Optional",
+            keyboardOptions =
+                androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                ),
+        ),
+    )
+    if (showFamily) {
+        Text("Health coverage", color = palette.muted, fontSize = TandemTypography.label)
+        FilterPills(listOf(false to "Just me", true to "Family"), family, onFamilyChange)
+    }
 }
 
 @Composable
