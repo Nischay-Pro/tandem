@@ -54,52 +54,48 @@ internal fun rememberReportData(
     reportsDataCache: ReportsDataCache,
 ): ReportDataBundle {
     val budgetId = state.selectedBudgetId
+    val reportViewModels = rememberReportViewModels(mobileSession)
     val categoryNames =
         remember(mobileSession.categoryRecords) {
             mobileSession.categoryRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }.toMap()
         }
     val categoryFlow =
-        remember(mobileSession.reportViewModels, budgetId, window, categoryNames) {
-            val viewModels = mobileSession.reportViewModels
-            if (budgetId.isNotBlank() && viewModels != null) {
-                viewModels.spendingByCategory.observe(budgetId, window, categoryNames)
+        remember(reportViewModels, budgetId, window, categoryNames) {
+            if (budgetId.isNotBlank() && reportViewModels != null) {
+                reportViewModels.spendingByCategory.observe(budgetId, window, categoryNames)
             } else {
                 flowOf(emptyList())
             }
         }
     val monthlyFlow =
-        remember(mobileSession.reportViewModels, budgetId, window) {
-            val viewModels = mobileSession.reportViewModels
-            if (budgetId.isNotBlank() && viewModels != null) {
-                viewModels.spendingOverTime.observe(budgetId, window)
+        remember(reportViewModels, budgetId, window) {
+            if (budgetId.isNotBlank() && reportViewModels != null) {
+                reportViewModels.spendingOverTime.observe(budgetId, window)
             } else {
                 flowOf(emptyList())
             }
         }
     val incomeAndSpendingFlow =
-        remember(mobileSession.reportViewModels, budgetId, window) {
-            val viewModels = mobileSession.reportViewModels
-            if (budgetId.isNotBlank() && viewModels != null) {
-                viewModels.incomeAndSpending.observe(budgetId, window)
+        remember(reportViewModels, budgetId, window) {
+            if (budgetId.isNotBlank() && reportViewModels != null) {
+                reportViewModels.incomeAndSpending.observe(budgetId, window)
             } else {
                 flowOf(emptyList())
             }
         }
     val budgetedFlow =
-        remember(mobileSession.reportViewModels, budgetId, window, categoryNames) {
-            val viewModels = mobileSession.reportViewModels
-            if (budgetId.isNotBlank() && viewModels != null) {
-                viewModels.budgetedAndSpent.observe(budgetId, window, categoryNames)
+        remember(reportViewModels, budgetId, window, categoryNames) {
+            if (budgetId.isNotBlank() && reportViewModels != null) {
+                reportViewModels.budgetedAndSpent.observe(budgetId, window, categoryNames)
             } else {
                 flowOf(emptyList())
             }
         }
     val today = platformTodayIsoDate()
     val netWorthFlow =
-        remember(mobileSession.reportViewModels, budgetId, netWorthWindow, today, accounts) {
-            val viewModels = mobileSession.reportViewModels
-            if (budgetId.isNotBlank() && viewModels != null) {
-                viewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
+        remember(reportViewModels, budgetId, netWorthWindow, today, accounts) {
+            if (budgetId.isNotBlank() && reportViewModels != null) {
+                reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
             } else {
                 flowOf(emptyList())
             }
@@ -123,4 +119,11 @@ internal fun rememberReportData(
         if (reportsDataCache.get(cacheKey) != data) reportsDataCache.put(cacheKey, data)
     }
     return data
+}
+
+/** The report view models over the open budget's local database, rebuilt when the budget changes. */
+@Composable
+private fun rememberReportViewModels(mobileSession: TandemMobileSession): ReportsViewModels? {
+    val repository = mobileSession.repository
+    return remember(repository) { repository?.let(::ReportsViewModels) }
 }

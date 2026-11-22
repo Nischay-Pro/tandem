@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.reports
+package app.tandemforactual.ui.core.state
 
 internal enum class ReportRangePreset(
     val label: String,

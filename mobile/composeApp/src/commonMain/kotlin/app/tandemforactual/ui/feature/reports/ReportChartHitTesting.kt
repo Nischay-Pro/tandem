@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import app.tandemforactual.ui.core.state.ReportKind
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.sqrt

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import app.tandemforactual.ui.app.isTab
 
 internal enum class BackRequestDisposition {
     START,
@@ -154,3 +153,11 @@ internal val appRouteStackSaver =
             }
         },
     )
+
+internal fun AppRoute.isTab(): Boolean =
+    this == AppRoute.HOME ||
+        this == AppRoute.BUDGET ||
+        this == AppRoute.ACCOUNTS ||
+        this == AppRoute.ACTIVITY ||
+        this == AppRoute.REPORTS ||
+        this == AppRoute.SETTINGS

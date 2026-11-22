@@ -10,11 +10,6 @@ function-size data:ActualTransactionOperations.change
 function-size data:BudgetSyncCoordinator.applySnapshot
 function-size data:LocalBudgetRepository.replaceBudgetMutationQueue
 function-size data:PlanningSync.sync
-layering AppState -> app
-layering AppState -> feature.reports
-layering RouteNavigation -> app
-layering TandemMobileSession -> feature.reports
-layering TandemThemeScreen -> app
 size api-client:TandemApiClient
 size data:ActualBudgetEdits
 size data:LocalBudgetRepository

@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.formatReportCurrency
+import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.design.theme.tandemPalette
 
 internal fun positiveAmount(value: Long): Long = if (value < 0L) -value else value

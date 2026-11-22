@@ -80,14 +80,6 @@ fun TandemApp(
     )
 }
 
-internal fun AppRoute.isTab(): Boolean =
-    this == AppRoute.HOME ||
-        this == AppRoute.BUDGET ||
-        this == AppRoute.ACCOUNTS ||
-        this == AppRoute.ACTIVITY ||
-        this == AppRoute.REPORTS ||
-        this == AppRoute.SETTINGS
-
 internal fun AppRoute.isTransactionForm(): Boolean = this == AppRoute.NEW_TRANSACTION || this == AppRoute.EDIT_TRANSACTION
 
 internal fun AppRoute.showsBottomNavigation(): Boolean =

@@ -7,7 +7,6 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.QuietHours
-import app.tandemforactual.ui.app.Workspace
 import app.tandemforactual.ui.core.format.currentMonthId
 import app.tandemforactual.ui.core.format.currentMonthLabel
 import app.tandemforactual.ui.core.format.formatAmount
@@ -17,9 +16,6 @@ import app.tandemforactual.ui.core.search.ActivitySortOrder
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
-import app.tandemforactual.ui.feature.reports.ReportKind
-import app.tandemforactual.ui.feature.reports.ReportPeriodMode
-import app.tandemforactual.ui.feature.reports.ReportRangePreset
 
 internal fun AppState.restorePendingBudgetSelectionOrigin(): Boolean {
     val origin = pendingBudgetSelectionOrigin ?: return false

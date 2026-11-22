@@ -14,12 +14,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import app.tandemforactual.ui.app.LocalInterfaceMode
 import app.tandemforactual.ui.core.format.AppLanguageController
 import app.tandemforactual.ui.core.format.AppLocaleEnvironment
 import app.tandemforactual.ui.core.format.LocalAppLanguage
 import app.tandemforactual.ui.core.format.appLanguageTag
 import app.tandemforactual.ui.core.state.InterfaceMode
+import app.tandemforactual.ui.core.state.LocalInterfaceMode
 
 @Composable
 internal fun TandemTheme(

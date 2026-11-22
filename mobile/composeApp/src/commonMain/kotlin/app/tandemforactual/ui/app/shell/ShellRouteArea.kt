@@ -32,10 +32,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
 import app.tandemforactual.ui.app.WorkspacePanes
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
 import app.tandemforactual.ui.design.theme.TandemMotion

@@ -9,27 +9,14 @@ import app.tandemforactual.ui.core.format.formatReportPercentage
 import app.tandemforactual.ui.core.format.formatShortMonth
 import app.tandemforactual.ui.core.format.parseReportMonth
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.state.ReportPeriodMode
+import app.tandemforactual.ui.core.state.ReportRangePreset
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.longValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-
-internal enum class ReportKind(
-    val title: String,
-) {
-    SPENDING_BY_CATEGORY("Spending by category"),
-    SPENDING_OVER_TIME("Spending over time"),
-    INCOME_AND_SPENDING("Income and spending"),
-    BUDGETED_AND_SPENT("Budgeted and spent"),
-    NET_WORTH("Net worth"),
-}
-
-internal enum class ReportPeriodMode {
-    MONTH,
-    RANGE,
-}
 
 internal data class CategorySpendingPoint(
     val categoryId: String,

@@ -30,7 +30,6 @@ import app.tandemforactual.ui.core.session.insights.InsightsController
 import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
 import app.tandemforactual.ui.core.session.transactions.TransactionController
-import app.tandemforactual.ui.feature.reports.ReportsViewModels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,7 +96,6 @@ internal class TandemMobileSession(
     ) {
         val repository = LocalBudgetRepository(database, nowEpochMillis)
         val queuePersistence = LocalBudgetRepositoryMutationQueuePersistence(repository)
-        val reports = ReportsViewModels(repository)
         val coordinator =
             BudgetSyncCoordinator(
                 repository,
@@ -118,7 +116,6 @@ internal class TandemMobileSession(
     internal val queuePersistenceOverride = budgetMutationQueuePersistenceOverride
     override val preferencesStore: AppPreferencesStore? = database?.let(::AppPreferencesStore)
     override val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    internal val reportViewModels: ReportsViewModels? get() = storage?.reports
     override val syncCoordinator: BudgetSyncCoordinator? get() = storage?.coordinator
 
     var databaseGeneration by mutableStateOf(0)

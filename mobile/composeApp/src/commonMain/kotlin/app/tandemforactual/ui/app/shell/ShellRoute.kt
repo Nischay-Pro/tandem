@@ -27,7 +27,6 @@ import app.tandemforactual.ui.app.FloatingSyncAction
 import app.tandemforactual.ui.app.FloatingTransactionAction
 import app.tandemforactual.ui.app.LocalWindowHinge
 import app.tandemforactual.ui.app.WindowHinge
-import app.tandemforactual.ui.app.isTab
 import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.LocalCrashReports
@@ -37,6 +36,7 @@ import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.core.state.decodeAppTabBackStacks
+import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.routeContentStateKey
 import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
 import app.tandemforactual.ui.design.theme.TandemSpacing
