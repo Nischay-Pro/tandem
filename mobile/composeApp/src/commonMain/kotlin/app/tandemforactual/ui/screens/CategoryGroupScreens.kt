@@ -861,6 +861,7 @@ internal fun CategoryGroupNameDialog(
                         enabled =
                             name.isNotBlank() && !busy,
                         loading = busy,
+                        saveShortcut = true,
                         onClick = onSave,
                     )
                 }

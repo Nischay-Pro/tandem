@@ -166,7 +166,7 @@ internal fun MatchEditorScreen(
                 }
             }
         }
-        TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
+        TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), saveShortcut = true) {
             scope.launch {
                 mobileSession.saveRetirementProfile(
                     state.selectedBudgetId,

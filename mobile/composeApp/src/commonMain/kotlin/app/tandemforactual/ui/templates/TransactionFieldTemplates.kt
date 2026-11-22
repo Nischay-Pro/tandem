@@ -614,6 +614,7 @@ internal fun FloatingTransactionSave(
     modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
+    SaveShortcuts.Register(enabled && !saved, onClick)
     Row(
         modifier =
             modifier

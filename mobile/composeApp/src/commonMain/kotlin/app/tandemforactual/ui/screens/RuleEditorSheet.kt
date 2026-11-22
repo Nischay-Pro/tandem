@@ -209,6 +209,7 @@ private fun RuleEditorContent(
                     enabled = canEdit && !busy,
                     loading = busy,
                     modifier = Modifier.fillMaxWidth(),
+                    saveShortcut = true,
                 ) {
                     val body =
                         draft.toRequestBody { text -> state.parseAmountMinorUnits(text) }.getOrElse {

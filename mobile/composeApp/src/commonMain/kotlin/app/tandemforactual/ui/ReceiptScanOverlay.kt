@@ -86,7 +86,7 @@ internal fun ReceiptScanOverlay(
                 val progress by sweep.animateFloat(
                     0f,
                     1f,
-                    infiniteRepeatable(tween(if (reduceMotion) 2_400 else 1_600, easing = LinearEasing), RepeatMode.Reverse),
+                    infiniteRepeatable(tween(1_600, easing = LinearEasing), RepeatMode.Reverse),
                     label = "receipt-sweep-progress",
                 )
                 val shape = RoundedCornerShape(TandemShapes.large)
@@ -111,7 +111,7 @@ internal fun ReceiptScanOverlay(
                             Icon(Lucide.ReceiptText, null, Modifier.fillMaxHeight(0.3f).aspectRatio(1f), tint = palette.muted)
                         }
                         val accent = palette.accent
-                        Canvas(Modifier.fillMaxSize()) {
+                        if (!reduceMotion) Canvas(Modifier.fillMaxSize()) {
                             val y = size.height * progress
                             val glow = size.height * 0.18f
                             drawRect(

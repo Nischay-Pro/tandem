@@ -5,6 +5,7 @@ package app.tandemforactual.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,10 +19,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import app.tandemforactual.ui.sheetShortcutKeys
 import app.tandemforactual.ui.tandemPalette
 import app.tandemforactual.ui.tandemReduceMotion
 import app.tandemforactual.ui.tandemSheetEnter
@@ -59,8 +65,20 @@ internal fun TandemTaskSheet(
             properties =
                 edgeToEdgeDialogProperties(dismissOnBackPress),
         ) {
+            val focus = remember { FocusRequester() }
+            var focusInside by remember { mutableStateOf(false) }
+            LaunchedEffect(focus) {
+                withFrameNanos {}
+                if (!focusInside) runCatching { focus.requestFocus() }
+            }
             Box(
-                Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
+                Modifier
+                    .fillMaxSize()
+                    .then(if (fullScreen) Modifier else Modifier.safeDrawingPadding())
+                    .sheetShortcutKeys(onDismissRequest.takeIf { dismissOnBackPress })
+                    .onFocusChanged { focusInside = it.hasFocus }
+                    .focusRequester(focus)
+                    .focusable(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 AnimatedVisibility(

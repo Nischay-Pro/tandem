@@ -231,7 +231,7 @@ internal fun SavingsGoalSheet(
                     if (goal != null) {
                         TandemActionButton("Delete", TandemActionButtonTone.DESTRUCTIVE, Modifier.weight(1f)) { onDelete(goal) }
                     }
-                    TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.weight(1f)) {
+                    TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.weight(1f), saveShortcut = true) {
                         val amount = parseAmountMinorUnits(target, settings)
                         error =
                             when {
@@ -323,7 +323,7 @@ internal fun DebtTermsSheet(
                     TextFieldOptions(placeholder = "12"),
                 )
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
+                TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), saveShortcut = true) {
                     val rate = apr.takeIf { it.isNotBlank() }?.let(::parseRateBasisPoints)
                     val payment = minimum.takeIf { it.isNotBlank() }?.let { parseAmountMinorUnits(it, settings) }
                     val day = dueDay.toIntOrNull()

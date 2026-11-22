@@ -73,12 +73,13 @@ internal fun BudgetSwitchSplash(
     ) {
         val palette = tandemPalette
         val breath = rememberInfiniteTransition(label = "budget-switch-breath")
-        val phase by breath.animateFloat(
+        val breathPhase by breath.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(1_200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
             label = "budget-switch-phase",
         )
+        val phase = if (tandemReduceMotion) 1f else breathPhase
         Box(
             Modifier
                 .fillMaxSize()

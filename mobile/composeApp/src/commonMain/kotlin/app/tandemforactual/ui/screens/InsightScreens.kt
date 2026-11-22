@@ -91,7 +91,13 @@ internal fun CashFlowScreen(
                 fontSize = TandemTypography.compactBody,
             )
         }
-        AreaChart(projection.daily, "Projected balance for the next $horizon days", selected = scrub, onScrub = { scrub = it })
+        AreaChart(
+            projection.daily,
+            "Projected balance for the next $horizon days, ending at ${state.formatCurrency(projection.daily.lastOrNull() ?: start)}. " +
+                "Lowest ${state.formatCurrency(projection.lowestMinor)} on ${formatLiveDate(projection.lowestDate)}.",
+            selected = scrub,
+            onScrub = { scrub = it },
+        )
         FilterPills(listOf(30 to "30 days", 60 to "60 days", 90 to "90 days"), horizon, { horizon = it })
         if (projection.lowestMinor < 0) {
             InlineMessage(

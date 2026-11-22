@@ -128,7 +128,7 @@ internal fun SettingsScreen(
                 stringResource(Res.string.home_customize),
                 stringResource(Res.string.settings_personalize_detail),
                 leading = RowLeading.Icon(Lucide.Sparkles),
-                onClick = { navigation.open(AppRoute.PERSONALIZE) },
+                onClick = { navigation.open(AppRoute.HOME_LAYOUT) },
             )
             DividerLine()
             ToggleRow(

@@ -360,6 +360,7 @@ internal fun AccountOptionsScreen(
                             icon = Lucide.Check,
                             enabled = renameValue.isNotBlank() && !mobileSession.isPerformingBudgetAction,
                             loading = mobileSession.isPerformingBudgetAction,
+                            saveShortcut = true,
                         ) {
                             scope.launch {
                                 if (mobileSession.renameBudgetAccount(

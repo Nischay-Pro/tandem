@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.tandemforactual.ui.components.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.components.TandemIconButton
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarCheck
@@ -62,6 +63,7 @@ import com.composables.icons.lucide.FlaskConical
 import com.composables.icons.lucide.GitMerge
 import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.History
+import com.composables.icons.lucide.Keyboard
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
@@ -134,10 +136,11 @@ internal fun AppMenu(
                     Spacer(Modifier.weight(1f))
                     Row(
                         Modifier
+                            .heightIn(min = MIN_TOUCH_TARGET)
                             .clip(CircleShape)
                             .background(palette.surface)
                             .clickable(role = Role.Button, onClick = onSwitchBudget)
-                            .padding(horizontal = TandemSpacing.medium, vertical = 12.dp),
+                            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Lucide.ArrowLeftRight, null, Modifier.size(16.dp), tint = palette.text)
@@ -326,14 +329,19 @@ private fun ColumnScope.MenuFooter(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         TandemBrandMark(Modifier.size(40.dp))
-        listOf("About Tandem" to onAbout, "Licenses" to onLicenses).forEach { (label, onClick) ->
-            Text(
-                label,
-                Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onClick).padding(4.dp),
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-                textDecoration = TextDecoration.Underline,
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            listOf("About Tandem" to onAbout, "Licenses" to onLicenses).forEach { (label, onClick) ->
+                Box(
+                    Modifier
+                        .heightIn(min = MIN_TOUCH_TARGET)
+                        .clip(RoundedCornerShape(TandemShapes.control))
+                        .clickable(role = Role.Button, onClick = onClick)
+                        .padding(horizontal = TandemSpacing.medium),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, color = palette.muted, fontSize = TandemTypography.compactBody, textDecoration = TextDecoration.Underline)
+                }
+            }
         }
         Text("Version ${platformAppVersionName()}", color = palette.muted, fontSize = TandemTypography.caption)
     }
@@ -354,6 +362,7 @@ internal fun appMenuItems(
     onScanReceipt: () -> Unit,
     onManageBanks: () -> Unit,
     onFeedback: () -> Unit,
+    onKeyboardShortcuts: (() -> Unit)? = null,
 ): List<AppMenuItem> =
     buildList {
         if (!readOnly) add(AppMenuItem(Lucide.Plus, "Add transaction", onClick = onAddTransaction))
@@ -395,6 +404,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
-        add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
+        add(AppMenuItem(Lucide.Sparkles, "Personalize Home", "Order and sections") { open(AppRoute.HOME_LAYOUT) })
+        onKeyboardShortcuts?.let { add(AppMenuItem(Lucide.Keyboard, "Keyboard shortcuts", onClick = it)) }
         add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))
     }

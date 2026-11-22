@@ -222,10 +222,12 @@ internal fun PersonalizeScreen(
         }
     }
     TandemBackHandler(enabled = history.isNotEmpty(), onBack = back, onBackProgress = { _, _ -> })
+    val reduceMotion = tandemReduceMotion
     AnimatedContent(
         step,
         transitionSpec = {
             val forward = targetState.ordinal > initialState.ordinal
+            if (reduceMotion) return@AnimatedContent tandemFadeEnter(true) togetherWith tandemFadeExit(true)
             (
                 slideInHorizontally(tween(TandemMotion.ROUTE_MILLIS, easing = FastOutSlowInEasing)) { if (forward) it / 6 else -it / 6 } +
                     fadeIn(tween(TandemMotion.ROUTE_MILLIS - 80, delayMillis = 80))
@@ -535,8 +537,9 @@ private fun ModeStep(
                 ModePreviewCard(mode, state.interfaceMode == mode, Modifier.weight(1f)) { state.interfaceMode = mode }
             }
         }
+        val reduceMotion = tandemReduceMotion
         AnimatedContent(state.interfaceMode, transitionSpec = {
-            fadeIn(tween(TandemMotion.CONTROL_MILLIS)) togetherWith fadeOut(tween(90))
+            tandemFadeEnter(reduceMotion, TandemMotion.CONTROL_MILLIS) togetherWith tandemFadeExit(reduceMotion, TandemMotion.TAB_EXIT_MILLIS)
         }, label = "mode-detail") { mode ->
             Text(
                 stringResource(if (mode == InterfaceMode.MINIMAL) Res.string.mode_minimal_detail else Res.string.mode_advanced_detail),

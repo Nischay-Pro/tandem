@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.SaveShortcuts
 import app.tandemforactual.ui.TandemMotion
 import app.tandemforactual.ui.TandemShapes
 import app.tandemforactual.ui.TandemSpacing
@@ -74,8 +75,10 @@ internal fun PrimaryButton(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     loading: Boolean = false,
+    saveShortcut: Boolean = false,
     onClick: () -> Unit,
 ) {
+    if (saveShortcut) SaveShortcuts.Register(enabled && !loading, onClick)
     TandemButton(TandemButtonStyle.PRIMARY, label, enabled, modifier, loading, onClick)
 }
 
@@ -103,8 +106,10 @@ internal fun TandemActionButton(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     loading: Boolean = false,
+    saveShortcut: Boolean = false,
     onClick: () -> Unit,
 ) {
+    if (saveShortcut) SaveShortcuts.Register(enabled && !loading, onClick)
     val palette = tandemPalette
     val shape = RoundedCornerShape(TandemShapes.medium)
     val containerColor =
@@ -384,7 +389,7 @@ internal fun ReorderDragHandle(
         }
     val handleModifier =
         Modifier
-            .size(44.dp)
+            .size(MIN_TOUCH_TARGET)
             .clip(RoundedCornerShape(TandemShapes.medium))
             .then(reorderSemantics)
             .draggable(

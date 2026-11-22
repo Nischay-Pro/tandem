@@ -1764,21 +1764,38 @@ fun TandemApp(
                 route.showsBottomNavigation() &&
                 !imeVisible &&
                 !transactionSheetActive
-        val shortcutsEnabled = tabShellRoute != null && state.selectedBudgetId.isNotBlank()
+        val budgetOpen = state.selectedBudgetId.isNotBlank()
+        val shortcutsEnabled = tabShellRoute != null && budgetOpen
         val rootFocus = remember { FocusRequester() }
-        LaunchedEffect(shortcutsEnabled) { if (shortcutsEnabled) runCatching { rootFocus.requestFocus() } }
+        LaunchedEffect(budgetOpen) { if (budgetOpen) runCatching { rootFocus.requestFocus() } }
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .onPreviewKeyEvent { event ->
-                        val shortcut = event.keyboardShortcut()?.takeIf { shortcutsEnabled } ?: return@onPreviewKeyEvent false
+                        val shortcut = event.keyboardShortcut()?.takeIf { budgetOpen } ?: return@onPreviewKeyEvent false
                         when (shortcut) {
-                            KeyboardShortcut.NewTransaction -> QuickActionEvents.requestAddTransaction()
-                            KeyboardShortcut.Search -> navigation.open(AppRoute.ACTIVITY_SEARCH)
-                            KeyboardShortcut.Sync -> syncNow()
-                            KeyboardShortcut.Back -> navigation.back()
-                            is KeyboardShortcut.Tab -> navigation.selectTab(shortcut.route)
+                            KeyboardShortcut.Close ->
+                                when {
+                                    state.menuOpen -> state.menuOpen = false
+                                    backStack.size > 1 -> navigation.back()
+                                    else -> return@onPreviewKeyEvent false
+                                }
+                            KeyboardShortcut.Save -> return@onPreviewKeyEvent SaveShortcuts.save()
+                            KeyboardShortcut.Help -> state.shortcutsHelpOpen = true
+                            KeyboardShortcut.Menu -> state.menuOpen = !state.menuOpen
+                            else -> {
+                                if (!shortcutsEnabled && !state.menuOpen) return@onPreviewKeyEvent false
+                                state.menuOpen = false
+                                when (shortcut) {
+                                    KeyboardShortcut.NewTransaction -> if (!state.readOnlyMode) QuickActionEvents.requestAddTransaction()
+                                    KeyboardShortcut.Search -> navigation.open(AppRoute.ACTIVITY_SEARCH)
+                                    KeyboardShortcut.Sync -> syncNow()
+                                    KeyboardShortcut.Back -> navigation.back()
+                                    is KeyboardShortcut.Tab -> shortcutTab(shortcut.index, state.interfaceMode)?.let(navigation::selectTab)
+                                    else -> Unit
+                                }
+                            }
                         }
                         true
                     }.focusRequester(rootFocus)
@@ -2141,6 +2158,15 @@ fun TandemApp(
                         openFromMenu(AppRoute.ACCOUNTS)
                     },
                     onFeedback = { uriHandler.openUri("https://github.com/Nischay-Pro/tandem/issues") },
+                    onKeyboardShortcuts =
+                        if (useRail) {
+                            {
+                                state.menuOpen = false
+                                state.shortcutsHelpOpen = true
+                            }
+                        } else {
+                            null
+                        },
                 ),
             onClose = { state.menuOpen = false },
             onBudgetSettings = { openFromMenu(AppRoute.SETTINGS) },
@@ -2151,6 +2177,11 @@ fun TandemApp(
             onSyncCenter = { openFromMenu(AppRoute.SYNC_CENTER) },
             onAbout = { openFromMenu(AppRoute.ABOUT) },
             onLicenses = { openFromMenu(AppRoute.MERCHANT_ICON_LICENSES) },
+        )
+        KeyboardShortcutsSheet(
+            visible = state.shortcutsHelpOpen,
+            mode = state.interfaceMode,
+            onClose = { state.shortcutsHelpOpen = false },
         )
         BudgetSwitchSplash(
             state.selectedBudget.takeIf { state.modeSwitchTarget == null && state.budgetSwitchSplashId != null },

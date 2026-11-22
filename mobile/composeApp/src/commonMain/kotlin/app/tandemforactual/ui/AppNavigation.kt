@@ -1,6 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui
+import app.tandemforactual.ui.components.MIN_TOUCH_TARGET
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
@@ -869,11 +870,16 @@ internal fun SideNavigationRail(
                 .width(80.dp)
                 .fillMaxHeight()
                 .background(palette.surface)
-                .padding(vertical = TandemSpacing.extraSmall),
+                .padding(vertical = TandemSpacing.medium),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
     ) {
         if (onOpenMenu != null) TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
+        Spacer(Modifier.weight(1f))
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.extraSmall),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        ) {
         items.forEach { (route, label) ->
             val active = route == selected
             val tabColor by
@@ -927,6 +933,8 @@ internal fun SideNavigationRail(
                 }
             }
         }
+        }
+        Spacer(Modifier.weight(1f))
         if (layouts.size > 1) WorkspaceLayoutButton(layouts, layout, onLayout)
     }
 }
@@ -942,7 +950,7 @@ private fun WorkspaceLayoutButton(
     Box {
         Box(
             Modifier
-                .size(44.dp)
+                .size(MIN_TOUCH_TARGET)
                 .clip(CircleShape)
                 .background(if (layout != WorkspaceLayout.SINGLE) palette.accentSurface else Color.Transparent)
                 .clickable(onClickLabel = "Choose how many screens to show") { expanded = true }

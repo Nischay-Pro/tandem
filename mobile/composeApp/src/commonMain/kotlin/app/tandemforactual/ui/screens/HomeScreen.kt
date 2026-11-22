@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -86,11 +87,17 @@ internal fun HomeScreen(
         plan.prominent.forEach { entry ->
             item(
                 key = "home-${entry.module.name}",
-            ) { HomeEntryCard(entry, state, mobileSession, editors, navigation, accounts, month, schedules, transactions, settings, money) }
+            ) {
+                Box(tandemListItemModifier(tandemReduceMotion)) {
+                    HomeEntryCard(entry, state, mobileSession, editors, navigation, accounts, month, schedules, transactions, settings, money)
+                }
+            }
         }
         if (plan.more.isNotEmpty()) {
             item(key = "home-more-title") {
                 Text(
+                    modifier = tandemListItemModifier(tandemReduceMotion),
+                    text =
                     stringResource(Res.string.home_more),
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.label,
@@ -101,6 +108,7 @@ internal fun HomeScreen(
                 item(
                     key = "home-more-${entry.module.name}",
                 ) {
+                    Box(tandemListItemModifier(tandemReduceMotion)) {
                     HomeEntryCard(
                         entry,
                         state,
@@ -114,6 +122,7 @@ internal fun HomeScreen(
                         settings,
                         money,
                     )
+                    }
                 }
             }
         }
