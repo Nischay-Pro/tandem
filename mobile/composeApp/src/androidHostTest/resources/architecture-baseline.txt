@@ -69,7 +69,6 @@ function-size AccountOptionsScreen.AccountOptionsScreen
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size AccountsScreen.AccountsScreen
-function-size ActivityScreen.ActivityScreen
 function-size ActivitySearch.activitySearchSuggestions
 function-size ActivitySearchScreen.ActivitySearchScreen
 function-size AppHeader.AppHeader
