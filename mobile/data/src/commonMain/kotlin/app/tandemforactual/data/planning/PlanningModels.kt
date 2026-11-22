@@ -229,14 +229,14 @@ private fun matchFrom(body: JsonObject): EmployerMatch =
         body.long("capMinor"),
     )
 
-private fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
+internal fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
 
-private fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+internal fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
-private fun Number?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+internal fun Number?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
-private fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
+internal fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
 
-private fun JsonObject.long(name: String) = (this[name] as? JsonPrimitive)?.longOrNull
+internal fun JsonObject.long(name: String) = (this[name] as? JsonPrimitive)?.longOrNull
 
-private fun JsonObject.int(name: String) = this[name]?.jsonPrimitive?.intOrNull
+internal fun JsonObject.int(name: String) = this[name]?.jsonPrimitive?.intOrNull

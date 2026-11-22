@@ -100,6 +100,13 @@ class PlanningStoreTest {
                 assertEquals(listOf("US", "IN"), store.settings().first().regions)
                 store.deleteRetirementProfile("us-ira")
                 assertEquals(listOf("us-401k"), store.retirementProfiles().first().map { it.planId })
+                val trips = CustomReport("r-2", "trips", grouping = ReportGrouping.PAYEE)
+                val food = CustomReport("r-1", "Food", categoryIds = listOf("cat-1"))
+                store.save(trips)
+                store.save(food)
+                assertEquals(listOf(food, trips), store.customReports().first())
+                store.deleteCustomReport("r-1")
+                assertEquals(listOf(trips), store.customReports().first())
             } finally {
                 db.close()
             }

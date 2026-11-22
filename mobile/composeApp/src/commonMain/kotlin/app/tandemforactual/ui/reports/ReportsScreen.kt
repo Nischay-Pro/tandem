@@ -98,6 +98,7 @@ import app.tandemforactual.ui.reports.reportMonthRangeLabel
 import app.tandemforactual.ui.reports.roundedReportAxisValues
 import app.tandemforactual.ui.reports.shiftReportMonthId
 import app.tandemforactual.ui.reports.spendingOverTimeSummary
+import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.ChartColumnIncreasing
 import com.composables.icons.lucide.ChartNoAxesCombined
@@ -182,6 +183,14 @@ internal fun ReportsScreen(
         }
         item(key = "reports-more") {
             SurfaceCard {
+                val saved = mobileSession.customReports.size
+                ListRow(
+                    "Custom reports",
+                    if (saved == 0) "Build your own by category, payee or account" else "$saved saved",
+                    leading = RowLeading.Icon(Lucide.ChartBar),
+                    onClick = { onOpenInsight(AppRoute.CUSTOM_REPORTS) },
+                )
+                DividerLine()
                 ListRow(
                     "Spending trends",
                     "Each category against past months",

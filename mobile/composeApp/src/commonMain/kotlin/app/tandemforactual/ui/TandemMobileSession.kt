@@ -27,6 +27,7 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
@@ -284,6 +285,8 @@ internal class TandemMobileSession(
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var planningSettings by mutableStateOf(PlanningSettings())
+    var customReports by mutableStateOf<List<CustomReport>>(emptyList())
+        private set
 
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
@@ -433,6 +436,20 @@ internal class TandemMobileSession(
         terms: DebtTerms,
     ) {
         planningStore(budgetId)?.save(terms)
+    }
+
+    suspend fun saveCustomReport(
+        budgetId: String,
+        report: CustomReport,
+    ) {
+        planningStore(budgetId)?.save(report)
+    }
+
+    suspend fun deleteCustomReport(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteCustomReport(id)
     }
 
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
@@ -5707,6 +5724,7 @@ internal class TandemMobileSession(
                 launch { planning.retirementProfiles().collect { retirementProfiles = it } }
                 launch { planning.reimbursements().collect { reimbursements = it } }
                 launch { planning.settings().collect { planningSettings = it } }
+                launch { planning.customReports().collect { customReports = it } }
             }
         }
     }
