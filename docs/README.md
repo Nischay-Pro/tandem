@@ -36,6 +36,7 @@ Choose a page by what you need to do.
 | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [Build from source](develop/build-from-source.md)                   | Developers building the API, Android app, or iOS app.                |
 | [Test Tandem](develop/testing.md)                                   | Contributors running API and mobile checks before review.            |
+| [Pull requests](develop/pull-requests.md)                           | Contributors opening a pull request.                                 |
 | [Actual compatibility tests](develop/actual-compatibility-tests.md) | Contributors checking direct sync against the pinned Actual release. |
 | [Toolchain](develop/toolchain.md)                                   | Developers setting up Gradle, Kotlin, and the generated client.      |
 | [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                           |

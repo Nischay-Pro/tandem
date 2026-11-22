@@ -68,6 +68,7 @@ step. Budget calculations run on the device. See
 
 See [build instructions](docs/develop/build-from-source.md),
 [testing instructions](docs/develop/testing.md), the
+[pull request guidelines](docs/develop/pull-requests.md), the
 [toolchain reference](docs/develop/toolchain.md), and the
 [extension sync API](docs/develop/api-reference.md). Its machine-readable
 contract is [`docs/api/openapi-v1.json`](docs/api/openapi-v1.json).
