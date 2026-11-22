@@ -109,6 +109,7 @@ internal object TandemLayout {
     val compactListRowVerticalInset = TandemSpacing.extraSmall + TandemSpacing.xxSmall
     val listRowGap = TandemSpacing.medium
     val listRowLeadingSize = 44.dp
+    val rowBadgeSize = 18.dp
     val compactListRowLeadingSize = 36.dp
     val listRowIconSize = 30.dp
     val compactListRowIconSize = 24.dp

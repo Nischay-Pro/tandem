@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
@@ -15,10 +16,16 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,12 +46,24 @@ internal fun <T> FilterPills(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
+    val scroll = rememberScrollState()
+    val offsets = remember { mutableStateMapOf<Int, Int>() }
+    val index = options.indexOfFirst { it.first == selected }
+    val density = LocalDensity.current
+    LaunchedEffect(index, offsets[index]) {
+        val x = offsets[index] ?: return@LaunchedEffect
+        scroll.animateScrollTo((x - with(density) { TandemSpacing.large.roundToPx() }).coerceAtLeast(0))
+    }
     Row(
-        modifier.horizontalScroll(rememberScrollState()).padding(contentPadding),
+        modifier.horizontalScroll(scroll).padding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        options.forEach { (value, label) -> FilterPill(label, value == selected) { onSelect(value) } }
+        options.forEachIndexed { i, (value, label) ->
+            Box(Modifier.onGloballyPositioned { offsets[i] = it.positionInParent().x.toInt() }) {
+                FilterPill(label, value == selected) { onSelect(value) }
+            }
+        }
     }
 }
 

@@ -280,10 +280,13 @@ internal class TandemMobileSession(
     var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
         private set
     var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
+        private set
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var planningSettings by mutableStateOf(PlanningSettings())
-        private set
+
+    /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
+    var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
 
     private fun planningStore(budgetId: String): PlanningStore? =
         storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, { planningKeyring.cipherFor(budgetId) }, nowEpochMillis) }
@@ -383,10 +386,13 @@ internal class TandemMobileSession(
 
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
 
+    /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
+    var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
+
     suspend fun loadLinkedAccounts(
         budgetId: String,
         encryptionPassword: String?,
-    ): List<LinkedAccount> = apiClient.budgetLinkedAccounts(budgetId, encryptionPassword)
+    ): List<LinkedAccount> = apiClient.budgetLinkedAccounts(budgetId, encryptionPassword).also { bankLinks = it }
 
     suspend fun linkBankAccount(
         budgetId: String,
@@ -3680,7 +3686,11 @@ internal class TandemMobileSession(
             encryptionPassword,
             "Couldn’t sync transactions from Actual. Check the bank connection and try again.",
         ) {
-            apiClient.runBudgetBankSync(budgetId, encryptionPassword)
+            try {
+                apiClient.runBudgetBankSync(budgetId, encryptionPassword)
+            } finally {
+                runCatching { loadLinkedAccounts(budgetId, encryptionPassword) }
+            }
         }
 
     suspend fun createBudgetAccount(

@@ -138,16 +138,28 @@ class ActualDirectBudget private constructor(
         sync()
         val accounts = locked { ActualBankSync(writer, { today }).linkedAccounts() }
         var changed = 0
+        var firstFailure: ActualServerException? = null
         for (account in accounts) {
-            val download = server.bankTransactions(account, fileId)
+            val download =
+                try {
+                    server.bankTransactions(account, fileId).also { bankFailures.remove(account.id) }
+                } catch (error: ActualServerException) {
+                    if (!error.reason.startsWith("bank-sync-")) throw error
+                    bankFailures[account.id] = account.providerAccountId to error.reason.removePrefix("bank-sync-")
+                    firstFailure = firstFailure ?: error
+                    continue
+                }
             locked {
                 val result = ActualBankSync(writer, { today }).apply(account, download)
                 changed += result.added.size + result.updated.size
             }
         }
         sync()
+        firstFailure?.let { throw it }
         return changed
     }
+
+    private val bankFailures = mutableMapOf<String, Pair<String, String>>()
 
     /** Which of these statement ids the account already holds, so an import can say how many rows are new. */
     suspend fun importedIds(
@@ -167,7 +179,12 @@ class ActualDirectBudget private constructor(
 
     val deviceNode: String get() = clock.clock.timestamp.node
 
-    suspend fun linkedAccounts(today: String): List<LinkedAccount> = locked { ActualBankSync(writer, { today }).linkedAccounts() }
+    suspend fun linkedAccounts(today: String): List<LinkedAccount> =
+        locked {
+            ActualBankSync(writer, { today }).linkedAccounts().map { linked ->
+                linked.copy(failure = bankFailures[linked.id]?.takeIf { it.first == linked.providerAccountId }?.second)
+            }
+        }
 
     suspend fun exportCsv(
         from: String,

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.ui.components.AnimatedReveal
@@ -30,6 +30,7 @@ import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SectionCard
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.CircleDashed
 import com.composables.icons.lucide.Copy
@@ -80,21 +81,29 @@ internal fun DataHealthScreen(
     mobileSession: TandemMobileSession,
     liveTransactions: List<TransactionItem>,
 ) {
-    var issues by remember(state.selectedBudgetId) { mutableStateOf<List<HealthIssue>?>(null) }
+    val cached = mobileSession.dataHealthCache?.takeIf { it.first == state.selectedBudgetId }?.second
     var loading by remember { mutableStateOf(true) }
     var reload by remember { mutableIntStateOf(0) }
-    var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+    val shown = remember { mutableStateMapOf<String, Int>() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        issues = mobileSession.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })
+        mobileSession.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })?.let {
+            mobileSession.dataHealthCache = state.selectedBudgetId to it
+        }
         loading = false
     }
+    val issues = cached
     val palette = tandemPalette
-    PageLazyColumn(isRefreshing = loading && issues != null, onRefresh = { reload++ }) {
+    PageLazyColumn(isRefreshing = loading && issues != null && reload > 0, onRefresh = { reload++ }) {
         val found = issues
         item(key = "summary") {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                Text(state.selectedBudget, color = palette.muted, fontSize = TandemTypography.body)
+                Text(
+                    if (loading && found != null) "Checking again…" else state.selectedBudget,
+                    color = palette.muted,
+                    fontSize = TandemTypography.body,
+                )
                 Text(
                     when {
                         found == null && loading -> "Checking…"
@@ -128,23 +137,27 @@ internal fun DataHealthScreen(
         }
         found?.forEach { issue ->
             item(key = issue.kind.name) {
-                val open = expanded == issue.kind.name
+                val open = issue.kind.name in expanded
+                val limit = shown[issue.kind.name] ?: PAGE
                 SectionCard(issue.kind.title(issue.rows.size), issue.kind.detail(), if (open) "Hide" else "Show", onClick = {
-                    expanded = if (open) null else issue.kind.name
+                    expanded = if (open) expanded - issue.kind.name else expanded + issue.kind.name
                 }) {
                     AnimatedReveal(visible = open) {
                         Column {
-                            issue.rows.take(MAX_ROWS).forEachIndexed { index, row ->
+                            issue.rows.take(limit).forEachIndexed { index, row ->
                                 if (index > 0) DividerLine()
                                 HealthRowItem(issue.kind, row, state, liveTransactions.firstOrNull { it.recordId == row.id }) { item ->
                                     openTransaction(state, navigation, item, isLive = true)
                                 }
                             }
-                            if (issue.rows.size > MAX_ROWS) {
-                                Text(
-                                    "and ${issue.rows.size - MAX_ROWS} more",
-                                    color = palette.muted,
-                                    fontSize = TandemTypography.compactBody,
+                            if (issue.rows.size > limit) {
+                                DividerLine()
+                                ListRow(
+                                    "Show ${minOf(PAGE, issue.rows.size - limit)} more",
+                                    "${issue.rows.size - limit} not shown",
+                                    leading = RowLeading.Icon(Lucide.ChevronDown),
+                                    options = ListRowOptions(showChevron = false, dense = true),
+                                    onClick = { shown[issue.kind.name] = limit + PAGE },
                                 )
                             }
                         }
@@ -155,7 +168,7 @@ internal fun DataHealthScreen(
     }
 }
 
-private const val MAX_ROWS = 25
+private const val PAGE = 25
 
 @Composable
 private fun HealthRowItem(

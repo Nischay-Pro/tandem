@@ -291,6 +291,10 @@ class TandemApiClientTest {
             )
             server.bankDownload = """{"status":"ok","data":{"error_type":"ITEM_ERROR","error_code":"ITEM_LOGIN_REQUIRED"}}"""
             assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+            client.budgetLinkedAccounts("group", null).first { it.id == checking }.let { linked ->
+                assertEquals("item_login_required", linked.failure)
+                kotlin.test.assertNotNull(linked.lastSyncMillis)
+            }
             val providers = client.bankProviderAccounts(SimpleFin)!!
             assertEquals(BankProviderAccount("SF-9", "Rewards Card", "Credit Union", "cu.example", "-42.10"), providers.first())
             assertEquals("org-1", providers[1].bankId)

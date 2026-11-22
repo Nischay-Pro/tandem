@@ -21,6 +21,8 @@ data class LinkedAccount(
     val bankId: String?,
     val bankName: String?,
     val startDate: String,
+    val lastSyncMillis: Long? = null,
+    val failure: String? = null,
 )
 
 /**
@@ -71,7 +73,7 @@ class ActualBankSync(
     fun linkedAccounts(): List<LinkedAccount> =
         db
             .query(
-                "SELECT a.id, a.name, a.account_id, a.account_sync_source, b.bank_id, b.name AS bank_name FROM accounts a " +
+                "SELECT a.id, a.name, a.account_id, a.account_sync_source, a.last_sync, b.bank_id, b.name AS bank_name FROM accounts a " +
                     "LEFT JOIN banks b ON a.bank = b.id WHERE a.tombstone = 0 AND a.closed = 0 AND b.bank_id IS NOT NULL " +
                     "AND a.account_id IS NOT NULL ORDER BY a.offbudget, a.sort_order",
             ).map {
@@ -84,6 +86,7 @@ class ActualBankSync(
                     it["bank_id"] as String?,
                     it["bank_name"] as String?,
                     startDate(id),
+                    (it["last_sync"] as String?)?.toLongOrNull(),
                 )
             }
 
@@ -165,7 +168,14 @@ class ActualBankSync(
         }
         return writer.batch {
             val result = options(if (pref("sync-import-transactions-${account.id}", true)) rows else emptyList())
-            if (current != null) writer.update("accounts", account.id, mapOf("balance_current" to current))
+            writer.update(
+                "accounts",
+                account.id,
+                buildMap {
+                    if (current != null) put("balance_current", current)
+                    put("last_sync", writer.nowMillis().toString())
+                },
+            )
             result
         }
     }

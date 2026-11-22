@@ -59,13 +59,13 @@ import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.ListRow
 import app.tandemforactual.ui.components.PrivacyAmountText
 import app.tandemforactual.ui.components.ReorderDragHandle
+import app.tandemforactual.ui.components.RowBadge
+import app.tandemforactual.ui.components.RowBadgeMark
 import app.tandemforactual.ui.components.RowLeading
 import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
-import app.tandemforactual.ui.components.TandemChoiceDialog
 import app.tandemforactual.ui.components.TandemIconButton
-import app.tandemforactual.ui.components.TandemModalHeader
 import app.tandemforactual.ui.components.TandemTaskSheet
 import app.tandemforactual.ui.model.LiveAccountSummary
 import app.tandemforactual.ui.model.liveAccountGroupLabel
@@ -80,7 +80,6 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
@@ -253,6 +252,7 @@ internal fun AccountSummaryCard(
     onDragBy: ((Float) -> Unit)? = null,
     onDragStopped: (() -> Unit)? = null,
     highlighted: Boolean = false,
+    bankBadge: RowBadge? = null,
 ) {
     val palette = tandemPalette
     val stackBalance = LocalDensity.current.fontScale >= 1.5f
@@ -285,32 +285,35 @@ internal fun AccountSummaryCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
         ) {
-            Box(
-                Modifier
-                    .size(TandemLayout.listRowLeadingSize)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(if (account.closed) palette.surface else palette.raised),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (merchantArtwork != null) {
-                    Image(
-                        painterResource(merchantArtwork),
-                        contentDescription = null,
-                        modifier =
-                            Modifier
-                                .size(TandemLayout.listRowLogoSize)
-                                .padding(TandemSpacing.xxSmall)
-                                .alpha(if (account.closed) 0.48f else 1f),
-                        contentScale = ContentScale.Fit,
-                    )
-                } else {
-                    Icon(
-                        accountTypeIcon(account.name, account.accountType),
-                        contentDescription = null,
-                        modifier = Modifier.size(TandemLayout.listRowIconSize),
-                        tint = if (account.closed) palette.muted else palette.accent,
-                    )
+            Box {
+                Box(
+                    Modifier
+                        .size(TandemLayout.listRowLeadingSize)
+                        .clip(RoundedCornerShape(TandemShapes.medium))
+                        .background(if (account.closed) palette.surface else palette.raised),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (merchantArtwork != null) {
+                        Image(
+                            painterResource(merchantArtwork),
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(TandemLayout.listRowLogoSize)
+                                    .padding(TandemSpacing.xxSmall)
+                                    .alpha(if (account.closed) 0.48f else 1f),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Icon(
+                            accountTypeIcon(account.name, account.accountType),
+                            contentDescription = null,
+                            modifier = Modifier.size(TandemLayout.listRowIconSize),
+                            tint = if (account.closed) palette.muted else palette.accent,
+                        )
+                    }
                 }
+                bankBadge?.let { RowBadgeMark(it) }
             }
             Column(
                 modifier = Modifier.weight(1f),
@@ -510,7 +513,6 @@ internal fun AccountsScreen(
 ) {
     val scope = rememberCoroutineScope()
     var addAccountDialog by rememberSaveable { mutableStateOf(false) }
-    var showBankConnectionsDialog by rememberSaveable { mutableStateOf(false) }
     var newAccountName by rememberSaveable { mutableStateOf("") }
     var newAccountOffBudget by rememberSaveable { mutableStateOf(false) }
     var newAccountGroupId by rememberSaveable { mutableStateOf("") }
@@ -526,6 +528,11 @@ internal fun AccountsScreen(
                 .mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
                 .sortedBy { it.second.lowercase() }
         }
+    LaunchedEffect(state.selectedBudgetId) {
+        if (state.selectedBudgetId.isNotBlank()) {
+            runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() }) }
+        }
+    }
     LaunchedEffect(state.accountsRequestedAction) {
         when (state.accountsRequestedAction) {
             "add" -> {
@@ -535,7 +542,7 @@ internal fun AccountsScreen(
                 mobileSession.clearBudgetActionMessage()
                 addAccountDialog = true
             }
-            "banks" -> showBankConnectionsDialog = true
+            "banks" -> navigation.open(AppRoute.BANK_CONNECTIONS)
         }
         state.accountsRequestedAction = null
     }
@@ -813,6 +820,11 @@ internal fun AccountsScreen(
                                 onDragStopped = ::dropDrag,
                             )
                         AccountSummaryCard(
+                            bankBadge =
+                                bankLinkBadge(
+                                    mobileSession.bankLinks.firstOrNull { it.id == account.id },
+                                    mobileSession.nowEpochMillis(),
+                                ),
                             account = account,
                             merchantArtwork = merchantIconMatcher?.accountIconFor(account.name),
                             privacyModeEnabled = state.privacyModeEnabled,
@@ -895,7 +907,7 @@ internal fun AccountsScreen(
                         Modifier.fillMaxWidth(),
                         icon = Lucide.Landmark,
                         enabled = !isRefreshing,
-                    ) { showBankConnectionsDialog = true }
+                    ) { navigation.open(AppRoute.BANK_CONNECTIONS) }
                 }
             }
         }
@@ -1006,41 +1018,6 @@ internal fun AccountsScreen(
                                 )
                             if (created) addAccountDialog = false
                         }
-                    }
-                }
-            }
-        }
-    }
-    TandemChoiceDialog(
-        visible = showBankConnectionsDialog,
-        onDismissRequest = { if (!isRefreshing) showBankConnectionsDialog = false },
-    ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                TandemModalHeader(
-                    title = "Bank connections",
-                    leadingIcon = Lucide.Landmark,
-                    enabled = !isRefreshing,
-                    onClose = { if (!isRefreshing) showBankConnectionsDialog = false },
-                )
-                InfoBubble("Review, add, or remove bank links in Actual Budget. Tandem syncs the connections configured there.")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TandemActionButton("Done", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f)) {
-                        showBankConnectionsDialog = false
-                    }
-                    TandemActionButton(
-                        "Sync accounts",
-                        TandemActionButtonTone.PRIMARY,
-                        Modifier.weight(1f),
-                        icon = Lucide.RefreshCw,
-                        enabled = !isRefreshing && !state.readOnlyMode,
-                        loading = isRefreshing,
-                    ) {
-                        showBankConnectionsDialog = false
-                        runBankSync()
                     }
                 }
             }

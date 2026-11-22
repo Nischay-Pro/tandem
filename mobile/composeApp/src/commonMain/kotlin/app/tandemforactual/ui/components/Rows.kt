@@ -10,12 +10,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +39,8 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +71,14 @@ internal data class ListRowOptions(
     val trailingAction: ListRowAction? = null,
     val showChevron: Boolean = true,
     val subtitleMaxLines: Int = 3,
+    val badge: RowBadge? = null,
+)
+
+/** A small status mark on the corner of the row's icon. */
+internal data class RowBadge(
+    val icon: ImageVector?,
+    val color: Color,
+    val description: String,
 )
 
 internal data class ListRowAction(
@@ -74,6 +87,30 @@ internal data class ListRowAction(
     val enabled: Boolean = true,
     val onClick: () -> Unit,
 )
+
+@Composable
+internal fun BoxScope.RowBadgeMark(badge: RowBadge) {
+    val palette = tandemPalette
+    Box(
+        Modifier
+            .align(Alignment.BottomEnd)
+            .offset(TandemSpacing.extraSmall, TandemSpacing.extraSmall)
+            .size(TandemLayout.rowBadgeSize)
+            .clip(CircleShape)
+            .background(palette.surface)
+            .padding(TandemSpacing.xxSmall)
+            .clip(CircleShape)
+            .background(badge.color)
+            .semantics { contentDescription = badge.description },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (badge.icon != null) {
+            Icon(badge.icon, contentDescription = null, Modifier.fillMaxSize(0.7f), tint = palette.surface)
+        } else {
+            Text("!", color = palette.surface, fontSize = TandemTypography.caption, fontWeight = FontWeight.Bold)
+        }
+    }
+}
 
 @Composable
 internal fun DividerLine() {
@@ -155,49 +192,52 @@ internal fun ListRow(
         horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
     ) {
         if (leading != RowLeading.None) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(
-                            if (options.dense) TandemLayout.compactListRowLeadingSize else TandemLayout.listRowLeadingSize,
-                        ).clip(RoundedCornerShape(TandemShapes.medium))
-                        .background(if (options.muted) palette.surface else palette.raised),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    resolvedPainter != null -> {
-                        Image(
-                            painter = resolvedPainter,
-                            contentDescription = null,
-                            modifier =
-                                Modifier
-                                    .size(if (options.dense) TandemLayout.compactListRowLogoSize else TandemLayout.listRowLogoSize)
-                                    .padding(TandemSpacing.xxSmall)
-                                    .alpha(if (options.muted) 0.48f else 1f),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    resolvedVector != null -> {
-                        Icon(
-                            imageVector = resolvedVector,
-                            contentDescription = null,
-                            modifier =
-                                Modifier.size(
-                                    if (options.dense) TandemLayout.compactListRowIconSize else TandemLayout.listRowIconSize,
-                                ),
-                            tint = if (options.muted) palette.muted else palette.accent,
-                        )
-                    }
-                    leading is RowLeading.Letter -> {
-                        Text(
-                            leading.value,
-                            modifier = Modifier.clearAndSetSemantics {},
-                            color = titleColor,
-                            fontSize = if (options.dense) TandemTypography.action else TandemTypography.cardTitle,
-                            fontWeight = FontWeight.Bold,
-                        )
+            Box {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(
+                                if (options.dense) TandemLayout.compactListRowLeadingSize else TandemLayout.listRowLeadingSize,
+                            ).clip(RoundedCornerShape(TandemShapes.medium))
+                            .background(if (options.muted) palette.surface else palette.raised),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        resolvedPainter != null -> {
+                            Image(
+                                painter = resolvedPainter,
+                                contentDescription = null,
+                                modifier =
+                                    Modifier
+                                        .size(if (options.dense) TandemLayout.compactListRowLogoSize else TandemLayout.listRowLogoSize)
+                                        .padding(TandemSpacing.xxSmall)
+                                        .alpha(if (options.muted) 0.48f else 1f),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
+                        resolvedVector != null -> {
+                            Icon(
+                                imageVector = resolvedVector,
+                                contentDescription = null,
+                                modifier =
+                                    Modifier.size(
+                                        if (options.dense) TandemLayout.compactListRowIconSize else TandemLayout.listRowIconSize,
+                                    ),
+                                tint = if (options.muted) palette.muted else palette.accent,
+                            )
+                        }
+                        leading is RowLeading.Letter -> {
+                            Text(
+                                leading.value,
+                                modifier = Modifier.clearAndSetSemantics {},
+                                color = titleColor,
+                                fontSize = if (options.dense) TandemTypography.action else TandemTypography.cardTitle,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 }
+                options.badge?.let { RowBadgeMark(it) }
             }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
