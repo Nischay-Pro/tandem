@@ -83,7 +83,6 @@ function-size CategoryGroupScreen.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
-function-size CurrencyScreens.ExchangeRatesScreen
 function-size CustomReportScreen.CustomReportScreen
 function-size CustomReportScreen.ReportControls
 function-size DebtPayoffScreen.DebtPayoffScreen

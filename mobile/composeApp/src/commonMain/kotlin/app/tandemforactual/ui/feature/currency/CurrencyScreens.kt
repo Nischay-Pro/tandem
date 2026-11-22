@@ -4,11 +4,8 @@ package app.tandemforactual.ui.feature.currency
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,7 +97,7 @@ internal fun TandemMobileSession.approximateInBudgetCurrency(
     return "≈ ${state.formatCurrency(convertMinor(balanceMinor ?: 0L, rate))} in ${state.budgetCurrencyCode}"
 }
 
-private val COMMON_CURRENCIES =
+internal val COMMON_CURRENCIES =
     listOf(
         "USD",
         "EUR",
@@ -162,89 +159,23 @@ internal fun ExchangeRatesScreen(
             fontSize = TandemTypography.compactBody,
         )
         if (foreign.isNotEmpty()) {
-            val total = mobileSession.convertedBalance(state, open.map { it.id to it.balanceMinor })
-            SectionCard("Net worth", netWorthDetail(total, budgetCurrency)) {
-                ListRow(
-                    "All open accounts",
-                    "Converted values are estimates. Rates move.",
-                    state.formatConverted(total),
-                    leading = RowLeading.Icon(Lucide.Coins),
-                    options = ListRowOptions(showChevron = false),
-                )
-            }
-            if (total.missingRates.isNotEmpty()) {
-                InlineMessage(
-                    "Add a rate for ${total.missingRates.sorted().joinToString()} to include those accounts in the total.",
-                    InlineMessageKind.WARNING,
-                )
-            }
-            SectionCard("Exchange rates", "Entered by you, with the date you checked them") {
-                foreign.forEachIndexed { index, code ->
-                    if (index > 0) DividerLine()
-                    val rate = rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates)
-                    ListRow(
-                        "1 $code = ${rate?.let { "${formatRate(it.value!!)} $budgetCurrency" } ?: "?"}",
-                        rate?.let { "As of ${formatLiveDate(it.asOf)}" } ?: "No rate yet · Tap to add one",
-                        leading = RowLeading.Icon(Lucide.ArrowLeftRight),
-                        options =
-                            ListRowOptions(
-                                badge = if (rate == null) RowBadge(null, palette.warning, "Needs a rate") else null,
-                            ),
-                        onClick = { editing = code },
-                    )
-                }
-            }
+            ForeignCurrencySections(state, mobileSession, open, foreign, budgetCurrency) { editing = it }
         }
-        SectionCard("Account currencies", "Tap an account to change its currency") {
-            open.forEachIndexed { index, account ->
-                if (index > 0) DividerLine()
-                val code = currencies[account.id]
-                ListRow(
-                    account.name,
-                    account.balanceMinor?.let { state.formatAccountMoney(it, code) },
-                    code ?: "$budgetCurrency · Budget",
-                    leading = RowLeading.Icon(accountTypeIcon(account.name, account.type)),
-                    options = ListRowOptions(dense = true, trailingColor = if (code == null) palette.muted else palette.text),
-                    onClick = { picking = account }.takeIf { !state.readOnlyMode },
-                )
-            }
-        }
+        AccountCurrenciesSection(state, open, currencies, budgetCurrency) { picking = it }
     }
-    val target = picking
-    TandemChoiceDialog(visible = target != null, onDismissRequest = { picking = null }) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                TandemModalHeader(target?.name.orEmpty(), onClose = { picking = null }, leadingIcon = Lucide.Coins)
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    (listOf(budgetCurrency) + COMMON_CURRENCIES.filter { it != budgetCurrency }).forEachIndexed { index, code ->
-                        if (index > 0) DividerLine()
-                        val selected = (currencies[target?.id] ?: budgetCurrency) == code
-                        ListRow(
-                            code,
-                            if (code == budgetCurrency) "The budget’s currency" else null,
-                            if (selected) "Current" else null,
-                            leading = RowLeading.None,
-                            options = ListRowOptions(dense = true, showChevron = false),
-                            onClick = {
-                                val account = target ?: return@ListRow
-                                picking = null
-                                scope.launch {
-                                    mobileSession.planning.saveAccountCurrency(
-                                        state.selectedBudgetId,
-                                        account.id,
-                                        if (code == budgetCurrency) "" else code,
-                                    )
-                                }
-                                if (code != budgetCurrency &&
-                                    rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates) == null
-                                ) {
-                                    editing = code
-                                }
-                            },
-                        )
-                    }
-                }
-            }
+    AccountCurrencyDialog(picking, budgetCurrency, currencies, onDismiss = { picking = null }) { account, code ->
+        picking = null
+        scope.launch {
+            mobileSession.planning.saveAccountCurrency(
+                state.selectedBudgetId,
+                account.id,
+                if (code == budgetCurrency) "" else code,
+            )
+        }
+        if (code != budgetCurrency &&
+            rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates) == null
+        ) {
+            editing = code
         }
     }
     ExchangeRateDialog(editing, budgetCurrency, mobileSession.planning.exchangeRates, onDismiss = { editing = null }) { rate, delete ->
@@ -254,6 +185,77 @@ internal fun ExchangeRatesScreen(
                 .filter { (it.from == rate.from && it.to == rate.to) || (it.from == rate.to && it.to == rate.from) }
                 .forEach { mobileSession.planning.deleteExchangeRate(state.selectedBudgetId, it) }
             if (!delete) mobileSession.planning.saveExchangeRate(state.selectedBudgetId, rate)
+        }
+    }
+}
+
+/** Net worth across currencies and the rate for each foreign currency in use. */
+@Composable
+private fun ForeignCurrencySections(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    open: List<LiveAccountSummary>,
+    foreign: List<String>,
+    budgetCurrency: String,
+    onEditRate: (String) -> Unit,
+) {
+    val palette = tandemPalette
+    val total = mobileSession.convertedBalance(state, open.map { it.id to it.balanceMinor })
+    SectionCard("Net worth", netWorthDetail(total, budgetCurrency)) {
+        ListRow(
+            "All open accounts",
+            "Converted values are estimates. Rates move.",
+            state.formatConverted(total),
+            leading = RowLeading.Icon(Lucide.Coins),
+            options = ListRowOptions(showChevron = false),
+        )
+    }
+    if (total.missingRates.isNotEmpty()) {
+        InlineMessage(
+            "Add a rate for ${total.missingRates.sorted().joinToString()} to include those accounts in the total.",
+            InlineMessageKind.WARNING,
+        )
+    }
+    SectionCard("Exchange rates", "Entered by you, with the date you checked them") {
+        foreign.forEachIndexed { index, code ->
+            if (index > 0) DividerLine()
+            val rate = rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates)
+            ListRow(
+                "1 $code = ${rate?.let { "${formatRate(it.value!!)} $budgetCurrency" } ?: "?"}",
+                rate?.let { "As of ${formatLiveDate(it.asOf)}" } ?: "No rate yet · Tap to add one",
+                leading = RowLeading.Icon(Lucide.ArrowLeftRight),
+                options =
+                    ListRowOptions(
+                        badge = if (rate == null) RowBadge(null, palette.warning, "Needs a rate") else null,
+                    ),
+                onClick = { onEditRate(code) },
+            )
+        }
+    }
+}
+
+/** Every open account with the currency it is kept in. */
+@Composable
+private fun AccountCurrenciesSection(
+    state: AppState,
+    open: List<LiveAccountSummary>,
+    currencies: Map<String, String>,
+    budgetCurrency: String,
+    onPick: (LiveAccountSummary) -> Unit,
+) {
+    val palette = tandemPalette
+    SectionCard("Account currencies", "Tap an account to change its currency") {
+        open.forEachIndexed { index, account ->
+            if (index > 0) DividerLine()
+            val code = currencies[account.id]
+            ListRow(
+                account.name,
+                account.balanceMinor?.let { state.formatAccountMoney(it, code) },
+                code ?: "$budgetCurrency · Budget",
+                leading = RowLeading.Icon(accountTypeIcon(account.name, account.type)),
+                options = ListRowOptions(dense = true, trailingColor = if (code == null) palette.muted else palette.text),
+                onClick = { onPick(account) }.takeIf { !state.readOnlyMode },
+            )
         }
     }
 }
