@@ -8,8 +8,6 @@ cross-feature AccountsScreen -> budget
 cross-feature AccountsScreen -> currency
 cross-feature ActivityScreen -> budget
 cross-feature ActivityScreen -> transactions
-cross-feature ActivitySearch -> budget
-cross-feature ActivitySearch -> transactions
 cross-feature ActivitySearchScreen -> transactions
 cross-feature AppLockGate -> sync
 cross-feature BankConnectionsScreen -> sync
@@ -38,7 +36,6 @@ cross-feature ManagePayeesScreen -> activity
 cross-feature ManagePayeesScreen -> schedules
 cross-feature PersonalizeScreen -> onboarding
 cross-feature ReimbursementScreens -> planning
-cross-feature ReportsScreenParts -> transactions
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
 cross-feature ScheduleDatePickerDialog -> budget
@@ -63,56 +60,26 @@ cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
 function-size AccountEdits.markTransactionsReconciled
-function-size AccountReconcileDialog.AccountReconcileDialog
-function-size AccountSummaryCard.AccountSummaryCard
-function-size ActivitySearch.activitySearchSuggestions
 function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
 function-size BottomNavigation.BottomNavigation
 function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
-function-size BudgetRulesScreen.BudgetRulesScreen
-function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
-function-size ConflictInboxScreen.ConflictInboxScreen
-function-size CustomReportScreen.CustomReportScreen
-function-size CustomReportScreen.ReportControls
-function-size DebtPayoffScreen.DebtPayoffScreen
-function-size DebtTermsSheet.DebtTermsSheet
-function-size GoalTimelineScreen.GoalTimelineScreen
 function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
-function-size MatchEditorScreen.MatchEditorScreen
 function-size NavigationGlyph.NavigationGlyph
-function-size PendingChangesScreen.PendingChangesScreen
 function-size QueueStateCompletion.complete
 function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
-function-size ReportDetailScreen.ReportDetailScreen
-function-size ReportsScreen.ReportCard
-function-size ReportsScreen.ReportsScreen
-function-size ReportsScreenParts.ReportCanvas
-function-size ReportsScreenParts.reportSelectionAt
-function-size RetirementScreen.PlanCard
-function-size RetirementSetupScreen.RetirementSetupScreen
-function-size RuleEditorSheet.RuleConditionEditor
-function-size RuleEditorSheet.RuleEditorContent
-function-size ScheduleDatePickerDialog.ScheduleDatePickerDialog
 function-size SessionSignOut.signOutAndClearLocalData
 function-size SessionSync.synchronizeSerialized
-function-size StatementImport.parseCsv
-function-size StatementImportDialog.StatementImportDialog
-function-size TransactionActionComponents.TransactionRow
 function-size TransactionConflictResolution.resolve
 function-size TransactionCreate.createTransaction
 function-size TransactionDelete.deleteTransaction
-function-size TransactionDetailScreen.TransactionDetailScreen
-function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
-function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
-function-size WhatIfScreen.WhatIfScreen
 function-size androidApp:BackgroundBudgetSync.doWork
 function-size data:ActualBudgetEdits.setOrders
 function-size data:ActualBudgetReader.read
@@ -136,9 +103,6 @@ layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
-size ActivitySearch
-size ReportsScreenParts
-size StatementImport
 size api-client:TandemApiClient
 size data:ActualBudgetEdits
 size data:LocalBudgetRepository
