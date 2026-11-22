@@ -36,10 +36,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.core.session.EncryptedBudgetUnlockResult
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.unlockEncryptedBudget
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.PrimaryButton
@@ -56,10 +54,7 @@ import app.tandemforactual.ui.feature.sync.SyncStatusRing
 import com.composables.icons.lucide.FingerprintPattern
 import com.composables.icons.lucide.LockKeyhole
 import com.composables.icons.lucide.Lucide
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 internal fun AppLockGate(
@@ -147,22 +142,20 @@ private fun EncryptedBudgetUnlock(
     val budgetId = state.selectedBudgetId
     val secretId = budgetPasswordSecretId(budgetId)
     val canUseBiometrics = remember(authenticator) { authenticator?.canStoreSecrets() == true }
-    var hasStoredPassword by remember(budgetId) {
-        mutableStateOf(canUseBiometrics && authenticator?.hasStoredSecret(secretId) == true)
-    }
-    var rememberWithBiometrics by remember(budgetId) { mutableStateOf(hasStoredPassword || state.biometricLockEnabled) }
-    var usePassword by remember(budgetId) { mutableStateOf(!hasStoredPassword) }
-    var password by remember(budgetId) { mutableStateOf("") }
-    var checking by remember { mutableStateOf(false) }
-    var error by remember(budgetId) {
-        mutableStateOf(
-            when (mobileSession.budgetPasswordRejection) {
-                "budget_password_incorrect" -> "That password didn’t unlock this budget. It may have changed in Actual."
-                else -> null
-            },
-        )
-    }
-    var prompting by remember { mutableStateOf(false) }
+    val form =
+        remember(budgetId) {
+            val hasStoredPassword = canUseBiometrics && authenticator?.hasStoredSecret(secretId) == true
+            EncryptedBudgetUnlockForm(
+                hasStoredPassword = hasStoredPassword,
+                rememberWithBiometrics = hasStoredPassword || state.biometricLockEnabled,
+                error =
+                    when (mobileSession.budgetPasswordRejection) {
+                        "budget_password_incorrect" -> "That password didn’t unlock this budget. It may have changed in Actual."
+                        else -> null
+                    },
+            )
+        }
+    val progress = remember { EncryptedBudgetUnlockProgress() }
     val retryAtMillis = state.unlockRetryAtEpochMillis
     var nowMillis by remember { mutableStateOf(mobileSession.nowEpochMillis()) }
     LaunchedEffect(retryAtMillis) {
@@ -173,155 +166,90 @@ private fun EncryptedBudgetUnlock(
         nowMillis = mobileSession.nowEpochMillis()
     }
     val waitSeconds = ((retryAtMillis - nowMillis + 999) / 1_000).coerceAtLeast(0)
-
-    fun submit(
-        candidate: String,
-        fromBiometrics: Boolean,
-    ) {
-        if (candidate.isBlank() || checking || mobileSession.nowEpochMillis() < retryAtMillis) return
-        checking = true
-        error = null
-        scope.launch {
-            val unlockWith = {
-                state.unlockFailureCount = 0
-                state.unlockRetryAtEpochMillis = 0L
-                state.encryptedPassword = candidate
-                lockState.unlock()
-                onUnlocked()
-            }
-            val rememberChoice = {
-                when {
-                    fromBiometrics || authenticator == null -> unlockWith()
-                    rememberWithBiometrics && canUseBiometrics ->
-                        authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { unlockWith() }
-                    else -> {
-                        authenticator.deleteSecret(secretId)
-                        unlockWith()
-                    }
-                }
-            }
-            val rejectStoredPassword = {
-                state.unlockFailureCount += 1
-                unlockWaitMillis(state.unlockFailureCount).takeIf { it > 0 }?.let {
-                    state.unlockRetryAtEpochMillis = mobileSession.nowEpochMillis() + it
-                }
-                if (fromBiometrics) {
-                    authenticator?.deleteSecret(secretId)
-                    hasStoredPassword = false
-                    usePassword = true
-                }
-            }
-            if (vault != null) {
-                val result = mobileSession.unlockEncryptedBudget(vault, budgetId, candidate)
-                checking = false
-                when (result) {
-                    EncryptedBudgetUnlockResult.UNLOCKED -> rememberChoice()
-                    EncryptedBudgetUnlockResult.WRONG_PASSWORD -> {
-                        rejectStoredPassword()
-                        error =
-                            if (fromBiometrics) {
-                                "Your saved password no longer works. It may have changed in Actual. Enter the current password."
-                            } else {
-                                "That password didn’t unlock this budget. It may have changed in Actual."
-                            }
-                    }
-                    EncryptedBudgetUnlockResult.TOO_MANY_ATTEMPTS ->
-                        error = "Too many incorrect passwords. Try again in a few minutes."
-                    EncryptedBudgetUnlockResult.NEEDS_CONNECTION ->
-                        error = "Connect to the internet to unlock this budget for the first time."
-                    EncryptedBudgetUnlockResult.FAILED -> {
-                        rejectStoredPassword()
-                        error = "Actual didn’t accept that password. Check it and try again."
-                    }
-                }
-                return@launch
-            }
-            mobileSession.synchronize(budgetId = budgetId, encryptionPassword = candidate)
-            val synced = mobileSession.syncComplete
-            val offlineCheck =
-                if (!synced && !mobileSession.isServerReachable) {
-                    withContext(Dispatchers.Default) { authenticator?.matchesPasswordCheck(secretId, candidate) }
-                } else {
-                    null
-                }
-            if (synced) withContext(Dispatchers.Default) { authenticator?.rememberPasswordCheck(secretId, candidate) }
-            if (mobileSession.budgetPasswordRejection == "budget_password_incorrect") authenticator?.forgetPasswordCheck(secretId)
-            checking = false
-            if (!encryptedBudgetUnlockAccepted(synced, mobileSession.isServerReachable, offlineCheck)) {
-                if (!mobileSession.isServerReachable && offlineCheck == null) {
-                    error = "Connect to the internet to unlock this budget for the first time."
-                    return@launch
-                }
-                rejectStoredPassword()
-                error = "That password didn’t unlock this budget. It may have changed in Actual."
-                return@launch
-            }
-            rememberChoice()
-        }
-    }
-
-    val unlockWithBiometrics: () -> Unit = {
-        if (authenticator != null && !prompting && !checking) {
-            prompting = true
-            authenticator.readSecret(secretId, "Unlock ${state.selectedBudget}") { secret ->
-                prompting = false
-                if (secret == null) {
-                    if (authenticator.hasStoredSecret(secretId).not()) {
-                        hasStoredPassword = false
-                        usePassword = true
-                    }
-                } else {
-                    submit(secret, fromBiometrics = true)
-                }
-            }
-        }
-    }
+    val unlocker =
+        EncryptedBudgetUnlocker(
+            state,
+            mobileSession,
+            authenticator,
+            vault,
+            lockState,
+            onUnlocked,
+            form,
+            progress,
+            scope,
+            canUseBiometrics,
+            retryAtMillis,
+        )
     LaunchedEffect(budgetId, appInForeground) {
-        if (hasStoredPassword && !usePassword && appInForeground) unlockWithBiometrics()
+        if (form.hasStoredPassword && !form.usePassword && appInForeground) unlocker.unlockWithBiometrics()
     }
 
     LockScaffold(
-        if (usePassword) Lucide.LockKeyhole else Lucide.FingerprintPattern,
+        if (form.usePassword) Lucide.LockKeyhole else Lucide.FingerprintPattern,
         "Unlock your budget.",
         "${state.selectedBudget} is encrypted. " +
-            if (usePassword) "Enter the password you use to open it in Actual." else "Use your fingerprint or face to open it.",
+            if (form.usePassword) "Enter the password you use to open it in Actual." else "Use your fingerprint or face to open it.",
     ) {
-        if (usePassword) {
-            TextFieldCard(
-                "Budget encryption password",
-                password,
-                {
-                    password = it
-                    error = null
-                },
-                TextFieldOptions(placeholder = "Password", isSecret = true),
-            )
-            FieldErrorMessage(error)
-            if (canUseBiometrics) {
-                BiometricPasswordCheckbox(rememberWithBiometrics) { rememberWithBiometrics = it }
+        if (form.usePassword) {
+            PasswordUnlockForm(form, progress.checking, canUseBiometrics, waitSeconds) {
+                unlocker.submit(form.password, fromBiometrics = false)
             }
-            PrimaryButton(
-                when {
-                    checking -> "Unlocking…"
-                    waitSeconds > 0 -> "Try again in ${waitSeconds}s"
-                    else -> "Unlock"
-                },
-                enabled = password.isNotBlank() && !checking && waitSeconds == 0L,
-                loading = checking,
-            ) { submit(password, fromBiometrics = false) }
-            if (hasStoredPassword) LockTextAction("Use biometrics instead") { usePassword = false }
         } else {
-            FieldErrorMessage(error)
-            PrimaryButton(
-                if (checking) "Unlocking…" else "Unlock with biometrics",
-                enabled = !checking,
-                loading = checking,
-                onClick = unlockWithBiometrics,
-            )
-            LockTextAction("Use password instead") { usePassword = true }
+            BiometricUnlockForm(form, progress.checking, onUnlock = unlocker::unlockWithBiometrics)
         }
         LockTextAction("Choose another budget", onClick = onChooseBudget)
     }
+}
+
+/** Password field, biometrics opt-in and unlock button. */
+@Composable
+private fun PasswordUnlockForm(
+    form: EncryptedBudgetUnlockForm,
+    checking: Boolean,
+    canUseBiometrics: Boolean,
+    waitSeconds: Long,
+    onSubmit: () -> Unit,
+) {
+    TextFieldCard(
+        "Budget encryption password",
+        form.password,
+        {
+            form.password = it
+            form.error = null
+        },
+        TextFieldOptions(placeholder = "Password", isSecret = true),
+    )
+    FieldErrorMessage(form.error)
+    if (canUseBiometrics) {
+        BiometricPasswordCheckbox(form.rememberWithBiometrics) { form.rememberWithBiometrics = it }
+    }
+    PrimaryButton(
+        when {
+            checking -> "Unlocking…"
+            waitSeconds > 0 -> "Try again in ${waitSeconds}s"
+            else -> "Unlock"
+        },
+        enabled = form.password.isNotBlank() && !checking && waitSeconds == 0L,
+        loading = checking,
+    ) { onSubmit() }
+    if (form.hasStoredPassword) LockTextAction("Use biometrics instead") { form.usePassword = false }
+}
+
+/** Biometric unlock button with a way back to the password. */
+@Composable
+private fun BiometricUnlockForm(
+    form: EncryptedBudgetUnlockForm,
+    checking: Boolean,
+    onUnlock: () -> Unit,
+) {
+    FieldErrorMessage(form.error)
+    PrimaryButton(
+        if (checking) "Unlocking…" else "Unlock with biometrics",
+        enabled = !checking,
+        loading = checking,
+        onClick = onUnlock,
+    )
+    LockTextAction("Use password instead") { form.usePassword = true }
 }
 
 @Composable

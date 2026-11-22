@@ -67,7 +67,6 @@ function-size AccountEdits.markTransactionsReconciled
 function-size AccountReconcileDialog.AccountReconcileDialog
 function-size AccountSummaryCard.AccountSummaryCard
 function-size ActivitySearch.activitySearchSuggestions
-function-size AppLockGate.EncryptedBudgetUnlock
 function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
 function-size BankBrowserLinkSheet.BanksStep
