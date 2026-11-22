@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCalendar
+import platform.Foundation.NSCalendarUnitHour
+import platform.Foundation.NSCalendarUnitMinute
 import platform.Foundation.NSCalendarUnitWeekday
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateComponents
@@ -188,6 +190,30 @@ internal actual fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Lon
             timeStyle = NSDateFormatterShortStyle
         }
     }) { it.stringFromDate(date) }
+}
+
+internal actual fun platformFormatTimeOfDay(minuteOfDay: Int): String {
+    val components =
+        NSDateComponents().apply {
+            year = 2001
+            month = 1
+            day = 1
+            hour = (minuteOfDay / 60).toLong()
+            minute = (minuteOfDay % 60).toLong()
+        }
+    val date = NSCalendar.currentCalendar.dateFromComponents(components) ?: NSDate()
+    val locale = NSLocale.currentLocale
+    return withDateFormatter("time:$locale:short", {
+        NSDateFormatter().apply {
+            this.locale = locale
+            timeStyle = NSDateFormatterShortStyle
+        }
+    }) { it.stringFromDate(date) }
+}
+
+internal actual fun platformMinuteOfDay(): Int {
+    val components = NSCalendar.currentCalendar.components(NSCalendarUnitHour or NSCalendarUnitMinute, fromDate = NSDate())
+    return (components.hour * 60 + components.minute).toInt()
 }
 
 internal actual fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String {

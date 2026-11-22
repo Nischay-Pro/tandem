@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import app.tandemforactual.data.store.LocalAlert
 
 internal object BudgetSystemNotifications {
     private const val CHANNEL_ID = "tandem-budget-alerts"
@@ -17,6 +18,7 @@ internal object BudgetSystemNotifications {
     private const val REJECTED_ID = 4103
     private const val SIGN_IN_REQUIRED_ID = 4104
     private const val OVERSPENDING_ID = 4105
+    private const val LOCAL_ALERT_BASE_ID = 4200
 
     fun initialize(context: Context) {
         context.applicationContext.getSystemService(NotificationManager::class.java)?.let(::createChannel)
@@ -71,6 +73,14 @@ internal object BudgetSystemNotifications {
     ) {
         if (message == null) return
         show(context, OVERSPENDING_ID, "Over budget", message)
+    }
+
+    /** Posts a policy-checked alert; each kind replaces its own earlier notification. */
+    fun post(
+        context: Context,
+        alert: LocalAlert,
+    ) {
+        show(context, LOCAL_ALERT_BASE_ID + alert.kind.ordinal, alert.title, alert.message)
     }
 
     private fun show(

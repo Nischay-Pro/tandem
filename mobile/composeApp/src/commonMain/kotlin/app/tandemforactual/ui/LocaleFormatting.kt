@@ -44,6 +44,12 @@ internal expect fun platformFormatDateAtEpochMilliseconds(epochMilliseconds: Lon
 
 internal expect fun platformFormatTimeAtEpochMilliseconds(epochMilliseconds: Long): String
 
+/** A time of day such as 10:00 PM, from minutes after midnight, in the device's own clock style. */
+internal expect fun platformFormatTimeOfDay(minuteOfDay: Int): String
+
+/** Minutes after local midnight right now. */
+internal expect fun platformMinuteOfDay(): Int
+
 internal expect fun platformIsoDateAtEpochMilliseconds(epochMilliseconds: Long): String
 
 internal expect fun platformTodayIsoDate(): String
