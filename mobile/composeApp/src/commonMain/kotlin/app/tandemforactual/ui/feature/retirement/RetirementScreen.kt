@@ -148,21 +148,7 @@ private fun PlanCard(
                     Text(money(allowance), color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
                 }
             }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(TandemShapes.pill))
-                    .background(palette.raised),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth((yours.toFloat() / allowance.coerceAtLeast(1)).coerceIn(0f, 1f))
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(TandemShapes.pill))
-                        .background(palette.accent),
-                )
-            }
+            PlanProgressBar(yours.toFloat() / allowance.coerceAtLeast(1))
             Text(
                 when {
                     accountName == null -> "Link an Actual account to read contributions."
@@ -179,27 +165,61 @@ private fun PlanCard(
                     fontSize = TandemTypography.caption,
                 )
             }
-            if (plan == K401) {
-                val result = if (match != null && salary != null) K401.match(year, profile.age, salary, yours, match) else null
-                Text(
-                    when {
-                        result == null -> "Set up your employer match"
-                        result.missedMinor > 0 -> "${money(result.missedMinor)} of employer match still available this year"
-                        else -> "Full employer match on track"
-                    },
-                    Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditMatch),
-                    color =
-                        when {
-                            result == null -> palette.accent
-                            result.missedMinor > 0 -> palette.warning
-                            else -> palette.positive
-                        },
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+            if (plan == K401) EmployerMatchStatus(year, profile, yours, ::money, onEditMatch)
         }
     }
+}
+
+/** How much of the yearly allowance has been used. */
+@Composable
+private fun PlanProgressBar(fraction: Float) {
+    val palette = tandemPalette
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(TandemShapes.pill))
+            .background(palette.raised),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .height(6.dp)
+                .clip(RoundedCornerShape(TandemShapes.pill))
+                .background(palette.accent),
+        )
+    }
+}
+
+/** Whether the full 401(k) employer match is on track, tapping through to edit the match. */
+@Composable
+private fun EmployerMatchStatus(
+    year: Int,
+    profile: RetirementProfile,
+    yours: Long,
+    money: (Long) -> String,
+    onEditMatch: () -> Unit,
+) {
+    val palette = tandemPalette
+    val match = profile.match
+    val salary = profile.salaryMinor
+    val result = if (match != null && salary != null) K401.match(year, profile.age, salary, yours, match) else null
+    Text(
+        when {
+            result == null -> "Set up your employer match"
+            result.missedMinor > 0 -> "${money(result.missedMinor)} of employer match still available this year"
+            else -> "Full employer match on track"
+        },
+        Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditMatch),
+        color =
+            when {
+                result == null -> palette.accent
+                result.missedMinor > 0 -> palette.warning
+                else -> palette.positive
+            },
+        fontSize = TandemTypography.compactBody,
+        fontWeight = FontWeight.Medium,
+    )
 }
 
 /** Whole-unit amounts in the plan's own currency, grouped the way that country writes them. */

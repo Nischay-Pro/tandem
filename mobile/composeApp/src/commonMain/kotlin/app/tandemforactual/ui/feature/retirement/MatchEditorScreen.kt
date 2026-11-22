@@ -118,64 +118,11 @@ internal fun MatchEditorScreen(
                 )
             },
         )
-        SectionCard("Match tiers", "Applied in order to what you put in") {
-            Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                tiers.forEachIndexed { index, tier ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                            Text(if (index == 0) "First tier" else "Then", color = palette.muted, fontSize = TandemTypography.label)
-                            TextFieldCard("Employer adds (%)", tier.rate, { tier.rate = it.filter(Char::isDigit) }, numbers)
-                            TextFieldCard(
-                                if (tier.band == MatchBand.AMOUNT) "Of the next ($)" else "Of the next (% of pay)",
-                                tier.size,
-                                { tier.size = it.filter(Char::isDigit) },
-                                numbers,
-                            )
-                            FilterPills(listOf(MatchBand.PERCENT_OF_SALARY to "% of pay", MatchBand.AMOUNT to "Dollar amount"), tier.band, {
-                                tier.band =
-                                    it
-                            })
-                        }
-                        TandemIconButton(Lucide.Trash2, "Remove tier") { tiers.removeAt(index) }
-                    }
-                }
-                TandemActionButton("Add a tier", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Plus) {
-                    tiers.add(TierDraft("50", MatchBand.PERCENT_OF_SALARY, "2"))
-                }
-            }
-        }
+        MatchTiersCard(tiers)
         TextFieldCard("Yearly match cap ($, optional)", cap, { cap = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("Your yearly salary ($)", salary, { salary = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("You plan to contribute (% of pay)", percent, { percent = it.filter(Char::isDigit) }, numbers)
-        if (salaryMinor != null && match.tiers.isNotEmpty()) {
-            val planned = percent.toLongOrNull()?.let { salaryMinor * it / 100 } ?: 0
-            val result = K401.match(year, profile.age, salaryMinor, planned, match)
-            val full = match.fullMatchAt(salaryMinor)
-            SectionCard("Preview for $year", null) {
-                Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Text(
-                        "At ${percent.ifBlank { "0" }}% you put in ${planMoney(result.employeeMinor, "USD")}.",
-                        color = palette.text,
-                        fontSize = TandemTypography.body,
-                    )
-                    Text(
-                        "Your employer adds ${planMoney(result.employerMinor, "USD")}.",
-                        color = palette.text,
-                        fontSize = TandemTypography.body,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        if (result.missedMinor > 0) {
-                            "Put in ${planMoney(full, "USD")} to collect the remaining ${planMoney(result.missedMinor, "USD")}."
-                        } else {
-                            "That collects the full match."
-                        },
-                        color = if (result.missedMinor > 0) palette.warning else palette.positive,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
-            }
-        }
+        if (salaryMinor != null && match.tiers.isNotEmpty()) MatchPreviewCard(year, profile, salaryMinor, percent, match)
         TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
             scope.launch {
                 mobileSession.planning.saveRetirementProfile(
@@ -188,6 +135,77 @@ internal fun MatchEditorScreen(
                 )
                 navigation.back()
             }
+        }
+    }
+}
+
+/** Each match tier with its rate, band and size, and a button to add another. */
+@Composable
+private fun MatchTiersCard(tiers: MutableList<TierDraft>) {
+    val palette = tandemPalette
+    SectionCard("Match tiers", "Applied in order to what you put in") {
+        Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+            tiers.forEachIndexed { index, tier ->
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                        Text(if (index == 0) "First tier" else "Then", color = palette.muted, fontSize = TandemTypography.label)
+                        TextFieldCard("Employer adds (%)", tier.rate, { tier.rate = it.filter(Char::isDigit) }, numbers)
+                        TextFieldCard(
+                            if (tier.band == MatchBand.AMOUNT) "Of the next ($)" else "Of the next (% of pay)",
+                            tier.size,
+                            { tier.size = it.filter(Char::isDigit) },
+                            numbers,
+                        )
+                        FilterPills(listOf(MatchBand.PERCENT_OF_SALARY to "% of pay", MatchBand.AMOUNT to "Dollar amount"), tier.band, {
+                            tier.band =
+                                it
+                        })
+                    }
+                    TandemIconButton(Lucide.Trash2, "Remove tier") { tiers.removeAt(index) }
+                }
+            }
+            TandemActionButton("Add a tier", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Plus) {
+                tiers.add(TierDraft("50", MatchBand.PERCENT_OF_SALARY, "2"))
+            }
+        }
+    }
+}
+
+/** What you and your employer put in this year at the planned contribution. */
+@Composable
+private fun MatchPreviewCard(
+    year: Int,
+    profile: RetirementProfile,
+    salaryMinor: Long,
+    percent: String,
+    match: EmployerMatch,
+) {
+    val palette = tandemPalette
+    val planned = percent.toLongOrNull()?.let { salaryMinor * it / 100 } ?: 0
+    val result = K401.match(year, profile.age, salaryMinor, planned, match)
+    val full = match.fullMatchAt(salaryMinor)
+    SectionCard("Preview for $year", null) {
+        Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            Text(
+                "At ${percent.ifBlank { "0" }}% you put in ${planMoney(result.employeeMinor, "USD")}.",
+                color = palette.text,
+                fontSize = TandemTypography.body,
+            )
+            Text(
+                "Your employer adds ${planMoney(result.employerMinor, "USD")}.",
+                color = palette.text,
+                fontSize = TandemTypography.body,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                if (result.missedMinor > 0) {
+                    "Put in ${planMoney(full, "USD")} to collect the remaining ${planMoney(result.missedMinor, "USD")}."
+                } else {
+                    "That collects the full match."
+                },
+                color = if (result.missedMinor > 0) palette.warning else palette.positive,
+                fontSize = TandemTypography.compactBody,
+            )
         }
     }
 }

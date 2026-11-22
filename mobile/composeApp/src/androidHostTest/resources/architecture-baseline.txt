@@ -101,7 +101,6 @@ function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
 function-size ManagePayeesScreen.ManagePayeesScreen
-function-size MatchEditorScreen.MatchEditorScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
@@ -113,8 +112,6 @@ function-size QueueStateCompletion.complete
 function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
-function-size RetirementScreen.PlanCard
-function-size RetirementSetupScreen.RetirementSetupScreen
 function-size Rows.SectionCardLayout
 function-size RuleEditorSheet.RuleConditionEditor
 function-size RuleEditorSheet.RuleEditorContent
