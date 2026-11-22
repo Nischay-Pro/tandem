@@ -29,6 +29,7 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.planning.AccountCurrency
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.DeviceName
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
@@ -309,6 +310,8 @@ internal class TandemMobileSession(
         private set
     var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
         private set
+    var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
 
     suspend fun saveAccountCurrency(
         budgetId: String,
@@ -330,6 +333,16 @@ internal class TandemMobileSession(
         rate: ExchangeRate,
     ) {
         planningStore(budgetId)?.deleteExchangeRate(rate)
+    }
+
+    /** Names this device's Actual node, so change history on every device can say which device made an edit. */
+    suspend fun nameDevice(
+        budgetId: String,
+        node: String,
+        name: String,
+    ) {
+        if (node.isBlank() || name.isBlank()) return
+        planningStore(budgetId)?.save(DeviceName(node, name.trim().take(40)))
     }
 
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
@@ -5827,6 +5840,7 @@ internal class TandemMobileSession(
                     }
                 }
                 launch { planning.exchangeRates().collect { exchangeRates = it } }
+                launch { planning.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
             }
         }
     }

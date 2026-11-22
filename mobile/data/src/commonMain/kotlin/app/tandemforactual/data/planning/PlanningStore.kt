@@ -71,6 +71,7 @@ class PlanningStore(
                 iv,
                 sealed,
                 pendingUpload = true,
+                syncedRevision = existing?.syncedRevision ?: 0,
             ),
         )
     }
@@ -122,6 +123,10 @@ class PlanningStore(
     suspend fun save(rate: ExchangeRate) = put(rate.id, ExchangeRate.TYPE, rate.toJson())
 
     suspend fun deleteExchangeRate(rate: ExchangeRate) = delete(rate.id, ExchangeRate.TYPE)
+
+    fun deviceNames(): Flow<List<DeviceName>> = observe(DeviceName.TYPE).map { list -> list.map { (_, body) -> DeviceName.fromJson(body) } }
+
+    suspend fun save(name: DeviceName) = put(name.id, DeviceName.TYPE, name.toJson())
 
     companion object {
         const val SCHEMA_VERSION = 1

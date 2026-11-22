@@ -74,6 +74,7 @@ private enum class ChangeFilter(
 internal fun ChangeHistoryScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    deviceName: String,
 ) {
     val scope = rememberCoroutineScope()
     var history by remember(state.selectedBudgetId) { mutableStateOf<BudgetChangeHistory?>(null) }
@@ -87,6 +88,13 @@ internal fun ChangeHistoryScreen(
         loading = true
         history = mobileSession.loadChangeHistory(state.selectedBudgetId, password)
         loading = false
+        history?.deviceNode?.takeIf { it !in mobileSession.deviceNames }?.let {
+            mobileSession.nameDevice(
+                state.selectedBudgetId,
+                it,
+                deviceName,
+            )
+        }
     }
     val names =
         remember(mobileSession.payeeRecords, mobileSession.categoryRecords, mobileSession.accountRecords) {
@@ -153,7 +161,8 @@ internal fun ChangeHistoryScreen(
                 ChangeRow(
                     set = set,
                     describe = describe,
-                    thisDevice = set.node == history?.deviceNode,
+                    deviceLabel =
+                        if (set.node == history?.deviceNode) "This device" else mobileSession.deviceNames[set.node] ?: "Another device",
                     expanded = expanded == set.id,
                     undoing = mobileSession.isPerformingBudgetAction,
                     onToggle = { expanded = if (expanded == set.id) null else set.id },
@@ -214,7 +223,7 @@ private fun DayHeader(isoDay: String) {
 private fun ChangeRow(
     set: ChangeSet,
     describe: ChangeDescriber,
-    thisDevice: Boolean,
+    deviceLabel: String,
     expanded: Boolean,
     undoing: Boolean,
     onToggle: () -> Unit,
@@ -244,7 +253,7 @@ private fun ChangeRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${platformFormatTimeAtEpochMilliseconds(set.millis)} · ${if (thisDevice) "This device" else "Another device"}",
+                    "${platformFormatTimeAtEpochMilliseconds(set.millis)} · $deviceLabel",
                     color = palette.muted,
                     fontSize = TandemTypography.label,
                 )
