@@ -1,16 +1,10 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.insights
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -34,13 +28,10 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
-import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
-import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.ArrowDownRight
 import com.composables.icons.lucide.ArrowUpRight
 import com.composables.icons.lucide.Lucide
@@ -144,46 +135,5 @@ internal fun TrendBadge(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
-    }
-}
-
-/** A thin rounded bar filled to [fraction], animating when the value changes. */
-@Composable
-internal fun ProgressBar(
-    fraction: Float,
-    color: Color,
-    modifier: Modifier = Modifier,
-    marker: Float? = null,
-) {
-    val palette = tandemPalette
-    val shown by animateFloatAsState(
-        fraction.coerceIn(0f, 1f),
-        tandemMotionSpec(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-        label = "insight-progress",
-    )
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .clip(CircleShape)
-            .background(palette.raised),
-    ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(shown)
-                .clip(CircleShape)
-                .background(color),
-        )
-        marker?.let { point ->
-            Box(
-                Modifier
-                    .fillMaxWidth(point.coerceIn(0.01f, 1f))
-                    .fillMaxHeight(),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Box(Modifier.size(width = 2.dp, height = 6.dp).background(palette.text))
-            }
-        }
     }
 }

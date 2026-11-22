@@ -44,8 +44,10 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.FinancialGoal
 import app.tandemforactual.ui.core.state.recommendedEmphasis
+import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.buttons.TandemBackButton
 import app.tandemforactual.ui.design.templates.OnboardingLayout
+import app.tandemforactual.ui.design.templates.SetupHeadline
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -54,8 +56,6 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import app.tandemforactual.ui.feature.onboarding.SetupHeadline
-import app.tandemforactual.ui.feature.onboarding.SetupPrimaryButton
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.decide_connect_detail
 import app.tandemforactual.ui.generated.resources.decide_personalize

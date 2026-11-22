@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.templates.OnboardingLayout
+import app.tandemforactual.ui.design.templates.SetupHeadline
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette

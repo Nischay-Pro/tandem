@@ -36,13 +36,12 @@ import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
-import app.tandemforactual.ui.design.templates.DisplayHeadline
-import app.tandemforactual.ui.design.templates.HeadlineDetail
 import app.tandemforactual.ui.design.theme.TandemBrandMark
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -89,18 +88,6 @@ internal fun StartupScreen() {
                 Text(stringResource(Res.string.setup_opening_your_budget), color = palette.muted, fontSize = TandemTypography.body)
             }
         }
-    }
-}
-
-@Composable
-internal fun SetupHeadline(
-    title: String,
-    supportingText: String,
-) {
-    val palette = tandemPalette
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-        DisplayHeadline(title)
-        HeadlineDetail(supportingText)
     }
 }
 

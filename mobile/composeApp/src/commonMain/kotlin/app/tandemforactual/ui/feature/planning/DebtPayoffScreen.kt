@@ -1,13 +1,10 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.planning
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.planning.DebtInput
 import app.tandemforactual.data.planning.DebtKind
@@ -32,6 +28,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.inputs.FilterPills
@@ -40,7 +37,6 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
-import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -306,26 +302,5 @@ private fun YourDebts(
                 )
             }
         }
-    }
-}
-
-@Composable
-internal fun StatTile(
-    label: String,
-    value: String,
-    detail: String,
-    modifier: Modifier = Modifier,
-) {
-    val palette = tandemPalette
-    Column(
-        modifier
-            .clip(RoundedCornerShape(TandemShapes.large))
-            .background(palette.surface)
-            .padding(TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
-    ) {
-        Text(label, color = palette.muted, fontSize = TandemTypography.label)
-        Text(value, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(detail, Modifier.fillMaxWidth(), color = palette.muted, fontSize = TandemTypography.caption, maxLines = 2)
     }
 }

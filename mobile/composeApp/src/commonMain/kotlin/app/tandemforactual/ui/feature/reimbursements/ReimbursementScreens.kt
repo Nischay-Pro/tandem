@@ -31,6 +31,7 @@ import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
+import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -45,7 +46,6 @@ import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.planning.StatTile
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.Lucide

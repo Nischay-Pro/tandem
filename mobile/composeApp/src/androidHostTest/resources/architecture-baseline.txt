@@ -19,12 +19,8 @@ cross-feature HomeLayoutScreen -> budget
 cross-feature HomeScreen -> planning
 cross-feature HomeScreen -> schedules
 cross-feature HomeScreen -> transactions
-cross-feature InsightScreens -> planning
 cross-feature ManagePayeesScreen -> activity
 cross-feature ManagePayeesScreen -> schedules
-cross-feature PersonalizeScreen -> onboarding
-cross-feature ReimbursementScreens -> planning
-cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
 cross-feature SettingsScreen -> planning
 cross-feature SyncCenterScreen -> transactions

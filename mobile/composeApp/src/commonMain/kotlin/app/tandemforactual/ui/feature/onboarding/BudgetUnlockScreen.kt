@@ -11,8 +11,10 @@ import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.restorePendingBudgetSelectionOrigin
+import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.templates.InfoBubble
 import app.tandemforactual.ui.design.templates.OnboardingLayout
+import app.tandemforactual.ui.design.templates.SetupHeadline
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.feature.auth.BiometricPasswordCheckbox

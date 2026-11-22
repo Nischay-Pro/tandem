@@ -42,6 +42,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.SecondaryButton
+import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.feedback.BodyText
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.templates.Heading
@@ -56,7 +57,6 @@ import app.tandemforactual.ui.design.theme.tandemFadeEnter
 import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import app.tandemforactual.ui.feature.onboarding.SetupPrimaryButton
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.launch

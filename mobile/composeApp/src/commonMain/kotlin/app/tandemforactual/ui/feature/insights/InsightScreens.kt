@@ -33,6 +33,7 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
@@ -49,7 +50,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.planning.StatTile
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.Lucide
 

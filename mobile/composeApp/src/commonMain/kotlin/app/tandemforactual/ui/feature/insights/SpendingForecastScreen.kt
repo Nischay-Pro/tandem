@@ -31,6 +31,7 @@ import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
+import app.tandemforactual.ui.design.feedback.ProgressBar
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.rows.SkeletonRows
