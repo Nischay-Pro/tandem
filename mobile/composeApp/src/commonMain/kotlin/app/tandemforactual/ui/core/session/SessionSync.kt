@@ -7,6 +7,7 @@ import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.ui.core.session.budget.hasPendingTransactionDependency
 import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
 import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
@@ -26,14 +27,10 @@ internal suspend fun TandemMobileSession.synchronizeSerialized(
     if (isSigningOut) return null
     if (encryptedStorageMissing(budgetId)) return null
 
-    fun present(next: SyncPresentationState) {
-        if (!background || (next.error == null && !next.isSyncing && syncPresentation.error != null)) {
-            syncPresentation = next
-        }
-    }
     if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
     if (!isCurrentIdentityCacheOwner()) {
-        present(
+        presentSync(
+            background,
             syncPresentation.failed(
                 "These changes belong to another server or account. Sign in there before syncing them.",
                 IDENTITY_MISMATCH_ERROR_CODE,
@@ -53,12 +50,12 @@ internal suspend fun TandemMobileSession.synchronizeSerialized(
     val coordinator = syncCoordinator
     val localRepository = repository
     if (coordinator == null || localRepository == null) {
-        present(syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
+        presentSync(background, syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
         return null
     }
 
     // Keep an earlier error visible while retrying; clear it only when the retry succeeds.
-    present(syncPresentation.begin())
+    presentSync(background, syncPresentation.begin())
     try {
         val summary =
             apiClient.withExclusiveSession {
@@ -67,80 +64,130 @@ internal suspend fun TandemMobileSession.synchronizeSerialized(
                     coordinator.synchronize(budgetId, encryptionPassword, sendWrites, reconcileUncertainOperationId)
                 }
             }
-        isServerReachable = true
-        refreshServerCapabilities()
-        schedules.retryQueuedScheduleActions()
-        lastSyncSummary = summary
-        loadLocalRecords(budgetId)
-        syncedTransactionCount =
-            localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        syncComplete = true
-        budgetPasswordRejection = null
-        present(syncPresentation.succeeded())
-        if (budgetQueueRestored) {
-            budgetQueue.budgetReorderQueue = budgetQueue.budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
-            if (retryQueuedBudgetMutations) budgetQueue.retryQueuedBudgetReorders(budgetId, encryptionPassword)
-        }
-        planning.sync(budgetId)
-        return summary
+        return finishSuccessfulSync(
+            budgetId,
+            encryptionPassword,
+            summary,
+            localRepository,
+            budgetQueueRestored,
+            retryQueuedBudgetMutations,
+            background,
+        )
     } catch (error: CancellationException) {
         throw error
     } catch (error: BudgetSyncRemoteException) {
-        isServerReachable = error.indicatesTandemReachable()
-        budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
-        present(
-            syncPresentation.failed(
-                apiFailureMessage(
-                    errorCode = error.errorCode,
-                    httpStatus = error.httpStatus,
-                    context = ApiFailureContext.SYNC,
-                    fallback = "Tandem couldn’t sync this budget. Try again shortly.",
-                ),
-                error.errorCode,
-                error.httpStatus,
-            ),
-        )
+        reportRemoteSyncFailure(background, error)
         return null
     } catch (error: TandemApiException) {
-        isServerReachable = error.errorCode != "address_unreachable"
-        budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
-        present(
-            syncPresentation.failed(
-                apiFailureMessage(
-                    error.errorCode,
-                    error.httpStatus,
-                    ApiFailureContext.SYNC,
-                    "Tandem couldn’t sync this budget. Try again shortly.",
-                ),
-                error.errorCode,
-                error.httpStatus,
-            ),
-        )
+        reportApiSyncFailure(background, error)
         return null
     } catch (error: BudgetSyncProtocolException) {
         isServerReachable = true
-        present(syncPresentation.failed("Tandem couldn’t read this budget. Try syncing again."))
+        presentSync(background, syncPresentation.failed("Tandem couldn’t read this budget. Try syncing again."))
         return null
     } catch (error: Exception) {
-        isServerReachable = false
-        if (apiClient.isUsingLocalServer) {
-            apiClient.useExternalServerAfterLocalFailure()
-            isUsingLocalServer = false
-        }
-        present(
-            syncPresentation.failed(
-                apiFailureMessage(
-                    errorCode = "network-error",
-                    httpStatus = null,
-                    context = ApiFailureContext.SYNC,
-                    fallback = "Tandem couldn’t sync this budget. Your saved copy is still available.",
-                ),
-            ),
-        )
+        reportUnexpectedSyncFailure(background)
         return null
     } finally {
         if (syncPresentation.isSyncing) syncPresentation = syncPresentation.stopped()
     }
+}
+
+private fun TandemMobileSession.presentSync(
+    background: Boolean,
+    next: SyncPresentationState,
+) {
+    if (!background || (next.error == null && !next.isSyncing && syncPresentation.error != null)) {
+        syncPresentation = next
+    }
+}
+
+private suspend fun TandemMobileSession.finishSuccessfulSync(
+    budgetId: String,
+    encryptionPassword: String?,
+    summary: BudgetSyncSummary,
+    localRepository: LocalBudgetRepository,
+    budgetQueueRestored: Boolean,
+    retryQueuedBudgetMutations: Boolean,
+    background: Boolean,
+): BudgetSyncSummary {
+    isServerReachable = true
+    refreshServerCapabilities()
+    schedules.retryQueuedScheduleActions()
+    lastSyncSummary = summary
+    loadLocalRecords(budgetId)
+    syncedTransactionCount =
+        localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    syncComplete = true
+    budgetPasswordRejection = null
+    presentSync(background, syncPresentation.succeeded())
+    if (budgetQueueRestored) {
+        budgetQueue.budgetReorderQueue = budgetQueue.budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
+        if (retryQueuedBudgetMutations) budgetQueue.retryQueuedBudgetReorders(budgetId, encryptionPassword)
+    }
+    planning.sync(budgetId)
+    return summary
+}
+
+private fun TandemMobileSession.reportRemoteSyncFailure(
+    background: Boolean,
+    error: BudgetSyncRemoteException,
+) {
+    isServerReachable = error.indicatesTandemReachable()
+    budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
+    presentSync(
+        background,
+        syncPresentation.failed(
+            apiFailureMessage(
+                errorCode = error.errorCode,
+                httpStatus = error.httpStatus,
+                context = ApiFailureContext.SYNC,
+                fallback = "Tandem couldn’t sync this budget. Try again shortly.",
+            ),
+            error.errorCode,
+            error.httpStatus,
+        ),
+    )
+}
+
+private fun TandemMobileSession.reportApiSyncFailure(
+    background: Boolean,
+    error: TandemApiException,
+) {
+    isServerReachable = error.errorCode != "address_unreachable"
+    budgetPasswordRejection = error.errorCode.takeIf { it in BUDGET_PASSWORD_ERROR_CODES }
+    presentSync(
+        background,
+        syncPresentation.failed(
+            apiFailureMessage(
+                error.errorCode,
+                error.httpStatus,
+                ApiFailureContext.SYNC,
+                "Tandem couldn’t sync this budget. Try again shortly.",
+            ),
+            error.errorCode,
+            error.httpStatus,
+        ),
+    )
+}
+
+private fun TandemMobileSession.reportUnexpectedSyncFailure(background: Boolean) {
+    isServerReachable = false
+    if (apiClient.isUsingLocalServer) {
+        apiClient.useExternalServerAfterLocalFailure()
+        isUsingLocalServer = false
+    }
+    presentSync(
+        background,
+        syncPresentation.failed(
+            apiFailureMessage(
+                errorCode = "network-error",
+                httpStatus = null,
+                context = ApiFailureContext.SYNC,
+                fallback = "Tandem couldn’t sync this budget. Your saved copy is still available.",
+            ),
+        ),
+    )
 }
 
 /** Each budget's sync state on this device; an encrypted budget that isn't open keeps its state locked. */

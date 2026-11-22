@@ -121,8 +121,6 @@ function-size ScheduleDatePickerDialog.ScheduleDatePickerDialog
 function-size SecurityScreen.SecurityScreen
 function-size ServerAddressScreen.ServerAddressScreen
 function-size ServerDeviceScreen.ServerDeviceScreen
-function-size SessionSignOut.signOutAndClearLocalData
-function-size SessionSync.synchronizeSerialized
 function-size SettingsScreen.SettingsScreen
 function-size SignInScreen.SignInScreen
 function-size SpendingForecastScreen.SpendingForecastScreen
@@ -161,4 +159,3 @@ size ReportsScreenParts
 size RuleEditorSheet
 size StatementImport
 size SyncCenterScreenParts
-size TandemMobileSession

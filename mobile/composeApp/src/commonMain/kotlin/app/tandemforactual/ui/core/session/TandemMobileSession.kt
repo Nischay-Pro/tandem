@@ -1,6 +1,5 @@
 package app.tandemforactual.ui.core.session
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,9 +8,7 @@ import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.ServerCapabilities
-import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -21,227 +18,24 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncSummary
-import app.tandemforactual.data.store.LocalBudgetMutationOutboxItem
-import app.tandemforactual.data.store.LocalBudgetMutationQueueSnapshot
 import app.tandemforactual.data.store.LocalBudgetRepository
-import app.tandemforactual.data.store.LocalRecordProjection
-import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
-import app.tandemforactual.ui.core.format.signedAmount
 import app.tandemforactual.ui.core.session.activity.ActivityController
 import app.tandemforactual.ui.core.session.banking.BankingController
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
-import app.tandemforactual.ui.core.session.budget.payeeRecordsWithPendingCreates
 import app.tandemforactual.ui.core.session.conflicts.ConflictController
 import app.tandemforactual.ui.core.session.feedback.BudgetActionRunner
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
 import app.tandemforactual.ui.core.session.transactions.TransactionController
-import app.tandemforactual.ui.core.state.AppRouteEntry
-import app.tandemforactual.ui.design.feedback.InlineMessage
-import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.feature.reports.ReportsViewModels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.put
-
-internal data class SyncPresentationState(
-    val isSyncing: Boolean = false,
-    val error: String? = null,
-    val errorCode: String? = null,
-    val errorStatus: Int? = null,
-) {
-    fun begin(): SyncPresentationState = copy(isSyncing = true)
-
-    fun succeeded(): SyncPresentationState = SyncPresentationState()
-
-    fun failed(
-        message: String,
-        code: String? = null,
-        status: Int? = null,
-    ): SyncPresentationState = SyncPresentationState(error = message, errorCode = code, errorStatus = status)
-
-    fun stopped(): SyncPresentationState = copy(isSyncing = false)
-}
-
-internal data class TransactionEditDetails(
-    val accountId: String,
-    val payeeId: String?,
-    val categoryId: String?,
-    val date: String,
-)
-
-internal fun pendingTransactionEditMessage(): String = "This transaction is waiting to sync. Try again after it syncs."
-
-internal fun blockedTransactionEditMessage(status: String): String =
-    when (status) {
-        "conflict" -> "Review this transaction in Pending Changes before editing it."
-        "uncertain" -> "This transaction’s status is unknown. Check Pending Changes before editing it again."
-        else -> "This transaction is syncing. Wait for it to finish before editing."
-    }
-
-internal fun queuedTransactionEditToDiscardForNoOp(
-    pendingWrites: List<OutboxOperationEntity>,
-    editingLocalCreate: Boolean,
-): String? =
-    if (editingLocalCreate) {
-        null
-    } else {
-        pendingWrites
-            .firstOrNull {
-                it.action == LocalWriteAction.UPDATE.name &&
-                    it.status == "queued" &&
-                    it.serverOperationId == null
-            }?.operationId
-    }
-
-internal fun queuedTransactionCreateToEdit(pendingWrites: List<OutboxOperationEntity>): OutboxOperationEntity? =
-    pendingWrites.firstOrNull {
-        it.action == LocalWriteAction.CREATE.name &&
-            it.status == "queued" &&
-            it.serverOperationId == null
-    }
-
-internal data class ConflictResolutionFeedback(
-    val operationId: String,
-    val message: String,
-)
-
-internal data class UndoNotice(
-    val id: Long,
-    val message: String,
-    val budgetId: String,
-    val transactionIds: Set<String>,
-)
-
-internal data class BudgetActionFeedback(
-    val text: String,
-    val kind: InlineMessageKind,
-    val ownerRoute: AppRouteEntry,
-    val actionLabel: String?,
-)
-
-internal fun pendingDeviceChangeNotice(): String =
-    "Any changes waiting to sync stay on this device. Sign in to the same server and account to sync them."
-
-@Composable
-internal fun budgetActionFeedbackMessage(mobileSession: TandemMobileSession) {
-    val message = mobileSession.budgetActionMessage ?: return
-    val actionLabel = mobileSession.feedback.budgetActionMessageActionLabel
-    InlineMessage(
-        message,
-        mobileSession.feedback.budgetActionMessageKind,
-        actionLabel = actionLabel,
-        onAction = if (actionLabel == null) null else ({ mobileSession.feedback.retryBudgetAction() }),
-    )
-}
-
-internal class BudgetActionFeedbackState {
-    var currentRouteEntry by mutableStateOf<AppRouteEntry?>(null)
-        internal set
-
-    var feedback by mutableStateOf<BudgetActionFeedback?>(null)
-        internal set
-
-    fun changeRoute(routeEntry: AppRouteEntry) {
-        if (currentRouteEntry == routeEntry) return
-        currentRouteEntry = routeEntry
-        feedback = null
-    }
-
-    fun show(
-        text: String,
-        kind: InlineMessageKind,
-        ownerRoute: AppRouteEntry?,
-        actionLabel: String? = null,
-    ) {
-        if (ownerRoute != null) feedback = BudgetActionFeedback(text, kind, ownerRoute, actionLabel)
-    }
-
-    fun clear() {
-        feedback = null
-    }
-
-    fun clear(route: AppRouteEntry?) {
-        if (feedback?.ownerRoute == route) feedback = null
-    }
-
-    fun messageFor(routeEntry: AppRouteEntry): BudgetActionFeedback? = feedback?.takeIf { it.ownerRoute == routeEntry }
-}
-
-internal fun buildTransactionEditPatch(
-    base: JsonObject,
-    signedAmount: Long,
-    fallbackCurrentAmount: Long?,
-    notes: String,
-    details: TransactionEditDetails?,
-): JsonObject =
-    buildJsonObject {
-        val currentAmount = base.longValue("amount") ?: fallbackCurrentAmount
-        val currentNotes = base.stringValue("notes") ?: ""
-        if (signedAmount != currentAmount) put("amount", JsonPrimitive(signedAmount))
-        if (notes != currentNotes) put("notes", JsonPrimitive(notes))
-        details?.let { requested ->
-            if (requested.accountId != base.stringValue("account")) put("account", JsonPrimitive(requested.accountId))
-            if (requested.payeeId != base.stringValue("payee")) {
-                put("payee", requested.payeeId?.let(::JsonPrimitive) ?: JsonNull)
-            }
-            if (requested.categoryId != base.stringValue("category")) {
-                put("category", requested.categoryId?.let(::JsonPrimitive) ?: JsonNull)
-            }
-            if (requested.date != base.stringValue("date")) put("date", JsonPrimitive(requested.date))
-        }
-    }
-
-internal interface BudgetMutationQueuePersistence {
-    suspend fun read(): LocalBudgetMutationQueueSnapshot
-
-    suspend fun replace(
-        items: List<LocalBudgetMutationOutboxItem>,
-        metadataJson: String,
-        supersededOperationIds: Set<String> = emptySet(),
-    )
-}
-
-internal class LocalBudgetRepositoryMutationQueuePersistence(
-    internal val repository: LocalBudgetRepository,
-) : BudgetMutationQueuePersistence {
-    override suspend fun read(): LocalBudgetMutationQueueSnapshot = repository.readBudgetMutationQueue()
-
-    override suspend fun replace(
-        items: List<LocalBudgetMutationOutboxItem>,
-        metadataJson: String,
-        supersededOperationIds: Set<String>,
-    ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
-}
-
-/** One budget's row in the Sync Center. */
-internal data class BudgetSyncOverview(
-    val budgetId: String,
-    val name: String,
-    val open: Boolean,
-    val locked: Boolean,
-    val lastSyncedAtEpochMs: Long?,
-    val failed: Boolean,
-    val waiting: Int,
-    val needsReview: Int,
-)
 
 /** In-memory session state. Device credentials use a platform store; budget passwords are never persisted. */
 internal class TandemMobileSession(
@@ -462,21 +256,9 @@ internal class TandemMobileSession(
 
     override val scheduleActionEncryptionPasswords: MutableMap<String, String> = mutableMapOf()
 
-    override suspend fun activeBudgetCacheOwner(): String? {
-        val device = authenticatedDevice ?: return null
-        val serverUrl = apiClient.currentServerUrl ?: return null
-        return budgetCacheOwner(serverUrl, device.principalId)
-    }
+    override suspend fun activeBudgetCacheOwner(): String? = signedInBudgetCacheOwner()
 
-    override suspend fun budgetCacheOwnerForLocalEdit(): String? {
-        val activeOwner = activeBudgetCacheOwner()
-        if (activeOwner != null) return activeOwner
-        return try {
-            preferencesStore?.read()?.get(BUDGET_CACHE_OWNER_KEY)
-        } catch (_: Exception) {
-            null
-        }
-    }
+    override suspend fun budgetCacheOwnerForLocalEdit(): String? = cacheOwnerForLocalEdit()
 
     internal var readOnlyMode = false
 
@@ -576,240 +358,9 @@ internal class TandemMobileSession(
 
     val canEditRules: Boolean get() = serverCapabilities?.supports("rule-edit") == true
 
-    override suspend fun loadLocalRecords(budgetId: String) {
-        val localRepository = repository ?: return
-        if (!isCurrentIdentityCacheOwner()) {
-            clearCachedBudgetPresentation()
-            return
-        }
-        cachedSnapshotBudgetId = budgetId
-        hasCachedSnapshot = localRepository.hasCachedSnapshot(budgetId)
-        budgetDisplaySettingsBudgetId = budgetId
-        budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
-        localSyncState = localRepository.readSyncState(budgetId)
-        transactionRecords = localRepository.findRecentRecords(budgetId, "transaction", limit = 50)
-        cachedTransactionCount =
-            localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        accountRecords = localRepository.findRecords(budgetId, "account")
-        accountGroupRecords = localRepository.findRecords(budgetId, "account-group")
-        scheduleRecords = localRepository.findRecords(budgetId, "schedule")
-        ruleRecords = localRepository.findRecords(budgetId, "rule")
-        payeeRecords = budgetQueue.payeeRecordsWithPendingCreates(budgetId, localRepository.findRecords(budgetId, "payee"))
-        categoryRecords = localRepository.findRecords(budgetId, "category")
-        categoryGroupRecords = localRepository.findRecords(budgetId, "category-group")
-        budgetMonthIds = localRepository.findRecordIds(budgetId, "budget-month")
-        pendingWrites = localRepository.readPendingWrites(budgetId)
-        conflictRecordsByRecordId = findConflictRecords(budgetId, pendingWrites)
-        activity.refreshActivityTransactionPages(budgetId)
-    }
+    override suspend fun loadLocalRecords(budgetId: String) = loadCachedBudgetRecords(budgetId)
 
-    override suspend fun isCurrentIdentityCacheOwner(): Boolean {
-        if (!apiClient.isAuthenticated) return true
-        val device = authenticatedDevice ?: return false
-        val serverUrl = apiClient.currentServerUrl ?: return false
-        val store = preferencesStore ?: return true
-        return try {
-            store.read()[BUDGET_CACHE_OWNER_KEY] == budgetCacheOwner(serverUrl, device.principalId)
-        } catch (_: Exception) {
-            false
-        }
-    }
+    override suspend fun isCurrentIdentityCacheOwner(): Boolean = ownsBudgetCache()
 
-    override fun clearCachedBudgetPresentation() {
-        budgets = emptyList()
-        cachedBudgets = emptyList()
-        budgetCatalogLoaded = false
-        budgetCatalogVersion += 1
-        hasCachedSnapshot = false
-        cachedSnapshotBudgetId = ""
-        budgetDisplaySettings = null
-        budgetDisplaySettingsBudgetId = null
-        localSyncState = null
-        transactionRecords = emptyList()
-        activity.reset()
-        activitySearchRecords = emptyList()
-        activitySearchRecordsBudgetId = ""
-        payeeRecords = emptyList()
-        categoryRecords = emptyList()
-        categoryGroupRecords = emptyList()
-        budgetMonthIds = emptyList()
-        selectedBudgetMonthRecord = null
-        isLoadingSelectedBudgetMonth = false
-        selectedBudgetMonthObservationKey = ""
-        accountRecords = emptyList()
-        accountGroupRecords = emptyList()
-        scheduleRecords = emptyList()
-        ruleRecords = emptyList()
-        pendingWrites = emptyList()
-        conflictRecordsByRecordId = emptyMap()
-        cachedTransactionCount = 0
-        syncedTransactionCount = 0
-    }
+    override fun clearCachedBudgetPresentation() = clearCachedBudgetRecords()
 }
-
-internal fun discardedPendingWriteMessage(operationStatus: String?): String =
-    if (operationStatus == "uncertain") {
-        "This pending change was removed from this device. Actual may already have saved it; removing it here doesn’t undo it."
-    } else {
-        "Your edit was discarded. Actual wasn’t changed."
-    }
-
-internal fun signOutRevocationNotice(httpStatus: Int?): String =
-    if (httpStatus == null) {
-        "The server still has this device linked. Sign in again to this server and unlink it in Settings."
-    } else {
-        "Couldn’t confirm that the server removed this device. Sign in again to this server and check Settings."
-    }
-
-internal fun TandemApiException.userFacingMessage(
-    fallback: String,
-    context: ApiFailureContext = ApiFailureContext.GENERAL,
-): String = apiFailureMessage(errorCode, httpStatus, context, fallback)
-
-internal fun budgetApiErrorMessage(
-    errorCode: String,
-    httpStatus: Int?,
-    fallback: String,
-): String = apiFailureMessage(errorCode, httpStatus, ApiFailureContext.GENERAL, fallback)
-
-internal const val ACTIVITY_TRANSACTION_PAGE_SIZE = 50
-internal const val ACTIVITY_TRANSACTION_REFRESH_LIMIT = 200
-
-/** How long reorders wait on the device before they are sent together, unless Sync now is tapped. */
-internal const val BUDGET_ORDER_FLUSH_INTERVAL_MS = 60_000L
-internal const val BUDGET_QUEUE_RESTORE_ERROR = "Couldn’t load saved category changes. Try again before editing categories."
-internal const val BUDGET_CACHE_OWNER_KEY = "internal:budget-cache-owner-v1"
-
-internal fun budgetCacheOwner(
-    serverUrl: String,
-    principalId: String,
-): String =
-    buildJsonObject {
-        put("serverUrl", serverUrl.trim().trimEnd('/'))
-        put("principalId", principalId)
-    }.toString()
-
-internal fun parseQueuePayload(encoded: String?): JsonObject? =
-    encoded?.let {
-        runCatching { Json.parseToJsonElement(it) as? JsonObject }.getOrNull()
-    }
-
-internal fun QueuedBudgetReorder.requirePayload(): JsonObject = parseQueuePayload(payloadJson) ?: JsonObject(emptyMap())
-
-internal fun JsonObject.requiredString(key: String): String = stringValue(key) ?: ""
-
-internal fun JsonObject.requiredLong(key: String): Long = this[key]?.jsonPrimitive?.longOrNull ?: -1L
-
-internal fun JsonObject.requiredBoolean(key: String): Boolean = this[key]?.jsonPrimitive?.booleanOrNull ?: false
-
-internal fun JsonObject.optionalString(key: String): String? = this[key]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull
-
-internal fun JsonObject.requiredAssignments(): List<Pair<String, Long>> =
-    (this["assignments"] as? JsonArray)
-        ?.mapNotNull { element ->
-            val item = element as? JsonObject ?: return@mapNotNull null
-            val categoryId = item.stringValue("categoryId") ?: return@mapNotNull null
-            val amountMinor = item["amountMinor"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-            categoryId to amountMinor
-        }.orEmpty()
-
-internal fun JsonObject.requiredStatementItems(): List<StatementImportItem> =
-    (this["transactions"] as? JsonArray)
-        ?.mapNotNull { element ->
-            val item = element as? JsonObject ?: return@mapNotNull null
-            val date = item.stringValue("date") ?: return@mapNotNull null
-            val amount = item["amountMinor"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-            val payeeName = item.stringValue("payeeName") ?: return@mapNotNull null
-            val importedId = item.stringValue("importedId") ?: return@mapNotNull null
-            StatementImportItem(date, amount, payeeName, item.optionalString("notes"), importedId)
-        }.orEmpty()
-
-internal fun rewriteAccountIds(
-    element: JsonElement,
-    temporaryId: String,
-    actualId: String,
-): JsonElement =
-    when (element) {
-        is JsonObject ->
-            JsonObject(
-                element.mapValues { (key, value) ->
-                    if (key in ACCOUNT_REFERENCE_FIELDS && (value as? JsonPrimitive)?.contentOrNull == temporaryId) {
-                        JsonPrimitive(actualId)
-                    } else {
-                        rewriteAccountIds(value, temporaryId, actualId)
-                    }
-                },
-            )
-        is JsonArray -> JsonArray(element.map { rewriteAccountIds(it, temporaryId, actualId) })
-        else -> element
-    }
-
-internal val ACCOUNT_REFERENCE_FIELDS = setOf("account", "accountId", "targetAccountId", "transferAccountId")
-
-internal fun BudgetReorderQueueState.enqueueIfMissing(move: QueuedBudgetReorder): BudgetReorderQueueState =
-    if (moves.any { it.operationId == move.operationId }) this else enqueue(move)
-
-internal fun activityTransactionRefreshLimit(loadedRecordCount: Int): Int =
-    minOf(
-        loadedRecordCount.coerceAtLeast(ACTIVITY_TRANSACTION_PAGE_SIZE),
-        ACTIVITY_TRANSACTION_REFRESH_LIMIT,
-    )
-
-/** Rows missing from the refreshed window were deleted; only rows older than the window are kept from before. */
-internal fun mergeRefreshedActivityTransactions(
-    previouslyLoaded: List<BudgetRecordEntity>,
-    refreshedPage: List<BudgetRecordEntity>,
-    pageIsComplete: Boolean = false,
-): List<BudgetRecordEntity> {
-    val order = compareByDescending<BudgetRecordEntity> { it.recordDate ?: "" }.thenBy { it.recordId }
-    val refreshed = refreshedPage.distinctBy(BudgetRecordEntity::recordId).sortedWith(order)
-    if (pageIsComplete) return refreshed
-    val refreshedIds = refreshed.mapTo(mutableSetOf(), BudgetRecordEntity::recordId)
-    val oldestRefreshed = refreshed.lastOrNull()
-    val older =
-        previouslyLoaded.filter { record ->
-            record.recordId !in refreshedIds && (oldestRefreshed == null || order.compare(record, oldestRefreshed) > 0)
-        }
-    return (refreshed + older).distinctBy(BudgetRecordEntity::recordId).sortedWith(order)
-}
-
-internal fun JsonObject.stringValue(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
-
-internal fun JsonObject.longValue(name: String): Long? =
-    (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toLongOrNull() }
-
-internal fun JsonObject.toProjection(): LocalRecordProjection =
-    LocalRecordProjection(
-        recordDate = stringValue("date"),
-        accountId = stringValue("account"),
-        categoryId = stringValue("category"),
-        payeeId = stringValue("payee"),
-        amountMinor = longValue("amount"),
-        budgetMonth = stringValue("month"),
-    )
-
-internal const val BUDGET_PASSWORD_ATTEMPTS_EXCEEDED = "budget_password_attempts_exceeded"
-
-internal val BUDGET_PASSWORD_ERROR_CODES =
-    setOf("budget_password_required", "budget_password_incorrect", BUDGET_PASSWORD_ATTEMPTS_EXCEEDED)
-
-internal const val ENCRYPTED_DATABASE_CLOSE_DELAY_MILLIS = 3_000L
-
-internal const val CAPABILITIES_REFRESH_MILLIS = 10 * 60_000L
-
-internal fun requiredServerFeature(kind: BudgetReorderKind): String? =
-    when (kind) {
-        BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "hold-total"
-        BudgetReorderKind.SET_ORDER -> "budget-order-merge"
-        else -> null
-    }
-
-internal fun missingServerFeature(
-    kind: BudgetReorderKind,
-    capabilities: ServerCapabilities?,
-): String? {
-    val feature = requiredServerFeature(kind) ?: return null
-    return feature.takeUnless { capabilities == null || capabilities.supports(it) }
-}
-
-internal const val RECENT_PAYEE_COUNT = 5
