@@ -635,7 +635,7 @@ internal fun ScreenContent(
         AppRoute.LOCAL_DATA -> LocalDataScreen(state, mobileSession, navigation)
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
-        AppRoute.CHANGE_HISTORY -> ChangeHistoryScreen(state, mobileSession)
+        AppRoute.CHANGE_HISTORY -> ChangeHistoryScreen(state, mobileSession, deviceName)
         AppRoute.BANK_CONNECTIONS -> BankConnectionsScreen(state, mobileSession, liveAccounts)
         AppRoute.REIMBURSEMENTS -> ReimbursementsScreen(state, mobileSession)
         AppRoute.RETIREMENT -> RetirementScreen(state, navigation, mobileSession, liveAccounts)
@@ -648,6 +648,7 @@ internal fun ScreenContent(
         AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)
         AppRoute.DEBT_PAYOFF -> DebtPayoffScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
         AppRoute.EXCHANGE_RATES -> ExchangeRatesScreen(state, mobileSession, liveAccounts, navigation)
+        AppRoute.HOUSEHOLD -> HouseholdScreen(state, mobileSession, deviceName)
     }
 }
 
