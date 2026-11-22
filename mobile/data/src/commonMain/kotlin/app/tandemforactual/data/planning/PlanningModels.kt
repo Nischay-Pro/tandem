@@ -159,6 +159,49 @@ data class Reimbursement(
     }
 }
 
+/** The currency an Actual account holds. Actual has no per-account currency, so Tandem keeps it as planning data. */
+data class AccountCurrency(
+    val accountId: String,
+    val currency: String,
+) {
+    val id: String get() = "currency:$accountId"
+
+    fun toJson(): JsonObject = jsonOf("accountId" to JsonPrimitive(accountId), "currency" to JsonPrimitive(currency))
+
+    companion object {
+        const val TYPE = "planning.account_currency"
+
+        fun fromJson(body: JsonObject) = AccountCurrency(body.text("accountId").orEmpty(), body.text("currency").orEmpty())
+    }
+}
+
+/** One exchange rate the person entered: one [from] is worth [rate] of [to], as of [asOf]. */
+data class ExchangeRate(
+    val from: String,
+    val to: String,
+    val rate: String,
+    val asOf: String,
+) {
+    val id: String get() = "fx:$from:$to"
+
+    val value: Double? get() = rate.toDoubleOrNull()?.takeIf { it > 0 && it.isFinite() }
+
+    fun toJson(): JsonObject =
+        jsonOf(
+            "from" to JsonPrimitive(from),
+            "to" to JsonPrimitive(to),
+            "rate" to JsonPrimitive(rate),
+            "asOf" to JsonPrimitive(asOf),
+        )
+
+    companion object {
+        const val TYPE = "planning.exchange_rate"
+
+        fun fromJson(body: JsonObject) =
+            ExchangeRate(body.text("from").orEmpty(), body.text("to").orEmpty(), body.text("rate").orEmpty(), body.text("asOf").orEmpty())
+    }
+}
+
 /** What the person entered for one retirement plan; the plan's limits come from its region pack. */
 data class RetirementProfile(
     val planId: String,

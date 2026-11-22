@@ -352,7 +352,9 @@ internal fun AccountDetailScreen(
     val reconciliationCandidates =
         shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
     val description = liveAccount?.let { if (it.offBudget) "Off budget" else "On budget" }.orEmpty()
-    val balance = liveAccount?.balanceMinor?.let(state::formatCurrency) ?: "Unavailable"
+    val accountCurrency = liveAccount?.let { mobileSession.accountCurrencies[it.id] }
+    val balance = liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, accountCurrency) } ?: "Unavailable"
+    val converted = liveAccount?.let { mobileSession.approximateInBudgetCurrency(state, it.id, it.balanceMinor) }
     PageColumn {
         if (accountName == null) {
             Heading("Account details", "This account isn’t saved on this device.")
@@ -373,7 +375,7 @@ internal fun AccountDetailScreen(
                     ) { navigation.open(AppRoute.ACCOUNT_OPTIONS) }
                 }
             }
-            AmountHero("Available balance", balance, "$accountName · $description")
+            AmountHero("Available balance", balance, listOfNotNull(converted, accountName, description).joinToString(" · "))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 AccountQuickAction(
                     Lucide.Plus,

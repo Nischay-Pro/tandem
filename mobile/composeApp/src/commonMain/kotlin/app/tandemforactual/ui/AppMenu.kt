@@ -55,6 +55,7 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.Coins
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.FileDown
 import com.composables.icons.lucide.FileUp
@@ -395,6 +396,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
+        add(AppMenuItem(Lucide.Coins, "Currencies", "Accounts in other currencies") { open(AppRoute.EXCHANGE_RATES) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
         add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })
         add(AppMenuItem(Lucide.MessageSquare, "Share feedback", external = true, onClick = onFeedback))
