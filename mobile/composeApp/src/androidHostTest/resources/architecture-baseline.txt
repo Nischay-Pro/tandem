@@ -1,10 +1,7 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature AccountDetailScreen -> currency
 cross-feature AccountDetailScreen -> transactions
-cross-feature AccountOptionsScreen -> currency
 cross-feature AccountsScreen -> banking
 cross-feature AccountsScreen -> budget
-cross-feature AccountsScreen -> currency
 cross-feature ActivityScreen -> transactions
 cross-feature ActivitySearchScreen -> transactions
 cross-feature AppLockGate -> sync
@@ -31,7 +28,6 @@ cross-feature PersonalizeScreen -> onboarding
 cross-feature ReimbursementScreens -> planning
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
-cross-feature ScheduleScreens -> rules
 cross-feature SecurityScreen -> auth
 cross-feature ServerDeviceScreen -> auth
 cross-feature SettingsScreen -> planning
@@ -42,7 +38,6 @@ cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
 cross-feature TransactionDetailScreen -> reimbursements
-cross-feature UpcomingSchedulesScreen -> rules
 cross-feature WhatIfScreen -> insights
 function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork

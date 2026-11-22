@@ -6,6 +6,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.format.amountLabel
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -17,7 +18,6 @@ import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
-import app.tandemforactual.ui.feature.rules.amountLabel
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
 

@@ -32,6 +32,7 @@ import app.tandemforactual.data.planning.ReportRange
 import app.tandemforactual.data.planning.ReportRow
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.wholePercent
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
@@ -63,7 +64,6 @@ import app.tandemforactual.ui.feature.insights.RecordNames
 import app.tandemforactual.ui.feature.insights.incomeCategoryIds
 import app.tandemforactual.ui.feature.insights.rememberBudgetTransactions
 import app.tandemforactual.ui.feature.insights.rememberRecordNames
-import app.tandemforactual.ui.feature.insights.wholePercent
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid

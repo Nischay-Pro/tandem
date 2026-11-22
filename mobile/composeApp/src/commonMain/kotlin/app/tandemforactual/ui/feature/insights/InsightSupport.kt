@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.planning.TrendDirection
+import app.tandemforactual.ui.core.format.wholePercent
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 import app.tandemforactual.ui.core.state.AppState
@@ -89,9 +90,6 @@ internal data class RecordNames(
 ) {
     fun category(id: String?): String = id?.takeIf { it.isNotEmpty() }?.let { categories[it] ?: "Deleted category" } ?: "Uncategorized"
 }
-
-/** A whole percentage from basis points, such as 1,250 as “13%”. */
-internal fun wholePercent(basisPoints: Int): String = "${(kotlin.math.abs(basisPoints) + 50) / 100}%"
 
 /** Spending going up reads as a warning and going down as good news. */
 @Composable

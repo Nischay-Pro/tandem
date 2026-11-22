@@ -12,6 +12,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.api.client.StatementImportPreview
+import app.tandemforactual.ui.core.format.approximateInBudgetCurrency
+import app.tandemforactual.ui.core.format.formatAccountMoney
 import app.tandemforactual.ui.core.navigation.openAccountActivity
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.platform.PickedStatementFile
@@ -34,8 +36,6 @@ import app.tandemforactual.ui.design.templates.Heading
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.SettingRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.feature.currency.approximateInBudgetCurrency
-import app.tandemforactual.ui.feature.currency.formatAccountMoney
 import app.tandemforactual.ui.feature.transactions.TransactionRow
 import app.tandemforactual.ui.feature.transactions.statement.StatementCsvColumnMapping
 import app.tandemforactual.ui.feature.transactions.statement.StatementCsvLayout
