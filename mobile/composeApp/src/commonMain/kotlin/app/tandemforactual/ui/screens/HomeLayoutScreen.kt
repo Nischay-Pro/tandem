@@ -89,18 +89,18 @@ internal fun HomeLayoutScreen(
                     fontSize = TandemTypography.body,
                     lineHeight = TandemTypography.bodyLineHeight,
                 )
+                val readyNote = stringResource(Res.string.home_layout_when_ready)
                 Text(
-                    stringResource(
-                        if (state.interfaceMode ==
-                            InterfaceMode.MINIMAL
-                        ) {
-                            Res.string.home_layout_minimal_note
-                        } else {
-                            Res.string.home_layout_when_ready
-                        },
-                    ),
+                    if (state.interfaceMode ==
+                        InterfaceMode.MINIMAL
+                    ) {
+                        "${stringResource(Res.string.home_layout_minimal_note)} $readyNote"
+                    } else {
+                        readyNote
+                    },
                     color = tandemPalette.muted,
                     fontSize = TandemTypography.compactBody,
+                    lineHeight = TandemTypography.compactLineHeight,
                 )
             }
         }
@@ -238,6 +238,7 @@ private fun HomeLayoutRow(
                         },
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
+                        lineHeight = TandemTypography.tightLineHeight,
                     )
                 }
             }
@@ -245,8 +246,8 @@ private fun HomeLayoutRow(
                 Modifier
                     .sizeIn(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
                     .clip(RoundedCornerShape(TandemShapes.control))
-                    .toggleable(value = item.shown, role = Role.Switch, onValueChange = onToggle)
-                    .semantics { contentDescription = toggleLabel },
+                    .semantics(mergeDescendants = true) { contentDescription = toggleLabel }
+                    .toggleable(value = item.shown, role = Role.Switch, onValueChange = onToggle),
                 contentAlignment = Alignment.Center,
             ) { TandemSwitchTrack(item.shown) }
             ReorderDragHandle(
