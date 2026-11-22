@@ -18,7 +18,6 @@ cross-feature BudgetRulesScreen -> activity
 cross-feature BudgetScreen -> schedules
 cross-feature BudgetScreen -> transactions
 cross-feature BudgetUnlockScreen -> auth
-cross-feature CategoryDetailScreen -> transactions
 cross-feature CategoryDetailScreenParts -> activity
 cross-feature CategoryDetailScreenParts -> reports
 cross-feature CategoryGroupScreen -> accounts
@@ -90,7 +89,6 @@ function-size BudgetReorderQueue.enqueue
 function-size BudgetReorderQueue.failHead
 function-size BudgetRulesScreen.BudgetRulesScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
-function-size CategoryDetailScreen.CategoryDetailScreen
 function-size CategoryGroupScreen.CategoryGroupScreen
 function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
@@ -186,7 +184,6 @@ size AppModels
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
-size CategoryDetailScreen
 size CategoryGroupScreen
 size ConflictReviewScreen
 size CustomReportScreen
