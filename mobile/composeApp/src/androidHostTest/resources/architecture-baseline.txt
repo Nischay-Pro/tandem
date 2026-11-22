@@ -59,27 +59,7 @@ cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
-function-size AccountEdits.markTransactionsReconciled
-function-size AppMenuScreen.AppMenu
 function-size AppScreenRouter.ScreenContent
-function-size BottomNavigation.BottomNavigation
-function-size BudgetEditRecovery.correctRejectedCategoryRename
-function-size BudgetEditRecovery.retryBudgetMutation
-function-size BudgetEditSender.processQueuedBudgetReorders
-function-size ConflictController.discardWrite
-function-size IosBackgroundSyncHandle.runSelectedBudgetBackgroundSync
-function-size LiveBudgetModels.liveBudgetMonthSummary
-function-size LiveBudgetModels.liveScheduleSummaries
-function-size NavigationGlyph.NavigationGlyph
-function-size QueueStateCompletion.complete
-function-size QueueStateEnqueue.enqueue
-function-size QueueStateFailure.failHead
-function-size SessionSignOut.signOutAndClearLocalData
-function-size SessionSync.synchronizeSerialized
-function-size TransactionConflictResolution.resolve
-function-size TransactionCreate.createTransaction
-function-size TransactionDelete.deleteTransaction
-function-size TransactionUpdate.updateTransaction
 function-size androidApp:BackgroundBudgetSync.doWork
 function-size data:ActualBudgetEdits.setOrders
 function-size data:ActualBudgetReader.read
