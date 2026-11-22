@@ -73,17 +73,22 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetCatalogItem
-import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.LocalAlert
 import app.tandemforactual.data.store.bankSyncFailureAlert
+import app.tandemforactual.ui.app.shell.AppSettingsEffects
 import app.tandemforactual.ui.app.shell.BudgetScopedShellState
+import app.tandemforactual.ui.app.shell.OpenIdReturnEffect
+import app.tandemforactual.ui.app.shell.ShellEnvironment
 import app.tandemforactual.ui.app.shell.ShellNavigator
+import app.tandemforactual.ui.app.shell.SignInActions
+import app.tandemforactual.ui.app.shell.StartupEffects
 import app.tandemforactual.ui.app.shell.appNavigation
 import app.tandemforactual.ui.app.shell.rememberAppShellState
+import app.tandemforactual.ui.app.shell.rememberShellSession
 import app.tandemforactual.ui.app.shell.updateBackGesture
 import app.tandemforactual.ui.core.format.AppLanguageController
 import app.tandemforactual.ui.core.format.formatAmount
@@ -91,18 +96,13 @@ import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.format.parseSharedTransactionText
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
-import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.CrashReports
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.LocalCrashReports
 import app.tandemforactual.ui.core.session.LocalShareText
 import app.tandemforactual.ui.core.session.NetworkKind
-import app.tandemforactual.ui.core.session.OpenIdLoginProofState
-import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.session.SyncNetwork
-import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.actualOpenIdReturn
 import app.tandemforactual.ui.core.session.budget.accountClosedOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountNameOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
@@ -122,25 +122,18 @@ import app.tandemforactual.ui.core.session.budget.pendingCategoryGroupCreatesFor
 import app.tandemforactual.ui.core.session.budget.processQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.budget.requestBudgetOrderFlush
 import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
-import app.tandemforactual.ui.core.session.cancelActualOpenIdSignIn
-import app.tandemforactual.ui.core.session.completeActualOpenIdSignIn
 import app.tandemforactual.ui.core.session.configureLocalServer
 import app.tandemforactual.ui.core.session.forgetDevice
 import app.tandemforactual.ui.core.session.forgetDeviceLocally
 import app.tandemforactual.ui.core.session.forgetEncryptionPasswords
-import app.tandemforactual.ui.core.session.hasCachedBudgetSnapshot
 import app.tandemforactual.ui.core.session.hasLoadedBudget
 import app.tandemforactual.ui.core.session.loadBudgets
-import app.tandemforactual.ui.core.session.loadCachedBudgets
 import app.tandemforactual.ui.core.session.observeLocalRecords
 import app.tandemforactual.ui.core.session.observeSelectedBudgetMonth
 import app.tandemforactual.ui.core.session.refreshServerCapabilities
-import app.tandemforactual.ui.core.session.reportSignInError
-import app.tandemforactual.ui.core.session.restoreStoredSession
 import app.tandemforactual.ui.core.session.scheduleOpenIdProofExpiry
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
 import app.tandemforactual.ui.core.session.signInWithPassword
-import app.tandemforactual.ui.core.session.startActualOpenIdSignIn
 import app.tandemforactual.ui.core.session.transactions.createTransaction
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
@@ -148,19 +141,12 @@ import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.session.unbindEncryptedBudgetDatabase
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
-import app.tandemforactual.ui.core.state.AppStartupDestination
 import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.core.state.BudgetSelectionSnapshot
 import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
-import app.tandemforactual.ui.core.state.budgetChoicesForSelection
 import app.tandemforactual.ui.core.state.buildLiveTransactionItems
-import app.tandemforactual.ui.core.state.cachedBudgetName
-import app.tandemforactual.ui.core.state.cachedBudgetsWithLocalSnapshots
 import app.tandemforactual.ui.core.state.decodeAppTabBackStacks
-import app.tandemforactual.ui.core.state.decodeCachedBudgetCatalog
-import app.tandemforactual.ui.core.state.encodeCachedBudgetCatalog
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.headerSyncCaption
@@ -172,7 +158,6 @@ import app.tandemforactual.ui.core.state.loadMerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
-import app.tandemforactual.ui.core.state.resolveAppStartupDestination
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
 import app.tandemforactual.ui.core.state.restoreTransactionFormBaseline
 import app.tandemforactual.ui.core.state.routeContentStateKey
@@ -205,12 +190,8 @@ import app.tandemforactual.ui.feature.auth.LocalDeviceAuthenticator
 import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.feature.auth.budgetPasswordSecretId
 import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
-import app.tandemforactual.ui.feature.onboarding.cleanServerAddress
 import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
-import app.tandemforactual.ui.feature.onboarding.rememberRecentServerAddress
 import app.tandemforactual.ui.feature.sync.conflictPayeeTitle
-import app.tandemforactual.ui.feature.transactions.currentMonthId
-import app.tandemforactual.ui.feature.transactions.currentMonthLabel
 import app.tandemforactual.ui.feature.transactions.openTransaction
 import app.tandemforactual.ui.feature.transactions.receipt.fillNewTransaction
 import kotlinx.coroutines.CancellationException
@@ -256,6 +237,34 @@ fun TandemApp(
     planningKeyStore: DeviceCredentialStore? = null,
     postLocalAlert: ((LocalAlert) -> Unit)? = null,
 ) {
+    val env =
+        ShellEnvironment(
+            deviceName,
+            database,
+            deviceCredentialStore,
+            nowEpochMillis,
+            allowInsecurePrivateNetwork,
+            onBackgroundSyncSettingsChanged,
+            onSystemAppearanceChanged,
+            onRequestNotificationPermission,
+            onOpenNotificationSettings,
+            notificationPermissionEnabled,
+            onToggleNotificationPermission,
+            onStartupComplete,
+            appResumeEvents,
+            appInForeground,
+            networkRestoredEvents,
+            deviceAuthenticator,
+            encryptedBudgetVault,
+            currentNetwork,
+            crashReports,
+            onShareText,
+            windowHinge,
+            screenshotScript,
+            actualBudgetFiles,
+            planningKeyStore,
+            postLocalAlert,
+        )
     val shell = rememberAppShellState(nowEpochMillis)
     var accessibilitySettingsRevision by shell::accessibilitySettingsRevision
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -269,24 +278,7 @@ fun TandemApp(
     val activitySortCache = shell.activitySortCache
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
-    val apiClient =
-        remember(allowInsecurePrivateNetwork, actualBudgetFiles) {
-            TandemApiClient(allowInsecurePrivateNetwork, budgetFiles = actualBudgetFiles, today = ::platformTodayIsoDate)
-        }
-    val openIdLoginProofState =
-        rememberSaveable(saver = OpenIdLoginProofState.saver(nowEpochMillis)) {
-            OpenIdLoginProofState(nowEpochMillis)
-        }
-    val mobileSession =
-        remember(apiClient, database, deviceCredentialStore, openIdLoginProofState) {
-            TandemMobileSession(
-                apiClient,
-                database,
-                nowEpochMillis,
-                deviceCredentialStore,
-                openIdLoginProofState = openIdLoginProofState,
-            ).apply { planning.keyring = PlanningKeyring(planningKeyStore) }
-        }
+    val mobileSession = rememberShellSession(env)
     LaunchedEffect(mobileSession) {
         if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
         mobileSession.budgetQueue.processQueuedBudgetReorders()
@@ -312,15 +304,6 @@ fun TandemApp(
     var merchantIconMatcherLoadError by shell::merchantIconMatcherLoadError
     var merchantIconCatalog by shell::merchantIconCatalog
     var merchantIconCatalogLoadError by shell::merchantIconCatalogLoadError
-    val cachedBudgetCatalog =
-        remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
-            cachedBudgetsWithLocalSnapshots(
-                decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
-                mobileSession.cachedBudgets,
-            )
-        }
-    val availableBudgets =
-        budgetChoicesForSelection(mobileSession.budgets, cachedBudgetCatalog, mobileSession.budgetCatalogLoaded)
     var syncRetryCounter by shell::syncRetryCounter
     var lastAutomaticSyncAtEpochMillis by shell::lastAutomaticSyncAtEpochMillis
     var lastAutomaticSyncBudgetId by shell::lastAutomaticSyncBudgetId
@@ -350,161 +333,8 @@ fun TandemApp(
     var savedTabBackStacks by shell::savedTabBackStacks
     val navigator = ShellNavigator(shell, state, coroutineScope, reduceMotion)
     val newRouteEntry: (AppRoute) -> AppRouteEntry = navigator::newRouteEntry
-    LaunchedEffect(mobileSession) {
-        try {
-            mobileSession.loadCachedBudgets()
-        } finally {
-            cacheDiscoveryComplete = true
-        }
-    }
-    LaunchedEffect(mobileSession) {
-        try {
-            val storedServerUrl = mobileSession.restoreStoredSession()
-            if (storedServerUrl != null) state.serverUrl = cleanServerAddress(storedServerUrl)
-        } finally {
-            sessionRestoreComplete = true
-        }
-    }
-    LaunchedEffect(state.selectedBudgetId, state.selectedBudgetEncrypted) {
-        if (state.selectedBudgetEncrypted) state.backgroundSyncEnabled = false
-    }
-    LaunchedEffect(
-        cacheDiscoveryComplete,
-        mobileSession.cachedBudgets,
-        state.settingsStorageReady,
-        state.settingsStorageError,
-        state.selectedBudgetId,
-        state.cachedBudgetCatalogJson,
-        sessionRestoreComplete,
-        mobileSession.isAuthenticated,
-    ) {
-        if (backStack.lastOrNull()?.route != AppRoute.STARTUP) return@LaunchedEffect
-        val hasEncryptedStore =
-            state.selectedBudgetId.isNotBlank() && encryptedBudgetVault?.hasStore(state.selectedBudgetId) == true
-        val destination =
-            resolveAppStartupDestination(
-                cacheDiscoveryComplete = cacheDiscoveryComplete,
-                hasCachedBudget = mobileSession.cachedBudgets.isNotEmpty() || hasEncryptedStore,
-                preferencesReady = state.settingsStorageReady,
-                preferencesFailed = state.settingsStorageError != null,
-                sessionRestoreComplete = sessionRestoreComplete,
-                isAuthenticated = mobileSession.isAuthenticated,
-            )
-        when (destination) {
-            AppStartupDestination.WAIT -> Unit
-            AppStartupDestination.CACHED_BUDGET -> {
-                val localCachedBudgets = mobileSession.cachedBudgets
-                val availableCachedBudgets =
-                    cachedBudgetsWithLocalSnapshots(
-                        decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson),
-                        localCachedBudgets,
-                    )
-                val selectedCachedBudget = availableCachedBudgets.firstOrNull { it.budgetId == state.selectedBudgetId }
-                val firstCachedBudget = selectedCachedBudget ?: availableCachedBudgets.firstOrNull()
-                if (hasEncryptedStore) {
-                    state.selectedBudgetEncrypted = true
-                    backStack.clear()
-                    backStack.add(newRouteEntry(AppRoute.HOME))
-                } else if (firstCachedBudget != null) {
-                    state.selectedBudget = cachedBudgetName(state.selectedBudgetId, state.selectedBudget, firstCachedBudget)
-                    state.selectedBudgetId = firstCachedBudget.budgetId
-                    state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
-                    backStack.clear()
-                    backStack.add(newRouteEntry(AppRoute.HOME))
-                }
-            }
-            AppStartupDestination.BUDGET_CHOOSER -> {
-                backStack.clear()
-                backStack.add(newRouteEntry(AppRoute.BUDGET_CHOOSER))
-            }
-            AppStartupDestination.WELCOME -> {
-                backStack.clear()
-                backStack.add(newRouteEntry(AppRoute.WELCOME))
-            }
-        }
-    }
-    LaunchedEffect(appPreferencesStore) {
-        val store = appPreferencesStore
-        if (store == null) {
-            state.settingsStorageReady = true
-            return@LaunchedEffect
-        }
-        val initialSettings = state.persistentSettings()
-        val localChanges = mutableMapOf<String, String>()
-        val localSettingsObserver =
-            launch {
-                snapshotFlow { state.persistentSettings() }
-                    .collect { currentSettings ->
-                        currentSettings
-                            .filter { (name, value) -> initialSettings[name] != value }
-                            .forEach { (name, value) -> localChanges[name] = value }
-                    }
-            }
-        var storedPreferences: Map<String, String>? = null
-        while (storedPreferences == null) {
-            val retryAtRead = state.settingsStorageRetry
-            try {
-                storedPreferences = store.read()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                state.settingsStorageError = "Couldn’t load app settings. Try again."
-                snapshotFlow { state.settingsStorageRetry }.first { it != retryAtRead }
-            }
-        }
-        state
-            .persistentSettings()
-            .filter { (name, value) -> initialSettings[name] != value }
-            .forEach { (name, value) -> localChanges[name] = value }
-        localSettingsObserver.cancel()
-        state.restorePersistentSettings(storedPreferences + localChanges)
-        state.selectedMonthId = currentMonthId()
-        state.selectedMonth = currentMonthLabel()
-        state.reportsMonthId = state.selectedMonthId
-        state.settingsStorageReady = true
-        var lastSavedPreferences = if (localChanges.isEmpty()) state.persistentSettings() else emptyMap()
-        var lastAttemptedRetry = state.settingsStorageRetry
-        snapshotFlow { state.persistentSettings() to state.settingsStorageRetry }
-            .collect { (updatedPreferences, retryCount) ->
-                if (updatedPreferences == lastSavedPreferences && retryCount == lastAttemptedRetry) return@collect
-                val retryRequested = retryCount != lastAttemptedRetry
-                lastAttemptedRetry = retryCount
-                try {
-                    store.save(updatedPreferences)
-                    lastSavedPreferences = updatedPreferences
-                    state.settingsStorageError = null
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    state.settingsStorageError =
-                        if (retryRequested) {
-                            "App settings still couldn’t be saved. Check local storage and try again."
-                        } else {
-                            "Couldn’t save app settings. Try again."
-                        }
-                }
-            }
-    }
-    LaunchedEffect(
-        state.settingsStorageReady,
-        state.backgroundSyncEnabled,
-        state.syncNetwork,
-        state.selectedBudgetId,
-        onBackgroundSyncSettingsChanged,
-    ) {
-        if (state.settingsStorageReady) {
-            onBackgroundSyncSettingsChanged?.invoke(
-                state.backgroundSyncEnabled,
-                state.syncNetwork,
-                state.selectedBudgetId,
-            )
-        }
-    }
-    LaunchedEffect(mobileSession.budgetCatalogVersion) {
-        if (mobileSession.budgetCatalogVersion > 0) {
-            state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)
-        }
-    }
+    StartupEffects(env, state, shell, navigator, mobileSession)
+    AppSettingsEffects(env, state, mobileSession, appPreferencesStore)
     var liveAccounts by shell::liveAccounts
     var liveSchedules by shell::liveSchedules
     val newTransaction: (String?) -> Unit = navigator::newTransaction
@@ -989,116 +819,12 @@ fun TandemApp(
             }
     }
 
-    val signIn = {
-        if (!mobileSession.isSigningIn) {
-            coroutineScope.launch {
-                if (mobileSession.signInWithPassword(state.serverUrl, state.actualPassword, deviceName)) {
-                    state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
-                    state.actualPassword = ""
-                    navigation.reset(AppRoute.BUDGET_CHOOSER)
-                }
-            }
-        }
-    }
-    val startOpenIdSignIn = {
-        if (!mobileSession.isSigningIn) {
-            coroutineScope.launch {
-                val redirectUrl = mobileSession.startActualOpenIdSignIn(state.serverUrl, deviceName)
-                if (redirectUrl != null) {
-                    try {
-                        uriHandler.openUri(redirectUrl)
-                    } catch (_: Exception) {
-                        mobileSession.cancelActualOpenIdSignIn()
-                        mobileSession.reportSignInError("Couldn’t open the sign-in page. Try again.")
-                    }
-                }
-            }
-        }
-    }
-    LaunchedEffect(mobileSession, state.serverUrl) {
-        AuthReturnEvents.uri.collect { returnUri ->
-            if (returnUri != null) {
-                AuthReturnEvents.clear(returnUri)
-                val callback = actualOpenIdReturn(returnUri)
-                if (callback != null) {
-                    if (mobileSession.completeActualOpenIdSignIn(state.serverUrl, callback.code, callback.state)) {
-                        state.recentServerUrls = rememberRecentServerAddress(state.recentServerUrls, state.serverUrl)
-                        navigation.reset(AppRoute.BUDGET_CHOOSER)
-                    }
-                }
-            }
-        }
-    }
-    val selectBudget: (BudgetCatalogItem) -> Unit = { budget ->
-        if (state.selectedBudgetId != budget.budgetId) state.encryptedPassword = ""
-        if (state.selectedBudgetId != budget.budgetId) state.budgetDisplaySettings = null
-        state.selectedBudget = budget.name
-        state.selectedBudgetId = budget.budgetId
-        state.selectedBudgetEncrypted = budget.isEncrypted
-    }
-    val refreshBudgets: () -> Unit = {
-        coroutineScope.launch {
-            mobileSession.loadBudgets()
-            if (mobileSession.budgets.none { it.budgetId == state.selectedBudgetId }) {
-                mobileSession.budgets.firstOrNull()?.let(selectBudget)
-            }
-        }
-    }
-    val openSelectedBudget: (BudgetCatalogItem) -> Unit = openSelectedBudget@{ selected ->
-        if (selected.budgetId.isBlank()) {
-            navigation.reset(AppRoute.BUDGET_CHOOSER)
-            return@openSelectedBudget
-        }
-        val previousSelection =
-            state.pendingBudgetSelectionOrigin ?: BudgetSelectionSnapshot(
-                budgetId = state.selectedBudgetId,
-                name = state.selectedBudget,
-                isEncrypted = state.selectedBudgetEncrypted,
-            )
-        val switchingBudget = state.selectedBudgetId != selected.budgetId
-        if (switchingBudget) state.budgetDisplaySettings = null
-        state.selectedBudget = selected.name
-        state.selectedBudgetId = selected.budgetId
-        state.selectedBudgetEncrypted = selected.isEncrypted
-        if (selected.isEncrypted && encryptedBudgetVault != null) {
-            val alreadyUnlocked =
-                mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
-            if (!alreadyUnlocked) state.encryptedPassword = ""
-            val setupIncomplete = !state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding
-            state.pendingSetupAfterUnlock = !alreadyUnlocked && setupIncomplete
-            state.pendingBudgetSelectionOrigin = null
-            if (alreadyUnlocked && setupIncomplete) {
-                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
-            } else {
-                navigation.reset(AppRoute.HOME)
-            }
-            return@openSelectedBudget
-        }
-        coroutineScope.launch {
-            val isCached =
-                !selected.isEncrypted &&
-                    (
-                        mobileSession.cachedBudgets.any { it.budgetId == selected.budgetId } ||
-                            mobileSession.hasCachedBudgetSnapshot(selected.budgetId)
-                    )
-            when {
-                isCached -> {
-                    if (switchingBudget) state.budgetSwitchSplashId = selected.budgetId
-                    state.pendingBudgetSelectionOrigin = null
-                    val previousRoute = backStack.getOrNull(backStack.lastIndex - 1)?.route
-                    if (previousRoute?.isTab() == true) {
-                        navigation.back()
-                    } else {
-                        navigation.reset(AppRoute.HOME)
-                    }
-                }
-                !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> {
-                    state.pendingBudgetSelectionOrigin = previousSelection
-                    navigation.open(AppRoute.FIRST_SYNC)
-                }
-            }
-        }
-    }
+    val signInActions = SignInActions(env, state, shell, mobileSession, navigation, coroutineScope, uriHandler)
+    val signIn: () -> Unit = signInActions::signIn
+    val startOpenIdSignIn: () -> Unit = signInActions::startOpenIdSignIn
+    OpenIdReturnEffect(state, mobileSession, navigation)
+    val refreshBudgets: () -> Unit = signInActions::refreshBudgets
+    val openSelectedBudget: (BudgetCatalogItem) -> Unit = signInActions::openSelectedBudget
     if (screenshotScript != null) {
         LaunchedEffect(screenshotScript, state.settingsStorageReady) {
             if (!state.settingsStorageReady) return@LaunchedEffect
@@ -1147,19 +873,7 @@ fun TandemApp(
             }
         }
     }
-    val prepareBudgetUnlock: (BudgetCatalogItem) -> Unit = { selected ->
-        state.pendingBudgetSelectionOrigin =
-            BudgetSelectionSnapshot(
-                budgetId = state.selectedBudgetId,
-                name = state.selectedBudget,
-                isEncrypted = state.selectedBudgetEncrypted,
-            )
-        state.selectedBudget = selected.name
-        state.selectedBudgetId = selected.budgetId
-        state.selectedBudgetEncrypted = selected.isEncrypted
-        state.encryptedPassword = ""
-        navigation.open(AppRoute.BUDGET_UNLOCK)
-    }
+    val prepareBudgetUnlock: (BudgetCatalogItem) -> Unit = signInActions::prepareBudgetUnlock
     val syncNow: () -> Unit = {
         // Send reorders held on the device instead of waiting for the next periodic flush.
         mobileSession.budgetQueue.requestBudgetOrderFlush()
