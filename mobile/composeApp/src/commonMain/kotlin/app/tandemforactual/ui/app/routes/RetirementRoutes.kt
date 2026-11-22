@@ -1,0 +1,33 @@
+package app.tandemforactual.ui.app.routes
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.app.ScreenContext
+import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.feature.retirement.MatchEditorScreen
+import app.tandemforactual.ui.feature.retirement.RetirementScreen
+import app.tandemforactual.ui.feature.retirement.RetirementSetupScreen
+
+/** Screens for the retirement routes. */
+internal val retirementScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
+    mapOf(
+        AppRoute.RETIREMENT to
+            @Composable { ctx ->
+                with(ctx) {
+                    RetirementScreen(state, navigation, mobileSession, liveAccounts)
+                }
+            },
+        AppRoute.RETIREMENT_SETUP to
+            @Composable { ctx ->
+                with(ctx) {
+                    RetirementSetupScreen(state, navigation, mobileSession, liveAccounts)
+                }
+            },
+        AppRoute.RETIREMENT_MATCH to
+            @Composable { ctx ->
+                with(ctx) {
+                    MatchEditorScreen(state, navigation, mobileSession)
+                }
+            },
+    )

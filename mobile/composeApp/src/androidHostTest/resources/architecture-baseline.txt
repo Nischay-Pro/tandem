@@ -180,7 +180,6 @@ size AppLock
 size AppMenu
 size AppModels
 size AppNavigation
-size AppScreenRouter
 size AppState
 size BankBrowserLinkSheet
 size BudgetReorderQueue
