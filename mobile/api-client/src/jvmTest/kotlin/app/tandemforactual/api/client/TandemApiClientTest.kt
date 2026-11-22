@@ -312,6 +312,7 @@ class TandemApiClientTest {
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
+            assertTrue(client.exportBudgetTransactions("group", "2000-01-01", "2099-12-31", null).startsWith("Date,Account"))
             assertTrue(
                 client
                     .budgetAccountInflows("group", listOf(checking), null)

@@ -56,6 +56,7 @@ import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.ExternalLink
+import com.composables.icons.lucide.FileDown
 import com.composables.icons.lucide.FileUp
 import com.composables.icons.lucide.FlaskConical
 import com.composables.icons.lucide.GitMerge
@@ -391,6 +392,7 @@ internal fun appMenuItems(
         )
         add(AppMenuItem(Lucide.PiggyBank, "Retirement & savings", "401(k), IRA, HSA and more") { open(AppRoute.RETIREMENT) })
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
+        add(AppMenuItem(Lucide.FileDown, "Export & backup", "CSV and planning backup") { open(AppRoute.EXPORT) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })
         add(AppMenuItem(Lucide.Sparkles, "Personalize Home") { open(AppRoute.PERSONALIZE) })

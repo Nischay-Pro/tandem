@@ -167,6 +167,11 @@ class ActualDirectBudget private constructor(
 
     suspend fun linkedAccounts(today: String): List<LinkedAccount> = locked { ActualBankSync(writer, { today }).linkedAccounts() }
 
+    suspend fun exportCsv(
+        from: String,
+        to: String,
+    ): String = locked { reader.exportCsv(from, to) }
+
     suspend fun inflowsByYear(accountId: String): Map<Int, Long> = locked { reader.inflowsByYear(accountId) }
 
     suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }

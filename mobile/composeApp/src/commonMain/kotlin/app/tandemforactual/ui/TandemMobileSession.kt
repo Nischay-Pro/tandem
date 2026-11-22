@@ -3608,6 +3608,30 @@ internal class TandemMobileSession(
             null
         }
 
+    suspend fun exportTransactions(
+        budgetId: String,
+        from: String,
+        to: String,
+        encryptionPassword: String?,
+    ): String? =
+        try {
+            apiClient.exportBudgetTransactions(budgetId, from, to, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    /** Writes every planning record back from a backup; records already on the device with the same id are replaced. */
+    suspend fun restorePlanning(
+        budgetId: String,
+        records: List<Triple<String, String, kotlinx.serialization.json.JsonObject>>,
+    ): Int {
+        val store = planningStore(budgetId) ?: return 0
+        records.forEach { (id, type, body) -> store.put(id, type, body) }
+        return records.size
+    }
+
     suspend fun loadDataHealth(
         budgetId: String,
         encryptionPassword: String?,

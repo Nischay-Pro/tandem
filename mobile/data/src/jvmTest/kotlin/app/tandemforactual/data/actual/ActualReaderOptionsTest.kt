@@ -39,6 +39,18 @@ class ActualReaderOptionsTest {
                 )?.get("account") as String?
         if (account != null) assertTrue(ActualBudgetReader(db).inflowsByYear(account).values.all { it > 0 })
         assertEquals(emptyMap(), ActualBudgetReader(db).inflowsByYear("missing"))
+        val id = db.first("SELECT id FROM transactions WHERE isParent = 0 AND tombstone = 0")!!["id"] as String
+        db.execute("UPDATE transactions SET notes = 'Lunch, with \"Sam\"', reconciled = 1, cleared = 1 WHERE id = ?", id)
+        val other = db.first("SELECT id FROM transactions WHERE isParent = 0 AND tombstone = 0 AND id != ?", id)?.get("id")
+        if (other != null) db.execute("UPDATE transactions SET cleared = 1, reconciled = 0 WHERE id = ?", other)
+        db.execute("UPDATE transactions SET cleared = 0, reconciled = 0 WHERE id NOT IN (?, ?) AND isParent = 0", id, other)
+        db.execute("UPDATE transactions SET amount = -1234 WHERE id = ?", id)
+        val csv = ActualBudgetReader(db).exportCsv("2000-01-01", "2099-12-31")
+        assertTrue(csv.startsWith("Date,Account,Payee,Category,Amount,Notes,Status\n"))
+        assertTrue("\"Lunch, with \"\"Sam\"\"\"" in csv)
+        assertTrue(",-12.34," in csv && "Reconciled" in csv)
+        assertTrue("Cleared" in csv.replace("Reconciled", "") || other == null)
+        assertTrue("Not cleared" in csv || db.first("SELECT count(*) AS n FROM v_transactions")!!["n"] == 2L)
         db.close()
     }
 

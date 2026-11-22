@@ -395,6 +395,13 @@ class TandemApiClient(
             accountIds.associateWith { budget.inflowsByYear(it) }
         }
 
+    suspend fun exportBudgetTransactions(
+        budgetId: String,
+        from: String,
+        to: String,
+        encryptionPassword: String?,
+    ): String = call { budget(budgetId, encryptionPassword).exportCsv(from, to) }
+
     suspend fun budgetDataHealth(
         budgetId: String,
         encryptionPassword: String?,
