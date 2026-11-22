@@ -2,19 +2,14 @@
 
 package app.tandemforactual.ui.feature.reports
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,7 +19,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,9 +37,6 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
-import app.tandemforactual.ui.design.buttons.TandemActionButton
-import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -59,10 +50,7 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.rows.SkeletonRows
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
-import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.PageColumn
-import app.tandemforactual.ui.design.templates.TextFieldCard
-import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -76,10 +64,6 @@ import app.tandemforactual.ui.feature.insights.incomeCategoryIds
 import app.tandemforactual.ui.feature.insights.rememberBudgetTransactions
 import app.tandemforactual.ui.feature.insights.rememberRecordNames
 import app.tandemforactual.ui.feature.insights.wholePercent
-import com.composables.icons.lucide.Check
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Save
-import com.composables.icons.lucide.Trash2
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -92,7 +76,6 @@ internal fun CustomReportScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
 ) {
-    val palette = tandemPalette
     val scope = rememberCoroutineScope()
     val saved = mobileSession.planning.customReports.firstOrNull { it.id == state.selectedCustomReportId }
     var draft by remember(state.selectedCustomReportId) { mutableStateOf(saved ?: CustomReport("", "")) }
@@ -116,28 +99,11 @@ internal fun CustomReportScreen(
             result.count == 0 -> EmptyState("Nothing matches", "Try a longer period or fewer filters.")
             else -> ReportResult(state, draft, result, names)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            if (saved != null) {
-                TandemActionButton("Delete", TandemActionButtonTone.DESTRUCTIVE, Modifier.weight(1f), icon = Lucide.Trash2) {
-                    confirmDelete = true
-                }
-            }
-            TandemActionButton(
-                when {
-                    saved == null -> "Save report"
-                    saved == draft -> "Saved"
-                    else -> "Save changes"
-                },
-                TandemActionButtonTone.PRIMARY,
-                Modifier.weight(1f),
-                icon = Lucide.Save,
-                enabled = saved != draft,
-            ) {
-                if (saved == null) {
-                    naming = true
-                } else {
-                    scope.launch { mobileSession.planning.saveCustomReport(state.selectedBudgetId, draft) }
-                }
+        CustomReportActions(saved, draft, onDelete = { confirmDelete = true }) {
+            if (saved == null) {
+                naming = true
+            } else {
+                scope.launch { mobileSession.planning.saveCustomReport(state.selectedBudgetId, draft) }
             }
         }
     }
@@ -151,18 +117,7 @@ internal fun CustomReportScreen(
         naming = false
     }
     picking?.let { kind ->
-        val options =
-            when (kind) {
-                ReportFilterKind.ACCOUNTS -> names.accounts
-                ReportFilterKind.CATEGORIES -> names.categories
-                ReportFilterKind.PAYEES -> names.payees
-            }.entries
-                .sortedBy { it.value.lowercase() }
-                .map { it.key to it.value }
-        ChoiceSheet(kind.title, options, kind.selected(draft).toSet(), { picking = null }) { chosen ->
-            draft = kind.apply(draft, options.map { it.first }.filter { it in chosen })
-            picking = null
-        }
+        ReportFilterChoiceSheet(kind, names, draft, { picking = null }) { draft = it }
     }
     if (confirmDelete && saved != null) {
         DestructiveConfirmationDialog(
@@ -179,6 +134,29 @@ internal fun CustomReportScreen(
     }
 }
 
+/** Lets the person pick which accounts, categories or payees a custom report includes. */
+@Composable
+private fun ReportFilterChoiceSheet(
+    kind: ReportFilterKind,
+    names: RecordNames,
+    draft: CustomReport,
+    onDismiss: () -> Unit,
+    onDraftChange: (CustomReport) -> Unit,
+) {
+    val options =
+        when (kind) {
+            ReportFilterKind.ACCOUNTS -> names.accounts
+            ReportFilterKind.CATEGORIES -> names.categories
+            ReportFilterKind.PAYEES -> names.payees
+        }.entries
+            .sortedBy { it.value.lowercase() }
+            .map { it.key to it.value }
+    ChoiceSheet(kind.title, options, kind.selected(draft).toSet(), onDismiss) { chosen ->
+        onDraftChange(kind.apply(draft, options.map { it.first }.filter { it in chosen }))
+        onDismiss()
+    }
+}
+
 @Composable
 private fun ReportControls(
     draft: CustomReport,
@@ -186,7 +164,6 @@ private fun ReportControls(
     onChange: (CustomReport) -> Unit,
     onPick: (ReportFilterKind) -> Unit,
 ) {
-    val palette = tandemPalette
     SurfaceCard {
         Column(
             Modifier
@@ -216,63 +193,44 @@ private fun ReportControls(
                 { onChange(draft.copy(range = it)) },
                 contentPadding = PaddingValues(horizontal = TandemSpacing.large),
             )
-            if (draft.range == ReportRange.CUSTOM) {
-                Row(Modifier.padding(horizontal = TandemSpacing.large), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    Column(Modifier.weight(1f)) {
-                        TextFieldCard(
-                            "From",
-                            draft.startDate.orEmpty(),
-                            { onChange(draft.copy(startDate = it.take(10))) },
-                            TextFieldOptions(placeholder = "2026-01-01"),
-                        )
-                    }
-                    Column(Modifier.weight(1f)) {
-                        TextFieldCard(
-                            "To",
-                            draft.endDate.orEmpty(),
-                            { onChange(draft.copy(endDate = it.take(10))) },
-                            TextFieldOptions(placeholder = "2026-03-31"),
-                        )
-                    }
-                }
-            }
-            Column {
-                ReportFilterKind.entries.forEach { kind ->
-                    DividerLine()
-                    val chosen = kind.selected(draft)
-                    ListRow(
-                        kind.title,
-                        when {
-                            chosen.isEmpty() -> "All ${kind.title.lowercase()}"
-                            chosen.size <= 2 ->
-                                chosen.joinToString {
-                                    when (kind) {
-                                        ReportFilterKind.ACCOUNTS -> names.group(ReportGrouping.ACCOUNT, it)
-                                        ReportFilterKind.CATEGORIES -> names.category(it)
-                                        ReportFilterKind.PAYEES -> names.group(ReportGrouping.PAYEE, it)
-                                    }
-                                }
-                            else -> "${chosen.size} ${kind.title.lowercase()}"
-                        },
-                        leading = RowLeading.None,
-                        options = ListRowOptions(dense = true, trailingColor = palette.muted),
-                        onClick = { onPick(kind) },
-                    )
-                }
-            }
+            if (draft.range == ReportRange.CUSTOM) CustomRangeFields(draft, onChange)
+            ReportFilterRows(draft, names, onPick)
         }
     }
 }
 
+/** One row per filter kind, summarising what the report includes. */
 @Composable
-private fun ControlLabel(text: String) {
-    Text(
-        text,
-        Modifier.padding(horizontal = TandemSpacing.large),
-        color = tandemPalette.muted,
-        fontSize = TandemTypography.caption,
-        fontWeight = FontWeight.SemiBold,
-    )
+private fun ReportFilterRows(
+    draft: CustomReport,
+    names: RecordNames,
+    onPick: (ReportFilterKind) -> Unit,
+) {
+    val palette = tandemPalette
+    Column {
+        ReportFilterKind.entries.forEach { kind ->
+            DividerLine()
+            val chosen = kind.selected(draft)
+            ListRow(
+                kind.title,
+                when {
+                    chosen.isEmpty() -> "All ${kind.title.lowercase()}"
+                    chosen.size <= 2 ->
+                        chosen.joinToString {
+                            when (kind) {
+                                ReportFilterKind.ACCOUNTS -> names.group(ReportGrouping.ACCOUNT, it)
+                                ReportFilterKind.CATEGORIES -> names.category(it)
+                                ReportFilterKind.PAYEES -> names.group(ReportGrouping.PAYEE, it)
+                            }
+                        }
+                    else -> "${chosen.size} ${kind.title.lowercase()}"
+                },
+                leading = RowLeading.None,
+                options = ListRowOptions(dense = true, trailingColor = palette.muted),
+                onClick = { onPick(kind) },
+            )
+        }
+    }
 }
 
 @Composable
@@ -422,74 +380,9 @@ private fun TableRow(
     }
 }
 
-@Composable
-private fun ReportNameSheet(
-    visible: Boolean,
-    suggestion: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-) {
-    var name by remember(visible) { mutableStateOf(suggestion) }
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                TandemModalHeader("Save report", onClose = onDismiss)
-                TextFieldCard("Name", name, { name = it.take(60) }, TextFieldOptions(placeholder = "Dining out this year"))
-                TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = name.isNotBlank()) {
-                    onSave(name.trim())
-                }
-            }
-        }
-    }
-}
+private const val MAX_CHART_ROWS = 8
 
-/** Picks any number of items from a list; choosing none means all of them. */
-@Composable
-private fun ChoiceSheet(
-    title: String,
-    options: List<Pair<String, String>>,
-    initial: Set<String>,
-    onDismiss: () -> Unit,
-    onDone: (Set<String>) -> Unit,
-) {
-    val palette = tandemPalette
-    var chosen by remember(title) { mutableStateOf(initial) }
-    var query by remember(title) { mutableStateOf("") }
-    TandemTaskSheet(visible = true, onDismissRequest = onDismiss, onDismissed = {}) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                TandemModalHeader(title, onClose = onDismiss)
-                if (options.size > 8) TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Filter the list"))
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                    options.filter { query.isBlank() || it.second.contains(query.trim(), ignoreCase = true) }.forEach { (id, label) ->
-                        val selected = id in chosen
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(role = Role.Checkbox) { chosen = if (selected) chosen - id else chosen + id }
-                                .padding(vertical = TandemSpacing.medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(label, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
-                            if (selected) Icon(Lucide.Check, "Selected", Modifier.size(18.dp), tint = palette.accent)
-                        }
-                    }
-                }
-                Text(
-                    if (chosen.isEmpty()) "Nothing picked, so all ${title.lowercase()} are included." else "${chosen.size} picked",
-                    color = palette.muted,
-                    fontSize = TandemTypography.caption,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                    TandemActionButton("Clear", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = chosen.isNotEmpty()) {
-                        chosen = emptySet()
-                    }
-                    TandemActionButton("Done", TandemActionButtonTone.PRIMARY, Modifier.weight(1f)) { onDone(chosen) }
-                }
-            }
-        }
-    }
-}
+private const val MAX_TABLE_ROWS = 50
 
 private fun groupNoun(
     grouping: ReportGrouping,
@@ -500,9 +393,3 @@ private fun groupNoun(
         ReportGrouping.PAYEE -> if (count == 1) "payee" else "payees"
         ReportGrouping.ACCOUNT -> if (count == 1) "account" else "accounts"
     }
-
-private fun String?.isIsoDate() = this != null && Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(this)
-
-private const val MAX_CHART_ROWS = 8
-
-private const val MAX_TABLE_ROWS = 50

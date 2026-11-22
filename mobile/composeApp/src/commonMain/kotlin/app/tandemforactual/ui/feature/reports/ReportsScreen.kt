@@ -109,43 +109,10 @@ internal fun ReportsScreen(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
         item(key = "reports-period") {
-            ReportPeriodSelector(
-                monthId = state.reportsMonthId,
-                mode = periodMode,
-                rangePreset = rangePreset,
-                availableMonthIds = mobileSession.budgetMonthIds,
-                onMonthChange = { state.reportsMonthId = it },
-                onModeChange = { state.reportsPeriodMode = it.name },
-                onRangePresetChange = {
-                    state.reportsRangePreset = it.name
-                    it.monthCount?.let { months -> state.reportsRangeMonths = months }
-                },
-            )
+            ReportsPeriodItem(state, mobileSession.budgetMonthIds, periodMode, rangePreset)
         }
         item(key = "reports-more") {
-            SurfaceCard {
-                val saved = mobileSession.planning.customReports.size
-                ListRow(
-                    "Custom reports",
-                    if (saved == 0) "Build your own by category, payee or account" else "$saved saved",
-                    leading = RowLeading.Icon(Lucide.ChartBar),
-                    onClick = { onOpenInsight(AppRoute.CUSTOM_REPORTS) },
-                )
-                DividerLine()
-                ListRow(
-                    "Spending trends",
-                    "Each category against past months",
-                    leading = RowLeading.Icon(Lucide.TrendingUp),
-                    onClick = { onOpenInsight(AppRoute.SPENDING_TRENDS) },
-                )
-                DividerLine()
-                ListRow(
-                    "Spending forecast",
-                    "Where this month is heading",
-                    leading = RowLeading.Icon(Lucide.Gauge),
-                    onClick = { onOpenInsight(AppRoute.SPENDING_FORECAST) },
-                )
-            }
+            ReportsMoreCard(mobileSession.planning.customReports.size, onOpenInsight)
         }
         ReportKind.entries.forEach { kind ->
             item(key = "report-card-${kind.name}") {
@@ -180,25 +147,7 @@ private fun ReportCard(
             Modifier.padding(TandemSpacing.large),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .clickable(role = Role.Button, onClickLabel = "Open ${kind.title}", onClick = onSeeAll)
-                    .padding(vertical = TandemSpacing.extraSmall),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
-                Icon(reportIcon(kind), contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
-                Text(
-                    kind.title,
-                    modifier = Modifier.weight(1f),
-                    color = tandemPalette.text,
-                    fontSize = TandemTypography.cardTitle,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.muted)
-            }
+            ReportCardHeader(kind, onSeeAll)
             if (kind != ReportKind.NET_WORTH && !empty) {
                 ReportSummary(kind, data, compact = true)
             }
@@ -223,28 +172,116 @@ private fun ReportCard(
                     onOpenCategoryActivity = onOpenCategoryActivity,
                     onNetWorthSelectionChange = { selectedNetWorthIndex = it },
                 )
-                if (kind == ReportKind.SPENDING_BY_CATEGORY) {
-                    val otherCategoryId = OTHER_CATEGORY_CHART_ID
-                    val listedCategories =
-                        data.categories.take(5) +
-                            categoryChartPoints(data.categories).filter { it.categoryId == otherCategoryId }
-                    listedCategories.forEach { point ->
-                        ListRow(
-                            point.category,
-                            trailing = formatReportCurrency(point.spendingMinor, data.displaySettings),
-                            leading = RowLeading.Icon(financeIcon(point.category)),
-                            onClick = {
-                                if (point.categoryId == otherCategoryId) {
-                                    onSeeAll()
-                                } else {
-                                    onOpenCategoryActivity(point.categoryId, point.category, window)
-                                }
-                            },
-                        )
-                    }
-                }
+                if (kind == ReportKind.SPENDING_BY_CATEGORY) ReportTopCategoryRows(data, window, onSeeAll, onOpenCategoryActivity)
             }
         }
+    }
+}
+
+/** The period selector at the top of the reports screen, writing its choices back to app state. */
+@Composable
+internal fun ReportsPeriodItem(
+    state: AppState,
+    availableMonthIds: List<String>,
+    periodMode: ReportPeriodMode,
+    rangePreset: ReportRangePreset,
+) {
+    ReportPeriodSelector(
+        monthId = state.reportsMonthId,
+        mode = periodMode,
+        rangePreset = rangePreset,
+        availableMonthIds = availableMonthIds,
+        onMonthChange = { state.reportsMonthId = it },
+        onModeChange = { state.reportsPeriodMode = it.name },
+        onRangePresetChange = {
+            state.reportsRangePreset = it.name
+            it.monthCount?.let { months -> state.reportsRangeMonths = months }
+        },
+    )
+}
+
+/** Links to the custom reports, spending trends and spending forecast screens. */
+@Composable
+private fun ReportsMoreCard(
+    saved: Int,
+    onOpenInsight: (AppRoute) -> Unit,
+) {
+    SurfaceCard {
+        ListRow(
+            "Custom reports",
+            if (saved == 0) "Build your own by category, payee or account" else "$saved saved",
+            leading = RowLeading.Icon(Lucide.ChartBar),
+            onClick = { onOpenInsight(AppRoute.CUSTOM_REPORTS) },
+        )
+        DividerLine()
+        ListRow(
+            "Spending trends",
+            "Each category against past months",
+            leading = RowLeading.Icon(Lucide.TrendingUp),
+            onClick = { onOpenInsight(AppRoute.SPENDING_TRENDS) },
+        )
+        DividerLine()
+        ListRow(
+            "Spending forecast",
+            "Where this month is heading",
+            leading = RowLeading.Icon(Lucide.Gauge),
+            onClick = { onOpenInsight(AppRoute.SPENDING_FORECAST) },
+        )
+    }
+}
+
+/** The tappable icon, title and chevron at the top of a report card. */
+@Composable
+private fun ReportCardHeader(
+    kind: ReportKind,
+    onSeeAll: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(TandemShapes.medium))
+            .clickable(role = Role.Button, onClickLabel = "Open ${kind.title}", onClick = onSeeAll)
+            .padding(vertical = TandemSpacing.extraSmall),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+    ) {
+        Icon(reportIcon(kind), contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.accent)
+        Text(
+            kind.title,
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.text,
+            fontSize = TandemTypography.cardTitle,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(24.dp), tint = tandemPalette.muted)
+    }
+}
+
+/** The largest spending categories under the category chart, each opening its activity. */
+@Composable
+private fun ReportTopCategoryRows(
+    data: ReportDataBundle,
+    window: ReportWindow,
+    onSeeAll: () -> Unit,
+    onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
+) {
+    val otherCategoryId = OTHER_CATEGORY_CHART_ID
+    val listedCategories =
+        data.categories.take(5) +
+            categoryChartPoints(data.categories).filter { it.categoryId == otherCategoryId }
+    listedCategories.forEach { point ->
+        ListRow(
+            point.category,
+            trailing = formatReportCurrency(point.spendingMinor, data.displaySettings),
+            leading = RowLeading.Icon(financeIcon(point.category)),
+            onClick = {
+                if (point.categoryId == otherCategoryId) {
+                    onSeeAll()
+                } else {
+                    onOpenCategoryActivity(point.categoryId, point.category, window)
+                }
+            },
+        )
     }
 }
 

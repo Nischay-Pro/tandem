@@ -37,7 +37,6 @@ cross-feature ManagePayeesScreen -> activity
 cross-feature ManagePayeesScreen -> schedules
 cross-feature PersonalizeScreen -> onboarding
 cross-feature ReimbursementScreens -> planning
-cross-feature ReportsScreenParts -> transactions
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
 cross-feature ScheduleDatePickerDialog -> budget
@@ -86,8 +85,6 @@ function-size ConflictController.discardWrite
 function-size ConflictInboxScreen.ConflictInboxScreen
 function-size ConflictReviewScreen.ConflictReviewScreen
 function-size CurrencyScreens.ExchangeRatesScreen
-function-size CustomReportScreen.CustomReportScreen
-function-size CustomReportScreen.ReportControls
 function-size DataHealthScreen.DataHealthScreen
 function-size ExportScreen.ExportScreen
 function-size FeedbackMessageView.FeedbackMessageView
@@ -116,11 +113,6 @@ function-size QueueStateCompletion.complete
 function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
-function-size ReportDetailScreen.ReportDetailScreen
-function-size ReportsScreen.ReportCard
-function-size ReportsScreen.ReportsScreen
-function-size ReportsScreenParts.ReportCanvas
-function-size ReportsScreenParts.reportSelectionAt
 function-size RetirementScreen.PlanCard
 function-size RetirementSetupScreen.RetirementSetupScreen
 function-size Rows.SectionCardLayout
@@ -171,12 +163,9 @@ size BudgetScreen
 size CategoryDetailScreen
 size CategoryGroupScreen
 size ConflictReviewScreen
-size CustomReportScreen
 size LiveBudgetModels
 size ManagePayeesScreen
 size PersonalizeScreen
-size ReportModels
-size ReportsScreenParts
 size RuleEditorSheet
 size StatementImport
 size SyncCenterScreen
