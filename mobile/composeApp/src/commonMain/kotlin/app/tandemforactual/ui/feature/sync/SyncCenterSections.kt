@@ -10,6 +10,7 @@ import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.ui.bankLinkBadge
+import app.tandemforactual.ui.core.ui.planningSyncDetail
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -17,7 +18,6 @@ import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.planning.planningSyncDetail
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.GitMerge

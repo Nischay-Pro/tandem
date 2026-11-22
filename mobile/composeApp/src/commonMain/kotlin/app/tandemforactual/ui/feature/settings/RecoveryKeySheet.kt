@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package app.tandemforactual.ui.feature.planning
+package app.tandemforactual.ui.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

@@ -29,8 +29,12 @@ import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.planHome
+import app.tandemforactual.ui.core.ui.DebtOverviewCard
 import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
+import app.tandemforactual.ui.core.ui.PlanningEditors
+import app.tandemforactual.ui.core.ui.SavingsGoalsCard
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
+import app.tandemforactual.ui.core.ui.rememberPlanningEditors
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.money.PrivacyAmountText
@@ -45,10 +49,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import app.tandemforactual.ui.feature.planning.DebtOverviewCard
-import app.tandemforactual.ui.feature.planning.PlanningEditors
-import app.tandemforactual.ui.feature.planning.SavingsGoalsCard
-import app.tandemforactual.ui.feature.planning.rememberPlanningEditors
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_more
 import app.tandemforactual.ui.generated.resources.home_set_up

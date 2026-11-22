@@ -1,7 +1,4 @@
 # Existing violations. Remove lines as code is fixed; never add new ones.
-cross-feature HomeScreen -> planning
-cross-feature SettingsScreen -> planning
-cross-feature SyncCenterSections -> planning
 function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork
 function-size data:ActualBudgetEdits.setOrders
