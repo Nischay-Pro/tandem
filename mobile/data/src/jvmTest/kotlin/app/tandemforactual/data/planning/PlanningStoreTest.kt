@@ -19,6 +19,21 @@ import kotlin.test.assertTrue
 
 class PlanningStoreTest {
     @Test
+    fun savesRetirementProfiles(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val store = PlanningStore(db.planningRecordDao(), "budget-1", PlanningCipher(PlanningCipher.newKey())) { 1_000L }
+                val profile = RetirementProfile("us-401k", 41, true, 500_000, 2026, 9_000_000, 600, 5_000, 600)
+                store.save(profile)
+                store.save(RetirementProfile("us-ira"))
+                assertEquals(setOf(profile, RetirementProfile("us-ira")), store.retirementProfiles().first().toSet())
+            } finally {
+                db.close()
+            }
+        }
+
+    @Test
     fun sealsRecordsAndReadsThemBack(): Unit =
         runBlocking {
             val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))

@@ -191,6 +191,8 @@ internal enum class AppRoute(
     DATA_HEALTH("Budget checkup"),
     CASH_FLOW("Cash flow"),
     MONTHLY_REVIEW("Monthly review"),
+    BANK_CONNECTIONS("Bank connections"),
+    RETIREMENT("Retirement & savings"),
 }
 
 internal enum class MainCloudStatus {

@@ -63,6 +63,7 @@ import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.PanelsTopLeft
+import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.ScanLine
 import com.composables.icons.lucide.Sparkles
@@ -363,7 +364,7 @@ internal fun appMenuItems(
             )
         }
         if (!advanced) add(AppMenuItem(Lucide.WalletCards, "Accounts") { open(AppRoute.ACCOUNTS) })
-        add(AppMenuItem(Lucide.Landmark, "Bank connections", onClick = onManageBanks))
+        add(AppMenuItem(Lucide.Landmark, "Bank connections", "Link and sync") { open(AppRoute.BANK_CONNECTIONS) })
         add(AppMenuItem(Lucide.FileUp, "Import a statement", "CSV, OFX, QIF") { open(AppRoute.ACCOUNTS) })
         add(
             AppMenuItem(
@@ -378,6 +379,7 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
         add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
         add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })
+        add(AppMenuItem(Lucide.PiggyBank, "Retirement & savings", "401(k), IRA, HSA and more") { open(AppRoute.RETIREMENT) })
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })

@@ -636,6 +636,8 @@ internal fun ScreenContent(
         AppRoute.ABOUT -> AboutScreen(merchantIconMatcherLoadError, navigation)
         AppRoute.MERCHANT_ICON_LICENSES -> MerchantIconLicensesScreen(merchantIconCatalog, merchantIconCatalogLoadError)
         AppRoute.CHANGE_HISTORY -> ChangeHistoryScreen(state, mobileSession)
+        AppRoute.BANK_CONNECTIONS -> BankConnectionsScreen(state, mobileSession, liveAccounts)
+        AppRoute.RETIREMENT -> RetirementScreen(state, mobileSession)
         AppRoute.CASH_FLOW -> CashFlowScreen(state, liveAccounts, liveSchedules)
         AppRoute.MONTHLY_REVIEW -> MonthlyReviewScreen(state, liveBudgetMonth, liveTransactions)
         AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)

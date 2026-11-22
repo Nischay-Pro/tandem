@@ -93,6 +93,50 @@ data class DebtTerms(
     }
 }
 
+/** What the person entered for one retirement plan; the plan's limits come from its region pack. */
+data class RetirementProfile(
+    val planId: String,
+    val age: Int? = null,
+    val family: Boolean = false,
+    val contributedMinor: Long = 0,
+    val year: Int? = null,
+    val salaryMinor: Long? = null,
+    val contributionBasisPoints: Int? = null,
+    val matchRateBasisPoints: Int? = null,
+    val matchUpToBasisPoints: Int? = null,
+) {
+    fun toJson(): JsonObject =
+        jsonOf(
+            "age" to age.json(),
+            "family" to JsonPrimitive(family),
+            "contributedMinor" to JsonPrimitive(contributedMinor),
+            "year" to year.json(),
+            "salaryMinor" to salaryMinor.json(),
+            "contributionBasisPoints" to contributionBasisPoints.json(),
+            "matchRateBasisPoints" to matchRateBasisPoints.json(),
+            "matchUpToBasisPoints" to matchUpToBasisPoints.json(),
+        )
+
+    companion object {
+        const val TYPE = "planning.retirement"
+
+        fun fromJson(
+            planId: String,
+            body: JsonObject,
+        ) = RetirementProfile(
+            planId = planId,
+            age = body.int("age"),
+            family = body.text("family") == "true",
+            contributedMinor = body.long("contributedMinor") ?: 0,
+            year = body.int("year"),
+            salaryMinor = body.long("salaryMinor"),
+            contributionBasisPoints = body.int("contributionBasisPoints"),
+            matchRateBasisPoints = body.int("matchRateBasisPoints"),
+            matchUpToBasisPoints = body.int("matchUpToBasisPoints"),
+        )
+    }
+}
+
 private fun jsonOf(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.filter { it.second != JsonNull }.toMap())
 
 private fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull

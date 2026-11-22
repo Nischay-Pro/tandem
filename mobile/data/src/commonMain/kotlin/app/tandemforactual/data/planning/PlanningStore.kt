@@ -84,6 +84,11 @@ class PlanningStore(
 
     suspend fun save(terms: DebtTerms) = put(terms.id, DebtTerms.TYPE, terms.toJson())
 
+    fun retirementProfiles(): Flow<List<RetirementProfile>> =
+        observe(RetirementProfile.TYPE).map { list -> list.map { (id, body) -> RetirementProfile.fromJson(id, body) } }
+
+    suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
+
     companion object {
         const val SCHEMA_VERSION = 1
     }

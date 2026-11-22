@@ -18,6 +18,7 @@ import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
@@ -30,7 +31,10 @@ import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningStore
 import app.tandemforactual.data.planning.PlanningSync
+import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.regions.global.bank.BankProvider
+import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -273,6 +277,7 @@ internal class TandemMobileSession(
     var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
         private set
     var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
+    var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
         private set
 
     private fun planningStore(budgetId: String): PlanningStore? =
@@ -324,6 +329,40 @@ internal class TandemMobileSession(
         planningKeyring.setRecoveryKey(budgetId, key)
         syncPlanning(budgetId)
     }
+
+    suspend fun saveRetirementProfile(
+        budgetId: String,
+        profile: RetirementProfile,
+    ) {
+        planningStore(budgetId)?.save(profile)
+    }
+
+    suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
+
+    suspend fun loadLinkedAccounts(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<LinkedAccount> = apiClient.budgetLinkedAccounts(budgetId, encryptionPassword)
+
+    suspend fun linkBankAccount(
+        budgetId: String,
+        accountId: String,
+        provider: BankProvider,
+        account: BankProviderAccount,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t link this account. Try again.") {
+            apiClient.linkBudgetBankAccount(budgetId, accountId, provider, account, encryptionPassword)
+        }
+
+    suspend fun unlinkBankAccount(
+        budgetId: String,
+        accountId: String,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t unlink this account. Try again.") {
+            apiClient.unlinkBudgetBankAccount(budgetId, accountId, encryptionPassword)
+        }
 
     suspend fun saveSavingsGoal(
         budgetId: String,
@@ -5574,6 +5613,7 @@ internal class TandemMobileSession(
             planningStore(budgetId)?.let { planning ->
                 launch { planning.savingsGoals().collect { savingsGoals = it } }
                 launch { planning.debtTerms().collect { debtTerms = it } }
+                launch { planning.retirementProfiles().collect { retirementProfiles = it } }
             }
         }
     }
