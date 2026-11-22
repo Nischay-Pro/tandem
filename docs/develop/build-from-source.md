@@ -43,7 +43,7 @@ need macOS and Xcode.
    **Check:** in another terminal, request the API contract:
 
    ```sh
-   curl --fail http://localhost:19753/api/v1/openapi.json
+   curl --fail http://localhost:19753/extension/v1/capabilities
    ```
 
    If the API does not start, inspect the Compose output and use the

@@ -68,7 +68,7 @@ test -s "$install_directory/.env"
 test "$(stat -c '%a' "$install_directory/.env")" = 600
 grep -Fq 'TANDEM_API_TAG=latest-nightly' "$install_directory/.env"
 grep -Fq 'POSTGRES_PASSWORD=' "$install_directory/.env"
-grep -Fq 'AUTH_TOKEN_ENCRYPTION_KEY=' "$install_directory/.env"
+! grep -Fq 'AUTH_TOKEN_ENCRYPTION_KEY=' "$install_directory/.env"
 grep -Fq 'image: ghcr.io/nischay-pro/tandem-api:${TANDEM_API_TAG:-latest-nightly}' \
   "$install_directory/docker-compose.yml"
 test "$(find "$install_directory" -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 2

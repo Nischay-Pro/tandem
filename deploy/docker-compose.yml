@@ -34,20 +34,12 @@ services:
       - "127.0.0.1:${TANDEM_API_HOST_PORT:-19753}:19753"
     environment:
       DATABASE_URL: postgresql://tandem:${POSTGRES_PASSWORD}@tandem-postgres:5432/tandem
-      AUTH_TOKEN_ENCRYPTION_KEY: ${AUTH_TOKEN_ENCRYPTION_KEY}
-      AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS: ${AUTH_TOKEN_ENCRYPTION_KEY_PREVIOUS:-}
       HOST: 0.0.0.0
       PORT: 19753
-      TRUST_PROXY: ${TRUST_PROXY:-}
-      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL:-}
-      ACTUAL_SESSION_TOKEN: ${ACTUAL_SESSION_TOKEN:-}
-      ACTUAL_PUBLIC_URL: ${ACTUAL_PUBLIC_URL:-}
-      ACTUAL_API_DATA_DIR: /data/actual-api
+      ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL}
     depends_on:
       tandem-postgres:
         condition: service_healthy
-    volumes:
-      - tandem-actual-workspace:/data/actual-api
     expose:
       - "19753"
     healthcheck:
@@ -56,20 +48,19 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:19753/api/v1/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://127.0.0.1:19753/extension/v1/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 15s
       timeout: 3s
       retries: 3
       start_period: 30s
-    stop_grace_period: 45s
+    stop_grace_period: 15s
     networks:
       - tandem-data
       - tandem-edge
 
 volumes:
   tandem-postgres-data:
-  tandem-actual-workspace:
 
 networks:
   tandem-data:

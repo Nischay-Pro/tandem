@@ -1,58 +1,42 @@
 #!/usr/bin/env bash
+# Runs Tandem's direct-sync round trips against the pinned Actual server: budgets are seeded and encrypted with
+# Actual's own client, then the Kotlin client edits them and checks Actual reads the same results back.
 set -Eeuo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
-scratch_root="$repository_root/.dev-tmp/actual"
-compatibility_project="tandem-actual-compat"
-compose_file="$repository_root/docker-compose.dev.yml"
-
-clear_test_data() {
-  python3 - "$scratch_root" <<'PY'
-from pathlib import Path
-import shutil
-import sys
-
-repository = Path.cwd().resolve()
-expected_root = (repository / ".dev-tmp" / "actual").resolve()
-scratch_root = Path(sys.argv[1]).resolve()
-if scratch_root != expected_root:
-    raise SystemExit("Refusing to clear a path outside .dev-tmp/actual")
-
-for child_name in ("compat-gate-server", "compat-gate-client"):
-    child = scratch_root / child_name
-    if child.exists():
-        shutil.rmtree(child)
-    child.mkdir(parents=True, mode=0o700)
-PY
-  if [[ -d "$scratch_root/compat-gate-postgres" ]]; then
-    docker run --rm --user 0:0 \
-      --volume "$scratch_root/compat-gate-postgres:/compat-postgres" \
-      --entrypoint sh node:26.13.1-trixie-slim -ec \
-      'find /compat-postgres -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
-    rmdir "$scratch_root/compat-gate-postgres" 2>/dev/null || true
-  fi
-}
+actual_image="ghcr.io/actualbudget/actual:26.11.0@sha256:06cf186569cf58d93e12659ff1a517b65b5b0ebee7050a3991d4bd8a1d398da6"
+node_image="node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc"
+container="tandem-actual-compat-$$"
+port="${ACTUAL_COMPAT_HOST_PORT:-55006}"
+password="compatibility-test-only-password"
 
 cleanup() {
-  result=$?
-  trap - EXIT
-  docker compose -p "$compatibility_project" -f "$compose_file" \
-    --profile actual-compat down --volumes --remove-orphans >/dev/null || true
-  clear_test_data
-  exit "$result"
+  docker rm --force "$container" >/dev/null 2>&1 || true
 }
-
 trap cleanup EXIT
-export ACTUAL_COMPAT_UID="$(id -u)"
-export ACTUAL_COMPAT_GID="$(id -g)"
-export POSTGRES_DATA_DIR="$scratch_root/compat-gate-postgres"
-export POSTGRES_HOST_PORT=55433
 
-docker compose -p "$compatibility_project" -f "$compose_file" \
-  --profile actual-compat down --volumes --remove-orphans >/dev/null 2>&1 || true
-clear_test_data
+docker run --detach --name "$container" --publish "127.0.0.1:$port:5006" "$actual_image" >/dev/null
+for _ in $(seq 1 60); do
+  curl --silent --fail "http://127.0.0.1:$port/" >/dev/null && break
+  sleep 2
+done
+curl --silent --fail --header "Content-Type: application/json" \
+  --data "{\"password\":\"$password\"}" "http://127.0.0.1:$port/account/bootstrap" >/dev/null
 
-docker compose -p "$compatibility_project" -f "$compose_file" \
-  --profile actual-compat run --build --rm actual-compat-tests
+docker run --rm --network host --volume "$repository_root:/workspace" --workdir /workspace \
+  --env ACTUAL_URL="http://127.0.0.1:$port" --env ACTUAL_PASSWORD="$password" \
+  "$node_image" sh -ec '
+    if [ ! -d services/api/node_modules/@actual-app/api ]; then
+      npm install --global --silent pnpm@12.16.1
+      pnpm install --silent --frozen-lockfile --filter @tandem-for-actual/api
+    fi
+    node scripts/actual-fixtures/seed-parity.mjs
+    cd services/api && node scripts/encrypt-budget.ts
+  '
+
+cd mobile
+ACTUAL_TEST_URL="http://127.0.0.1:$port" ACTUAL_TEST_PASSWORD="$password" ./gradlew \
+  :api-client:jvmTest --rerun \
+  --tests "*ActualEditsRoundTripTest" --tests "*ActualEncryptedRoundTripTest"

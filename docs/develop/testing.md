@@ -21,8 +21,7 @@ quality gate in its Compose environment and use CI for platform-specific checks.
 
 The test profile uses Docker because it provides the API's pinned Node and
 PostgreSQL versions. Direct `pnpm check:all` needs `DATABASE_URL` to point to a
-disposable database and `AUTH_TOKEN_ENCRYPTION_KEY` to contain a randomly
-generated 32-byte key encoded as 64 hexadecimal characters.
+disposable database so the store's integration tests can run.
 
 ## Mobile checks
 
