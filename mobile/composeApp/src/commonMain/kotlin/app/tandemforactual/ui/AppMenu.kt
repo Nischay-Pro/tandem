@@ -47,8 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.tandemforactual.ui.components.TandemIconButton
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.CalendarCheck
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChartColumn
+import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
@@ -64,6 +66,7 @@ import com.composables.icons.lucide.PanelsTopLeft
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.ScanLine
 import com.composables.icons.lucide.Sparkles
+import com.composables.icons.lucide.Stethoscope
 import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.TrendingDown
 import com.composables.icons.lucide.WalletCards
@@ -372,6 +375,9 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) })
         add(AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) })
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
+        add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
+        add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
+        add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })
         add(AppMenuItem(Lucide.WalletCards, "Closed accounts") { open(AppRoute.CLOSED_ACCOUNTS) })

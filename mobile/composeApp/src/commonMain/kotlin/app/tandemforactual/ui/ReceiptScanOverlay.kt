@@ -42,9 +42,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -117,7 +117,9 @@ internal fun ReceiptScanOverlay(
                             drawRect(
                                 Brush.verticalGradient(listOf(Color.Transparent, accent.copy(alpha = 0.28f)), startY = y - glow, endY = y),
                                 topLeft = Offset(0f, (y - glow).coerceAtLeast(0f)),
-                                size = androidx.compose.ui.geometry.Size(size.width, glow.coerceAtMost(y)),
+                                size =
+                                    androidx.compose.ui.geometry
+                                        .Size(size.width, glow.coerceAtMost(y)),
                             )
                             drawLine(accent, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx())
                         }

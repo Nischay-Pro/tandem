@@ -17,6 +17,7 @@ import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
@@ -3519,6 +3520,18 @@ internal class TandemMobileSession(
     ): BudgetChangeHistory? =
         try {
             apiClient.budgetChangeHistory(budgetId, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    suspend fun loadDataHealth(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<HealthIssue>? =
+        try {
+            apiClient.budgetDataHealth(budgetId, encryptionPassword)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

@@ -188,6 +188,9 @@ internal enum class AppRoute(
     MERCHANT_ICON_LICENSES("Icon licenses and sources"),
     CHANGE_HISTORY("Change history"),
     DEBT_PAYOFF("Debt payoff"),
+    DATA_HEALTH("Budget checkup"),
+    CASH_FLOW("Cash flow"),
+    MONTHLY_REVIEW("Monthly review"),
 }
 
 internal enum class MainCloudStatus {

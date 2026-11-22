@@ -182,7 +182,16 @@ internal fun ChangeHistoryScreen(
     }
 }
 
-private val INTERNAL_DATASETS = setOf("payee_mapping", "category_mapping", "preferences", "messages_clock")
+private val INTERNAL_DATASETS =
+    setOf(
+        "payee_mapping",
+        "category_mapping",
+        "preferences",
+        "messages_clock",
+        "schedules_next_date",
+        "schedules_json_paths",
+        "zero_budget_months",
+    )
 private val BUDGET_DATASETS = setOf("zero_budgets", "reflect_budgets", "zero_budget_months", "categories", "category_groups")
 private val SETUP_DATASETS = setOf("payees", "rules", "schedules", "payee_mapping", "category_mapping")
 

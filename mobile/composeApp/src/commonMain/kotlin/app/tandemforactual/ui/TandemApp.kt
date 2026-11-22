@@ -1698,7 +1698,10 @@ fun TandemApp(
                                             .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
                                 )
                             }
-                            if (visibleRoute in QUICK_ADD_TABS && state.selectedBudgetId.isNotBlank() && !needsEncryptedBudgetUnlock(state, visibleRoute)) {
+                            if (visibleRoute in QUICK_ADD_TABS &&
+                                state.selectedBudgetId.isNotBlank() &&
+                                !needsEncryptedBudgetUnlock(state, visibleRoute)
+                            ) {
                                 val addCompact by
                                     remember(routeScrollState, routeLazyListState) {
                                         derivedStateOf { routeScrollState.value > 72 || routeLazyListState.firstVisibleItemIndex > 0 }

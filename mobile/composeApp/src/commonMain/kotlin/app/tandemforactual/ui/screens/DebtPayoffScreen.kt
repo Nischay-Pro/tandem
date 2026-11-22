@@ -60,9 +60,23 @@ internal fun DebtPayoffScreen(
         }
     val missing = debts.filter { account -> ready.none { it.id == account.id } }
     val plan = remember(ready, extra, strategy) { PlanningMath.plan(ready, extra, strategy) }
-    val other = remember(ready, extra, strategy) { PlanningMath.plan(ready, extra, if (strategy == PayoffStrategy.AVALANCHE) PayoffStrategy.SNOWBALL else PayoffStrategy.AVALANCHE) }
+    val other =
+        remember(ready, extra, strategy) {
+            PlanningMath.plan(
+                ready,
+                extra,
+                if (strategy ==
+                    PayoffStrategy.AVALANCHE
+                ) {
+                    PayoffStrategy.SNOWBALL
+                } else {
+                    PayoffStrategy.AVALANCHE
+                },
+            )
+        }
     val minimumsOnly = remember(ready) { PlanningMath.plan(ready, 0, strategy) }
     val today = platformTodayIsoDate()
+
     fun monthLabel(offset: Int): String {
         val (y, m) = today.split('-').let { it[0].toInt() to it[1].toInt() }
         val index = y * 12 + (m - 1) + offset
@@ -107,7 +121,21 @@ internal fun DebtPayoffScreen(
                 fontSize = TandemTypography.compactBody,
             )
         }
-        plan?.let { AreaChart(listOf(ready.sumOf { d -> d.balanceMinor }) + it.balances, "Total owed each month until debt-free", selected = scrub, onScrub = { i -> scrub = i?.minus(1)?.takeIf { s -> s >= 0 } }) }
+        plan?.let {
+            AreaChart(
+                listOf(
+                    ready.sumOf { d ->
+                        d.balanceMinor
+                    },
+                ) + it.balances,
+                "Total owed each month until debt-free",
+                selected = scrub,
+                onScrub = { i ->
+                    scrub =
+                        i?.minus(1)?.takeIf { s -> s >= 0 }
+                },
+            )
+        }
         FilterPills(
             listOf(PayoffStrategy.AVALANCHE to "Highest interest first", PayoffStrategy.SNOWBALL to "Smallest balance first"),
             strategy,
@@ -129,7 +157,16 @@ internal fun DebtPayoffScreen(
                     Modifier.weight(1f),
                 )
             }
-            SectionCard("Payoff order", if (strategy == PayoffStrategy.AVALANCHE) "Extra goes to the highest APR" else "Extra goes to the smallest balance") {
+            SectionCard(
+                "Payoff order",
+                if (strategy ==
+                    PayoffStrategy.AVALANCHE
+                ) {
+                    "Extra goes to the highest APR"
+                } else {
+                    "Extra goes to the smallest balance"
+                },
+            ) {
                 plan.order.forEachIndexed { index, id ->
                     if (index > 0) DividerLine()
                     val account = debts.first { it.id == id }

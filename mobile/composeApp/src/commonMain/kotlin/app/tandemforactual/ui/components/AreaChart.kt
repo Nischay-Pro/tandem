@@ -55,7 +55,14 @@ internal fun AreaChart(
             .height(height)
             .semantics { contentDescription = description }
             .pointerInput(values) {
-                fun index(x: Float) = if (values.size < 2) 0 else ((x / size.width) * (values.size - 1)).toInt().coerceIn(0, values.lastIndex)
+                fun index(x: Float) =
+                    if (values.size <
+                        2
+                    ) {
+                        0
+                    } else {
+                        ((x / size.width) * (values.size - 1)).toInt().coerceIn(0, values.lastIndex)
+                    }
                 detectDragGestures(
                     onDragStart = { scrub.value(index(it.x)) },
                     onDragEnd = { scrub.value(null) },
@@ -63,7 +70,15 @@ internal fun AreaChart(
                 ) { change, _ -> scrub.value(index(change.position.x)) }
             }.pointerInput(values) {
                 detectTapGestures(onPress = { offset ->
-                    scrub.value(if (values.size < 2) 0 else ((offset.x / size.width) * (values.size - 1)).toInt().coerceIn(0, values.lastIndex))
+                    scrub.value(
+                        if (values.size <
+                            2
+                        ) {
+                            0
+                        } else {
+                            ((offset.x / size.width) * (values.size - 1)).toInt().coerceIn(0, values.lastIndex)
+                        },
+                    )
                     tryAwaitRelease()
                     scrub.value(null)
                 })
@@ -75,6 +90,7 @@ internal fun AreaChart(
         val span = (max - min).toFloat().coerceAtLeast(1f)
         val top = 8.dp.toPx()
         val usable = size.height - top - 4.dp.toPx()
+
         fun point(i: Int) =
             Offset(
                 if (values.size < 2) size.width / 2 else size.width * i / (values.size - 1),
@@ -94,7 +110,13 @@ internal fun AreaChart(
         }
         selected?.takeIf { it in values.indices }?.let { i ->
             val p = point(i)
-            drawLine(palette.muted, Offset(p.x, 0f), Offset(p.x, size.height), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+            drawLine(
+                palette.muted,
+                Offset(p.x, 0f),
+                Offset(p.x, size.height),
+                1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+            )
             drawCircle(palette.background, 6.dp.toPx(), p)
             drawCircle(palette.accent, 4.dp.toPx(), p)
         }

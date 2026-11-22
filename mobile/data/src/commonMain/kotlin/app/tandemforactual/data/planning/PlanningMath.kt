@@ -64,7 +64,10 @@ object PlanningMath {
     ): DebtPlan? {
         val order =
             when (strategy) {
-                PayoffStrategy.AVALANCHE -> debts.sortedWith(compareByDescending<DebtInput> { it.aprBasisPoints }.thenBy { it.balanceMinor })
+                PayoffStrategy.AVALANCHE ->
+                    debts.sortedWith(
+                        compareByDescending<DebtInput> { it.aprBasisPoints }.thenBy { it.balanceMinor },
+                    )
                 PayoffStrategy.SNOWBALL -> debts.sortedWith(compareBy<DebtInput> { it.balanceMinor }.thenByDescending { it.aprBasisPoints })
             }.map { it.id }
         val balance = debts.associate { it.id to it.balanceMinor.coerceAtLeast(0) }.toMutableMap()

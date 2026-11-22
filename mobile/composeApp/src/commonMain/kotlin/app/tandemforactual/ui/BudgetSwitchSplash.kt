@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -46,13 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChartCandlestick
 import com.composables.icons.lucide.Feather
 import com.composables.icons.lucide.Lucide
-import androidx.compose.material.Icon
-import androidx.compose.ui.unit.sp
 
 /** Covers the app while a budget opens, so its data can settle before it is shown. */
 @Composable
@@ -191,7 +191,13 @@ internal fun AdvancedModeSwitch(
             }.semantics { contentDescription = "Advanced mode" }
             .padding(2.dp),
     ) {
-        Box(Modifier.offset(x = pillThumb).size(36.dp).clip(CircleShape).background(palette.text))
+        Box(
+            Modifier
+                .offset(x = pillThumb)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(palette.text),
+        )
         Row(Modifier.fillMaxSize()) {
             listOf(Lucide.Feather to !advanced, Lucide.ChartCandlestick to advanced).forEach { (icon, on) ->
                 val tint by animateColorAsState(

@@ -5,6 +5,7 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualBudgetReader
 import app.tandemforactual.data.actual.ActualChangeHistory
+import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
@@ -13,6 +14,7 @@ import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
@@ -161,6 +163,8 @@ class ActualDirectBudget private constructor(
         }
 
     val deviceNode: String get() = clock.clock.timestamp.node
+
+    suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
 
     suspend fun changeHistory(limit: Int): List<ChangeSet> =
         locked {

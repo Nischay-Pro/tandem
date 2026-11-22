@@ -4,6 +4,8 @@ package app.tandemforactual.data.actual
 object ActualDates {
     fun toInt(isoDate: String): Long = isoDate.replace("-", "").toLong()
 
+    fun fromInt(date: Long): String = date.toString().let { "${it.take(4)}-${it.substring(4, 6)}-${it.takeLast(2)}" }
+
     fun dayNumber(date: Long): Long = daysFromCivil((date / 10_000).toInt(), (date / 100 % 100).toInt(), (date % 100).toInt())
 
     fun addDays(

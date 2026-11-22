@@ -5,6 +5,7 @@ import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.InvalidTransactionRequestException
 import app.tandemforactual.data.actual.UndoResult
@@ -356,6 +357,11 @@ class TandemApiClient(
             val budget = budget(budgetId, encryptionPassword)
             BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
         }
+
+    suspend fun budgetDataHealth(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<HealthIssue> = call { budget(budgetId, encryptionPassword).dataHealth(today()) }
 
     suspend fun undoBudgetChange(
         budgetId: String,
