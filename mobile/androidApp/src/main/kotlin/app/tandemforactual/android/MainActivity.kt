@@ -155,6 +155,7 @@ class MainActivity : FragmentActivity() {
         onShareText = { text -> shareText(text) },
         windowHinge = windowHinge,
         screenshotScript = screenshotScript(),
+        postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
       )
     }
   }

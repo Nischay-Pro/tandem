@@ -78,7 +78,10 @@ import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.data.store.LocalAlert
+import app.tandemforactual.data.store.bankSyncFailureAlert
 import app.tandemforactual.ui.components.DestructiveConfirmationDialog
 import app.tandemforactual.ui.components.InlineMessage
 import app.tandemforactual.ui.components.InlineMessageKind
@@ -135,6 +138,7 @@ fun TandemApp(
     screenshotScript: ScreenshotScript? = null,
     actualBudgetFiles: ActualBudgetFiles? = null,
     planningKeyStore: DeviceCredentialStore? = null,
+    postLocalAlert: ((LocalAlert) -> Unit)? = null,
 ) {
     var accessibilitySettingsRevision by remember { mutableStateOf(0) }
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
@@ -177,6 +181,13 @@ fun TandemApp(
     }
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
+    LaunchedEffect(mobileSession.bankLinks) {
+        val links = mobileSession.bankLinks.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+        val store = appPreferencesStore ?: return@LaunchedEffect
+        val post = postLocalAlert ?: return@LaunchedEffect
+        val alert = bankSyncFailureAlert(store, state.selectedBudgetId, links.filter { it.failure != null }.map { it.name })
+        if (alert != null && state.notificationPolicy.allows(AlertKind.BANK_SYNC_FAILURE, platformMinuteOfDay())) post(alert)
+    }
     val coroutineScope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     var merchantIconMatcher by remember { mutableStateOf<MerchantIconMatcherPack?>(null) }
