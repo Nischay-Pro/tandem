@@ -143,7 +143,7 @@ object SpendingInsights {
         val earlier = historyMonths(entries, monthId, historyMonths).map { byMonth[it].orEmpty() }
         val current = byMonth[monthId].orEmpty().filter { it.date.substring(8, 10).toInt() <= day }
         val spent = totals(current)
-        val ids = (spent.keys + limits.keys + earlier.flatMap { month -> month.map { it.categoryId } }).toSortedSet()
+        val ids = (spent.keys + limits.keys + earlier.flatMap { month -> month.map { it.categoryId } }).toSet().sorted()
         val categories =
             ids
                 .map { id ->
