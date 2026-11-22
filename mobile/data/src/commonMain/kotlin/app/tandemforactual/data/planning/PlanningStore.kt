@@ -87,6 +87,22 @@ class PlanningStore(
     fun retirementProfiles(): Flow<List<RetirementProfile>> =
         observe(RetirementProfile.TYPE).map { list -> list.map { (id, body) -> RetirementProfile.fromJson(id, body) } }
 
+    fun settings(): Flow<PlanningSettings> =
+        observe(PlanningSettings.TYPE).map { list ->
+            list.firstOrNull()?.let { PlanningSettings.fromJson(it.second) } ?: PlanningSettings()
+        }
+
+    suspend fun save(settings: PlanningSettings) = put(PlanningSettings.ID, PlanningSettings.TYPE, settings.toJson())
+
+    suspend fun deleteRetirementProfile(planId: String) = delete(planId, RetirementProfile.TYPE)
+
+    fun reimbursements(): Flow<List<Reimbursement>> =
+        observe(Reimbursement.TYPE).map { list -> list.map { (id, body) -> Reimbursement.fromJson(id, body) } }
+
+    suspend fun save(reimbursement: Reimbursement) = put(reimbursement.transactionId, Reimbursement.TYPE, reimbursement.toJson())
+
+    suspend fun deleteReimbursement(transactionId: String) = delete(transactionId, Reimbursement.TYPE)
+
     suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
 
     companion object {

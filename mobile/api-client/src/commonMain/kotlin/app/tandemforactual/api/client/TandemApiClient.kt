@@ -384,6 +384,17 @@ class TandemApiClient(
             BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
         }
 
+    /** Deposits and transfers into each account by calendar year, keyed by account id; the first year shows when saving began. */
+    suspend fun budgetAccountInflows(
+        budgetId: String,
+        accountIds: List<String>,
+        encryptionPassword: String?,
+    ): Map<String, Map<Int, Long>> =
+        call {
+            val budget = budget(budgetId, encryptionPassword)
+            accountIds.associateWith { budget.inflowsByYear(it) }
+        }
+
     suspend fun budgetDataHealth(
         budgetId: String,
         encryptionPassword: String?,

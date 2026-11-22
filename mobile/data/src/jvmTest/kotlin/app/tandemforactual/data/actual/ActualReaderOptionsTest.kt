@@ -32,6 +32,13 @@ class ActualReaderOptionsTest {
         val before = ActualBudgetReader(db).read("2026-11-21")
         assertEquals("before", before.displaySettings.currencySymbolPosition)
         assertTrue(before.displaySettings.currencySpaceBetweenAmountAndSymbol)
+        val account =
+            db
+                .first(
+                    "SELECT account FROM v_transactions WHERE amount > 0 AND starting_balance_flag = 0",
+                )?.get("account") as String?
+        if (account != null) assertTrue(ActualBudgetReader(db).inflowsByYear(account).values.all { it > 0 })
+        assertEquals(emptyMap(), ActualBudgetReader(db).inflowsByYear("missing"))
         db.close()
     }
 

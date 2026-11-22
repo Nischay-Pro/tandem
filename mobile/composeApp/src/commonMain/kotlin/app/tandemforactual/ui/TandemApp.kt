@@ -2123,6 +2123,8 @@ fun TandemApp(
                     scheduleCount = liveSchedules.size,
                     payeeCount = mobileSession.payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null },
                     conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
+                    reimbursementsOwedMinor = mobileSession.reimbursements.filterNot { it.received }.sumOf { it.amountMinor },
+                    formatMoney = state::formatCurrency,
                     readOnly = state.readOnlyMode,
                     open = openFromMenu,
                     onAddTransaction = {
@@ -2207,6 +2209,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.EDIT_TRANSACTION,
         AppRoute.CHOOSE_PAYEE,
         AppRoute.CHOOSE_CATEGORY,
+        AppRoute.RETIREMENT_SETUP,
         -> false
         else -> true
     }

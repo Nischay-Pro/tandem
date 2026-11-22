@@ -11,6 +11,7 @@ object Tfsa : RetirementPlan() {
     override val region = Region.CA
     override val currency = "CAD"
     override val description = "Tax-free savings account; unused room carries forward"
+    override val accountKeywords = listOf("TFSA")
     override val source = "CRA TFSA dollar limit (canada.ca)"
 
     override val limits =

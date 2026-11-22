@@ -4,11 +4,64 @@ import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.global.retirement.AnnualLimit
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 
-/** An employer's match: [rateBasisPoints] of what you put in, on contributions up to [upToBasisPoints] of salary. */
-data class EmployerMatch(
+/** How a match band is measured: a share of salary, or a fixed amount of your own contributions. */
+enum class MatchBand { PERCENT_OF_SALARY, AMOUNT }
+
+/**
+ * One step of a match formula: the employer adds [rateBasisPoints] of what you put into the next band. The band is
+ * [size] basis points of salary, or [size] minor units of your contributions.
+ */
+data class MatchTier(
     val rateBasisPoints: Int,
-    val upToBasisPoints: Int,
+    val band: MatchBand,
+    val size: Long,
 )
+
+/** An employer's formula: tiers applied in order to your contributions, with an optional yearly cap on the match. */
+data class EmployerMatch(
+    val tiers: List<MatchTier>,
+    val capMinor: Long? = null,
+) {
+    /** The employer's share for [employeeMinor] contributed in a year on [salaryMinor]. */
+    fun on(
+        employeeMinor: Long,
+        salaryMinor: Long,
+    ): Long {
+        var remaining = employeeMinor
+        var total = 0L
+        for (tier in tiers) {
+            val band = if (tier.band == MatchBand.PERCENT_OF_SALARY) salaryMinor * tier.size / 10_000 else tier.size
+            val portion = minOf(remaining, band).coerceAtLeast(0)
+            total += portion * tier.rateBasisPoints / 10_000
+            remaining -= portion
+        }
+        return capMinor?.let { minOf(total, it) } ?: total
+    }
+
+    /** What you'd need to put in to collect every dollar of match. */
+    fun fullMatchAt(salaryMinor: Long): Long =
+        tiers.sumOf { if (it.band == MatchBand.PERCENT_OF_SALARY) salaryMinor * it.size / 10_000 else it.size }
+
+    companion object {
+        fun simple(
+            rateBasisPoints: Int,
+            upToBasisPoints: Int,
+        ) = EmployerMatch(listOf(MatchTier(rateBasisPoints, MatchBand.PERCENT_OF_SALARY, upToBasisPoints.toLong())))
+
+        /** Common formulas to start from; any of them can be edited tier by tier. */
+        val presets: List<Pair<String, EmployerMatch>> =
+            listOf(
+                "50% of the first 6% of pay" to simple(5_000, 600),
+                "100% of the first 3%, 50% of the next 2%" to
+                    EmployerMatch(
+                        listOf(MatchTier(10_000, MatchBand.PERCENT_OF_SALARY, 300), MatchTier(5_000, MatchBand.PERCENT_OF_SALARY, 200)),
+                    ),
+                "100% of the first 4% of pay" to simple(10_000, 400),
+                "100% of the first \$1,000, 50% of the next \$1,000" to
+                    EmployerMatch(listOf(MatchTier(10_000, MatchBand.AMOUNT, 100_000), MatchTier(5_000, MatchBand.AMOUNT, 100_000))),
+            )
+    }
+}
 
 data class MatchResult(
     val employeeMinor: Long,
@@ -24,6 +77,7 @@ object K401 : RetirementPlan() {
     override val region = Region.US
     override val currency = "USD"
     override val description = "Employer plan, including 403(b) and 457(b)"
+    override val accountKeywords = listOf("401", "403(b)", "457", "403b")
     override val source = "IRS retirement plan contribution limits (irs.gov)"
     override val catchUpAge = 50
     override val superCatchUpAges = 60..63
@@ -44,18 +98,35 @@ object K401 : RetirementPlan() {
             AnnualLimit(2026, 2_450_000, 800_000, combinedMinor = 7_200_000, superCatchUpMinor = 1_125_000),
         )
 
-    /** The year's contribution at [contributionBasisPoints] of salary, capped at the year's limit, and the employer match on it. */
+    /**
+     * Splits a year's deposits into a 401(k) account into your part and the employer's, by finding the contribution whose
+     * match brings the total to [depositsMinor].
+     */
+    fun splitDeposits(
+        depositsMinor: Long,
+        salaryMinor: Long,
+        match: EmployerMatch,
+    ): Pair<Long, Long> {
+        var low = 0L
+        var high = depositsMinor
+        while (low < high) {
+            val mid = (low + high + 1) / 2
+            if (mid + match.on(mid, salaryMinor) <= depositsMinor) low = mid else high = mid - 1
+        }
+        return low to depositsMinor - low
+    }
+
+    /** The match on [employeeMinor] contributed this year, capped at the year's limit, and how much more match is available. */
     fun match(
         year: Int,
         age: Int?,
         salaryMinor: Long,
-        contributionBasisPoints: Int,
+        employeeMinor: Long,
         match: EmployerMatch,
     ): MatchResult {
-        val employee = minOf(salaryMinor * contributionBasisPoints / 10_000, allowance(year, age))
-        val matchable = salaryMinor * match.upToBasisPoints / 10_000
-        val employer = minOf(employee, matchable) * match.rateBasisPoints / 10_000
-        val full = matchable * match.rateBasisPoints / 10_000
+        val employee = minOf(employeeMinor, allowance(year, age))
+        val employer = match.on(employee, salaryMinor)
+        val full = match.on(minOf(match.fullMatchAt(salaryMinor), allowance(year, age)), salaryMinor)
         return MatchResult(employee, employer, (full - employer).coerceAtLeast(0))
     }
 }

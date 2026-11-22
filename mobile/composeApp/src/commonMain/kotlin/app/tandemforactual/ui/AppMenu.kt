@@ -58,6 +58,7 @@ import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.FileUp
 import com.composables.icons.lucide.GitMerge
+import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
@@ -343,6 +344,8 @@ internal fun appMenuItems(
     scheduleCount: Int,
     payeeCount: Int,
     conflictCount: Int,
+    reimbursementsOwedMinor: Long,
+    formatMoney: (Long) -> String,
     readOnly: Boolean,
     open: (AppRoute) -> Unit,
     onAddTransaction: () -> Unit,
@@ -379,6 +382,11 @@ internal fun appMenuItems(
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
         add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
         add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })
+        add(
+            AppMenuItem(Lucide.HandCoins, "Reimbursements", reimbursementsOwedMinor.takeIf { it > 0 }?.let { "${formatMoney(it)} owed" }) {
+                open(AppRoute.REIMBURSEMENTS)
+            },
+        )
         add(AppMenuItem(Lucide.PiggyBank, "Retirement & savings", "401(k), IRA, HSA and more") { open(AppRoute.RETIREMENT) })
         add(AppMenuItem(Lucide.TrendingDown, "Debt payoff", "Snowball or avalanche") { open(AppRoute.DEBT_PAYOFF) })
         add(AppMenuItem(Lucide.History, "Change history", "Undo any edit") { open(AppRoute.CHANGE_HISTORY) })

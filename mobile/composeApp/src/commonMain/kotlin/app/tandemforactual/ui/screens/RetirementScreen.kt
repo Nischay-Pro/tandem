@@ -3,6 +3,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,75 +11,91 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.RetirementProfile
-import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
-import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.K401
+import app.tandemforactual.ui.components.EmptyState
 import app.tandemforactual.ui.components.FilterPills
 import app.tandemforactual.ui.components.SectionCard
-import app.tandemforactual.ui.components.SurfaceCard
 import app.tandemforactual.ui.components.TandemActionButton
 import app.tandemforactual.ui.components.TandemActionButtonTone
-import app.tandemforactual.ui.components.TandemChoiceDialog
-import app.tandemforactual.ui.components.TandemModalHeader
+import app.tandemforactual.ui.model.LiveAccountSummary
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.PiggyBank
-import kotlinx.coroutines.launch
+import com.composables.icons.lucide.Settings2
 
-/** Contribution room for each tax-advantaged account in the chosen region and year, using that year's published limits. */
+/**
+ * Contribution room for the plans set up in the wizard. Contributions come from each plan's Actual account, so the years
+ * offered are the ones with deposits, plus this year.
+ */
 @Composable
 internal fun RetirementScreen(
     state: AppState,
+    navigation: AppNavigation,
     mobileSession: TandemMobileSession,
+    liveAccounts: List<LiveAccountSummary>,
 ) {
-    val scope = rememberCoroutineScope()
-    val currentYear = platformTodayIsoDate().take(4).toInt()
-    val defaultRegion =
-        when (platformCurrencyCode()) {
-            "CAD" -> Region.CA
-            "INR" -> Region.IN
-            else -> Region.US
-        }
-    var region by rememberSaveable { mutableStateOf(defaultRegion) }
-    var year by rememberSaveable { mutableStateOf(currentYear) }
-    var editing by remember { mutableStateOf<RetirementPlan?>(null) }
-    val profiles = mobileSession.retirementProfiles.associateBy { it.planId }
+    val profiles = mobileSession.retirementProfiles.filter { RetirementPlans.byId(it.planId) != null }
     val palette = tandemPalette
+    if (profiles.isEmpty()) {
+        PageColumn(verticalSpacing = TandemSpacing.large) {
+            EmptyState(
+                "Track your retirement accounts",
+                "Tell Tandem where you save and which Actual accounts hold your 401(k), IRA, PPF or others. It works out each year’s room from your deposits.",
+            )
+            TandemActionButton("Set up", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
+                navigation.open(AppRoute.RETIREMENT_SETUP)
+            }
+        }
+        return
+    }
+    val currentYear = platformTodayIsoDate().take(4).toInt()
+    var inflows by remember(state.selectedBudgetId) { mutableStateOf<Map<String, Map<Int, Long>>>(emptyMap()) }
+    val accountIds = profiles.mapNotNull { it.accountId }
+    LaunchedEffect(state.selectedBudgetId, accountIds) {
+        inflows = mobileSession.loadAccountInflows(state.selectedBudgetId, accountIds, state.encryptedPassword.takeIf { it.isNotBlank() })
+    }
+    val years = (inflows.values.flatMap { it.keys } + currentYear).filter { it <= currentYear }.distinct().sortedDescending()
+    var year by rememberSaveable { mutableStateOf(currentYear) }
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        FilterPills(RetirementPlans.regions.map { it to it.displayName }, region, { region = it })
-        FilterPills((currentYear downTo currentYear - 3).map { it to it.toString() }, year, { year = it })
-        RetirementPlans.forRegion(region).forEach { plan ->
-            val profile = profiles[plan.id] ?: RetirementProfile(plan.id)
-            PlanCard(plan, profile.takeIf { it.year == null || it.year == year } ?: RetirementProfile(plan.id), year) { editing = plan }
+        if (years.size > 1) FilterPills(years.map { it to it.toString() }, year, { year = it })
+        val order = mobileSession.planningSettings.regions
+        profiles
+            .groupBy { RetirementPlans.byId(it.planId)!!.region }
+            .entries
+            .sortedBy { (region, _) -> order.indexOf(region.name).let { if (it < 0) Int.MAX_VALUE else it } }
+            .forEach { (region, regionProfiles) ->
+                Text(region.displayName.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
+                regionProfiles.forEach { profile ->
+                    val plan = RetirementPlans.byId(profile.planId)!!
+                    val accountName = profile.accountId?.let { id -> liveAccounts.firstOrNull { it.id == id }?.name }
+                    PlanCard(plan, profile, accountName, year, profile.accountId?.let { inflows[it]?.get(year) } ?: 0) {
+                        navigation.open(AppRoute.RETIREMENT_MATCH)
+                    }
+                }
+            }
+        TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
+            navigation.open(AppRoute.RETIREMENT_SETUP)
         }
         Text(
-            "Limits are the published figures for each year. Check your plan’s own rules; employers and income can lower them.",
+            "Limits are each year’s published figures. Contributions are deposits and transfers into the linked account.",
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
-    }
-    val plan = editing
-    if (plan != null) {
-        ProfileEditor(plan, profiles[plan.id] ?: RetirementProfile(plan.id), year, onDismiss = { editing = null }) { updated ->
-            editing = null
-            scope.launch { mobileSession.saveRetirementProfile(state.selectedBudgetId, updated.copy(year = year)) }
-        }
     }
 }
 
@@ -86,16 +103,22 @@ internal fun RetirementScreen(
 private fun PlanCard(
     plan: RetirementPlan,
     profile: RetirementProfile,
+    accountName: String?,
     year: Int,
-    onEdit: () -> Unit,
+    depositsMinor: Long,
+    onEditMatch: () -> Unit,
 ) {
     val palette = tandemPalette
     val lookup = plan.limitFor(year)
     val allowance = plan.allowance(year, profile.age, profile.family)
-    val room = plan.room(year, profile.age, profile.contributedMinor, profile.family)
+    val match = profile.match
+    val salary = profile.salaryMinor
+    val (yours, employer) =
+        if (plan == K401 && match != null && salary != null) K401.splitDeposits(depositsMinor, salary, match) else depositsMinor to 0L
+    val room = (allowance - yours).coerceAtLeast(0)
 
     fun money(minor: Long) = planMoney(minor, plan.currency)
-    SectionCard(plan.displayName, plan.description, "Edit", onClick = onEdit) {
+    SectionCard(plan.displayName, accountName?.let { "Linked to $it" } ?: "No Actual account linked") {
         Column(
             Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
             verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
@@ -119,15 +142,18 @@ private fun PlanCard(
             ) {
                 Box(
                     Modifier
-                        .fillMaxWidth((profile.contributedMinor.toFloat() / allowance.coerceAtLeast(1)).coerceIn(0f, 1f))
+                        .fillMaxWidth((yours.toFloat() / allowance.coerceAtLeast(1)).coerceIn(0f, 1f))
                         .height(6.dp)
                         .clip(RoundedCornerShape(TandemShapes.pill))
                         .background(palette.accent),
                 )
             }
             Text(
-                "${money(profile.contributedMinor)} put in so far" +
-                    (if (allowance > lookup.limit.standardMinor && !profile.family) " · includes catch-up" else ""),
+                when {
+                    accountName == null -> "Link an Actual account to read contributions."
+                    employer > 0 -> "${money(yours)} from you and ${money(employer)} from your employer"
+                    else -> "${money(yours)} put in"
+                },
                 color = palette.muted,
                 fontSize = TandemTypography.caption,
             )
@@ -138,90 +164,24 @@ private fun PlanCard(
                     fontSize = TandemTypography.caption,
                 )
             }
-            val salary = profile.salaryMinor
-            val contribution = profile.contributionBasisPoints
-            val matchRate = profile.matchRateBasisPoints
-            if (plan == K401 && salary != null && contribution != null && matchRate != null) {
-                val result =
-                    K401.match(
-                        year,
-                        profile.age,
-                        salary,
-                        contribution,
-                        EmployerMatch(matchRate, profile.matchUpToBasisPoints ?: 0),
-                    )
+            if (plan == K401) {
+                val result = if (match != null && salary != null) K401.match(year, profile.age, salary, yours, match) else null
                 Text(
-                    "Employer adds ${money(result.employerMinor)} a year" +
-                        if (result.missedMinor >
-                            0
-                        ) {
-                            ". You’re leaving ${money(result.missedMinor)} of match unclaimed."
-                        } else {
-                            ", the full match."
+                    when {
+                        result == null -> "Set up your employer match"
+                        result.missedMinor > 0 -> "${money(result.missedMinor)} of employer match still available this year"
+                        else -> "Full employer match on track"
+                    },
+                    Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditMatch),
+                    color =
+                        when {
+                            result == null -> palette.accent
+                            result.missedMinor > 0 -> palette.warning
+                            else -> palette.positive
                         },
-                    color = if (result.missedMinor > 0) palette.warning else palette.positive,
                     fontSize = TandemTypography.compactBody,
+                    fontWeight = FontWeight.Medium,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileEditor(
-    plan: RetirementPlan,
-    profile: RetirementProfile,
-    year: Int,
-    onDismiss: () -> Unit,
-    onSave: (RetirementProfile) -> Unit,
-) {
-    var age by remember(plan) { mutableStateOf(profile.age?.toString().orEmpty()) }
-    var contributed by remember(plan) {
-        mutableStateOf(
-            if (profile.contributedMinor ==
-                0L
-            ) {
-                ""
-            } else {
-                (profile.contributedMinor / 100).toString()
-            },
-        )
-    }
-    var family by remember(plan) { mutableStateOf(profile.family) }
-    var salary by remember(plan) { mutableStateOf(profile.salaryMinor?.let { (it / 100).toString() }.orEmpty()) }
-    var percent by remember(plan) { mutableStateOf(profile.contributionBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
-    var matchRate by remember(plan) { mutableStateOf(profile.matchRateBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
-    var matchUpTo by remember(plan) { mutableStateOf(profile.matchUpToBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
-
-    fun whole(text: String) = text.filter(Char::isDigit).toLongOrNull()
-    TandemChoiceDialog(visible = true, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                TandemModalHeader("${plan.displayName} for $year", onClose = onDismiss, leadingIcon = Lucide.PiggyBank)
-                TextFieldCard("Contributed so far this year", contributed, { contributed = it }, numberField("0"))
-                TextFieldCard("Your age at the end of $year", age, { age = it }, numberField("For catch-up limits"))
-                if (plan.limits.any { it.familyMinor != null }) {
-                    FilterPills(listOf(false to "Self-only", true to "Family"), family, { family = it })
-                }
-                if (plan == K401) {
-                    TextFieldCard("Yearly salary", salary, { salary = it }, numberField("Optional, for the match"))
-                    TextFieldCard("You contribute (% of salary)", percent, { percent = it }, numberField("e.g. 6"))
-                    TextFieldCard("Employer matches (% of yours)", matchRate, { matchRate = it }, numberField("e.g. 50"))
-                    TextFieldCard("…on up to (% of salary)", matchUpTo, { matchUpTo = it }, numberField("e.g. 6"))
-                }
-                TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
-                    onSave(
-                        profile.copy(
-                            age = whole(age)?.toInt(),
-                            family = family,
-                            contributedMinor = (whole(contributed) ?: 0) * 100,
-                            salaryMinor = whole(salary)?.times(100),
-                            contributionBasisPoints = whole(percent)?.toInt()?.times(100),
-                            matchRateBasisPoints = whole(matchRate)?.toInt()?.times(100),
-                            matchUpToBasisPoints = whole(matchUpTo)?.toInt()?.times(100),
-                        ),
-                    )
-                }
             }
         }
     }
@@ -257,12 +217,3 @@ internal fun planMoney(
         }
     return (if (minor < 0) "-" else "") + symbol + grouped
 }
-
-private fun numberField(placeholder: String) =
-    TextFieldOptions(
-        placeholder = placeholder,
-        keyboardOptions =
-            androidx.compose.foundation.text.KeyboardOptions(
-                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-            ),
-    )

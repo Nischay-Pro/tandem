@@ -35,6 +35,12 @@ abstract class RetirementPlan {
     /** Where the limits come from, so they can be checked each year. */
     abstract val source: String
     abstract val limits: List<AnnualLimit>
+
+    /** Words in an account's name that suggest it holds this plan, for suggesting the account to map. */
+    abstract val accountKeywords: List<String>
+
+    fun matchesAccount(name: String): Boolean = accountKeywords.any { name.contains(it, ignoreCase = true) }
+
     open val catchUpAge: Int? = null
     open val superCatchUpAges: IntRange? = null
 

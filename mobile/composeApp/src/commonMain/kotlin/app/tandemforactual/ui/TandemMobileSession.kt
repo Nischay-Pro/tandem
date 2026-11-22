@@ -29,8 +29,10 @@ import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
+import app.tandemforactual.data.planning.PlanningSettings
 import app.tandemforactual.data.planning.PlanningStore
 import app.tandemforactual.data.planning.PlanningSync
+import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.regions.global.bank.BankProvider
@@ -278,6 +280,8 @@ internal class TandemMobileSession(
         private set
     var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
+    var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
+    var planningSettings by mutableStateOf(PlanningSettings())
         private set
 
     private fun planningStore(budgetId: String): PlanningStore? =
@@ -330,12 +334,51 @@ internal class TandemMobileSession(
         syncPlanning(budgetId)
     }
 
+    suspend fun saveReimbursement(
+        budgetId: String,
+        reimbursement: Reimbursement,
+    ) {
+        planningStore(budgetId)?.save(reimbursement)
+    }
+
+    suspend fun deleteReimbursement(
+        budgetId: String,
+        transactionId: String,
+    ) {
+        planningStore(budgetId)?.deleteReimbursement(transactionId)
+    }
+
     suspend fun saveRetirementProfile(
         budgetId: String,
         profile: RetirementProfile,
     ) {
         planningStore(budgetId)?.save(profile)
     }
+
+    /** Saves the wizard's answers in one go: the chosen countries and the plans kept, removing plans no longer picked. */
+    suspend fun saveRetirementSetup(
+        budgetId: String,
+        regions: List<String>,
+        profiles: List<RetirementProfile>,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        store.save(PlanningSettings(regions))
+        retirementProfiles.filter { old -> profiles.none { it.planId == old.planId } }.forEach { store.deleteRetirementProfile(it.planId) }
+        profiles.forEach { store.save(it) }
+    }
+
+    suspend fun loadAccountInflows(
+        budgetId: String,
+        accountIds: List<String>,
+        encryptionPassword: String?,
+    ): Map<String, Map<Int, Long>> =
+        try {
+            apiClient.budgetAccountInflows(budgetId, accountIds, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyMap()
+        }
 
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
 
@@ -5614,6 +5657,8 @@ internal class TandemMobileSession(
                 launch { planning.savingsGoals().collect { savingsGoals = it } }
                 launch { planning.debtTerms().collect { debtTerms = it } }
                 launch { planning.retirementProfiles().collect { retirementProfiles = it } }
+                launch { planning.reimbursements().collect { reimbursements = it } }
+                launch { planning.settings().collect { planningSettings = it } }
             }
         }
     }

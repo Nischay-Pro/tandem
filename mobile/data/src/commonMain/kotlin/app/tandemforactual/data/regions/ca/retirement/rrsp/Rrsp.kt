@@ -11,6 +11,7 @@ object Rrsp : RetirementPlan() {
     override val region = Region.CA
     override val currency = "CAD"
     override val description = "Registered retirement savings plan, up to 18% of last year’s earned income"
+    override val accountKeywords = listOf("RRSP")
     override val source = "CRA MP, DB, RRSP, DPSP, ALDA, TFSA limits (canada.ca)"
 
     override val limits =

@@ -189,6 +189,15 @@ class ActualBudgetReader(
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+    /** Money put into an account each calendar year: deposits and transfers in, without its starting balance. */
+    fun inflowsByYear(accountId: String): Map<Int, Long> =
+        db
+            .query(
+                "SELECT date / 10000 AS year, sum(amount) AS total FROM v_transactions WHERE account = ? AND amount > 0 " +
+                    "AND is_parent = 0 AND starting_balance_flag = 0 GROUP BY date / 10000 ORDER BY year",
+                accountId,
+            ).associate { (it["year"] as Number).toInt() to (it["total"] as Number).toLong() }
+
     /** One transaction record with its revision, by Actual id or Tandem id. */
     fun transactionRecord(id: String): ActualRecord? =
         transaction(id)?.let { ActualRecord("transaction", it.str("id"), it, Sha256.hex(stringifyJson(it))) }

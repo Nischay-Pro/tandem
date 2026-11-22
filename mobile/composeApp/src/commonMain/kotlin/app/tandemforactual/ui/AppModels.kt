@@ -193,6 +193,9 @@ internal enum class AppRoute(
     MONTHLY_REVIEW("Monthly review"),
     BANK_CONNECTIONS("Bank connections"),
     RETIREMENT("Retirement & savings"),
+    REIMBURSEMENTS("Reimbursements"),
+    RETIREMENT_SETUP("Retirement accounts"),
+    RETIREMENT_MATCH("Employer match"),
 }
 
 internal enum class MainCloudStatus {

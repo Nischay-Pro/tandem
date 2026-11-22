@@ -11,6 +11,7 @@ object HealthFsa : RetirementPlan() {
     override val region = Region.US
     override val currency = "USD"
     override val description = "Health flexible spending account through an employer"
+    override val accountKeywords = listOf("FSA", "Flexible spending")
     override val source = "IRS health FSA salary reduction limit (irs.gov)"
 
     override val limits =

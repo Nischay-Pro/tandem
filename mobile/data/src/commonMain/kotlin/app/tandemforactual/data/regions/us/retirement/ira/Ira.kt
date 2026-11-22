@@ -11,6 +11,7 @@ object Ira : RetirementPlan() {
     override val region = Region.US
     override val currency = "USD"
     override val description = "Traditional and Roth IRAs combined"
+    override val accountKeywords = listOf("IRA", "Roth")
     override val source = "IRS IRA contribution limits (irs.gov)"
     override val catchUpAge = 50
 

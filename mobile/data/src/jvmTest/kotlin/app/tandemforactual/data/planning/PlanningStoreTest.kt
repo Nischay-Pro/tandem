@@ -4,11 +4,15 @@ import androidx.room3.Room
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
+import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
+import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -24,10 +28,58 @@ class PlanningStoreTest {
             val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
             try {
                 val store = PlanningStore(db.planningRecordDao(), "budget-1", PlanningCipher(PlanningCipher.newKey())) { 1_000L }
-                val profile = RetirementProfile("us-401k", 41, true, 500_000, 2026, 9_000_000, 600, 5_000, 600)
+                val profile =
+                    RetirementProfile(
+                        "us-401k",
+                        "acct-1",
+                        41,
+                        true,
+                        500_000,
+                        2026,
+                        9_000_000,
+                        600,
+                        EmployerMatch(listOf(MatchTier(10_000, MatchBand.AMOUNT, 100_000)), capMinor = 50_000),
+                    )
                 store.save(profile)
                 store.save(RetirementProfile("us-ira"))
+                store.put(
+                    "broken",
+                    RetirementProfile.TYPE,
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(
+                            """{"match":{"tiers":[1,{"band":"NOPE"},{"band":"AMOUNT"}]}}""",
+                        ).jsonObject,
+                )
+                assertEquals(
+                    listOf(MatchTier(0, MatchBand.AMOUNT, 0)),
+                    store
+                        .retirementProfiles()
+                        .first()
+                        .first { it.planId == "broken" }
+                        .match!!
+                        .tiers,
+                )
+                store.deleteRetirementProfile("broken")
                 assertEquals(setOf(profile, RetirementProfile("us-ira")), store.retirementProfiles().first().toSet())
+                val owed = Reimbursement("tx-1", 4_200, "Sam", "Dinner", "2026-11-20")
+                store.save(owed)
+                store.save(Reimbursement("tx-2", 900))
+                assertFalse(owed.received)
+                store.save(owed.copy(receivedOn = "2026-11-25"))
+                store.deleteReimbursement("tx-2")
+                assertEquals(listOf(owed.copy(receivedOn = "2026-11-25")), store.reimbursements().first())
+                assertTrue(
+                    store
+                        .reimbursements()
+                        .first()
+                        .single()
+                        .received,
+                )
+                assertEquals(PlanningSettings(), store.settings().first())
+                store.save(PlanningSettings(listOf("US", "IN")))
+                assertEquals(listOf("US", "IN"), store.settings().first().regions)
+                store.deleteRetirementProfile("us-ira")
+                assertEquals(listOf("us-401k"), store.retirementProfiles().first().map { it.planId })
             } finally {
                 db.close()
             }

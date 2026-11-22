@@ -11,6 +11,7 @@ object Hsa : RetirementPlan() {
     override val region = Region.US
     override val currency = "USD"
     override val description = "Health savings account with a high-deductible plan"
+    override val accountKeywords = listOf("HSA", "Health savings")
     override val source = "IRS HSA inflation-adjusted amounts (irs.gov)"
     override val catchUpAge = 55
 

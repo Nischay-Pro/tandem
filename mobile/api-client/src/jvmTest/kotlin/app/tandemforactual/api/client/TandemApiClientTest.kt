@@ -312,6 +312,13 @@ class TandemApiClientTest {
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
+            assertTrue(
+                client
+                    .budgetAccountInflows("group", listOf(checking), null)
+                    .getValue(checking)
+                    .values
+                    .all { it > 0 },
+            )
             val history = client.budgetChangeHistory("group", null)
             val latest = history.changes.first()
             assertEquals(history.deviceNode, latest.node)
