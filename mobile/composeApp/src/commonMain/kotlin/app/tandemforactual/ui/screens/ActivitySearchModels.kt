@@ -3,7 +3,11 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.data.database.SearchableBudgetTransaction
+import app.tandemforactual.data.planning.SavedSearch
+import app.tandemforactual.data.planning.SavedSearchFilter
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 internal fun TransactionItem.toActivitySearchRecord(): ActivitySearchRecord =
     ActivitySearchRecord(
@@ -80,3 +84,21 @@ internal fun ActivitySearchRecord.toTransactionItem(
         matched = matched,
         isTransfer = transfer,
     )
+
+internal fun SavedActivitySearch.toSavedSearch(id: String): SavedSearch =
+    SavedSearch(id, name.take(80), query.take(300), filters.take(20).map { SavedSearchFilter(it.field.name, it.value, it.label) })
+
+/** The search's filters, skipping any whose field this version of Tandem doesn't know. */
+internal fun SavedSearch.activityFilters(): List<ActivitySearchFilter> =
+    filters.mapNotNull { filter ->
+        ActivitySearchField.entries.firstOrNull { it.name == filter.field }?.let { ActivitySearchFilter(it, filter.value, filter.label) }
+    }
+
+internal fun SavedSearch.summary(): String =
+    listOfNotNull(
+        query.trim().takeIf { it.isNotEmpty() }?.let { "“$it”" },
+        filters.size.takeIf { it > 0 }?.let { if (it == 1) "1 filter" else "$it filters" },
+    ).joinToString(" · ").ifEmpty { "All transactions" }
+
+@OptIn(ExperimentalUuidApi::class)
+internal fun newSavedSearchId(): String = Uuid.random().toString()
