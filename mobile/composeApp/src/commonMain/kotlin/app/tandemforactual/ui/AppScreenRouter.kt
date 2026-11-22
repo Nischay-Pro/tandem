@@ -650,6 +650,7 @@ internal fun ScreenContent(
         AppRoute.DEBT_PAYOFF -> DebtPayoffScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
         AppRoute.SPENDING_TRENDS -> SpendingTrendsScreen(state, mobileSession)
         AppRoute.SPENDING_FORECAST -> SpendingForecastScreen(state, mobileSession, liveBudgetMonth)
+        AppRoute.GOAL_TIMELINE -> GoalTimelineScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
     }
 }
 

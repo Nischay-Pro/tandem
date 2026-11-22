@@ -199,6 +199,7 @@ internal enum class AppRoute(
     WHAT_IF("What if"),
     SPENDING_TRENDS("Spending trends"),
     SPENDING_FORECAST("Spending forecast"),
+    GOAL_TIMELINE("Goal timeline"),
     EXPORT("Export & backup"),
 }
 
