@@ -8,8 +8,6 @@ cross-feature AccountsScreen -> budget
 cross-feature AccountsScreen -> currency
 cross-feature ActivityScreen -> budget
 cross-feature ActivityScreen -> transactions
-cross-feature ActivitySearch -> budget
-cross-feature ActivitySearch -> transactions
 cross-feature ActivitySearchScreen -> transactions
 cross-feature AppLockGate -> sync
 cross-feature BankConnectionsScreen -> sync
@@ -64,7 +62,6 @@ cross-feature UpcomingSchedulesScreen -> rules
 cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
 function-size AccountEdits.markTransactionsReconciled
-function-size ActivitySearch.activitySearchSuggestions
 function-size AppHeader.AppHeader
 function-size AppLockGate.EncryptedBudgetUnlock
 function-size AppMenuScreen.AppMenu
@@ -170,7 +167,6 @@ layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
 layering TransactionDateValidation -> feature.budget
 layering TransactionDateValidation -> feature.transactions
-size ActivitySearch
 size AppHeader
 size AppState
 size BankBrowserLinkSheet
