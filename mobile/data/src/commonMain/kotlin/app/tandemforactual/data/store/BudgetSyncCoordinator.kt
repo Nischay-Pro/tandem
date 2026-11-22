@@ -217,23 +217,7 @@ class BudgetSyncCoordinator(
                     break
                 }
                 if (displaySettings == null) displaySettings = page.displaySettings
-                var pagePreviousType = previousType
-                var pagePreviousId = previousId
-                for (record in page.records) {
-                    if (record.generation != generation ||
-                        pagePreviousType != null &&
-                        compareSnapshotRecordKeys(
-                            record.recordType,
-                            record.recordId,
-                            pagePreviousType,
-                            pagePreviousId.orEmpty(),
-                        ) <= 0
-                    ) {
-                        throw BudgetSyncProtocolException("Snapshot page records are out of order")
-                    }
-                    pagePreviousType = record.recordType
-                    pagePreviousId = record.recordId
-                }
+                val (pagePreviousType, pagePreviousId) = validateSnapshotPageOrder(page.records, generation, previousType, previousId)
                 repository.stageSnapshotPage(budgetId, generation, cursor, page.records)
                 previousType = pagePreviousType
                 previousId = pagePreviousId
@@ -246,16 +230,7 @@ class BudgetSyncCoordinator(
                         FullSnapshotResult.STALE_CHECKPOINT -> break
                     }
                 }
-                val nextType = page.nextAfterType
-                val nextId = page.nextAfterId
-                if (nextType == null ||
-                    nextId.isNullOrBlank() ||
-                    page.records.isEmpty() ||
-                    previousType != nextType ||
-                    previousId != nextId
-                ) {
-                    throw BudgetSyncProtocolException("Snapshot page continuation is invalid")
-                }
+                val (nextType, nextId) = requireSnapshotContinuation(page, previousType, previousId)
                 afterType = nextType
                 afterId = nextId
                 page =
@@ -272,6 +247,51 @@ class BudgetSyncCoordinator(
             if (resetRequired) return@repeat
         }
         throw BudgetSyncProtocolException("Snapshot could not be applied because the local checkpoint kept changing")
+    }
+
+    /** Checks [records] continue strictly after the previous page's last key, and returns this page's last key. */
+    private fun validateSnapshotPageOrder(
+        records: List<RemoteBudgetRecord>,
+        generation: String,
+        previousType: String?,
+        previousId: String?,
+    ): Pair<String?, String?> {
+        var pagePreviousType = previousType
+        var pagePreviousId = previousId
+        for (record in records) {
+            if (record.generation != generation ||
+                pagePreviousType != null &&
+                compareSnapshotRecordKeys(
+                    record.recordType,
+                    record.recordId,
+                    pagePreviousType,
+                    pagePreviousId.orEmpty(),
+                ) <= 0
+            ) {
+                throw BudgetSyncProtocolException("Snapshot page records are out of order")
+            }
+            pagePreviousType = record.recordType
+            pagePreviousId = record.recordId
+        }
+        return pagePreviousType to pagePreviousId
+    }
+
+    private fun requireSnapshotContinuation(
+        page: RemoteBudgetSnapshotPage,
+        previousType: String?,
+        previousId: String?,
+    ): Pair<String, String> {
+        val nextType = page.nextAfterType
+        val nextId = page.nextAfterId
+        if (nextType == null ||
+            nextId.isNullOrBlank() ||
+            page.records.isEmpty() ||
+            previousType != nextType ||
+            previousId != nextId
+        ) {
+            throw BudgetSyncProtocolException("Snapshot page continuation is invalid")
+        }
+        return nextType to nextId
     }
 
     private fun validateSnapshotCheckpoint(

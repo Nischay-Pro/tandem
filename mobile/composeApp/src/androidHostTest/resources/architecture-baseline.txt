@@ -148,14 +148,6 @@ function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
 function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
 function-size WhatIfScreen.WhatIfScreen
-function-size androidApp:BackgroundBudgetSync.doWork
-function-size data:ActualBudgetReader.read
-function-size data:ActualImport.reconcile
-function-size data:ActualRuleEngine.eval
-function-size data:ActualScheduleEdits.edit
-function-size data:ActualTransactionOperations.change
-function-size data:BudgetSyncCoordinator.applySnapshot
-function-size data:PlanningSync.sync
 layering ActivitySearchCache -> feature.activity
 layering AppState -> app
 layering AppState -> feature.activity

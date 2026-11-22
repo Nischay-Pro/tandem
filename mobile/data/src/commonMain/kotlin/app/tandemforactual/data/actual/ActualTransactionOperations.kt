@@ -193,6 +193,23 @@ class ActualTransactionOperations(
                 )
             }
         }
+        val (applicable, conflicts) = mergeEditFields(patch, base, latest)
+        if (conflicts.isNotEmpty()) return conflict("same-field-edit", conflicts.distinct())
+        if (applicable.isEmpty()) return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
+        validateUpdate(
+            applicable,
+            latest,
+        )?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
+        transactions.batchUpdate(updated = listOf(applicable + ("id" to actualId)))
+        return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
+    }
+
+    /** The patch fields that still apply on top of [latest], and the fields edited on both sides. */
+    private fun mergeEditFields(
+        patch: Map<String, Any?>,
+        base: JsonObject,
+        latest: JsonObject,
+    ): Pair<LinkedHashMap<String, Any?>, List<String>> {
         val applicable = LinkedHashMap<String, Any?>()
         val conflicts = mutableListOf<String>()
         for (field in EDIT_FIELDS) {
@@ -212,14 +229,7 @@ class ActualTransactionOperations(
         ) {
             conflicts += "category"
         }
-        if (conflicts.isNotEmpty()) return conflict("same-field-edit", conflicts.distinct())
-        if (applicable.isEmpty()) return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
-        validateUpdate(
-            applicable,
-            latest,
-        )?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
-        transactions.batchUpdate(updated = listOf(applicable + ("id" to actualId)))
-        return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
+        return applicable to conflicts
     }
 
     private fun actualId(transactionId: String): String =

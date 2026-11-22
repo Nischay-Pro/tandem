@@ -28,6 +28,8 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 import app.tandemforactual.data.store.readBudgetDisplaySettings
@@ -101,60 +103,13 @@ class BackgroundBudgetSyncWorker(
             val summary = sessionClient.withExclusiveSession {
                 BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
             }
-            val policy = NotificationPolicy.read(preferences)
-            val minute = LocalTime.now().let { it.hour * 60 + it.minute }
-            if (policy.allows(AlertKind.NEEDS_REVIEW, minute)) {
-                BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
-            }
-            if (policy.allows(AlertKind.REJECTED_EDIT, minute)) {
-                BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
-            }
-            if (policy.allows(AlertKind.OVERSPENDING, minute)) {
-                BudgetSystemNotifications.overspending(
-                    applicationContext,
-                    overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
-                )
-            }
-            val store = AppPreferencesStore(database)
-            val today = LocalDate.now().toString()
-            val format = currencyFormatter(repository, budgetId)
-            if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
-                upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let {
-                    BudgetSystemNotifications.post(applicationContext, it)
-                }
-            }
-            if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
-                largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let {
-                    BudgetSystemNotifications.post(applicationContext, it)
-                }
-            }
+            postAlerts(database, repository, budgetId, preferences, summary)
             BudgetWidget.refresh(applicationContext)
             Result.success()
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
-            when (error.backgroundSyncFailureAction()) {
-                BackgroundSyncFailureAction.PAIR_AGAIN -> {
-                    apiClient?.let { client -> runCatching { client.forgetSession() } }
-                    runCatching { credentialStore.clear() }
-                    if (syncFailureAlertAllowed(notificationPreferences)) {
-                        BudgetSystemNotifications.signInRequired(applicationContext)
-                    }
-                    Result.success()
-                }
-                BackgroundSyncFailureAction.RETRY -> {
-                    if (syncFailureAlertAllowed(notificationPreferences)) {
-                        BudgetSystemNotifications.syncFailed(applicationContext)
-                    }
-                    Result.retry()
-                }
-                BackgroundSyncFailureAction.FINISH -> {
-                    if (syncFailureAlertAllowed(notificationPreferences)) {
-                        BudgetSystemNotifications.syncFailed(applicationContext)
-                    }
-                    Result.success()
-                }
-            }
+            apiFailureResult(error, apiClient, credentialStore, notificationPreferences)
         } catch (error: BudgetSyncRemoteException) {
             if (syncFailureAlertAllowed(notificationPreferences)) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
@@ -169,6 +124,71 @@ class BackgroundBudgetSyncWorker(
             database.close()
         }
     }
+
+    private suspend fun postAlerts(
+        database: TandemDatabase,
+        repository: LocalBudgetRepository,
+        budgetId: String,
+        preferences: Map<String, String>,
+        summary: BudgetSyncSummary,
+    ) {
+        val policy = NotificationPolicy.read(preferences)
+        val minute = LocalTime.now().let { it.hour * 60 + it.minute }
+        if (policy.allows(AlertKind.NEEDS_REVIEW, minute)) {
+            BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
+        }
+        if (policy.allows(AlertKind.REJECTED_EDIT, minute)) {
+            BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
+        }
+        if (policy.allows(AlertKind.OVERSPENDING, minute)) {
+            BudgetSystemNotifications.overspending(
+                applicationContext,
+                overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
+            )
+        }
+        val store = AppPreferencesStore(database)
+        val today = LocalDate.now().toString()
+        val format = currencyFormatter(repository, budgetId)
+        if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
+            upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let {
+                BudgetSystemNotifications.post(applicationContext, it)
+            }
+        }
+        if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
+            largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let {
+                BudgetSystemNotifications.post(applicationContext, it)
+            }
+        }
+    }
+
+    private suspend fun apiFailureResult(
+        error: TandemApiException,
+        apiClient: TandemApiClient?,
+        credentialStore: AndroidDeviceCredentialStore,
+        notificationPreferences: Map<String, String>?,
+    ): Result =
+        when (error.backgroundSyncFailureAction()) {
+            BackgroundSyncFailureAction.PAIR_AGAIN -> {
+                apiClient?.let { client -> runCatching { client.forgetSession() } }
+                runCatching { credentialStore.clear() }
+                if (syncFailureAlertAllowed(notificationPreferences)) {
+                    BudgetSystemNotifications.signInRequired(applicationContext)
+                }
+                Result.success()
+            }
+            BackgroundSyncFailureAction.RETRY -> {
+                if (syncFailureAlertAllowed(notificationPreferences)) {
+                    BudgetSystemNotifications.syncFailed(applicationContext)
+                }
+                Result.retry()
+            }
+            BackgroundSyncFailureAction.FINISH -> {
+                if (syncFailureAlertAllowed(notificationPreferences)) {
+                    BudgetSystemNotifications.syncFailed(applicationContext)
+                }
+                Result.success()
+            }
+        }
 }
 
 private suspend fun currencyFormatter(

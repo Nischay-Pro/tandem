@@ -69,56 +69,15 @@ class ActualScheduleEdits(
         val schedule = active(id) ?: fail("Choose an active schedule in this budget")
         if (!name.isNullOrEmpty() && nameTaken(id, name)) fail("A schedule with this name already exists")
         val accountId = fields.value("accountId") as String?
-        if (accountId != null) {
-            val account = db.first("SELECT closed FROM accounts WHERE id = ? AND tombstone = 0", accountId)
-            if (account == null || truthy(account["closed"])) fail("Choose an open account in this budget")
-        }
         val payeeId = fields.value("payeeId") as String?
-        if (payeeId != null && ActualBudgetReader(db).read(today()).records.none { it.type == "payee" && it.id == payeeId }) {
-            fail("Choose a payee in this budget")
-        }
+        requireEditTargets(accountId, payeeId)
         val ruleId = schedule.value("rule") as String
         val rule =
             ActualRules.load(db.query("SELECT * FROM rules WHERE id = ? AND tombstone = 0", ruleId), emptyMap()).firstOrNull()
                 ?: fail("No rule found for schedule")
         val old = rule.getValue("conditions").jsonArray.map { it.jsonObject }
-        val conditions = old.toMutableList()
-
-        fun indexOf(match: (JsonObject) -> Boolean) = conditions.indexOfFirst(match)
-
-        fun upsert(
-            field: String,
-            value: String,
-        ) {
-            val index = indexOf { it.value("op") == "is" && it.value("field") == field }
-            val replacement =
-                JsonObject(
-                    linkedMapOf(
-                        "field" to JsonPrimitive(field),
-                        "op" to JsonPrimitive("is"),
-                        "value" to JsonPrimitive(value),
-                    ),
-                )
-            if (index >= 0) conditions[index] = replacement else conditions += replacement
-        }
-        if (payeeId != null) upsert("payee", payeeId)
-        if (accountId != null) upsert("account", accountId)
-        val amount = fields["amountMinor"] ?: fields["amountRangeMinor"]
-        val amountOp = fields.value("amountOp") as String?
-        if (amount != null || amountOp != null) {
-            val index = indexOf { it.value("field") == "amount" && it.value("op") in setOf("is", "isapprox", "isbetween") }
-            if (index < 0) fail("Ammount can not be found. There is a bug here")
-            var condition = conditions[index]
-            if (amountOp != null) condition = JsonObject(condition + ("op" to JsonPrimitive(amountOp)))
-            if (amount != null) condition = JsonObject(condition + ("value" to amount))
-            conditions[index] = condition
-        }
         val date = fields["date"]
-        if (date != null) {
-            val index = indexOf { it.value("field") == "date" && it.value("op") in setOf("is", "isapprox") }
-            if (index < 0) fail("Date can not be found. Schedules can not be created without a date there is a bug here")
-            conditions[index] = JsonObject(conditions[index] + ("value" to date))
-        }
+        val conditions = editedConditions(old, fields, payeeId, accountId, date)
         val actions = syncAmountActions(conditions, rule.getValue("actions").jsonArray)
         writer.update(
             "rules",
@@ -155,6 +114,66 @@ class ActualScheduleEdits(
                 "name" to (name ?: schedule.value("name")),
             ),
         )
+    }
+
+    private fun requireEditTargets(
+        accountId: String?,
+        payeeId: String?,
+    ) {
+        if (accountId != null) {
+            val account = db.first("SELECT closed FROM accounts WHERE id = ? AND tombstone = 0", accountId)
+            if (account == null || truthy(account["closed"])) fail("Choose an open account in this budget")
+        }
+        if (payeeId != null && ActualBudgetReader(db).read(today()).records.none { it.type == "payee" && it.id == payeeId }) {
+            fail("Choose a payee in this budget")
+        }
+    }
+
+    /** [old] with the edit's payee, account, amount and date applied. */
+    private fun editedConditions(
+        old: List<JsonObject>,
+        fields: JsonObject,
+        payeeId: String?,
+        accountId: String?,
+        date: JsonElement?,
+    ): MutableList<JsonObject> {
+        val conditions = old.toMutableList()
+
+        fun indexOf(match: (JsonObject) -> Boolean) = conditions.indexOfFirst(match)
+
+        fun upsert(
+            field: String,
+            value: String,
+        ) {
+            val index = indexOf { it.value("op") == "is" && it.value("field") == field }
+            val replacement =
+                JsonObject(
+                    linkedMapOf(
+                        "field" to JsonPrimitive(field),
+                        "op" to JsonPrimitive("is"),
+                        "value" to JsonPrimitive(value),
+                    ),
+                )
+            if (index >= 0) conditions[index] = replacement else conditions += replacement
+        }
+        if (payeeId != null) upsert("payee", payeeId)
+        if (accountId != null) upsert("account", accountId)
+        val amount = fields["amountMinor"] ?: fields["amountRangeMinor"]
+        val amountOp = fields.value("amountOp") as String?
+        if (amount != null || amountOp != null) {
+            val index = indexOf { it.value("field") == "amount" && it.value("op") in setOf("is", "isapprox", "isbetween") }
+            if (index < 0) fail("Ammount can not be found. There is a bug here")
+            var condition = conditions[index]
+            if (amountOp != null) condition = JsonObject(condition + ("op" to JsonPrimitive(amountOp)))
+            if (amount != null) condition = JsonObject(condition + ("value" to amount))
+            conditions[index] = condition
+        }
+        if (date != null) {
+            val index = indexOf { it.value("field") == "date" && it.value("op") in setOf("is", "isapprox") }
+            if (index < 0) fail("Date can not be found. Schedules can not be created without a date there is a bug here")
+            conditions[index] = JsonObject(conditions[index] + ("value" to date))
+        }
+        return conditions
     }
 
     fun skip(
