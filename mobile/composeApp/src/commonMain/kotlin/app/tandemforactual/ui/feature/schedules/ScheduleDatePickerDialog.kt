@@ -111,37 +111,49 @@ internal fun ScheduleDatePickerDialog(
                         )
                     }
                 }
-                cells.chunked(7).forEach { week ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        week.forEach { day ->
-                            if (day == null) {
-                                Spacer(Modifier.weight(1f).height(44.dp))
-                            } else {
-                                val value = transactionIsoDate(visibleYear, visibleMonth, day)
-                                val isSelected = value == initialDate
-                                SelectableTile(
-                                    selected = isSelected,
-                                    contentDescription = displayTransactionDate(value),
-                                    onSelect = { onSelect(value) },
-                                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                                    shape = CircleShape,
-                                    selectedBackground = tandemPalette.accentSurface,
-                                    unselectedBackground = Color.Transparent,
-                                ) {
-                                    Text(
-                                        day.toString(),
-                                        color = if (isSelected) tandemPalette.accent else tandemPalette.text,
-                                        fontSize = TandemTypography.label,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    )
-                                }
-                            }
-                        }
-                        repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
-                    }
-                }
+                ScheduleDayGrid(visibleYear, visibleMonth, cells, initialDate, onSelect)
                 TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
             }
+        }
+    }
+}
+
+/** The weeks of the visible month, one tappable cell per day. */
+@Composable
+private fun ScheduleDayGrid(
+    year: Int,
+    month: Int,
+    cells: List<Int?>,
+    initialDate: String,
+    onSelect: (String) -> Unit,
+) {
+    cells.chunked(7).forEach { week ->
+        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+            week.forEach { day ->
+                if (day == null) {
+                    Spacer(Modifier.weight(1f).height(44.dp))
+                } else {
+                    val value = transactionIsoDate(year, month, day)
+                    val isSelected = value == initialDate
+                    SelectableTile(
+                        selected = isSelected,
+                        contentDescription = displayTransactionDate(value),
+                        onSelect = { onSelect(value) },
+                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                        shape = CircleShape,
+                        selectedBackground = tandemPalette.accentSurface,
+                        unselectedBackground = Color.Transparent,
+                    ) {
+                        Text(
+                            day.toString(),
+                            color = if (isSelected) tandemPalette.accent else tandemPalette.text,
+                            fontSize = TandemTypography.label,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+            repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
         }
     }
 }

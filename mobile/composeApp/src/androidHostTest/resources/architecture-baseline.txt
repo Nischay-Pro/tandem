@@ -111,7 +111,6 @@ function-size QueueStateEnqueue.enqueue
 function-size QueueStateFailure.failHead
 function-size ReorderDragHandle.ReorderDragHandle
 function-size Rows.SectionCardLayout
-function-size ScheduleDatePickerDialog.ScheduleDatePickerDialog
 function-size SecurityScreen.SecurityScreen
 function-size ServerAddressScreen.ServerAddressScreen
 function-size ServerDeviceScreen.ServerDeviceScreen
