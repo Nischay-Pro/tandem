@@ -17,9 +17,9 @@ class AppStateTest {
     }
 
     @Test
-    fun notificationOnboardingDoesNotRepeatItsTitleInTheRouteHeader() {
-        assertFalse(shouldRenderRouteHeader(AppRoute.NOTIFICATION_ONBOARDING, hasStationaryTabShell = true))
-        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.NOTIFICATION_ONBOARDING))
+    fun personalizationDoesNotRepeatItsTitleInTheRouteHeader() {
+        assertFalse(shouldRenderRouteHeader(AppRoute.PERSONALIZE, hasStationaryTabShell = true))
+        assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.PERSONALIZE))
         assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.BUDGET_CHOOSER))
         assertFalse(shouldRenderStandaloneRouteHeader(AppRoute.SETUP_COMPLETE))
     }

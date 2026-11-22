@@ -49,7 +49,7 @@ class BottomNavigationVisibilityTest {
         val selection =
             selectAppTabNavigation(currentStack, "", AppRoute.ACTIVITY) { route -> AppRouteEntry(route, nextId++) }
 
-        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACTIVITY), selection.backStack.map { it.route })
+        assertEquals(listOf(AppRoute.HOME, AppRoute.ACTIVITY), selection.backStack.map { it.route })
         assertEquals(listOf(10L, 11L), selection.backStack.map { it.id })
     }
 
@@ -71,7 +71,7 @@ class BottomNavigationVisibilityTest {
                 AppRoute.ACTIVITY,
             ) { route -> AppRouteEntry(route, nextId++) }
 
-        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACCOUNTS), accountSelection.backStack.map { it.route })
+        assertEquals(listOf(AppRoute.HOME, AppRoute.ACCOUNTS), accountSelection.backStack.map { it.route })
         assertEquals(activityStack, activitySelection.backStack)
     }
 
@@ -103,7 +103,7 @@ class BottomNavigationVisibilityTest {
         val selection =
             selectAppTabRootNavigation(activityStack, "", AppRoute.ACTIVITY) { route -> AppRouteEntry(route, nextId++) }
 
-        assertEquals(listOf(AppRoute.BUDGET, AppRoute.ACTIVITY), selection.backStack.map { it.route })
+        assertEquals(listOf(AppRoute.HOME, AppRoute.ACTIVITY), selection.backStack.map { it.route })
         assertTrue(decodeAppTabBackStacks(selection.savedTabBackStacks)[AppRoute.ACTIVITY] == null)
     }
 
@@ -120,7 +120,7 @@ class BottomNavigationVisibilityTest {
         assertFalse(AppRoute.EDIT_TRANSACTION.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_PAYEE.showsBottomNavigation())
         assertFalse(AppRoute.CHOOSE_CATEGORY.showsBottomNavigation())
-        assertFalse(AppRoute.NOTIFICATION_ONBOARDING.showsBottomNavigation())
+        assertFalse(AppRoute.PERSONALIZE.showsBottomNavigation())
         assertFalse(AppRoute.BUDGET_UNLOCK.showsBottomNavigation())
         assertFalse(AppRoute.SETUP_COMPLETE.showsBottomNavigation())
     }

@@ -5,11 +5,12 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,16 +37,16 @@ class OnboardingWordingTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Your budget.\nEverywhere.").assertExists()
+        composeTestRule.onNodeWithText("Your budget, your way.").assertExists()
         composeTestRule.onNodeWithText("FOR ACTUAL BUDGET").assertExists()
-        composeTestRule.onNodeWithText("Access your Actual Budget anywhere. Make changes offline. Sync when ready.").assertExists()
+        composeTestRule.onNodeWithText("Connect to Actual. Keep your finances organized, wherever you are.").assertExists()
         composeTestRule
-            .onNodeWithText("Need help setting up the API Gateway?")
+            .onNodeWithText("How Tandem works")
             .performClick()
         composeTestRule.waitForIdle()
         assertTrue(openedSetupGuide)
-        composeTestRule.onAllNodesWithText("Get started").assertCountEquals(1)
-        composeTestRule.onNodeWithText("Get started").performClick()
+        composeTestRule.onAllNodesWithText("Connect to Actual").assertCountEquals(1)
+        composeTestRule.onNodeWithText("Connect to Actual").performClick()
         assertEquals(AppRoute.SERVER_ADDRESS, openedRoute)
     }
 
@@ -58,7 +59,7 @@ class OnboardingWordingTest {
         }
 
         composeTestRule
-            .onNodeWithText("Tandem checks for the Actual API Gateway at /api/v1/.")
+            .onNodeWithText("Tandem connects straight to your Actual server. Nothing else to install.")
             .assertExists()
         composeTestRule.onNodeWithContentDescription("Setup progress. Step 1 of 4: Server.").assertExists()
         composeTestRule.onAllNodesWithText("Continue").assertCountEquals(1)
@@ -72,174 +73,89 @@ class OnboardingWordingTest {
     }
 
     @Test
-    fun notificationScreenRequestsPermissionOnlyAfterTap() {
-        val state = AppState()
-        var permissionRequests = 0
-        var openedRoute: AppRoute? = null
-        val navigation = noOpNavigation().copy(open = { openedRoute = it })
-
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
-            }
-        }
-
-        composeTestRule.onNodeWithText("Stay in the loop.").assertExists()
-        composeTestRule.onNodeWithText("Sync issues").assertExists()
-        composeTestRule.onNodeWithText("Know when your Actual server needs attention.").assertExists()
-        composeTestRule.onNodeWithText("Needs review").assertExists()
-        val cardBounds = composeTestRule.onNodeWithTag("notification-onboarding-info").fetchSemanticsNode().boundsInRoot
-        val messageBounds =
-            composeTestRule
-                .onNodeWithText("Know when your Actual server needs attention.")
-                .fetchSemanticsNode()
-                .boundsInRoot
-        assertTrue(messageBounds.left - cardBounds.left >= 16f)
-        assertTrue(cardBounds.right - messageBounds.right >= 16f)
-        assertEquals(0, permissionRequests)
-        composeTestRule.onNodeWithText("Allow notifications").performClick()
-
-        assertEquals(1, permissionRequests)
-        assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.SYNC_ONBOARDING, openedRoute)
-    }
-
-    @Test
-    fun syncStepSavesChoicesAndFinishesSetup() {
-        val state = AppState().apply { hasCompletedNotificationOnboarding = true }
-        var openedRoute: AppRoute? = null
-        val navigation = noOpNavigation().copy(open = { openedRoute = it })
-
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SyncOnboardingScreen(state, navigation, notificationPermissionEnabled = true)
-            }
-        }
-        composeTestRule.onNodeWithText("Keep it up to date.").assertExists()
-        composeTestRule.onNodeWithText("Sync in the background").performClick()
-        composeTestRule.onNodeWithText("Wi-Fi").performClick()
-        composeTestRule.onNodeWithText("Continue").performClick()
-
-        assertTrue(state.backgroundSyncEnabled)
-        assertEquals(SyncNetwork.WIFI, state.syncNetwork)
-        assertTrue(state.hasCompletedSyncOnboarding)
-        assertEquals(AppRoute.SETUP_COMPLETE, openedRoute)
-    }
-
-    @Test
-    fun notNowContinuesWithoutRequestingPermissionAndPersistsChoice() {
-        val state = AppState()
-        var permissionRequests = 0
-        var openedRoute: AppRoute? = null
-        val navigation = noOpNavigation().copy(open = { openedRoute = it })
-
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
-            }
-        }
-        composeTestRule.onNodeWithText("Not now").performClick()
-
-        assertEquals(0, permissionRequests)
-        assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.SYNC_ONBOARDING, openedRoute)
-        val restoredState = AppState().apply { restorePersistentSettings(state.persistentSettings()) }
-        assertTrue(restoredState.hasCompletedNotificationOnboarding)
-    }
-
-    @Test
-    fun notificationPermissionOrPreviousChoiceSkipsOnboarding() {
-        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = true))
-        assertFalse(shouldShowNotificationOnboarding(alreadyCompleted = true, permissionEnabled = false))
-        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = false))
-        assertTrue(shouldShowNotificationOnboarding(alreadyCompleted = false, permissionEnabled = null))
-    }
-
-    @Test
-    fun alreadyDeniedSystemPermissionCanOpenSettingsFromTheAllowAction() {
-        val state = AppState()
-        var openedSettings = false
-        val navigation = noOpNavigation()
-
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                NotificationOnboardingScreen(state, navigation) {
-                    // Native permission handlers open settings when the system has already denied access.
-                    openedSettings = true
-                }
-            }
-        }
-
-        composeTestRule.onNodeWithText("Allow notifications").performClick()
-
-        assertTrue(openedSettings)
-        assertTrue(state.hasCompletedNotificationOnboarding)
-    }
-
-    @Test
-    fun firstSyncSkipsNotificationStepWhenSystemPermissionIsAlreadyEnabled() {
-        val state = AppState()
+    fun firstSyncLeadsToPersonalizationWithoutAskingForNotifications() {
+        val state = AppState().apply { selectedBudgetId = "budget-1" }
         val route = mutableStateOf(AppRoute.FIRST_SYNC)
         val navigation = noOpNavigation().copy(open = { route.value = it })
-
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncCompletionAction(
-                    state = state,
-                    navigation = navigation,
-                    syncComplete = true,
-                    notificationPermissionEnabled = true,
-                    onComplete = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Done").performClick()
-
-        assertEquals(AppRoute.SYNC_ONBOARDING, route.value)
-    }
-
-    @Test
-    fun firstSyncDoneOpensOptionalNotificationStepAndCanBeSkipped() {
-        val state = AppState()
-        val route = mutableStateOf(AppRoute.FIRST_SYNC)
         val syncComplete = mutableStateOf(false)
-        var permissionRequests = 0
-        val navigation =
-            noOpNavigation().copy(
-                open = { route.value = it },
-                selectTab = { route.value = it },
-            )
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                when (route.value) {
-                    AppRoute.FIRST_SYNC ->
-                        FirstSyncCompletionAction(
-                            state = state,
-                            navigation = navigation,
-                            syncComplete = syncComplete.value,
-                            notificationPermissionEnabled = false,
-                            onComplete = {},
-                        )
-                    AppRoute.NOTIFICATION_ONBOARDING ->
-                        NotificationOnboardingScreen(state, navigation) { permissionRequests += 1 }
-                    else -> Unit
-                }
+                FirstSyncCompletionAction(state, navigation, syncComplete.value, notificationPermissionEnabled = false, onComplete = {})
             }
         }
 
         composeTestRule.onNodeWithText("Done").assertIsNotEnabled()
         composeTestRule.runOnIdle { syncComplete.value = true }
         composeTestRule.onNodeWithText("Done").assertIsEnabled().performClick()
+        assertEquals(AppRoute.PERSONALIZE, route.value)
+        state.updateExperience { it.copy(personalizationDeferred = true) }
+        assertEquals(AppRoute.SETUP_COMPLETE, nextSetupRoute(state, notificationPermissionEnabled = false))
+    }
 
-        composeTestRule.onNodeWithText("Stay in the loop.").assertExists()
-        assertEquals(AppRoute.NOTIFICATION_ONBOARDING, route.value)
-        composeTestRule.onNodeWithText("Not now").performClick()
+    @Test
+    fun justConnectingAsksNothingAndLandsOnHome() {
+        val state = AppState().apply { selectedBudgetId = "budget-1" }
+        var tab: AppRoute? = null
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                PersonalizeScreen(state, noOpNavigation().copy(reset = { tab = it }))
+            }
+        }
 
-        assertEquals(0, permissionRequests)
-        assertTrue(state.hasCompletedNotificationOnboarding)
-        assertEquals(AppRoute.SYNC_ONBOARDING, route.value)
+        composeTestRule.onNodeWithText("Want Tandem tailored to you?").assertExists()
+        composeTestRule.onNodeWithContentDescription("Step 1 of 5").assertExists()
+        composeTestRule.onNodeWithText("Just connect to Actual").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
+        assertEquals(AppRoute.HOME, tab)
+        assertEquals(ExperienceSettings(personalizationDeferred = true), state.experience)
+    }
+
+    @Test
+    fun choosingAllFiveGoalsWalksThroughFocusModeAndTools() {
+        val state = AppState().apply { selectedBudgetId = "budget-1" }
+        var tab: AppRoute? = null
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                PersonalizeScreen(state, noOpNavigation().copy(reset = { tab = it }))
+            }
+        }
+
+        composeTestRule.onNodeWithText("Continue").performClick()
+        listOf("Stay organized", "Get control of my spending", "Pay down debt", "Save for something", "Analyze my finances")
+            .forEach { composeTestRule.onNodeWithText(it).performScrollTo().performClick() }
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("What should Tandem focus on first?").assertExists()
+        composeTestRule.onNodeWithText("Recommended").assertExists()
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("Advanced").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("Suggested for you").assertExists()
+        composeTestRule.onAllNodesWithText("Add")[0].performClick()
+        composeTestRule.onNodeWithText("Added").assertExists()
+        composeTestRule.onNodeWithText("Open Home").performClick()
+
+        assertEquals(AppRoute.HOME, tab)
+        assertEquals(InterfaceMode.ADVANCED, state.interfaceMode)
+        val experience = checkNotNull(state.experience)
+        assertEquals(FinancialGoal.entries.toSet(), experience.selectedGoals)
+        assertEquals(FinancialGoal.ORGANIZE, experience.primaryGoal)
+        assertEquals(listOf(HomeModule.REVIEW_INBOX), experience.pinnedModules)
+    }
+
+    @Test
+    fun oneGoalSkipsTheFocusStep() {
+        val state = AppState().apply { selectedBudgetId = "budget-1" }
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) { PersonalizeScreen(state, noOpNavigation()) }
+        }
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("Pay down debt").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
+        composeTestRule.onNodeWithText("How much detail would you like?").assertExists()
+        assertEquals(FinancialGoal.DEBT, state.experience?.emphasis)
+        composeTestRule.onAllNodesWithContentDescription("Back")[0].performClick()
+        composeTestRule.onNodeWithText("What would you like to do with your money?").assertExists()
     }
 
     @Test

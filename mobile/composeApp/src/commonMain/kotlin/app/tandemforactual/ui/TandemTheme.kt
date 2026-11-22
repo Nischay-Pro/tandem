@@ -297,6 +297,7 @@ internal fun TandemTheme(
     reduceMotion: Boolean = false,
     animateThemeChanges: Boolean = true,
     language: AppLanguageController? = null,
+    interfaceMode: InterfaceMode = InterfaceMode.MINIMAL,
     content: @Composable () -> Unit,
 ) {
     val systemIsDark = isSystemInDarkTheme()
@@ -326,6 +327,7 @@ internal fun TandemTheme(
         )
 
     CompositionLocalProvider(
+        LocalInterfaceMode provides interfaceMode,
         LocalTandemPalette provides animatedPalette,
         LocalReduceMotion provides reduceMotion,
     ) {

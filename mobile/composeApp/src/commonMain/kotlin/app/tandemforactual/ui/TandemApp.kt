@@ -291,13 +291,13 @@ fun TandemApp(
                 if (hasEncryptedStore) {
                     state.selectedBudgetEncrypted = true
                     backStack.clear()
-                    backStack.add(newRouteEntry(AppRoute.BUDGET))
+                    backStack.add(newRouteEntry(AppRoute.HOME))
                 } else if (firstCachedBudget != null) {
                     state.selectedBudget = cachedBudgetName(state.selectedBudgetId, state.selectedBudget, firstCachedBudget)
                     state.selectedBudgetId = firstCachedBudget.budgetId
                     state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
                     backStack.clear()
-                    backStack.add(newRouteEntry(AppRoute.BUDGET))
+                    backStack.add(newRouteEntry(AppRoute.HOME))
                 }
             }
             AppStartupDestination.BUDGET_CHOOSER -> {
@@ -933,6 +933,13 @@ fun TandemApp(
             if (state.selectedBudgetEncrypted != it.isEncrypted) state.selectedBudgetEncrypted = it.isEncrypted
         }
     }
+    LaunchedEffect(state.modeSwitchTarget) {
+        val target = state.modeSwitchTarget ?: return@LaunchedEffect
+        delay(MODE_SWITCH_COVER_MS)
+        state.interfaceMode = target
+        delay(BUDGET_SWITCH_SPLASH_MIN_MS)
+        state.modeSwitchTarget = null
+    }
     LaunchedEffect(state.budgetSwitchSplashId) {
         val budgetId = state.budgetSwitchSplashId ?: return@LaunchedEffect
         val shown = TimeSource.Monotonic.markNow()
@@ -1191,7 +1198,7 @@ fun TandemApp(
             if (alreadyUnlocked && setupIncomplete) {
                 navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
             } else {
-                navigation.reset(AppRoute.BUDGET)
+                navigation.reset(AppRoute.HOME)
             }
             return@openSelectedBudget
         }
@@ -1210,7 +1217,7 @@ fun TandemApp(
                     if (previousRoute?.isTab() == true) {
                         navigation.back()
                     } else {
-                        navigation.reset(AppRoute.BUDGET)
+                        navigation.reset(AppRoute.HOME)
                     }
                 }
                 !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> {
@@ -1431,6 +1438,7 @@ fun TandemApp(
         reduceMotion,
         animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
         language = AppLanguageController(state.appLanguage) { state.appLanguage = it },
+        interfaceMode = state.interfaceMode,
     ) {
         val palette = tandemPalette
         val windowSize = LocalWindowInfo.current.containerSize
@@ -2015,7 +2023,10 @@ fun TandemApp(
                 },
             )
         }
-        BudgetSwitchSplash(state.selectedBudget.takeIf { state.budgetSwitchSplashId != null })
+        BudgetSwitchSplash(
+            state.modeSwitchTarget?.let { if (it == InterfaceMode.ADVANCED) "Advanced mode" else "Minimal mode" }
+                ?: state.selectedBudget.takeIf { state.budgetSwitchSplashId != null },
+        )
         AppLockGate(
             state = state,
             mobileSession = mobileSession,
@@ -2042,7 +2053,8 @@ fun TandemApp(
 }
 
 internal fun AppRoute.isTab(): Boolean =
-    this == AppRoute.BUDGET ||
+    this == AppRoute.HOME ||
+        this == AppRoute.BUDGET ||
         this == AppRoute.ACCOUNTS ||
         this == AppRoute.ACTIVITY ||
         this == AppRoute.REPORTS ||
@@ -2060,8 +2072,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.BUDGET_CHOOSER,
         AppRoute.BUDGET_UNLOCK,
         AppRoute.FIRST_SYNC,
-        AppRoute.NOTIFICATION_ONBOARDING,
-        AppRoute.SYNC_ONBOARDING,
+        AppRoute.PERSONALIZE,
         AppRoute.SETUP_COMPLETE,
         AppRoute.NEW_TRANSACTION,
         AppRoute.EDIT_TRANSACTION,
@@ -2088,3 +2099,4 @@ private const val SCREENSHOT_SETTLE_MILLIS = 1_500L
 private const val BUDGET_SWITCH_SPLASH_MIN_MS = 700L
 private const val BUDGET_SWITCH_SPLASH_MAX_MS = 5_000L
 private const val BUDGET_SWITCH_SETTLE_MS = 250L
+private const val MODE_SWITCH_COVER_MS = 220L

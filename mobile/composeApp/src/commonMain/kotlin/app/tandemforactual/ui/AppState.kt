@@ -156,6 +156,28 @@ internal class AppState {
     var backgroundSyncEnabled by mutableStateOf(false)
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
+    var interfaceMode by mutableStateOf(InterfaceMode.MINIMAL)
+    var modeSwitchTarget by mutableStateOf<InterfaceMode?>(null)
+
+    /** Starts a switch; the app applies it once the splash covers the screen. */
+    fun switchInterfaceMode(mode: InterfaceMode) {
+        if (mode != interfaceMode && modeSwitchTarget == null) modeSwitchTarget = mode
+    }
+
+    var experienceSettingsJson by mutableStateOf("{}")
+
+    /** Personalization for the open budget; null until the person has decided, so setup can ask once. */
+    val experience: ExperienceSettings? get() = decodeExperienceSettings(experienceSettingsJson)[selectedBudgetId]
+
+    fun updateExperience(change: (ExperienceSettings) -> ExperienceSettings) {
+        val all = decodeExperienceSettings(experienceSettingsJson)
+        experienceSettingsJson = encodeExperienceSettings(all + (selectedBudgetId to change(all[selectedBudgetId] ?: ExperienceSettings())))
+    }
+
+    fun resetExperience() {
+        experienceSettingsJson = encodeExperienceSettings(decodeExperienceSettings(experienceSettingsJson) - selectedBudgetId)
+    }
+
     var pendingSetupAfterUnlock by mutableStateOf(false)
     var unlockFailureCount by mutableStateOf(0)
     var localServerUrl by mutableStateOf("")
@@ -264,6 +286,8 @@ internal class AppState {
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
             "syncNetwork" to syncNetwork.name,
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
+            "interfaceMode" to interfaceMode.name,
+            "experienceSettingsJson" to experienceSettingsJson,
             "unlockFailureCount" to unlockFailureCount.toString(),
             "localServerUrl" to localServerUrl,
             "lastTransactionAccountId" to lastTransactionAccountId,
@@ -320,6 +344,8 @@ internal class AppState {
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
+        interfaceMode = InterfaceMode.entries.firstOrNull { it.name == saved["interfaceMode"] } ?: interfaceMode
+        experienceSettingsJson = saved["experienceSettingsJson"] ?: experienceSettingsJson
         unlockFailureCount = saved["unlockFailureCount"]?.toIntOrNull()?.coerceAtLeast(0) ?: unlockFailureCount
         localServerUrl = saved["localServerUrl"] ?: localServerUrl
         lastTransactionAccountId = saved["lastTransactionAccountId"] ?: lastTransactionAccountId

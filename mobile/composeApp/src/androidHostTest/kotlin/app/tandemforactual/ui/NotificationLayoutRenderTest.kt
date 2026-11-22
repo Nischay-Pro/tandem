@@ -45,10 +45,26 @@ class NotificationLayoutRenderTest {
     }
 
     @Test
-    fun notificationStep() = render("notification") { NotificationOnboardingScreen(AppState(), navigation) {} }
+    fun personalizeStep() = render("personalize") { PersonalizeScreen(AppState(), navigation) }
 
     @Test
-    fun syncStep() = render("sync") { SyncOnboardingScreen(AppState(), navigation, null) }
+    fun homeStep() =
+        render("home") {
+            HomeScreen(
+                AppState(),
+                TandemMobileSession(
+                    app.tandemforactual.api.client
+                        .TandemApiClient(),
+                    null,
+                    { 0L },
+                ),
+                navigation,
+                emptyList(),
+                null,
+                emptyList(),
+                emptyList(),
+            )
+        }
 
     @Test
     fun welcome() = render("welcome") { WelcomeScreen(navigation, onOpenSetupGuide = {}) }

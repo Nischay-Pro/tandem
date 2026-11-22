@@ -149,9 +149,9 @@ internal enum class AppRoute(
     LOCAL_SERVER_ADDRESS("Local address"),
     BUDGET_UNLOCK("Unlock budget"),
     FIRST_SYNC("Preparing budget"),
-    NOTIFICATION_ONBOARDING("Stay in the loop"),
-    SYNC_ONBOARDING("Keep it up to date"),
     SETUP_COMPLETE("Setup complete"),
+    PERSONALIZE("Personalize Tandem"),
+    HOME("Home"),
     BUDGET("Budget"),
     CATEGORY_GROUP("Essentials"),
     CATEGORY_DETAIL("Rent"),
@@ -862,8 +862,7 @@ internal fun AppRoute.isSetupRoute(): Boolean =
             AppRoute.BUDGET_CHOOSER,
             AppRoute.BUDGET_UNLOCK,
             AppRoute.FIRST_SYNC,
-            AppRoute.NOTIFICATION_ONBOARDING,
-            AppRoute.SYNC_ONBOARDING,
+            AppRoute.PERSONALIZE,
             AppRoute.SETUP_COMPLETE,
         )
 
@@ -949,14 +948,14 @@ internal fun selectAppTabNavigation(
             } else {
                 tabStacks.remove(selectedTab)
                 buildList {
-                    if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+                    if (selectedTab != AppRoute.HOME) add(newRouteEntry(AppRoute.HOME))
                     add(newRouteEntry(selectedTab))
                 }
             }
         } else {
             activeTab?.let { tabStacks[it] = currentBackStack }
             tabStacks[selectedTab] ?: buildList {
-                if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+                if (selectedTab != AppRoute.HOME) add(newRouteEntry(AppRoute.HOME))
                 add(newRouteEntry(selectedTab))
             }
         }
@@ -976,7 +975,7 @@ internal fun selectAppTabRootNavigation(
     tabStacks.remove(selectedTab)
     val rootBackStack =
         buildList {
-            if (selectedTab != AppRoute.BUDGET) add(newRouteEntry(AppRoute.BUDGET))
+            if (selectedTab != AppRoute.HOME) add(newRouteEntry(AppRoute.HOME))
             add(newRouteEntry(selectedTab))
         }
     return AppTabSelection(rootBackStack, encodeAppTabBackStacks(tabStacks))

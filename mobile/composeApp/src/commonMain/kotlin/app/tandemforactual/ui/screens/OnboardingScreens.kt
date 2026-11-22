@@ -42,7 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -74,11 +73,9 @@ import app.tandemforactual.ui.components.TandemIconButton
 import app.tandemforactual.ui.components.TandemLoadingIndicator
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.settings_section_budget
-import app.tandemforactual.ui.generated.resources.setup_about_every_six_hours_even
 import app.tandemforactual.ui.generated.resources.setup_access_your_actual_budget_anywhere
 import app.tandemforactual.ui.generated.resources.setup_actual_password
 import app.tandemforactual.ui.generated.resources.setup_add_your_actual_budget_server
-import app.tandemforactual.ui.generated.resources.setup_allow_notifications
 import app.tandemforactual.ui.generated.resources.setup_ask_the_budget_owner_to
 import app.tandemforactual.ui.generated.resources.setup_available_budgets
 import app.tandemforactual.ui.generated.resources.setup_available_on_this_server
@@ -95,7 +92,6 @@ import app.tandemforactual.ui.generated.resources.setup_checking_sign_in_options
 import app.tandemforactual.ui.generated.resources.setup_choose_a_budget
 import app.tandemforactual.ui.generated.resources.setup_choose_a_saved_budget
 import app.tandemforactual.ui.generated.resources.setup_choose_a_server_budget_or
-import app.tandemforactual.ui.generated.resources.setup_choose_how_tandem_syncs_with
 import app.tandemforactual.ui.generated.resources.setup_complete_offline_copy_saved
 import app.tandemforactual.ui.generated.resources.setup_connect_this_device_to_your
 import app.tandemforactual.ui.generated.resources.setup_connect_to_your_server
@@ -109,24 +105,18 @@ import app.tandemforactual.ui.generated.resources.setup_downloading_a_local_copy
 import app.tandemforactual.ui.generated.resources.setup_encrypted
 import app.tandemforactual.ui.generated.resources.setup_encrypted_actual_budget
 import app.tandemforactual.ui.generated.resources.setup_encrypted_budget_saved_on_this
-import app.tandemforactual.ui.generated.resources.setup_encrypted_budgets_sync_only_while
 import app.tandemforactual.ui.generated.resources.setup_encrypted_saved_on_this_device
 import app.tandemforactual.ui.generated.resources.setup_enter_the_address_you_use
 import app.tandemforactual.ui.generated.resources.setup_first_sync
 import app.tandemforactual.ui.generated.resources.setup_first_sync_complete
 import app.tandemforactual.ui.generated.resources.setup_first_sync_needs_attention
 import app.tandemforactual.ui.generated.resources.setup_for_actual_budget
-import app.tandemforactual.ui.generated.resources.setup_get_helpful_alerts_when_your
 import app.tandemforactual.ui.generated.resources.setup_get_started
-import app.tandemforactual.ui.generated.resources.setup_keep_it_up_to_date
 import app.tandemforactual.ui.generated.resources.setup_keep_tandem_open_for_the
-import app.tandemforactual.ui.generated.resources.setup_know_when_your_actual_server
 import app.tandemforactual.ui.generated.resources.setup_loading_budgets
 import app.tandemforactual.ui.generated.resources.setup_making_it_yours
 import app.tandemforactual.ui.generated.resources.setup_need_help_setting_up_the
-import app.tandemforactual.ui.generated.resources.setup_needs_review
 import app.tandemforactual.ui.generated.resources.setup_no_budgets_available
-import app.tandemforactual.ui.generated.resources.setup_not_now
 import app.tandemforactual.ui.generated.resources.setup_not_secure
 import app.tandemforactual.ui.generated.resources.setup_not_set
 import app.tandemforactual.ui.generated.resources.setup_on_this_server
@@ -155,15 +145,10 @@ import app.tandemforactual.ui.generated.resources.setup_sign_in_first
 import app.tandemforactual.ui.generated.resources.setup_sign_in_to_this_server
 import app.tandemforactual.ui.generated.resources.setup_sign_in_with_your_existing
 import app.tandemforactual.ui.generated.resources.setup_signing_in
-import app.tandemforactual.ui.generated.resources.setup_stay_in_the_loop
 import app.tandemforactual.ui.generated.resources.setup_sync_again_whenever_you_need
-import app.tandemforactual.ui.generated.resources.setup_sync_in_the_background
-import app.tandemforactual.ui.generated.resources.setup_sync_issues
-import app.tandemforactual.ui.generated.resources.setup_sync_over
 import app.tandemforactual.ui.generated.resources.setup_tandem
 import app.tandemforactual.ui.generated.resources.setup_tandem_can_t_use_this
 import app.tandemforactual.ui.generated.resources.setup_tandem_checks_for_the_actual
-import app.tandemforactual.ui.generated.resources.setup_these_changes_need_your_decision
 import app.tandemforactual.ui.generated.resources.setup_this_is_not_your_actual
 import app.tandemforactual.ui.generated.resources.setup_transactions_saved
 import app.tandemforactual.ui.generated.resources.setup_try_again
@@ -318,7 +303,7 @@ private fun WelcomeBrand(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SetupHeadline(
+internal fun SetupHeadline(
     title: String,
     supportingText: String,
 ) {
@@ -389,7 +374,7 @@ private fun SetupStepHeader(
 }
 
 @Composable
-private fun SetupPrimaryButton(
+internal fun SetupPrimaryButton(
     label: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -1119,7 +1104,7 @@ internal fun FirstSyncScreen(
                     SecondaryButton(stringResource(Res.string.setup_open_saved_copy)) {
                         state.pendingBudgetSelectionOrigin = null
                         selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
-                        navigation.selectTab(AppRoute.BUDGET)
+                        navigation.selectTab(AppRoute.HOME)
                     }
                 }
             }
@@ -1187,13 +1172,7 @@ internal fun FirstSyncCompletionAction(
 internal fun nextSetupRoute(
     state: AppState,
     notificationPermissionEnabled: Boolean?,
-): AppRoute =
-    when {
-        shouldShowNotificationOnboarding(state.hasCompletedNotificationOnboarding, notificationPermissionEnabled) ->
-            AppRoute.NOTIFICATION_ONBOARDING
-        !state.hasCompletedSyncOnboarding -> AppRoute.SYNC_ONBOARDING
-        else -> AppRoute.SETUP_COMPLETE
-    }
+): AppRoute = if (state.experience == null) AppRoute.PERSONALIZE else AppRoute.SETUP_COMPLETE
 
 internal fun continueSetup(
     state: AppState,
@@ -1224,109 +1203,6 @@ internal fun budgetOpenButtonEnabled(
     selectedBudgetAvailable &&
         (!loadingBudgets || hasCachedSnapshot) &&
         (!passwordRequired || budgetPassword.isNotBlank())
-
-@Composable
-internal fun NotificationOnboardingScreen(
-    state: AppState,
-    navigation: AppNavigation,
-    onRequestNotificationPermission: (() -> Unit)?,
-) {
-    OnboardingLayout(
-        verticalSpacing = TandemSpacing.medium,
-        content = {
-            SetupStepHeader(step = 4, navigation = navigation, optional = true)
-            SetupHeadline(stringResource(Res.string.setup_stay_in_the_loop), stringResource(Res.string.setup_get_helpful_alerts_when_your))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .testTag("notification-onboarding-info"),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
-            ) {
-                listOf(
-                    stringResource(Res.string.setup_sync_issues) to stringResource(Res.string.setup_know_when_your_actual_server),
-                    stringResource(Res.string.setup_needs_review) to stringResource(Res.string.setup_these_changes_need_your_decision),
-                ).forEach { (title, detail) ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.accent)
-                        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
-                            Text(
-                                title,
-                                color = tandemPalette.text,
-                                fontSize = TandemTypography.compactBody,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                detail,
-                                color = tandemPalette.muted,
-                                fontSize = TandemTypography.caption,
-                                lineHeight = TandemTypography.bodyLineHeight,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        actions = {
-            SetupPrimaryButton(stringResource(Res.string.setup_allow_notifications), modifier = Modifier.fillMaxWidth()) {
-                finishNotificationOnboarding(state, navigation, onRequestNotificationPermission)
-            }
-            SecondaryButton(stringResource(Res.string.setup_not_now), modifier = Modifier.fillMaxWidth()) {
-                finishNotificationOnboarding(state, navigation, onRequestPermission = null)
-            }
-        },
-    )
-}
-
-internal fun finishNotificationOnboarding(
-    state: AppState,
-    navigation: AppNavigation,
-    onRequestPermission: (() -> Unit)?,
-) {
-    state.hasCompletedNotificationOnboarding = true
-    onRequestPermission?.invoke()
-    navigation.open(nextSetupRoute(state, notificationPermissionEnabled = true))
-}
-
-@Composable
-internal fun SyncOnboardingScreen(
-    state: AppState,
-    navigation: AppNavigation,
-    notificationPermissionEnabled: Boolean?,
-) {
-    OnboardingLayout(
-        verticalSpacing = TandemSpacing.medium,
-        content = {
-            SetupStepHeader(step = 4, navigation = navigation, optional = true)
-            SetupHeadline(
-                stringResource(Res.string.setup_keep_it_up_to_date),
-                stringResource(Res.string.setup_choose_how_tandem_syncs_with),
-            )
-            SurfaceCard {
-                ToggleRow(
-                    stringResource(Res.string.setup_sync_in_the_background),
-                    if (state.selectedBudgetEncrypted) {
-                        stringResource(Res.string.setup_encrypted_budgets_sync_only_while)
-                    } else {
-                        stringResource(Res.string.setup_about_every_six_hours_even)
-                    },
-                    state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
-                    enabled = !state.selectedBudgetEncrypted,
-                ) { state.backgroundSyncEnabled = it }
-            }
-            LabelText(stringResource(Res.string.setup_sync_over))
-            SyncNetworkChoices(state.syncNetwork) { state.syncNetwork = it }
-        },
-        actions = {
-            SetupPrimaryButton(stringResource(Res.string.setup_continue), modifier = Modifier.fillMaxWidth()) {
-                state.hasCompletedSyncOnboarding = true
-                navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
-            }
-        },
-    )
-}
 
 @Composable
 internal fun SwitchBudgetScreen(
@@ -1443,7 +1319,7 @@ internal fun SetupCompleteScreen(
         actions = {
             SetupPrimaryButton(stringResource(Res.string.setup_open_budget), modifier = Modifier.fillMaxWidth()) {
                 state.pendingBudgetSelectionOrigin = null
-                navigation.selectTab(AppRoute.BUDGET)
+                navigation.selectTab(AppRoute.HOME)
             }
             Text(
                 stringResource(Res.string.setup_you_can_manage_syncing_in),

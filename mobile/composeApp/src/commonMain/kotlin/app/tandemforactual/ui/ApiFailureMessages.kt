@@ -19,7 +19,7 @@ internal fun apiFailureMessage(
     return when (errorCode) {
         "actual_only" ->
             "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address."
-        "address_unreachable", "network-error" -> "Tandem isn’t responding at this address. Check the server address."
+        "address_unreachable", "network-error" -> "Actual isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
         "tandem_route_unavailable" ->
@@ -70,7 +70,7 @@ internal fun apiFailureMessage(
                     "This device doesn’t have access to this budget. Ask the budget owner to grant access."
                 404, 405 -> "Tandem isn’t available here. Check the server address."
                 408, 425, 429 -> "Tandem couldn’t complete the request. Wait a moment before trying again."
-                in 500..599 -> "Tandem is temporarily unavailable. Try again shortly."
+                in 500..599 -> "The Actual server is temporarily unavailable. Try again shortly."
                 else -> fallback
             }
     }
