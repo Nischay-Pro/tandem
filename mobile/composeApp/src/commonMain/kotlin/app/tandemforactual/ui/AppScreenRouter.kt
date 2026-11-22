@@ -222,6 +222,7 @@ internal fun ScreenContent(
                 },
                 onAddTransaction = { navigation.newTransaction(null) },
                 onChooseBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
+                onOpenInsight = { navigation.open(it) },
             )
         AppRoute.REPORT_DETAIL -> {
             val kind =
@@ -648,6 +649,7 @@ internal fun ScreenContent(
         AppRoute.MONTHLY_REVIEW -> MonthlyReviewScreen(state, liveBudgetMonth, liveTransactions)
         AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)
         AppRoute.DEBT_PAYOFF -> DebtPayoffScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
+        AppRoute.SPENDING_TRENDS -> SpendingTrendsScreen(state, mobileSession)
     }
 }
 

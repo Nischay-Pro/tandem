@@ -125,6 +125,7 @@ internal fun ReportsScreen(
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
     onAddTransaction: () -> Unit,
     onChooseBudget: () -> Unit,
+    onOpenInsight: (AppRoute) -> Unit = {},
 ) {
     LaunchedEffect(state.selectedBudgetId) {
         if (state.reportsBudgetId != state.selectedBudgetId) {
@@ -177,6 +178,16 @@ internal fun ReportsScreen(
                     it.monthCount?.let { months -> state.reportsRangeMonths = months }
                 },
             )
+        }
+        item(key = "reports-more") {
+            SurfaceCard {
+                ListRow(
+                    "Spending trends",
+                    "Each category against past months",
+                    leading = RowLeading.Icon(Lucide.TrendingUp),
+                    onClick = { onOpenInsight(AppRoute.SPENDING_TRENDS) },
+                )
+            }
         }
         ReportKind.entries.forEach { kind ->
             item(key = "report-card-${kind.name}") {
