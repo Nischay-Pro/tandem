@@ -195,7 +195,7 @@ internal fun CategoryGroupScreen(
         val nextOrder = reorderItemToIndex(oldOrder, itemId, oldOrder.indexOf(itemId) + direction)
         if (oldOrder == nextOrder) return
         mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
-        mobileSession.clearBudgetActionMessage()
+        mobileSession.feedback.clearBudgetActionMessage()
         scope.launch {
             mobileSession.enqueueBudgetReorder(
                 state.selectedBudgetId,
@@ -277,7 +277,7 @@ internal fun CategoryGroupScreen(
                                 enabled = !state.readOnlyMode,
                             ) {
                                 groupNameDraft = group.name
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 showGroupDialog = true
                             }
                         }
@@ -323,7 +323,7 @@ internal fun CategoryGroupScreen(
                     fun startDrag() {
                         selectedCategoryOrderId = category.id
                         mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, categoryScopeId)
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         dragReorder.start(currentCategoryOrder(), category.id)
                     }
 
@@ -503,7 +503,7 @@ internal fun CategoryGroupScreen(
                             fun startHiddenDrag() {
                                 selectedCategoryOrderId = hidden.recordId
                                 mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, hiddenCategoryScopeId)
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 hiddenDrag.start(hiddenDrag.currentOrder(latestQueuedHiddenCategoryOrder()), hidden.recordId)
                             }
 
@@ -640,7 +640,7 @@ internal fun CategoryGroupScreen(
                 outlined = true,
                 onClick = {
                     newCategoryName = ""
-                    mobileSession.clearBudgetActionMessage()
+                    mobileSession.feedback.clearBudgetActionMessage()
                     showCreateCategoryDialog = true
                 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 20.dp),
@@ -655,9 +655,16 @@ internal fun CategoryGroupScreen(
             onNameChange = { groupNameDraft = it },
             busy = mobileSession.isPerformingBudgetAction || state.readOnlyMode,
             message = mobileSession.budgetActionMessage,
-            messageKind = mobileSession.budgetActionMessageKind,
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind,
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             placeholder = group.name,
             onDismiss = { showGroupDialog = false },
             onSave = {
@@ -755,9 +762,16 @@ internal fun CategoryGroupScreen(
             onNameChange = { newCategoryName = it },
             busy = mobileSession.isPerformingBudgetAction || state.readOnlyMode,
             message = mobileSession.budgetActionMessage,
-            messageKind = mobileSession.budgetActionMessageKind,
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind,
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             placeholder = "Groceries",
             onDismiss = { showCreateCategoryDialog = false },
             onSave = {

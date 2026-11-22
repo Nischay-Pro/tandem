@@ -301,7 +301,7 @@ internal fun UpcomingSchedulesScreen(
                                 selectedScheduleId = schedule.id
                                 showScheduleEditor = true
                                 dialogMode = "menu"
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                             },
                         )
                         TandemIconButton(
@@ -315,7 +315,7 @@ internal fun UpcomingSchedulesScreen(
                             selectedScheduleId = schedule.id
                             showScheduleEditor = true
                             dialogMode = "menu"
-                            mobileSession.clearBudgetActionMessage()
+                            mobileSession.feedback.clearBudgetActionMessage()
                         }
                     }
                 }
@@ -756,7 +756,7 @@ internal fun UpcomingSchedulesScreen(
                                 icon = Lucide.Pencil,
                                 enabled = !mobileSession.isPerformingBudgetAction,
                             ) {
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 dialogMode = "edit"
                             }
                             TandemActionButton(
@@ -766,7 +766,7 @@ internal fun UpcomingSchedulesScreen(
                                 icon = Lucide.Trash2,
                                 enabled = !mobileSession.isPerformingBudgetAction,
                             ) {
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 dialogMode = "delete"
                                 showDeleteScheduleConfirmation = true
                             }
@@ -780,9 +780,16 @@ internal fun UpcomingSchedulesScreen(
         DestructiveConfirmationDialog(
             title = "Delete schedule?",
             message = mobileSession.budgetActionMessage ?: "Remove ${selectedSchedule.name} from upcoming bills?",
-            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
             dismissLabel = "Keep schedule",
             enabled = !mobileSession.isPerformingBudgetAction,

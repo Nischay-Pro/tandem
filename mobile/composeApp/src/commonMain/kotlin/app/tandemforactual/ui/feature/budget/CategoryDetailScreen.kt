@@ -218,7 +218,7 @@ internal fun CategoryDetailScreen(
                 else -> state.categoryIconChoice(selectedCategory.id) ?: "Automatic"
             }
         iconSearch = ""
-        mobileSession.clearBudgetActionMessage()
+        mobileSession.feedback.clearBudgetActionMessage()
         showEditDialog = true
     }
     LaunchedEffect(state.selectedCategoryId, state.categoryEditRequested, category?.id) {
@@ -261,7 +261,7 @@ internal fun CategoryDetailScreen(
                                 onClickLabel = "Edit assigned amount",
                                 onClick = {
                                     assignedAmountDraft = state.formatAmount(category.assignedMinor)
-                                    mobileSession.clearBudgetActionMessage()
+                                    mobileSession.feedback.clearBudgetActionMessage()
                                     showAssignedAmountDialog = true
                                 },
                             ).padding(
@@ -351,7 +351,7 @@ internal fun CategoryDetailScreen(
                                     ?.id
                                     .orEmpty()
                             moveMoneyAmountDraft = ""
-                            mobileSession.clearBudgetActionMessage()
+                            mobileSession.feedback.clearBudgetActionMessage()
                             showMoveMoneyDialog = true
                         },
                     )
@@ -688,7 +688,7 @@ internal fun CategoryDetailScreen(
                         ) {
                             showEditDialog = false
                             deleteDestinationId = null
-                            mobileSession.clearBudgetActionMessage()
+                            mobileSession.feedback.clearBudgetActionMessage()
                             showDeleteDialog = true
                         }
                         TandemActionButton(

@@ -446,7 +446,7 @@ internal fun AccountDetailScreen(
                         enabled = !liveAccount.closed && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                         modifier = Modifier.weight(1f),
                     ) {
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         pickStatementFile()
                     }
                 }
@@ -528,7 +528,7 @@ internal fun AccountDetailScreen(
             parseResult = statementParseResult,
             parseError = statementParseError,
             actionMessage = mobileSession.budgetActionMessage,
-            actionMessageKind = mobileSession.budgetActionMessageKind,
+            actionMessageKind = mobileSession.feedback.budgetActionMessageKind,
             dateOrder = statementDateOrder,
             csvLayout = statementCsvLayout,
             csvMapping = statementCsvMapping,

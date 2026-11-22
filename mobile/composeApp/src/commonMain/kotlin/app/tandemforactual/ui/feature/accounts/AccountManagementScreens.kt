@@ -287,7 +287,7 @@ internal fun AccountOptionsScreen(
                         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                     ) {
                         renameValue = liveAccount.name
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         renameDialog = true
                     }
                 }
@@ -335,7 +335,7 @@ internal fun AccountOptionsScreen(
                     ) {
                         transferAccountId = ""
                         transferCategoryId = ""
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         confirmClose = true
                     }
                 }

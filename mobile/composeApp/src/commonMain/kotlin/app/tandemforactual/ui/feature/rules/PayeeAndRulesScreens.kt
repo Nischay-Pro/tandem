@@ -187,7 +187,7 @@ internal fun ManagePayeesScreen(
                     containerColor = tandemPalette.accentSurface,
                 ) {
                     newPayeeName = ""
-                    mobileSession.clearBudgetActionMessage()
+                    mobileSession.feedback.clearBudgetActionMessage()
                     showAddPayee = true
                 }
             }
@@ -221,7 +221,7 @@ internal fun ManagePayeesScreen(
                     mergeTargetId = null
                     defaultCategoryDraft = defaultCategories[payeeId]?.singleOrNull().orEmpty()
                     mode = "menu"
-                    mobileSession.clearBudgetActionMessage()
+                    mobileSession.feedback.clearBudgetActionMessage()
                 }
                 SurfaceCard {
                     ListRow(
@@ -481,7 +481,7 @@ internal fun ManagePayeesScreen(
                                     leading = RowLeading.Icon(Lucide.Tags),
                                     onClick = {
                                         defaultCategoryDraft = selectedDefaultCategoryId.orEmpty()
-                                        mobileSession.clearBudgetActionMessage()
+                                        mobileSession.feedback.clearBudgetActionMessage()
                                         mode = "default-category"
                                     },
                                 )
@@ -494,7 +494,7 @@ internal fun ManagePayeesScreen(
                                 enabled = !state.readOnlyMode,
                             ) {
                                 nameDraft = selectedPayee.second
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 mode = "rename"
                             }
                             TandemActionButton(
@@ -504,7 +504,7 @@ internal fun ManagePayeesScreen(
                                 icon = Lucide.Tags,
                                 enabled = !state.readOnlyMode && payees.size > 1,
                             ) {
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 mode = "merge"
                             }
                             TandemActionButton(
@@ -514,7 +514,7 @@ internal fun ManagePayeesScreen(
                                 icon = Lucide.Trash2,
                                 enabled = !state.readOnlyMode,
                             ) {
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 mode = "delete"
                             }
                         }
@@ -529,9 +529,16 @@ internal fun ManagePayeesScreen(
             message =
                 mobileSession.budgetActionMessage
                     ?: "Move transactions from ${selectedPayee.second} to ${mergeTarget?.second ?: "the selected payee"}?",
-            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Merging…" else "Merge",
             dismissLabel = "Choose another",
             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && mergeTarget != null,
@@ -558,9 +565,16 @@ internal fun ManagePayeesScreen(
         DestructiveConfirmationDialog(
             title = "Delete ${selectedPayee.second}?",
             message = mobileSession.budgetActionMessage ?: "Remove this payee from the budget?",
-            messageKind = mobileSession.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
             dismissLabel = "Keep payee",
             enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,

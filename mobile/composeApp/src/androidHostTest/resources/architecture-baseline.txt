@@ -146,7 +146,6 @@ function-size TandemMobileSession.createTransaction
 function-size TandemMobileSession.deleteTransaction
 function-size TandemMobileSession.discardWrite
 function-size TandemMobileSession.markTransactionsReconciled
-function-size TandemMobileSession.performBudgetAction
 function-size TandemMobileSession.processQueuedBudgetReorders
 function-size TandemMobileSession.retryBudgetMutation
 function-size TandemMobileSession.signOutAndClearLocalData

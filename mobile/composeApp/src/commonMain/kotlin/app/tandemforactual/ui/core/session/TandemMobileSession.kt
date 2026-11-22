@@ -43,6 +43,7 @@ import app.tandemforactual.ui.core.format.transactionAmountInputError
 import app.tandemforactual.ui.core.format.transactionDateValidationMessage
 import app.tandemforactual.ui.core.format.validateTransactionDate
 import app.tandemforactual.ui.core.session.banking.BankingController
+import app.tandemforactual.ui.core.session.feedback.BudgetActionRunner
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
@@ -176,12 +177,12 @@ internal fun pendingDeviceChangeNotice(): String =
 @Composable
 internal fun budgetActionFeedbackMessage(mobileSession: TandemMobileSession) {
     val message = mobileSession.budgetActionMessage ?: return
-    val actionLabel = mobileSession.budgetActionMessageActionLabel
+    val actionLabel = mobileSession.feedback.budgetActionMessageActionLabel
     InlineMessage(
         message,
-        mobileSession.budgetActionMessageKind,
+        mobileSession.feedback.budgetActionMessageKind,
         actionLabel = actionLabel,
-        onAction = if (actionLabel == null) null else ({ mobileSession.retryBudgetAction() }),
+        onAction = if (actionLabel == null) null else ({ mobileSession.feedback.retryBudgetAction() }),
     )
 }
 
@@ -290,17 +291,30 @@ internal class TandemMobileSession(
     /** Bank providers, links and bank sync. */
     val banking =
         BankingController(apiClient, nowEpochMillis) { budgetId, password, message, action ->
-            performBudgetAction(budgetId, password, message, action = action)
+            feedback.performBudgetAction(budgetId, password, message, action = action)
         }
 
     /** Budget checkup, change history, rule preview and export. */
     val insights =
         InsightsController(apiClient) { budgetId, password, message, action ->
-            performBudgetAction(budgetId, password, message, action = action)
+            feedback.performBudgetAction(budgetId, password, message, action = action)
         }
 
     /** Queued schedule actions and their status. */
     val schedules = ScheduleActionController(this)
+
+    /** Messages, retries and the in-progress flag for budget changes made from any screen. */
+    val feedback = BudgetActionRunner(this)
+
+    override val budgetActionMessage: String? get() = feedback.budgetActionMessage
+
+    override fun reportBudgetActionMessage(message: String?) {
+        feedback.budgetActionMessage = message
+    }
+
+    override val isPerformingBudgetAction: Boolean get() = feedback.isPerformingBudgetAction
+
+    override suspend fun <T> withoutBudgetActionFeedback(action: suspend () -> T): T = feedback.withoutBudgetActionFeedback(action)
 
     private val mainStorage = database?.let { BudgetStorage(it) }
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
@@ -543,7 +557,7 @@ internal class TandemMobileSession(
     var syncComplete by mutableStateOf(false)
         private set
 
-    val syncError: String? get() = syncPresentation.error
+    override val syncError: String? get() = syncPresentation.error
 
     suspend fun recentPayeeIds(budgetId: String): List<String> =
         runCatching { repository?.recentPayeeIds(budgetId, RECENT_PAYEE_COUNT) }.getOrNull().orEmpty()
@@ -599,64 +613,6 @@ internal class TandemMobileSession(
 
     var serverConfirmedConflictOperationId by mutableStateOf<String?>(null)
         private set
-
-    override var isPerformingBudgetAction by mutableStateOf(false)
-        private set
-
-    private val budgetActionFeedbackState = BudgetActionFeedbackState()
-    private var budgetActionRetryAction: (suspend () -> Boolean)? = null
-    private var budgetActionRetryInFlight = false
-    private var suppressBudgetActionFeedback = false
-    private val currentBudgetActionMessageOwner: AppRouteEntry?
-        get() = if (suppressBudgetActionFeedback) null else budgetActionFeedbackState.currentRouteEntry
-
-    override fun reportBudgetActionMessage(message: String?) {
-        budgetActionMessage = message
-    }
-
-    override var budgetActionMessage: String?
-        get() = budgetActionFeedbackState.currentRouteEntry?.let { budgetActionFeedbackState.messageFor(it)?.text }
-        private set(value) {
-            if (value == null) {
-                budgetActionFeedbackState.clear(currentBudgetActionMessageOwner)
-                budgetActionRetryAction = null
-            } else {
-                budgetActionRetryAction = null
-                budgetActionFeedbackState.show(value, InlineMessageKind.ERROR, currentBudgetActionMessageOwner)
-            }
-        }
-
-    val budgetActionMessageKind: InlineMessageKind
-        get() {
-            val routeEntry = budgetActionFeedbackState.currentRouteEntry
-            return routeEntry?.let { budgetActionFeedbackState.messageFor(it)?.kind } ?: InlineMessageKind.ERROR
-        }
-
-    val budgetActionMessageActionLabel: String?
-        get() {
-            val routeEntry = budgetActionFeedbackState.currentRouteEntry
-            return routeEntry?.let { budgetActionFeedbackState.messageFor(it)?.actionLabel }
-        }
-
-    fun retryBudgetAction() {
-        if (isPerformingBudgetAction || budgetActionRetryInFlight) return
-        val retry = budgetActionRetryAction ?: return
-        budgetActionRetryInFlight = true
-        sessionScope.launch {
-            try {
-                retry()
-            } finally {
-                budgetActionRetryInFlight = false
-            }
-        }
-    }
-
-    var budgetActionWasAppliedButRefreshFailed by mutableStateOf(false)
-        private set
-
-    private var budgetActionShouldRetry by mutableStateOf(false)
-    private var lastBudgetActionHttpStatus: Int? = null
-    private var lastBudgetActionErrorCode: String? = null
 
     private var budgetReorderQueueState by mutableStateOf(BudgetReorderQueueState())
     var isPersistingBudgetMutation by mutableStateOf(false)
@@ -755,17 +711,17 @@ internal class TandemMobileSession(
                 }
                 budgetReorderQueueState = restoredState
                 budgetQueueLoaded = true
-                if (budgetActionMessage == BUDGET_QUEUE_RESTORE_ERROR) clearBudgetActionMessage()
+                if (budgetActionMessage == BUDGET_QUEUE_RESTORE_ERROR) feedback.clearBudgetActionMessage()
                 true
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                setBudgetActionMessage(
+                feedback.setBudgetActionMessage(
                     text = BUDGET_QUEUE_RESTORE_ERROR,
                     actionLabel = "Try again",
                     retryAction = {
                         val restored = restoreBudgetReorderQueue()
-                        if (restored) clearBudgetActionMessage()
+                        if (restored) feedback.clearBudgetActionMessage()
                         restored
                     },
                 )
@@ -811,14 +767,14 @@ internal class TandemMobileSession(
 
     private suspend fun persistBudgetReorderQueueMutation(transform: (BudgetReorderQueueState) -> BudgetReorderQueueState): Boolean {
         if (isPersistingBudgetMutation) {
-            budgetActionMessage = "Saving a category change on this device. Try again in a moment."
+            feedback.budgetActionMessage = "Saving a category change on this device. Try again in a moment."
             return false
         }
         isPersistingBudgetMutation = true
         try {
             if (!restoreBudgetReorderQueue()) return false
             if (budgetMutationQueuePersistence == null) {
-                budgetActionMessage = "Tandem can’t save this change on this device. Restart the app and try again."
+                feedback.budgetActionMessage = "Tandem can’t save this change on this device. Restart the app and try again."
                 return false
             }
             return budgetQueuePersistenceMutex.withLock {
@@ -828,7 +784,7 @@ internal class TandemMobileSession(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    setBudgetActionMessage(
+                    feedback.setBudgetActionMessage(
                         text = localStorageFailureMessage(error, "Couldn’t save this change on this device."),
                         actionLabel = "Try again",
                         retryAction = { persistBudgetReorderQueueMutation(transform) },
@@ -836,7 +792,7 @@ internal class TandemMobileSession(
                     return@withLock false
                 }
                 budgetReorderQueueState = next
-                budgetActionMessage = null
+                feedback.budgetActionMessage = null
                 true
             }
         } finally {
@@ -1351,15 +1307,15 @@ internal class TandemMobileSession(
         name: String? = null,
     ): Boolean {
         if (budgetId.isBlank() || itemId.isBlank()) {
-            budgetActionMessage = "Open a budget before making this change."
+            feedback.budgetActionMessage = "Open a budget before making this change."
             return false
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return false
         }
         if (!isCurrentIdentityCacheOwner()) {
-            budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
+            feedback.budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
             return false
         }
         val queued =
@@ -1380,7 +1336,7 @@ internal class TandemMobileSession(
             }
         if (queued) {
             if (!isServerReachable) {
-                setBudgetActionMessage(
+                feedback.setBudgetActionMessage(
                     "Saved on this device. It will sync when Actual is reachable.",
                     InlineMessageKind.INFO,
                 )
@@ -1398,7 +1354,7 @@ internal class TandemMobileSession(
         currentOrder: List<String>,
         encryptionPassword: String?,
     ): Boolean {
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         val scopeId = groupId
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
@@ -1424,19 +1380,19 @@ internal class TandemMobileSession(
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
-            budgetActionMessage = "Enter a category group name up to 100 characters."
+            feedback.budgetActionMessage = "Enter a category group name up to 100 characters."
             return null
         }
         if (budgetId.isBlank()) {
-            budgetActionMessage = "Open a budget before adding a category group."
+            feedback.budgetActionMessage = "Open a budget before adding a category group."
             return null
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return null
         }
         val localGroupId = "local-${Uuid.random()}"
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         val persisted =
             persistBudgetReorderQueueMutation { queue ->
                 queue.enqueueIfMissing(
@@ -1465,18 +1421,18 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
-            budgetActionMessage = "Enter a category group name up to 100 characters."
+            feedback.budgetActionMessage = "Enter a category group name up to 100 characters."
             return false
         }
         if (budgetId.isBlank() || groupId.isBlank()) {
-            budgetActionMessage = "Open a budget before renaming this category group."
+            feedback.budgetActionMessage = "Open a budget before renaming this category group."
             return false
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return false
         }
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1501,11 +1457,11 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (budgetId.isBlank() || groupId.isBlank()) {
-            budgetActionMessage = "Open a budget before deleting this category group."
+            feedback.budgetActionMessage = "Open a budget before deleting this category group."
             return false
         }
         if (refuseWriteInReadOnlyMode()) return false
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1530,19 +1486,19 @@ internal class TandemMobileSession(
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
-            budgetActionMessage = "Enter a category name up to 100 characters."
+            feedback.budgetActionMessage = "Enter a category name up to 100 characters."
             return null
         }
         if (budgetId.isBlank() || groupId.isBlank()) {
-            budgetActionMessage = "Open a budget before adding a category."
+            feedback.budgetActionMessage = "Open a budget before adding a category."
             return null
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return null
         }
         val localCategoryId = "local-category-${Uuid.random()}"
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         val persisted =
             persistBudgetReorderQueueMutation { queue ->
                 val resolvedGroupId = queue.resolveCategoryGroupId(budgetId, groupId)
@@ -1571,18 +1527,18 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
-            budgetActionMessage = "Enter a category name up to 100 characters."
+            feedback.budgetActionMessage = "Enter a category name up to 100 characters."
             return false
         }
         if (budgetId.isBlank() || categoryId.isBlank()) {
-            budgetActionMessage = "Open a budget before renaming this category."
+            feedback.budgetActionMessage = "Open a budget before renaming this category."
             return false
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return false
         }
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1606,14 +1562,14 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (budgetId.isBlank() || categoryId.isBlank() || groupId.isBlank()) {
-            budgetActionMessage = "Choose a category group."
+            feedback.budgetActionMessage = "Choose a category group."
             return false
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return false
         }
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1637,14 +1593,14 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (budgetId.isBlank() || categoryId.isBlank()) {
-            budgetActionMessage = "Open a budget before deleting this category."
+            feedback.budgetActionMessage = "Open a budget before deleting this category."
             return false
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return false
         }
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1667,7 +1623,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (budgetId.isBlank() || groupId.isBlank() || refuseWriteInReadOnlyMode()) return false
-        budgetActionMessage = null
+        feedback.budgetActionMessage = null
         return persistBudgetReorderQueueMutation { queue ->
             queue.enqueueIfMissing(
                 QueuedBudgetReorder(
@@ -1688,16 +1644,6 @@ internal class TandemMobileSession(
         scopeId: String,
     ) {
         budgetReorderQueue = budgetReorderQueue.clearMessage(budgetId, scopeId)
-    }
-
-    override suspend fun <T> withoutBudgetActionFeedback(action: suspend () -> T): T {
-        val wasSuppressed = suppressBudgetActionFeedback
-        suppressBudgetActionFeedback = true
-        return try {
-            action()
-        } finally {
-            suppressBudgetActionFeedback = wasSuppressed
-        }
     }
 
     private fun clearBudgetReorderMessageAfterDelay(
@@ -1855,10 +1801,10 @@ internal class TandemMobileSession(
             var createdCategoryId: String? = null
             var createdPayeeId: String? = null
             var createdAccountId: String? = null
-            budgetActionWasAppliedButRefreshFailed = false
-            budgetActionShouldRetry = false
-            lastBudgetActionHttpStatus = null
-            lastBudgetActionErrorCode = null
+            feedback.budgetActionWasAppliedButRefreshFailed = false
+            feedback.budgetActionShouldRetry = false
+            feedback.lastBudgetActionHttpStatus = null
+            feedback.lastBudgetActionErrorCode = null
             val isRefreshOnlyRequest =
                 request.refreshOnly ||
                     request.kind in
@@ -1963,7 +1909,7 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(
+                                feedback.performBudgetAction(
                                     request.budgetId,
                                     request.encryptionPassword,
                                     "Couldn’t update the assigned amount.",
@@ -1981,7 +1927,12 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t update carryover.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t update carryover.",
+                                    null,
+                                ) {
                                     apiClient.setBudgetCategoryCarryover(
                                         request.budgetId,
                                         request.itemId,
@@ -1994,7 +1945,7 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.COPY_BUDGET_MONTH -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(
+                                feedback.performBudgetAction(
                                     request.budgetId,
                                     request.encryptionPassword,
                                     "Couldn’t copy last month’s assignments.",
@@ -2011,7 +1962,12 @@ internal class TandemMobileSession(
                             BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
                                 val payload = request.requirePayload()
                                 val assignments = payload.requiredAssignments()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t apply this template.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t apply this template.",
+                                    null,
+                                ) {
                                     apiClient.applyBudgetTemplate(
                                         request.budgetId,
                                         payload.requiredString("month"),
@@ -2023,7 +1979,7 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(
+                                feedback.performBudgetAction(
                                     request.budgetId,
                                     request.encryptionPassword,
                                     "Couldn’t hold this money for next month.",
@@ -2040,7 +1996,7 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.RESET_BUDGET_HOLD -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(
+                                feedback.performBudgetAction(
                                     request.budgetId,
                                     request.encryptionPassword,
                                     "Couldn’t reset the next-month hold.",
@@ -2056,7 +2012,7 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.MOVE_BUDGET_MONEY -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t move money.", null) {
+                                feedback.performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t move money.", null) {
                                     apiClient.moveMoneyBetweenCategories(
                                         request.budgetId,
                                         payload.requiredString("month"),
@@ -2070,7 +2026,12 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.CLOSE_ACCOUNT -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t close this account.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t close this account.",
+                                    null,
+                                ) {
                                     apiClient.closeBudgetAccount(
                                         request.budgetId,
                                         request.itemId,
@@ -2083,7 +2044,12 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.RENAME_ACCOUNT -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t rename this account.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t rename this account.",
+                                    null,
+                                ) {
                                     apiClient.renameBudgetAccount(
                                         request.budgetId,
                                         request.itemId,
@@ -2094,7 +2060,12 @@ internal class TandemMobileSession(
                                 }
                             }
                             BudgetReorderKind.REOPEN_ACCOUNT ->
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t reopen this account.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t reopen this account.",
+                                    null,
+                                ) {
                                     apiClient.reopenBudgetAccount(
                                         request.budgetId,
                                         request.itemId,
@@ -2106,7 +2077,12 @@ internal class TandemMobileSession(
                                 val order =
                                     request.requirePayload()["order"] as? JsonObject
                                         ?: throw IllegalStateException("A saved reorder could not be read.")
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t save the new order.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t save the new order.",
+                                    null,
+                                ) {
                                     apiClient.setBudgetOrder(
                                         request.budgetId,
                                         order,
@@ -2117,7 +2093,12 @@ internal class TandemMobileSession(
                             }
                             BudgetReorderKind.MOVE_ACCOUNT -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t reorder this account.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t reorder this account.",
+                                    null,
+                                ) {
                                     apiClient.moveBudgetAccount(
                                         request.budgetId,
                                         request.itemId,
@@ -2133,7 +2114,12 @@ internal class TandemMobileSession(
                             BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
                             -> {
                                 val payload = request.requirePayload()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t update this payee.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t update this payee.",
+                                    null,
+                                ) {
                                     apiClient.manageBudgetPayee(
                                         request.budgetId,
                                         request.itemId,
@@ -2149,7 +2135,12 @@ internal class TandemMobileSession(
                             BudgetReorderKind.IMPORT_STATEMENT -> {
                                 val payload = request.requirePayload()
                                 val imported = payload.requiredStatementItems()
-                                performBudgetAction(request.budgetId, request.encryptionPassword, "Couldn’t import this statement.", null) {
+                                feedback.performBudgetAction(
+                                    request.budgetId,
+                                    request.encryptionPassword,
+                                    "Couldn’t import this statement.",
+                                    null,
+                                ) {
                                     apiClient.importBudgetAccountTransactions(
                                         request.budgetId,
                                         payload.requiredString("accountId"),
@@ -2228,17 +2219,17 @@ internal class TandemMobileSession(
                 repository?.remapPendingAccountReferences(request.budgetId, request.itemId, createdAccountIdAfterAction)
                 remapQueuedAccountReferences(request.operationId, request.itemId, createdAccountIdAfterAction)
             }
-            val refreshFailed = budgetActionWasAppliedButRefreshFailed
-            val failureDisposition = budgetMutationFailureDisposition(lastBudgetActionErrorCode)
+            val refreshFailed = feedback.budgetActionWasAppliedButRefreshFailed
+            val failureDisposition = budgetMutationFailureDisposition(feedback.lastBudgetActionErrorCode)
             val operationOutcomeUncertain =
                 failureDisposition in
                     setOf(
                         BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
                         BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
                     ) ||
-                    lastBudgetActionHttpStatus == 408 ||
-                    lastBudgetActionHttpStatus in 500..599
-            val operationResultUnavailable = budgetMutationNeedsRefresh(lastBudgetActionErrorCode)
+                    feedback.lastBudgetActionHttpStatus == 408 ||
+                    feedback.lastBudgetActionHttpStatus in 500..599
+            val operationResultUnavailable = budgetMutationNeedsRefresh(feedback.lastBudgetActionErrorCode)
             val resultRefreshSucceeded =
                 operationResultUnavailable &&
                     withoutBudgetActionFeedback {
@@ -2261,18 +2252,18 @@ internal class TandemMobileSession(
             } else if (operationOutcomeUncertain) {
                 repository?.markBudgetMutationUncertain(
                     request.operationId,
-                    lastBudgetActionErrorCode ?: "http-$lastBudgetActionHttpStatus",
+                    feedback.lastBudgetActionErrorCode ?: "http-$feedback.lastBudgetActionHttpStatus",
                 )
             } else if (isRefreshOnlyRequest) {
                 repository?.returnBudgetMutationToQueue(request.operationId, "refresh-unavailable")
-            } else if (lastBudgetActionErrorCode == "operation_rejected") {
-                repository?.markBudgetMutationRejected(request.operationId, lastBudgetActionErrorCode!!)
-            } else if (lastBudgetActionHttpStatus == 409) {
-                repository?.markBudgetMutationConflict(request.operationId, lastBudgetActionErrorCode ?: "http-409")
-            } else if (budgetActionShouldRetry) {
-                repository?.returnBudgetMutationToQueue(request.operationId, lastBudgetActionErrorCode ?: "retry-later")
+            } else if (feedback.lastBudgetActionErrorCode == "operation_rejected") {
+                repository?.markBudgetMutationRejected(request.operationId, feedback.lastBudgetActionErrorCode!!)
+            } else if (feedback.lastBudgetActionHttpStatus == 409) {
+                repository?.markBudgetMutationConflict(request.operationId, feedback.lastBudgetActionErrorCode ?: "http-409")
+            } else if (feedback.budgetActionShouldRetry) {
+                repository?.returnBudgetMutationToQueue(request.operationId, feedback.lastBudgetActionErrorCode ?: "retry-later")
             } else {
-                repository?.markBudgetMutationRejected(request.operationId, lastBudgetActionErrorCode ?: "local-validation")
+                repository?.markBudgetMutationRejected(request.operationId, feedback.lastBudgetActionErrorCode ?: "local-validation")
             }
             if (request.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP && refreshFailed && createdCategoryGroupIdAfterAction != null) {
                 budgetReorderQueue =
@@ -2351,13 +2342,13 @@ internal class TandemMobileSession(
                         budgetReorderQueue.awaitRefresh(request, "Saved in Actual. Waiting for the budget to refresh.")
                     }
             } else if (operationOutcomeUncertain) {
-                val message = budgetMutationFailureMessage(lastBudgetActionErrorCode)
+                val message = budgetMutationFailureMessage(feedback.lastBudgetActionErrorCode)
                 budgetReorderQueue =
                     budgetReorderQueue.holdForReview(
                         request,
                         message,
                     )
-            } else if (lastBudgetActionHttpStatus == 409) {
+            } else if (feedback.lastBudgetActionHttpStatus == 409) {
                 withoutBudgetActionFeedback {
                     synchronize(
                         request.budgetId,
@@ -2366,7 +2357,7 @@ internal class TandemMobileSession(
                         background = true,
                     )
                 }
-                val message = budgetMutationFailureMessage(lastBudgetActionErrorCode)
+                val message = budgetMutationFailureMessage(feedback.lastBudgetActionErrorCode)
                 budgetReorderQueue = budgetReorderQueue.failHead(request, message)
             } else if ((
                     request.refreshOnly ||
@@ -2387,7 +2378,7 @@ internal class TandemMobileSession(
                     )
             } else if (moved) {
                 budgetReorderQueue = budgetReorderQueue.complete(request, refreshFailed, null)
-            } else if (budgetActionShouldRetry || !isServerReachable || !apiClient.isAuthenticated) {
+            } else if (feedback.budgetActionShouldRetry || !isServerReachable || !apiClient.isAuthenticated) {
                 budgetReorderQueue =
                     budgetReorderQueue.waitForConnection(
                         request,
@@ -2418,27 +2409,6 @@ internal class TandemMobileSession(
 
     fun setReadOnlyMode(enabled: Boolean) {
         readOnlyMode = enabled
-    }
-
-    fun clearBudgetActionMessage() {
-        budgetActionFeedbackState.clear(budgetActionFeedbackState.currentRouteEntry)
-        budgetActionRetryAction = null
-    }
-
-    fun setBudgetActionRoute(routeEntry: AppRouteEntry) {
-        if (budgetActionFeedbackState.currentRouteEntry != routeEntry) budgetActionRetryAction = null
-        budgetActionFeedbackState.changeRoute(routeEntry)
-    }
-
-    private fun setBudgetActionMessage(
-        text: String,
-        kind: InlineMessageKind = InlineMessageKind.ERROR,
-        ownerRoute: AppRouteEntry? = currentBudgetActionMessageOwner,
-        actionLabel: String? = null,
-        retryAction: (suspend () -> Boolean)? = null,
-    ) {
-        budgetActionRetryAction = retryAction
-        budgetActionFeedbackState.show(text, kind, ownerRoute, actionLabel)
     }
 
     fun clearTransactionWriteMessage() {
@@ -3246,11 +3216,11 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            budgetActionMessage = "Enter an account name."
+            feedback.budgetActionMessage = "Enter an account name."
             return false
         }
         if (cleanName.length > 100) {
-            budgetActionMessage = "Account names can be up to 100 characters."
+            feedback.budgetActionMessage = "Account names can be up to 100 characters."
             return false
         }
         val localAccountId = "local-account-${Uuid.random()}"
@@ -3297,11 +3267,11 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            budgetActionMessage = "Enter an account name."
+            feedback.budgetActionMessage = "Enter an account name."
             return false
         }
         if (cleanName.length > 100) {
-            budgetActionMessage = "Account names can be up to 100 characters."
+            feedback.budgetActionMessage = "Account names can be up to 100 characters."
             return false
         }
         return enqueueOfflineBudgetMutation(
@@ -3350,7 +3320,7 @@ internal class TandemMobileSession(
         }
         if (budgetId.isBlank() || accountId.isBlank() || refuseWriteInReadOnlyMode()) return false
         if (!isCurrentIdentityCacheOwner()) {
-            budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
+            feedback.budgetActionMessage = "Sign in to the server and account that own this budget before changing it."
             return false
         }
         return persistBudgetReorderQueueMutation { queue ->
@@ -3473,14 +3443,14 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            budgetActionMessage = "Enter a category name."
+            feedback.budgetActionMessage = "Enter a category name."
             return false
         }
         if (cleanName.length > 100) {
-            budgetActionMessage = "Category names can be up to 100 characters."
+            feedback.budgetActionMessage = "Category names can be up to 100 characters."
             return false
         }
-        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t rename this category. Try again.") {
+        return feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t rename this category. Try again.") {
             apiClient.renameBudgetCategory(budgetId, categoryId, cleanName, encryptionPassword, idempotencyKey)
         }
     }
@@ -3494,19 +3464,19 @@ internal class TandemMobileSession(
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            budgetActionMessage = "Enter a category name."
+            feedback.budgetActionMessage = "Enter a category name."
             return null
         }
         if (cleanName.length > 100) {
-            budgetActionMessage = "Category names can be up to 100 characters."
+            feedback.budgetActionMessage = "Category names can be up to 100 characters."
             return null
         }
         var categoryId: String? = null
         val created =
-            performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category. Try again.") {
+            feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category. Try again.") {
                 categoryId = apiClient.createBudgetCategory(budgetId, categoryGroupId, cleanName, encryptionPassword, idempotencyKey)
             }
-        return categoryId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
+        return categoryId.takeIf { created || feedback.budgetActionWasAppliedButRefreshFailed }
     }
 
     suspend fun createBudgetCategoryGroup(
@@ -3518,15 +3488,15 @@ internal class TandemMobileSession(
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank() || cleanName.length > 100) {
-            budgetActionMessage = "Enter a category group name up to 100 characters."
+            feedback.budgetActionMessage = "Enter a category group name up to 100 characters."
             return null
         }
         var groupId: String? = null
         val created =
-            performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category group. Try again.") {
+            feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t create this category group. Try again.") {
                 groupId = apiClient.createBudgetCategoryGroup(budgetId, cleanName, isIncome, encryptionPassword, idempotencyKey)
             }
-        return groupId.takeIf { created || budgetActionWasAppliedButRefreshFailed }
+        return groupId.takeIf { created || feedback.budgetActionWasAppliedButRefreshFailed }
     }
 
     suspend fun manageBudgetCategoryGroup(
@@ -3539,10 +3509,10 @@ internal class TandemMobileSession(
         idempotencyKey: String? = null,
     ): Boolean {
         if (action == "rename" && name.isNullOrBlank()) {
-            budgetActionMessage = "Enter a category group name."
+            feedback.budgetActionMessage = "Enter a category group name."
             return false
         }
-        return performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category group. Try again.") {
+        return feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category group. Try again.") {
             apiClient.manageBudgetCategoryGroup(budgetId, groupId, action, name?.trim(), targetId, encryptionPassword, idempotencyKey)
         }
     }
@@ -3556,7 +3526,7 @@ internal class TandemMobileSession(
         targetGroupId: String? = null,
         idempotencyKey: String? = null,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category. Try again.") {
+        feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t update this category. Try again.") {
             apiClient.manageBudgetCategory(budgetId, categoryId, action, targetId, encryptionPassword, targetGroupId, idempotencyKey)
         }
 
@@ -3565,26 +3535,26 @@ internal class TandemMobileSession(
         name: String,
         encryptionPassword: String?,
     ): String? {
-        val messageOwner = currentBudgetActionMessageOwner
+        val messageOwner = feedback.currentBudgetActionMessageOwner
         val cleanName = name.trim()
         if (cleanName.isBlank()) {
-            budgetActionMessage = "Enter a payee name."
+            feedback.budgetActionMessage = "Enter a payee name."
             return null
         }
         if (cleanName.length > 100) {
-            budgetActionMessage = "Payee names can be up to 100 characters."
+            feedback.budgetActionMessage = "Payee names can be up to 100 characters."
             return null
         }
         if (refuseWriteInReadOnlyMode()) {
-            budgetActionMessage = transactionWriteMessage
+            feedback.budgetActionMessage = transactionWriteMessage
             return null
         }
         if (budgetId.isBlank()) {
-            budgetActionMessage = "Open a budget before changing it."
+            feedback.budgetActionMessage = "Open a budget before changing it."
             return null
         }
         if (!isCurrentIdentityCacheOwner()) {
-            setBudgetActionMessage(
+            feedback.setBudgetActionMessage(
                 "Sign in to the server and account that own this budget before changing it.",
                 ownerRoute = messageOwner,
             )
@@ -3610,7 +3580,7 @@ internal class TandemMobileSession(
         if (!queued) return null
         payeeRecords = payeeRecordsWithPendingCreates(budgetId, payeeRecords)
         if (!isServerReachable) {
-            setBudgetActionMessage(
+            feedback.setBudgetActionMessage(
                 "Saved on this device. It will sync when Actual is reachable.",
                 InlineMessageKind.INFO,
                 messageOwner,
@@ -3628,11 +3598,11 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (amountMinor < 0L) {
-            budgetActionMessage = "Assigned amounts can’t be negative."
+            feedback.budgetActionMessage = "Assigned amounts can’t be negative."
             return false
         }
         if (amountMinor > 9_007_199_254_740_991L) {
-            budgetActionMessage = "Enter a smaller assigned amount."
+            feedback.budgetActionMessage = "Enter a smaller assigned amount."
             return false
         }
         return enqueueOfflineBudgetMutation(
@@ -3708,7 +3678,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (transactions.isEmpty() || transactions.size > 1_000) {
-            budgetActionMessage = "Choose a statement with 1 to 1,000 transactions."
+            feedback.budgetActionMessage = "Choose a statement with 1 to 1,000 transactions."
             return false
         }
         val payload =
@@ -3747,7 +3717,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (assignments.isEmpty() || assignments.size > 500 || assignments.any { it.second < 0L }) {
-            budgetActionMessage = "Choose a valid budget template."
+            feedback.budgetActionMessage = "Choose a valid budget template."
             return false
         }
         return enqueueOfflineBudgetMutation(
@@ -3814,7 +3784,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
     ): Boolean {
         if (fromCategoryId == toCategoryId || amountMinor <= 0L) {
-            budgetActionMessage = "Choose two categories and a positive amount."
+            feedback.budgetActionMessage = "Choose two categories and a positive amount."
             return false
         }
         return enqueueOfflineBudgetMutation(
@@ -3839,7 +3809,7 @@ internal class TandemMobileSession(
         encryptionPassword: String?,
         idempotencyKey: String? = null,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this category. Try again.") {
+        feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this category. Try again.") {
             apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
         }
 
@@ -3868,7 +3838,7 @@ internal class TandemMobileSession(
         rule: JsonObject,
         encryptionPassword: String?,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t add this rule. Try again.") {
+        feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t add this rule. Try again.") {
             apiClient.createBudgetRule(budgetId, rule, encryptionPassword)
         }
 
@@ -3878,7 +3848,7 @@ internal class TandemMobileSession(
         rule: JsonObject,
         encryptionPassword: String?,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t save this rule. Try again.") {
+        feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t save this rule. Try again.") {
             apiClient.manageBudgetRule(budgetId, ruleId, "edit", rule, encryptionPassword)
         }
 
@@ -3887,7 +3857,7 @@ internal class TandemMobileSession(
         ruleId: String,
         encryptionPassword: String?,
     ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this rule. Try again.") {
+        feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this rule. Try again.") {
             apiClient.manageBudgetRule(budgetId, ruleId, "delete", null, encryptionPassword)
         }
 
@@ -3902,15 +3872,15 @@ internal class TandemMobileSession(
     ): Boolean {
         val cleanName = name?.trim()
         if (action == "rename" && cleanName.isNullOrBlank()) {
-            budgetActionMessage = "Enter a payee name."
+            feedback.budgetActionMessage = "Enter a payee name."
             return false
         }
         if (cleanName != null && cleanName.length > 100) {
-            budgetActionMessage = "Payee names can be up to 100 characters."
+            feedback.budgetActionMessage = "Payee names can be up to 100 characters."
             return false
         }
         if (action == "merge" && (targetPayeeId.isNullOrBlank() || targetPayeeId == payeeId)) {
-            budgetActionMessage = "Choose another payee to merge into."
+            feedback.budgetActionMessage = "Choose another payee to merge into."
             return false
         }
         val kind =
@@ -3920,7 +3890,7 @@ internal class TandemMobileSession(
                 "delete" -> BudgetReorderKind.DELETE_PAYEE
                 "default-category" -> BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY
                 else -> {
-                    budgetActionMessage = "This payee change isn’t supported."
+                    feedback.budgetActionMessage = "This payee change isn’t supported."
                     return false
                 }
             }
@@ -3945,7 +3915,7 @@ internal class TandemMobileSession(
         val name = request.name ?: return null
         var createdId: String? = null
         val saved =
-            performBudgetAction(
+            feedback.performBudgetAction(
                 budgetId = request.budgetId,
                 encryptionPassword = request.encryptionPassword,
                 failureMessage = "Couldn’t add this payee. Try again.",
@@ -3959,7 +3929,7 @@ internal class TandemMobileSession(
                         idempotencyKeyOverride = request.operationId,
                     )
             }
-        return createdId.takeIf { saved || budgetActionWasAppliedButRefreshFailed }
+        return createdId.takeIf { saved || feedback.budgetActionWasAppliedButRefreshFailed }
     }
 
     private suspend fun createQueuedBudgetAccount(request: QueuedBudgetReorder): String? {
@@ -3967,7 +3937,7 @@ internal class TandemMobileSession(
         val name = payload.stringValue("name") ?: request.name ?: return null
         var createdId: String? = null
         val saved =
-            performBudgetAction(
+            feedback.performBudgetAction(
                 budgetId = request.budgetId,
                 encryptionPassword = request.encryptionPassword,
                 failureMessage = "Couldn’t add this account.",
@@ -3983,7 +3953,7 @@ internal class TandemMobileSession(
                         idempotencyKeyOverride = request.operationId,
                     )
             }
-        return createdId.takeIf { saved || budgetActionWasAppliedButRefreshFailed }
+        return createdId.takeIf { saved || feedback.budgetActionWasAppliedButRefreshFailed }
     }
 
     private suspend fun remapQueuedAccountReferences(
@@ -4019,137 +3989,6 @@ internal class TandemMobileSession(
             persistBudgetReorderQueueNow(next)
             budgetReorderQueueState = next
         }
-    }
-
-    private suspend fun performBudgetAction(
-        budgetId: String,
-        encryptionPassword: String?,
-        failureMessage: String,
-        messageOwner: AppRouteEntry? = currentBudgetActionMessageOwner,
-        action: suspend () -> Unit,
-    ): Boolean {
-        budgetActionMessage = null
-        budgetActionWasAppliedButRefreshFailed = false
-        budgetActionShouldRetry = false
-        lastBudgetActionHttpStatus = null
-        lastBudgetActionErrorCode = null
-        if (refuseWriteInReadOnlyMode()) {
-            transactionWriteMessage?.let { setBudgetActionMessage(it, ownerRoute = messageOwner) }
-            return false
-        }
-        if (budgetId.isBlank() || !apiClient.isAuthenticated) {
-            setBudgetActionMessage("Sign in and open a budget before changing it.", ownerRoute = messageOwner)
-            return false
-        }
-        if (!isCurrentIdentityCacheOwner()) {
-            setBudgetActionMessage(
-                "Sign in to the server and account that own this budget before changing it.",
-                ownerRoute = messageOwner,
-            )
-            return false
-        }
-        if (isPerformingBudgetAction) return false
-        isPerformingBudgetAction = true
-        var actionApplied = false
-        try {
-            apiClient.withExclusiveSession {
-                action()
-                actionApplied = true
-            }
-            if (synchronize(budgetId, encryptionPassword, background = suppressBudgetActionFeedback) == null) {
-                budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage =
-                    syncError ?: "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
-                setBudgetActionMessage(
-                    refreshMessage,
-                    InlineMessageKind.WARNING,
-                    messageOwner,
-                    actionLabel = "Refresh",
-                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
-                )
-                return false
-            }
-            budgetActionRetryAction = null
-            return true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: TandemApiException) {
-            budgetActionShouldRetry = shouldKeepBudgetMutationQueued(error.httpStatus)
-            lastBudgetActionHttpStatus = error.httpStatus
-            lastBudgetActionErrorCode = error.errorCode
-            isServerReachable = error.httpStatus != null && !budgetActionShouldRetry
-            if (actionApplied) {
-                budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage = "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
-                setBudgetActionMessage(
-                    refreshMessage,
-                    InlineMessageKind.WARNING,
-                    messageOwner,
-                    actionLabel = "Refresh",
-                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
-                )
-            } else if (budgetActionShouldRetry) {
-                setBudgetActionMessage(
-                    error.userFacingMessage(failureMessage),
-                    ownerRoute = messageOwner,
-                    actionLabel = "Try again",
-                    retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
-                )
-            } else {
-                // Network failures are handled by the persistent queue. Do not surface the
-                // transport exception as if the category edit itself was rejected.
-                if (!budgetActionShouldRetry && error.httpStatus != null) {
-                    setBudgetActionMessage(error.userFacingMessage(failureMessage), ownerRoute = messageOwner)
-                }
-            }
-            return false
-        } catch (_: Exception) {
-            isServerReachable = false
-            budgetActionShouldRetry = true
-            lastBudgetActionErrorCode = "network-error"
-            if (actionApplied) {
-                budgetActionWasAppliedButRefreshFailed = true
-                val refreshMessage = "Actual was updated, but Tandem couldn’t refresh the budget. Sync to load the latest data."
-                setBudgetActionMessage(
-                    refreshMessage,
-                    InlineMessageKind.WARNING,
-                    messageOwner,
-                    actionLabel = "Refresh",
-                    retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, refreshMessage) },
-                )
-            } else {
-                setBudgetActionMessage(
-                    failureMessage,
-                    ownerRoute = messageOwner,
-                    actionLabel = "Try again",
-                    retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
-                )
-            }
-            return false
-        } finally {
-            isPerformingBudgetAction = false
-        }
-    }
-
-    private suspend fun retryBudgetActionRefresh(
-        budgetId: String,
-        encryptionPassword: String?,
-        messageOwner: AppRouteEntry?,
-        failureMessage: String,
-    ): Boolean {
-        if (synchronize(budgetId, encryptionPassword) == null) {
-            setBudgetActionMessage(
-                failureMessage,
-                InlineMessageKind.WARNING,
-                messageOwner,
-                actionLabel = "Refresh",
-                retryAction = { retryBudgetActionRefresh(budgetId, encryptionPassword, messageOwner, failureMessage) },
-            )
-            return false
-        }
-        budgetActionWasAppliedButRefreshFailed = false
-        clearBudgetActionMessage()
-        return true
     }
 
     suspend fun updateTransaction(

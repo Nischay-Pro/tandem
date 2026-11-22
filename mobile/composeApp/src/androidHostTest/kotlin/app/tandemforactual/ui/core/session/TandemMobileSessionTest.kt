@@ -444,7 +444,7 @@ class TandemMobileSessionTest {
                         credentialStore,
                     )
                 assertEquals(serverUrl, session.restoreStoredSession())
-                session.setBudgetActionRoute(AppRouteEntry(AppRoute.BUDGET, 1))
+                session.feedback.setBudgetActionRoute(AppRouteEntry(AppRoute.BUDGET, 1))
 
                 assertFalse(session.banking.runBankSync("budget-1", null))
 
@@ -453,7 +453,7 @@ class TandemMobileSessionTest {
                     "Actual isn’t responding at this address. Check the server address.",
                     session.budgetActionMessage,
                 )
-                assertEquals("Try again", session.budgetActionMessageActionLabel)
+                assertEquals("Try again", session.feedback.budgetActionMessageActionLabel)
 
                 val preview = session.previewStatementImportTransactions("budget-1", "account-1", listOf("import-1"), null)
                 assertFalse(preview.serverChecked)

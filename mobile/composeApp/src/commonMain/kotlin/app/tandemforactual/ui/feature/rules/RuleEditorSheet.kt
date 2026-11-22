@@ -84,7 +84,7 @@ internal fun RuleEditorSheet(
     val close = {
         if (!mobileSession.isPerformingBudgetAction) {
             state.ruleEditorRuleId = null
-            mobileSession.clearBudgetActionMessage()
+            mobileSession.feedback.clearBudgetActionMessage()
         }
     }
     TandemTaskSheet(
@@ -218,7 +218,7 @@ private fun RuleEditorContent(
                 }
                 RulePreview(state, mobileSession, draft)
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.budgetActionMessageKind) }
+                mobileSession.budgetActionMessage?.let { InlineMessage(it, mobileSession.feedback.budgetActionMessageKind) }
                 PrimaryButton(
                     if (ruleId.isBlank()) "Add rule" else "Save rule",
                     enabled = canEdit && !busy,

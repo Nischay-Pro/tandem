@@ -342,7 +342,7 @@ internal fun BudgetScreen(
         }
         scope.launch {
             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
-            mobileSession.clearBudgetActionMessage()
+            mobileSession.feedback.clearBudgetActionMessage()
             val saved =
                 mobileSession.enqueueBudgetReorder(
                     state.selectedBudgetId,
@@ -464,7 +464,7 @@ internal fun BudgetScreen(
                                 icon = Lucide.CalendarDays,
                                 enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                                 onClick = {
-                                    mobileSession.clearBudgetActionMessage()
+                                    mobileSession.feedback.clearBudgetActionMessage()
                                     showCopyLastMonthDialog = true
                                 },
                             )
@@ -476,7 +476,7 @@ internal fun BudgetScreen(
                                 icon = Lucide.CalendarDays,
                                 enabled = !mobileSession.isPerformingBudgetAction,
                                 onClick = {
-                                    mobileSession.clearBudgetActionMessage()
+                                    mobileSession.feedback.clearBudgetActionMessage()
                                     showBudgetTemplatesDialog = true
                                 },
                             )
@@ -596,7 +596,7 @@ internal fun BudgetScreen(
                                                     holdEnterNewOperand = false
                                                     holdAmountMessage = null
                                                     holdKeypadVisible = true
-                                                    mobileSession.clearBudgetActionMessage()
+                                                    mobileSession.feedback.clearBudgetActionMessage()
                                                     showNextMonthHoldDialog = true
                                                     holdSheetMounted = true
                                                 },
@@ -893,7 +893,7 @@ internal fun BudgetScreen(
                                 selectedBudgetCategoryGroupId = group.id
                                 selectedBudgetCategoryOrderId = category.id
                                 mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, group.id)
-                                mobileSession.clearBudgetActionMessage()
+                                mobileSession.feedback.clearBudgetActionMessage()
                                 budgetCategoryDrag.start(budgetCategoryDrag.currentOrder(latestQueuedCategoryOrder(group)), category.id)
                             }
 
@@ -1046,7 +1046,7 @@ internal fun BudgetScreen(
                     onClick = {
                         categoryGroupNameDraft = ""
                         newCategoryGroupIsIncome = false
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         showCreateCategoryGroupDialog = true
                     },
                 )
@@ -1464,9 +1464,16 @@ internal fun BudgetScreen(
             onNameChange = { categoryGroupNameDraft = it },
             busy = isCreatingCategoryGroup || mobileSession.isPersistingBudgetMutation,
             message = mobileSession.budgetActionMessage,
-            messageKind = mobileSession.budgetActionMessageKind,
-            messageActionLabel = mobileSession.budgetActionMessageActionLabel,
-            onMessageAction = if (mobileSession.budgetActionMessageActionLabel == null) null else mobileSession::retryBudgetAction,
+            messageKind = mobileSession.feedback.budgetActionMessageKind,
+            messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
+            onMessageAction =
+                if (mobileSession.feedback.budgetActionMessageActionLabel ==
+                    null
+                ) {
+                    null
+                } else {
+                    mobileSession.feedback::retryBudgetAction
+                },
             placeholder = "Travel & Leisure",
             nameLabel = "Group name",
             description = "Keep related categories together under one heading.",

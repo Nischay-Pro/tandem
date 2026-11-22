@@ -576,7 +576,7 @@ internal fun AccountsScreen(
                 newAccountName = ""
                 newAccountOffBudget = false
                 newAccountGroupId = ""
-                mobileSession.clearBudgetActionMessage()
+                mobileSession.feedback.clearBudgetActionMessage()
                 addAccountDialog = true
             }
             "banks" -> navigation.open(AppRoute.BANK_CONNECTIONS)
@@ -846,7 +846,7 @@ internal fun AccountsScreen(
                         fun startDrag() {
                             selectedAccountOrderId = account.id
                             mobileSession.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
-                            mobileSession.clearBudgetActionMessage()
+                            mobileSession.feedback.clearBudgetActionMessage()
                             val fullOrder = latestAccountOrder()
                             dragReorder.start(
                                 itemOrder = fullOrder.filter { it in movableAccountIds },
@@ -970,7 +970,7 @@ internal fun AccountsScreen(
                         newAccountName = ""
                         newAccountOffBudget = false
                         newAccountGroupId = ""
-                        mobileSession.clearBudgetActionMessage()
+                        mobileSession.feedback.clearBudgetActionMessage()
                         addAccountDialog = true
                     }
                     TandemActionButton(

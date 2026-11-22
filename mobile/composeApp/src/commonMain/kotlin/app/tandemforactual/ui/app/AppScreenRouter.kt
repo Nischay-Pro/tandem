@@ -617,7 +617,7 @@ internal fun ScreenContent(
                                                         createGroupId.isNotBlank() &&
                                                         newName.length <= 100,
                                             ) {
-                                                mobileSession.clearBudgetActionMessage()
+                                                mobileSession.feedback.clearBudgetActionMessage()
                                                 scope.launch {
                                                     val categoryId =
                                                         mobileSession.enqueueBudgetCategoryCreate(

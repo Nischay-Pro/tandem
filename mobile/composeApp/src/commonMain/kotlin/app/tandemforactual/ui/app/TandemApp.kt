@@ -741,7 +741,7 @@ fun TandemApp(
         )
     val routeEntry = backStack.last()
     val route = routeEntry.route
-    SideEffect { mobileSession.setBudgetActionRoute(routeEntry) }
+    SideEffect { mobileSession.feedback.setBudgetActionRoute(routeEntry) }
     LaunchedEffect(mobileSession.budgets, state.selectedBudgetId) {
         mobileSession.budgets
             .firstOrNull { it.budgetId == state.selectedBudgetId }
@@ -962,7 +962,7 @@ fun TandemApp(
         }
     }
     LaunchedEffect(route) {
-        mobileSession.clearBudgetActionMessage()
+        mobileSession.feedback.clearBudgetActionMessage()
     }
     LaunchedEffect(route, state.selectedBudgetId, syncRetryCounter) {
         if (route == AppRoute.FIRST_SYNC && state.selectedBudgetId.isNotBlank()) {
