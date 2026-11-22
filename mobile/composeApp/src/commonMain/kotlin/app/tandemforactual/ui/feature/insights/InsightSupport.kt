@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.planning.TrendDirection
-import app.tandemforactual.ui.core.format.platformFormatMonth
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 import app.tandemforactual.ui.core.state.AppState
@@ -89,15 +88,6 @@ internal data class RecordNames(
     val accounts: Map<String, String>,
 ) {
     fun category(id: String?): String = id?.takeIf { it.isNotEmpty() }?.let { categories[it] ?: "Deleted category" } ?: "Uncategorized"
-}
-
-/** A month a number of months after the current one, written out, such as “March 2027”. */
-internal fun monthFromNow(
-    today: String,
-    offset: Int,
-): String {
-    val index = today.take(4).toInt() * 12 + today.substring(5, 7).toInt() - 1 + offset
-    return platformFormatMonth(index / 12, index % 12 + 1, abbreviated = false)
 }
 
 /** A whole percentage from basis points, such as 1,250 as “13%”. */

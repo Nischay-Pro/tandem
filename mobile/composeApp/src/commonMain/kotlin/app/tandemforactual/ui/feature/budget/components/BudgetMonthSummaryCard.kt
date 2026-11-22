@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.AppState
@@ -38,7 +39,6 @@ import app.tandemforactual.ui.design.theme.tandemRevealEnter
 import app.tandemforactual.ui.design.theme.tandemRevealExit
 import app.tandemforactual.ui.feature.budget.BudgetAssignmentKind
 import app.tandemforactual.ui.feature.budget.BudgetAssignmentPresentation
-import app.tandemforactual.ui.feature.budget.daysInMonth
 import app.tandemforactual.ui.feature.budget.stillToSpend
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Gauge

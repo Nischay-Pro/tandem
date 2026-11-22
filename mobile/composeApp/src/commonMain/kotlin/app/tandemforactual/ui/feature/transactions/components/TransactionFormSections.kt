@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.format.transactionAmountInputError
 import app.tandemforactual.ui.core.format.transactionAmountNeedsFormatConfirmation
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -49,7 +50,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.transactions.TransactionDatePickerDialog
 import app.tandemforactual.ui.feature.transactions.TransactionTypePicker
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 import app.tandemforactual.ui.feature.transactions.selectTransactionType
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide

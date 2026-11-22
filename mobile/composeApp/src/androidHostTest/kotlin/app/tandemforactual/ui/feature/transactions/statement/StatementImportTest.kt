@@ -2,9 +2,9 @@ package app.tandemforactual.ui.feature.transactions.statement
 
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.platform.decodeStatementBytes
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows

@@ -25,7 +25,7 @@ import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PayoffStrategy
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.platformFormatMonth
+import app.tandemforactual.ui.core.format.monthLabel
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
@@ -82,11 +82,6 @@ internal fun DebtPayoffScreen(
     val minimumsOnly = remember(ready) { PlanningMath.plan(ready, 0, strategy) }
     val today = platformTodayIsoDate()
 
-    fun monthLabel(offset: Int): String {
-        val (y, m) = today.split('-').let { it[0].toInt() to it[1].toInt() }
-        val index = y * 12 + (m - 1) + offset
-        return platformFormatMonth(index / 12, index % 12 + 1, abbreviated = false)
-    }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (debts.isEmpty()) {
             EmptyState("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
@@ -98,12 +93,12 @@ internal fun DebtPayoffScreen(
             YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
             return@PageColumn
         }
-        DebtPayoffSummary(state, plan, scrub, ::monthLabel)
+        DebtPayoffSummary(state, plan, scrub, { monthLabel(today, it) })
         plan?.let { DebtPayoffChart(ready, it, scrub) { i -> scrub = i } }
         DebtPayoffControls(state, strategy, extra, { strategy = it }, { extra = it })
         if (plan != null) {
             DebtPayoffComparison(state, plan, other, minimumsOnly, ready.size, strategy)
-            PayoffOrderCard(state, plan, strategy, debts, terms, ::monthLabel) { editors.debtAccount = it }
+            PayoffOrderCard(state, plan, strategy, debts, terms, { monthLabel(today, it) }) { editors.debtAccount = it }
         }
         YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
         Text(

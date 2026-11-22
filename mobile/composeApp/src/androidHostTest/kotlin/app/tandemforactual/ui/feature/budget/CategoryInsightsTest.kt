@@ -1,6 +1,6 @@
 package app.tandemforactual.ui.feature.budget
 
-import app.tandemforactual.ui.feature.transactions.daysInMonth
+import app.tandemforactual.ui.core.format.daysInMonth
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

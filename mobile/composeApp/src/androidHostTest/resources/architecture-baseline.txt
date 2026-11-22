@@ -19,13 +19,11 @@ cross-feature BudgetUnlockScreen -> auth
 cross-feature CategoryDetailScreenParts -> activity
 cross-feature CategoryDetailScreenParts -> reports
 cross-feature CategoryGroupScreen -> accounts
-cross-feature CategoryInsights -> transactions
 cross-feature CurrencyScreens -> accounts
 cross-feature CustomReportScreen -> insights
 cross-feature CustomReportScreens -> insights
 cross-feature CustomReportsScreen -> insights
 cross-feature DataHealthScreen -> transactions
-cross-feature GoalTimelineScreen -> insights
 cross-feature HomeLayoutScreen -> budget
 cross-feature HomeScreen -> planning
 cross-feature HomeScreen -> schedules
@@ -38,15 +36,10 @@ cross-feature PersonalizeScreen -> onboarding
 cross-feature ReimbursementScreens -> planning
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
-cross-feature ScheduleDatePickerDialog -> budget
-cross-feature ScheduleDatePickerDialog -> transactions
 cross-feature ScheduleScreens -> rules
 cross-feature SecurityScreen -> auth
 cross-feature ServerDeviceScreen -> auth
 cross-feature SettingsScreen -> planning
-cross-feature SpendingForecastScreen -> budget
-cross-feature SpendingForecastScreen -> reports
-cross-feature SpendingForecastScreen -> transactions
 cross-feature StatementImportDialog -> transactions
 cross-feature SwitchBudgetScreen -> auth
 cross-feature SyncCenterScreen -> auth
@@ -54,10 +47,8 @@ cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
 cross-feature TransactionDetailScreen -> reimbursements
-cross-feature TransactionSelectorScreens -> budget
 cross-feature TransactionSyncStatus -> sync
 cross-feature UpcomingSchedulesScreen -> rules
-cross-feature UpcomingSchedulesScreen -> transactions
 cross-feature WhatIfScreen -> insights
 function-size AppScreenRouter.ScreenContent
 function-size androidApp:BackgroundBudgetSync.doWork
@@ -74,15 +65,12 @@ layering ActivitySearchCache -> feature.activity
 layering AppState -> app
 layering AppState -> feature.activity
 layering AppState -> feature.reports
-layering AppState -> feature.transactions
 layering DragReorderUpdate -> feature.budget
 layering IosDeviceAuthenticator -> feature.auth
 layering MerchantIcons -> feature.activity
 layering RouteNavigation -> app
 layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app
-layering TransactionDateValidation -> feature.budget
-layering TransactionDateValidation -> feature.transactions
 size api-client:TandemApiClient
 size data:ActualBudgetEdits
 size data:LocalBudgetRepository

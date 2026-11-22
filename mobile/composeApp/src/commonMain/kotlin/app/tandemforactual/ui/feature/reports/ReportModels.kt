@@ -3,9 +3,11 @@ import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
+import app.tandemforactual.ui.core.format.ReportMonth
 import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.format.formatReportPercentage
 import app.tandemforactual.ui.core.format.formatShortMonth
+import app.tandemforactual.ui.core.format.parseReportMonth
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.longValue
@@ -182,8 +184,6 @@ internal fun shiftReportMonthId(
     offset: Int,
 ): String? = parseReportMonth(monthId)?.let { reportMonthId(shiftReportMonth(it, offset)) }
 
-internal fun reportMonthLabel(monthId: String): String = parseReportMonth(monthId)?.let { formatMonth(it.year, it.month) } ?: monthId
-
 internal fun reportMonthRangeLabel(
     startMonthId: String,
     endMonthId: String,
@@ -328,18 +328,6 @@ internal fun netWorthPoints(
             )
     }
     return pointsDescending.asReversed()
-}
-
-private data class ReportMonth(
-    val year: Int,
-    val month: Int,
-)
-
-private fun parseReportMonth(monthId: String): ReportMonth? {
-    if (monthId.length != 7 || monthId[4] != '-') return null
-    val year = monthId.take(4).toIntOrNull() ?: return null
-    val month = monthId.takeLast(2).toIntOrNull() ?: return null
-    return ReportMonth(year, month).takeIf { year in 1..9999 && month in 1..12 }
 }
 
 private fun reportMonthId(month: ReportMonth): String =

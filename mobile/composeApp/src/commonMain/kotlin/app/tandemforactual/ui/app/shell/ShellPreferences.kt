@@ -6,11 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.ui.core.format.currentMonthId
+import app.tandemforactual.ui.core.format.currentMonthLabel
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.encodeCachedBudgetCatalog
-import app.tandemforactual.ui.feature.transactions.currentMonthId
-import app.tandemforactual.ui.feature.transactions.currentMonthLabel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first

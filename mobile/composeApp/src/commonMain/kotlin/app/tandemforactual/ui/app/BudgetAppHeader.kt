@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.format.reportMonthLabel
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MainCloudStatus
@@ -35,7 +36,6 @@ import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.reports.reportMonthLabel
 import app.tandemforactual.ui.feature.reports.shiftReportMonthId
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronLeft

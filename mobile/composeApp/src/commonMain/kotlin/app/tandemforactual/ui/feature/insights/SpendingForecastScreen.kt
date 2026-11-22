@@ -17,8 +17,10 @@ import app.tandemforactual.data.planning.ForecastBasis
 import app.tandemforactual.data.planning.ForecastStatus
 import app.tandemforactual.data.planning.SpendingForecast
 import app.tandemforactual.data.planning.SpendingInsights
+import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.reportMonthLabel
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
@@ -37,9 +39,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.budget.daysInMonth
-import app.tandemforactual.ui.feature.reports.reportMonthLabel
-import app.tandemforactual.ui.feature.transactions.daysInMonth
 
 /** Where this month’s spending is heading, per category and in total, and which budgets look set to run out. */
 @Composable

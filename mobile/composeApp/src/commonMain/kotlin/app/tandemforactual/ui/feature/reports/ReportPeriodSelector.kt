@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.reportMonthLabel
 import app.tandemforactual.ui.design.buttons.PeriodStepper
 import app.tandemforactual.ui.design.buttons.SegmentedSelector
 import app.tandemforactual.ui.design.cards.SurfaceCard

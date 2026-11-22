@@ -3,8 +3,8 @@ package app.tandemforactual.ui.feature.transactions.statement
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.ui.core.format.MIN_TRANSACTION_DATE
+import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.platform.MAX_STATEMENT_IMPORT_CHARS
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 
 internal data class StatementImportDraft(
     val date: String,

@@ -16,6 +16,7 @@ import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteBudgetRecord
+import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.signedAmount
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
@@ -53,7 +54,6 @@ import app.tandemforactual.ui.feature.sync.canOfferUncertainWriteRecoveryActions
 import app.tandemforactual.ui.feature.sync.isBudgetMutationReviewable
 import app.tandemforactual.ui.feature.sync.isUncertainWriteOperationNotFound
 import app.tandemforactual.ui.feature.sync.uncertainWriteRemovalWarning
-import app.tandemforactual.ui.feature.transactions.displayTransactionDate
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import kotlinx.coroutines.Dispatchers

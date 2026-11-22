@@ -1,7 +1,7 @@
 package app.tandemforactual.ui.feature.budget
 
+import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
-import app.tandemforactual.ui.feature.transactions.daysInMonth
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -65,16 +65,6 @@ internal fun previousMonthId(monthId: String): String? {
     val year = monthId.substringBefore('-').toIntOrNull() ?: return null
     val month = monthId.substringAfter('-', "").toIntOrNull()?.takeIf { it in 1..12 } ?: return null
     return if (month == 1) "${(year - 1).toString().padStart(4, '0')}-12" else "$year-${(month - 1).toString().padStart(2, '0')}"
-}
-
-internal fun daysInMonth(monthId: String): Int? {
-    val year = monthId.substringBefore('-').toIntOrNull() ?: return null
-    return when (monthId.substringAfter('-', "").toIntOrNull()) {
-        1, 3, 5, 7, 8, 10, 12 -> 31
-        4, 6, 9, 11 -> 30
-        2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
-        else -> null
-    }
 }
 
 internal fun categoryPaceDetail(
