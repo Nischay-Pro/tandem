@@ -2,14 +2,20 @@
 
 package app.tandemforactual.ui.app.shell
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import app.tandemforactual.ui.app.AppHeader
+import app.tandemforactual.ui.app.isLandscapeViewport
 import app.tandemforactual.ui.app.isTab
+import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
@@ -17,6 +23,10 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
+import app.tandemforactual.ui.design.theme.TandemBackHandler
+import app.tandemforactual.ui.design.theme.TandemSystemBars
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.sync.conflictPayeeTitle
 import kotlinx.coroutines.delay
 
@@ -36,6 +46,36 @@ internal class ShellChromeState(
             ctx.mobileSession.localSyncState?.lastSyncedAtEpochMs,
             headerClockMs.value,
         )
+}
+
+/** Everything inside the theme: system bars, back handling, the scaffold and the overlays above it. */
+@Composable
+internal fun ShellFrame(
+    ctx: ShellContext,
+    isAppInForeground: Boolean,
+) {
+    val state = ctx.state
+    val palette = tandemPalette
+    val windowSize = LocalWindowInfo.current.containerSize
+    val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
+    val useRail = usesRailNavigation(with(LocalDensity.current) { windowSize.width.toDp().value }, isLandscape)
+    val isDark =
+        state.theme == ThemeMode.DARK ||
+            state.theme == ThemeMode.PURE_BLACK ||
+            (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
+    SideEffect {
+        ctx.env.onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
+    }
+    TandemSystemBars(isDark, palette.background)
+    TandemBackHandler(
+        enabled = ctx.backStack.size > 1 && !ctx.transactionSheetActive,
+        onBack = ctx.navigator::handleCurrentRouteBack,
+        onBackProgress = ctx.navigator::updateBackGesture,
+    )
+    val headerClockMs = rememberHeaderClock(ctx)
+    val chrome = ShellChromeState(ctx, windowSize, isLandscape, useRail, mainCloudStatus(ctx), headerClockMs)
+    ShellScaffold(chrome)
+    ShellOverlays(chrome, isAppInForeground)
 }
 
 @Composable
