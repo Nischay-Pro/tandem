@@ -87,7 +87,6 @@ function-size CustomReportScreen.CustomReportScreen
 function-size CustomReportScreen.ReportControls
 function-size DebtPayoffScreen.DebtPayoffScreen
 function-size DebtTermsSheet.DebtTermsSheet
-function-size ExportScreen.ExportScreen
 function-size FirstSyncScreen.FirstSyncScreen
 function-size GoalTimelineScreen.GoalTimelineScreen
 function-size HomeLayoutScreen.HomeLayoutRow
