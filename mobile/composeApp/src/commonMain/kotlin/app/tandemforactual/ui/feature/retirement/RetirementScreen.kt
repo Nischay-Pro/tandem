@@ -77,7 +77,12 @@ internal fun RetirementScreen(
     var inflows by remember(state.selectedBudgetId) { mutableStateOf<Map<String, Map<Int, Long>>>(emptyMap()) }
     val accountIds = profiles.mapNotNull { it.accountId }
     LaunchedEffect(state.selectedBudgetId, accountIds) {
-        inflows = mobileSession.loadAccountInflows(state.selectedBudgetId, accountIds, state.encryptedPassword.takeIf { it.isNotBlank() })
+        inflows =
+            mobileSession.insights.loadAccountInflows(
+                state.selectedBudgetId,
+                accountIds,
+                state.encryptedPassword.takeIf { it.isNotBlank() },
+            )
     }
     val years = (inflows.values.flatMap { it.keys } + currentYear).filter { it <= currentYear }.distinct().sortedDescending()
     var year by rememberSaveable { mutableStateOf(currentYear) }

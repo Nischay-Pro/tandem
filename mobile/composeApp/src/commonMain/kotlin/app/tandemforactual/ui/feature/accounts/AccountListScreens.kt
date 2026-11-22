@@ -562,7 +562,12 @@ internal fun AccountsScreen(
         }
     LaunchedEffect(state.selectedBudgetId) {
         if (state.selectedBudgetId.isNotBlank()) {
-            runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() }) }
+            runCatching {
+                mobileSession.banking.loadLinkedAccounts(
+                    state.selectedBudgetId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
         }
     }
     LaunchedEffect(state.accountsRequestedAction) {
@@ -631,7 +636,7 @@ internal fun AccountsScreen(
     val runBankSync: () -> Unit = {
         if (!isRefreshing && mobileSession.isAuthenticated && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             scope.launch {
-                mobileSession.runBankSync(
+                mobileSession.banking.runBankSync(
                     state.selectedBudgetId,
                     state.encryptedPassword.takeIf { it.isNotBlank() },
                 )
@@ -889,7 +894,7 @@ internal fun AccountsScreen(
                         AccountSummaryCard(
                             bankBadge =
                                 bankLinkBadge(
-                                    mobileSession.bankLinks.firstOrNull { it.id == account.id },
+                                    mobileSession.banking.bankLinks.firstOrNull { it.id == account.id },
                                     mobileSession.nowEpochMillis(),
                                 ),
                             account = account,

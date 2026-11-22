@@ -199,7 +199,7 @@ internal fun SyncCenterScreen(
     val scope = rememberCoroutineScope()
     val vault = LocalEncryptedBudgetVault.current
     val retryable =
-        transactionsNeedingReview.count { it.status == "uncertain" } + mobileSession.bankLinks.count { it.failure != null } +
+        transactionsNeedingReview.count { it.status == "uncertain" } + mobileSession.banking.bankLinks.count { it.failure != null } +
             (if (mobileSession.planning.syncStatus == PlanningSyncStatus.WAITING) 1 else 0)
     val conflictCount = transactionsNeedingReview.count { it.status == "conflict" }
     var retrying by remember { mutableStateOf(false) }
@@ -212,7 +212,12 @@ internal fun SyncCenterScreen(
     ) { value = mobileSession.budgetSyncOverview(state.selectedBudgetId) }
     LaunchedEffect(state.selectedBudgetId, mobileSession.isAuthenticated) {
         if (mobileSession.isAuthenticated) {
-            runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() }) }
+            runCatching {
+                mobileSession.banking.loadLinkedAccounts(
+                    state.selectedBudgetId,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            }
         }
     }
     PageLazyColumn {
@@ -365,7 +370,7 @@ internal fun SyncCenterScreen(
                 SyncCenterBudgets(budgetOverview, mobileSession) { navigation.open(AppRoute.SWITCH_BUDGET) }
             }
         }
-        if (mobileSession.bankLinks.isNotEmpty()) {
+        if (mobileSession.banking.bankLinks.isNotEmpty()) {
             item(key = "sync-center-bank-links") {
                 SyncCenterBankLinks(mobileSession) { navigation.open(AppRoute.BANK_CONNECTIONS) }
             }

@@ -81,7 +81,7 @@ internal fun BankConnectionsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
-    val linked = mobileSession.bankLinks
+    val linked = mobileSession.banking.bankLinks
     var reload by remember { mutableIntStateOf(0) }
     val providerStates = remember { mutableStateMapOf<String, ProviderState>() }
     var linking by remember { mutableStateOf<Pair<BankProvider, BankProviderAccount>?>(null) }
@@ -89,7 +89,7 @@ internal fun BankConnectionsScreen(
     var relinkFor by remember { mutableStateOf<LinkedAccount?>(null) }
     var browserProvider by remember { mutableStateOf<BrowserBankProvider?>(null) }
     LaunchedEffect(state.selectedBudgetId, reload) {
-        runCatching { mobileSession.loadLinkedAccounts(state.selectedBudgetId, password) }
+        runCatching { mobileSession.banking.loadLinkedAccounts(state.selectedBudgetId, password) }
     }
 
     fun linkTo(
@@ -98,7 +98,7 @@ internal fun BankConnectionsScreen(
         providerAccount: BankProviderAccount,
     ) {
         scope.launch {
-            if (mobileSession.linkBankAccount(state.selectedBudgetId, target.id, provider, providerAccount, password)) reload++
+            if (mobileSession.banking.linkBankAccount(state.selectedBudgetId, target.id, provider, providerAccount, password)) reload++
         }
     }
 
@@ -110,7 +110,7 @@ internal fun BankConnectionsScreen(
         providerStates[provider.source] = ProviderState.Loading
         scope.launch {
             providerStates[provider.source] =
-                runCatching { mobileSession.loadBankProviderAccounts(provider) }.fold(
+                runCatching { mobileSession.banking.loadBankProviderAccounts(provider) }.fold(
                     { accounts -> accounts?.let { ProviderState.Ready(it) } ?: ProviderState.NotSetUp },
                     { ProviderState.Failed("Couldn’t reach ${provider.displayName} through your Actual server.") },
                 )
@@ -154,7 +154,7 @@ internal fun BankConnectionsScreen(
                     icon = Lucide.RefreshCw,
                     enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                     loading = mobileSession.isPerformingBudgetAction,
-                ) { scope.launch { mobileSession.runBankSync(state.selectedBudgetId, password) } }
+                ) { scope.launch { mobileSession.banking.runBankSync(state.selectedBudgetId, password) } }
             }
         }
         relinkFor?.let { target ->
@@ -228,7 +228,7 @@ internal fun BankConnectionsScreen(
                         val account = managed ?: return@ListRow
                         managing = null
                         scope.launch {
-                            if (mobileSession.unlinkBankAccount(state.selectedBudgetId, account.id, password)) reload++
+                            if (mobileSession.banking.unlinkBankAccount(state.selectedBudgetId, account.id, password)) reload++
                         }
                     },
                 )
@@ -270,7 +270,7 @@ internal fun BankConnectionsScreen(
                             val (provider, providerAccount) = target ?: return@ListRow
                             linking = null
                             scope.launch {
-                                if (mobileSession.linkBankAccount(
+                                if (mobileSession.banking.linkBankAccount(
                                         state.selectedBudgetId,
                                         account.id,
                                         provider,

@@ -86,7 +86,7 @@ internal fun SyncCenterBankLinks(
     mobileSession: TandemMobileSession,
     onManage: () -> Unit,
 ) {
-    val links = mobileSession.bankLinks
+    val links = mobileSession.banking.bankLinks
     val failing = links.count { it.failure != null }
     val now = mobileSession.nowEpochMillis()
     SectionCard(

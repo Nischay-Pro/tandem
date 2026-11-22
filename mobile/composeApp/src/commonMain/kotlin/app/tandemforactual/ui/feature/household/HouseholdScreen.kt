@@ -63,7 +63,7 @@ internal fun HouseholdScreen(
         state.serverUrl,
     ) { if (state.serverUrl.isNotBlank()) runCatching { mobileSession.loadActualLoginMethods(state.serverUrl) } }
     val thisNode by produceState<String?>(null, state.selectedBudgetId) {
-        value = mobileSession.loadChangeHistory(state.selectedBudgetId, password)?.deviceNode
+        value = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)?.deviceNode
     }
     LaunchedEffect(thisNode) {
         val node = thisNode ?: return@LaunchedEffect

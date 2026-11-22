@@ -207,7 +207,7 @@ private fun BanksStep(
     var query by remember(country) { mutableStateOf("") }
     LaunchedEffect(provider, country) {
         try {
-            banks = mobileSession.loadBankInstitutions(provider, country)
+            banks = mobileSession.banking.loadBankInstitutions(provider, country)
         } catch (error: TandemApiException) {
             failure = bankLinkFailureMessage(provider, error.errorCode)
         }
@@ -290,7 +290,7 @@ private fun WaitingStep(
         if (step.link != null) return@LaunchedEffect
         val link =
             try {
-                mobileSession.startBankLink(provider, step.institution)
+                mobileSession.banking.startBankLink(provider, step.institution)
             } catch (error: TandemApiException) {
                 onFailed(bankLinkFailureMessage(provider, error.errorCode))
                 return@LaunchedEffect
@@ -300,7 +300,7 @@ private fun WaitingStep(
     }
     LaunchedEffect(step.link?.handle) {
         val link = step.link ?: return@LaunchedEffect
-        when (val status = mobileSession.awaitBankLink(provider, link.handle)) {
+        when (val status = mobileSession.banking.awaitBankLink(provider, link.handle)) {
             is BrowserLinkStatus.Linked -> onLinked(status.accounts)
             is BrowserLinkStatus.Failed ->
                 onFailed(

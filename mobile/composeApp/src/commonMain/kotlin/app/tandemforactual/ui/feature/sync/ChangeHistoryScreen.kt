@@ -98,7 +98,7 @@ internal fun ChangeHistoryScreen(
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        history = mobileSession.loadChangeHistory(state.selectedBudgetId, password)
+        history = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)
         loading = false
         history?.deviceNode?.takeIf { it !in mobileSession.planning.deviceNames }?.let {
             mobileSession.planning.nameDevice(
@@ -186,7 +186,7 @@ internal fun ChangeHistoryScreen(
                     onToggle = { expanded = if (expanded == set.id) null else set.id },
                     onUndo = {
                         scope.launch {
-                            val result = mobileSession.undoChange(state.selectedBudgetId, set.id, password)
+                            val result = mobileSession.insights.undoChange(state.selectedBudgetId, set.id, password)
                             notice =
                                 when {
                                     result == null ->

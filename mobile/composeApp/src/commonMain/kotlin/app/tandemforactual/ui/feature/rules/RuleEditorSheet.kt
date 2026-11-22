@@ -518,7 +518,15 @@ private fun RulePreview(
         kotlinx.coroutines.delay(400)
         val body = draft.toPreviewBody { text -> state.parseAmountMinorUnits(text) }
         matches =
-            body?.let { mobileSession.previewRule(state.selectedBudgetId, it, state.encryptedPassword.takeIf { p -> p.isNotBlank() }) }
+            body?.let {
+                mobileSession.insights.previewRule(
+                    state.selectedBudgetId,
+                    it,
+                    state.encryptedPassword.takeIf { p ->
+                        p.isNotBlank()
+                    },
+                )
+            }
     }
     val found = matches ?: return
     SectionCard(

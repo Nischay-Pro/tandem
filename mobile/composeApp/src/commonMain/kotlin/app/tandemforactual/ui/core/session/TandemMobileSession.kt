@@ -1,4 +1,5 @@
 package app.tandemforactual.ui.core.session
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -9,29 +10,18 @@ import androidx.compose.runtime.snapshots.Snapshot
 import app.tandemforactual.api.client.ActualLoginMethods
 import app.tandemforactual.api.client.AuthenticatedDevice
 import app.tandemforactual.api.client.BudgetCatalogItem
-import app.tandemforactual.api.client.BudgetChangeHistory
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.ServerCapabilities
 import app.tandemforactual.api.client.StatementImportItem
 import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
-import app.tandemforactual.data.actual.HealthIssue
-import app.tandemforactual.data.actual.HealthRow
-import app.tandemforactual.data.actual.LinkedAccount
-import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
-import app.tandemforactual.data.regions.global.bank.BankInstitution
-import app.tandemforactual.data.regions.global.bank.BankProvider
-import app.tandemforactual.data.regions.global.bank.BankProviderAccount
-import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
-import app.tandemforactual.data.regions.global.bank.BrowserLink
-import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -53,6 +43,8 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.transactionAmountInputError
 import app.tandemforactual.ui.core.format.transactionDateValidationMessage
 import app.tandemforactual.ui.core.format.validateTransactionDate
+import app.tandemforactual.ui.core.session.banking.BankingController
+import app.tandemforactual.ui.core.session.insights.InsightsController
 import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.state.AccountActivitySnapshot
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -272,9 +264,6 @@ private class LocalBudgetRepositoryMutationQueuePersistence(
     ) = repository.replaceBudgetMutationQueue(items, metadataJson, supersededOperationIds)
 }
 
-private const val BANK_LINK_TIMEOUT_MILLIS = 10L * 60 * 1000
-private const val BANK_LINK_POLL_MILLIS = 3_000L
-
 /** One budget's row in the Sync Center. */
 internal data class BudgetSyncOverview(
     val budgetId: String,
@@ -298,6 +287,18 @@ internal class TandemMobileSession(
     private val openIdLoginProofState: OpenIdLoginProofState = OpenIdLoginProofState(nowEpochMillis),
     private val revokeCurrentDeviceForSignOut: suspend () -> Unit = { apiClient.revokeCurrentDevice() },
 ) {
+    /** Bank providers, links and bank sync. */
+    val banking =
+        BankingController(apiClient, nowEpochMillis) { budgetId, password, message, action ->
+            performBudgetAction(budgetId, password, message, action = action)
+        }
+
+    /** Budget checkup, change history, rule preview and export. */
+    val insights =
+        InsightsController(apiClient) { budgetId, password, message, action ->
+            performBudgetAction(budgetId, password, message, action = action)
+        }
+
     private val mainStorage = database?.let { BudgetStorage(it) }
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
     private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
@@ -305,83 +306,6 @@ internal class TandemMobileSession(
 
     /** Goals, debts, retirement, reimbursements and the other planning records Actual doesn't hold. */
     val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
-
-    /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
-    var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
-
-    suspend fun loadAccountInflows(
-        budgetId: String,
-        accountIds: List<String>,
-        encryptionPassword: String?,
-    ): Map<String, Map<Int, Long>> =
-        try {
-            apiClient.budgetAccountInflows(budgetId, accountIds, encryptionPassword)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            emptyMap()
-        }
-
-    suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
-
-    suspend fun loadBankInstitutions(
-        provider: BrowserBankProvider,
-        country: String,
-    ): List<BankInstitution> = apiClient.bankInstitutions(provider, country)
-
-    suspend fun startBankLink(
-        provider: BrowserBankProvider,
-        institution: BankInstitution,
-    ): BrowserLink = apiClient.startBankLink(provider, institution)
-
-    /** Asks the server until the bank sign-in finishes, fails, or ten minutes pass; a dropped request just asks again. */
-    suspend fun awaitBankLink(
-        provider: BrowserBankProvider,
-        handle: String,
-    ): BrowserLinkStatus {
-        val deadline = nowEpochMillis() + BANK_LINK_TIMEOUT_MILLIS
-        while (nowEpochMillis() < deadline) {
-            val status =
-                try {
-                    apiClient.bankLinkStatus(provider, handle)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    BrowserLinkStatus.Pending
-                }
-            if (status != BrowserLinkStatus.Pending) return status
-            delay(BANK_LINK_POLL_MILLIS)
-        }
-        return BrowserLinkStatus.Failed("timeout")
-    }
-
-    /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
-    var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
-
-    suspend fun loadLinkedAccounts(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): List<LinkedAccount> = apiClient.budgetLinkedAccounts(budgetId, encryptionPassword).also { bankLinks = it }
-
-    suspend fun linkBankAccount(
-        budgetId: String,
-        accountId: String,
-        provider: BankProvider,
-        account: BankProviderAccount,
-        encryptionPassword: String?,
-    ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t link this account. Try again.") {
-            apiClient.linkBudgetBankAccount(budgetId, accountId, provider, account, encryptionPassword)
-        }
-
-    suspend fun unlinkBankAccount(
-        budgetId: String,
-        accountId: String,
-        encryptionPassword: String?,
-    ): Boolean =
-        performBudgetAction(budgetId, encryptionPassword, "Couldn’t unlink this account. Try again.") {
-            apiClient.unlinkBudgetBankAccount(budgetId, accountId, encryptionPassword)
-        }
 
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
         get() = queuePersistenceOverride ?: storage?.queuePersistence
@@ -3551,86 +3475,6 @@ internal class TandemMobileSession(
         return true
     }
 
-    suspend fun loadChangeHistory(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): BudgetChangeHistory? =
-        try {
-            apiClient.budgetChangeHistory(budgetId, encryptionPassword)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-
-    suspend fun exportTransactions(
-        budgetId: String,
-        from: String,
-        to: String,
-        encryptionPassword: String?,
-    ): String? =
-        try {
-            apiClient.exportBudgetTransactions(budgetId, from, to, encryptionPassword)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-
-    suspend fun previewRule(
-        budgetId: String,
-        rule: kotlinx.serialization.json.JsonObject,
-        encryptionPassword: String?,
-    ): List<HealthRow>? =
-        try {
-            apiClient.previewBudgetRule(budgetId, rule, encryptionPassword)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-
-    suspend fun loadDataHealth(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): List<HealthIssue>? =
-        try {
-            apiClient.budgetDataHealth(budgetId, encryptionPassword)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
-
-    suspend fun undoChange(
-        budgetId: String,
-        changeId: String,
-        encryptionPassword: String?,
-    ): UndoResult? {
-        var result: UndoResult? = null
-        val done =
-            performBudgetAction(budgetId, encryptionPassword, "Couldn’t undo this change. Try again.") {
-                result = apiClient.undoBudgetChange(budgetId, changeId, encryptionPassword)
-            }
-        return result.takeIf { done }
-    }
-
-    suspend fun runBankSync(
-        budgetId: String,
-        encryptionPassword: String?,
-    ): Boolean =
-        performBudgetAction(
-            budgetId,
-            encryptionPassword,
-            "Couldn’t sync transactions from Actual. Check the bank connection and try again.",
-        ) {
-            try {
-                apiClient.runBudgetBankSync(budgetId, encryptionPassword)
-            } finally {
-                runCatching { loadLinkedAccounts(budgetId, encryptionPassword) }
-            }
-        }
-
     suspend fun createBudgetAccount(
         budgetId: String,
         name: String,
@@ -5416,7 +5260,7 @@ internal class TandemMobileSession(
             .forEach { runCatching { localRepository.retryUncertainWrite(it.operationId) } }
         synchronize(budgetId, encryptionPassword)
         loadLocalRecords(budgetId)
-        if (bankLinks.any { it.failure != null }) runBankSync(budgetId, encryptionPassword)
+        if (banking.bankLinks.any { it.failure != null }) banking.runBankSync(budgetId, encryptionPassword)
         if (planning.syncStatus == PlanningSyncStatus.WAITING) planning.sync(budgetId)
     }
 

@@ -114,7 +114,7 @@ internal fun ExportScreen(
                     exporting = true
                     scope.launch {
                         val csv =
-                            mobileSession.exportTransactions(
+                            mobileSession.insights.exportTransactions(
                                 state.selectedBudgetId,
                                 from,
                                 to,

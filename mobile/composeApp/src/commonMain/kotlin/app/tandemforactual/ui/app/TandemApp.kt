@@ -270,8 +270,8 @@ fun TandemApp(
     }
     SideEffect { mobileSession.setReadOnlyMode(state.readOnlyMode) }
     val appPreferencesStore = remember(database) { database?.let(::AppPreferencesStore) }
-    LaunchedEffect(mobileSession.bankLinks) {
-        val links = mobileSession.bankLinks.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+    LaunchedEffect(mobileSession.banking.bankLinks) {
+        val links = mobileSession.banking.bankLinks.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         val store = appPreferencesStore ?: return@LaunchedEffect
         val post = postLocalAlert ?: return@LaunchedEffect
         val alert = bankSyncFailureAlert(store, state.selectedBudgetId, links.filter { it.failure != null }.map { it.name })

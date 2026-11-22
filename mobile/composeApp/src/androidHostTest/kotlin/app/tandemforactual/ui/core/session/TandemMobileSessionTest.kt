@@ -445,7 +445,7 @@ class TandemMobileSessionTest {
                 assertEquals(serverUrl, session.restoreStoredSession())
                 session.setBudgetActionRoute(AppRouteEntry(AppRoute.BUDGET, 1))
 
-                assertFalse(session.runBankSync("budget-1", null))
+                assertFalse(session.banking.runBankSync("budget-1", null))
 
                 assertFalse(session.isServerReachable)
                 assertEquals(

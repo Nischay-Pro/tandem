@@ -93,15 +93,18 @@ internal fun DataHealthScreen(
     mobileSession: TandemMobileSession,
     liveTransactions: List<TransactionItem>,
 ) {
-    val cached = mobileSession.dataHealthCache?.takeIf { it.first == state.selectedBudgetId }?.second
+    val cached =
+        mobileSession.insights.dataHealthCache
+            ?.takeIf { it.first == state.selectedBudgetId }
+            ?.second
     var loading by remember { mutableStateOf(true) }
     var reload by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
     val shown = remember { mutableStateMapOf<String, Int>() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        mobileSession.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })?.let {
-            mobileSession.dataHealthCache = state.selectedBudgetId to it
+        mobileSession.insights.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })?.let {
+            mobileSession.insights.dataHealthCache = state.selectedBudgetId to it
         }
         loading = false
     }
