@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -46,7 +45,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +80,11 @@ import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.LocalAlert
 import app.tandemforactual.data.store.bankSyncFailureAlert
+import app.tandemforactual.ui.app.shell.BudgetScopedShellState
+import app.tandemforactual.ui.app.shell.ShellNavigator
+import app.tandemforactual.ui.app.shell.appNavigation
+import app.tandemforactual.ui.app.shell.rememberAppShellState
+import app.tandemforactual.ui.app.shell.updateBackGesture
 import app.tandemforactual.ui.core.format.AppLanguageController
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -143,24 +146,14 @@ import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUn
 import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
 import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.session.unbindEncryptedBudgetDatabase
-import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.AppStartupDestination
 import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.core.state.BackRequestDisposition
 import app.tandemforactual.ui.core.state.BudgetSelectionSnapshot
 import app.tandemforactual.ui.core.state.InterfaceMode
-import app.tandemforactual.ui.core.state.LiveAccountSummary
-import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
-import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
-import app.tandemforactual.ui.core.state.MerchantIconCatalog
-import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
-import app.tandemforactual.ui.core.state.TransactionItem
-import app.tandemforactual.ui.core.state.appRouteStackSaver
-import app.tandemforactual.ui.core.state.backRequestDisposition
 import app.tandemforactual.ui.core.state.budgetChoicesForSelection
 import app.tandemforactual.ui.core.state.buildLiveTransactionItems
 import app.tandemforactual.ui.core.state.cachedBudgetName
@@ -181,17 +174,13 @@ import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.resolveAppStartupDestination
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
-import app.tandemforactual.ui.core.state.restorePendingBudgetSelectionOrigin
 import app.tandemforactual.ui.core.state.restoreTransactionFormBaseline
 import app.tandemforactual.ui.core.state.routeContentStateKey
-import app.tandemforactual.ui.core.state.selectAppTabNavigation
-import app.tandemforactual.ui.core.state.selectAppTabRootNavigation
 import app.tandemforactual.ui.core.state.shouldRenderRouteHeader
 import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
 import app.tandemforactual.ui.core.state.shouldTriggerAutomaticSync
 import app.tandemforactual.ui.core.state.shouldTriggerAutomaticSyncForRouteEntry
 import app.tandemforactual.ui.core.state.stringValue
-import app.tandemforactual.ui.core.state.transactionFormHasUnsavedChanges
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -210,9 +199,7 @@ import app.tandemforactual.ui.design.theme.tandemBottomBarExit
 import app.tandemforactual.ui.design.theme.tandemEdgeBackGesture
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.activity.ActivityTransactionSortCache
 import app.tandemforactual.ui.feature.auth.AppLockGate
-import app.tandemforactual.ui.feature.auth.AppLockState
 import app.tandemforactual.ui.feature.auth.DeviceAuthenticator
 import app.tandemforactual.ui.feature.auth.LocalDeviceAuthenticator
 import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
@@ -221,7 +208,6 @@ import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
 import app.tandemforactual.ui.feature.onboarding.cleanServerAddress
 import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
 import app.tandemforactual.ui.feature.onboarding.rememberRecentServerAddress
-import app.tandemforactual.ui.feature.reports.ReportsDataCache
 import app.tandemforactual.ui.feature.sync.conflictPayeeTitle
 import app.tandemforactual.ui.feature.transactions.currentMonthId
 import app.tandemforactual.ui.feature.transactions.currentMonthLabel
@@ -229,7 +215,6 @@ import app.tandemforactual.ui.feature.transactions.openTransaction
 import app.tandemforactual.ui.feature.transactions.receipt.fillNewTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -271,15 +256,17 @@ fun TandemApp(
     planningKeyStore: DeviceCredentialStore? = null,
     postLocalAlert: ((LocalAlert) -> Unit)? = null,
 ) {
-    var accessibilitySettingsRevision by remember { mutableStateOf(0) }
+    val shell = rememberAppShellState(nowEpochMillis)
+    var accessibilitySettingsRevision by shell::accessibilitySettingsRevision
     val systemReduceMotion = key(accessibilitySettingsRevision) { SystemReduceMotionEnabled() }
     val state = rememberSaveable(saver = AppState.Saver) { AppState() }
     val saveableStateHolder = rememberSaveableStateHolder()
-    var activitySelectionTotalMinor by remember(state.selectedBudgetId) { mutableStateOf<Long?>(null) }
-    val routeScrollStates = remember { mutableMapOf<String, ScrollState>() }
-    val routeLazyListStates = remember { mutableMapOf<String, LazyListState>() }
-    val reportsDataCache = remember { ReportsDataCache() }
-    val activitySortCache = remember { ActivityTransactionSortCache() }
+    val budgetScoped = remember(state.selectedBudgetId) { BudgetScopedShellState() }
+    var activitySelectionTotalMinor by budgetScoped::activitySelectionTotalMinor
+    val routeScrollStates = shell.routeScrollStates
+    val routeLazyListStates = shell.routeLazyListStates
+    val reportsDataCache = shell.reportsDataCache
+    val activitySortCache = shell.activitySortCache
     SideEffect { state.systemReduceMotionEnabled = systemReduceMotion }
     val reduceMotion = state.reduceMotionOverride ?: systemReduceMotion
     val apiClient =
@@ -321,10 +308,10 @@ fun TandemApp(
     }
     val coroutineScope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
-    var merchantIconMatcher by remember { mutableStateOf<MerchantIconMatcherPack?>(null) }
-    var merchantIconMatcherLoadError by remember { mutableStateOf<String?>(null) }
-    var merchantIconCatalog by remember { mutableStateOf<MerchantIconCatalog?>(null) }
-    var merchantIconCatalogLoadError by remember { mutableStateOf<String?>(null) }
+    var merchantIconMatcher by shell::merchantIconMatcher
+    var merchantIconMatcherLoadError by shell::merchantIconMatcherLoadError
+    var merchantIconCatalog by shell::merchantIconCatalog
+    var merchantIconCatalogLoadError by shell::merchantIconCatalogLoadError
     val cachedBudgetCatalog =
         remember(state.cachedBudgetCatalogJson, mobileSession.cachedBudgets) {
             cachedBudgetsWithLocalSnapshots(
@@ -334,54 +321,35 @@ fun TandemApp(
         }
     val availableBudgets =
         budgetChoicesForSelection(mobileSession.budgets, cachedBudgetCatalog, mobileSession.budgetCatalogLoaded)
-    var syncRetryCounter by remember { mutableStateOf(0) }
-    var lastAutomaticSyncAtEpochMillis by remember { mutableStateOf<Long?>(null) }
-    var lastAutomaticSyncBudgetId by remember { mutableStateOf<String?>(null) }
-    var automaticSyncInFlight by remember { mutableStateOf(false) }
-    var pendingAutomaticSync by remember { mutableStateOf(false) }
-    var budgetGroupReorderActive by remember(state.selectedBudgetId) { mutableStateOf(false) }
-    var cacheDiscoveryComplete by remember { mutableStateOf(false) }
-    var sessionRestoreComplete by remember { mutableStateOf(false) }
-    var routeTransitionDirection by remember { mutableStateOf(0f) }
-    var routeTransitionInputBlocked by remember { mutableStateOf(false) }
-    var routeTransitionInputJob by remember { mutableStateOf<Job?>(null) }
+    var syncRetryCounter by shell::syncRetryCounter
+    var lastAutomaticSyncAtEpochMillis by shell::lastAutomaticSyncAtEpochMillis
+    var lastAutomaticSyncBudgetId by shell::lastAutomaticSyncBudgetId
+    var automaticSyncInFlight by shell::automaticSyncInFlight
+    var pendingAutomaticSync by shell::pendingAutomaticSync
+    var budgetGroupReorderActive by budgetScoped::budgetGroupReorderActive
+    var cacheDiscoveryComplete by shell::cacheDiscoveryComplete
+    var sessionRestoreComplete by shell::sessionRestoreComplete
+    var routeTransitionDirection by shell::routeTransitionDirection
+    var routeTransitionInputBlocked by shell::routeTransitionInputBlocked
+    var routeTransitionInputJob by shell::routeTransitionInputJob
     val routeTransitionInputBlockedState = rememberUpdatedState(routeTransitionInputBlocked)
-    var backGestureProgress by remember { mutableStateOf(0f) }
-    var backGestureDirection by remember { mutableStateOf(1f) }
-    var backGestureCommitPending by remember { mutableStateOf(false) }
-    var backGestureOutgoingEntry by remember { mutableStateOf<AppRouteEntry?>(null) }
-    var backPreviewRoute by remember { mutableStateOf<AppRouteEntry?>(null) }
-    var backGestureCancelJob by remember { mutableStateOf<Job?>(null) }
-    var backButtonTransitionRunning by remember { mutableStateOf(false) }
-    var queuedBackPresses by remember { mutableStateOf(0) }
-    var pendingBackAfterRouteTransition by remember { mutableStateOf(false) }
-    var skipNextRouteTransition by remember { mutableStateOf(false) }
-    var showDiscardTransactionDialog by rememberSaveable { mutableStateOf(false) }
-    var transactionSheetClosing by remember { mutableStateOf(false) }
-    var transactionSheetPopCount by remember { mutableStateOf(1) }
-    var nextRouteEntryId by rememberSaveable { mutableStateOf(2L) }
-    val backStack = rememberSaveable(saver = appRouteStackSaver) { mutableStateListOf(AppRouteEntry(AppRoute.STARTUP, 1)) }
-    var savedTabBackStacks by rememberSaveable { mutableStateOf("") }
-    val newRouteEntry: (AppRoute) -> AppRouteEntry = { nextRoute ->
-        val entryId = nextRouteEntryId
-        nextRouteEntryId += 1
-        AppRouteEntry(nextRoute, entryId)
-    }
-    val beginRouteTransition: () -> Boolean = {
-        if (routeTransitionInputBlocked) {
-            false
-        } else {
-            routeTransitionInputBlocked = true
-            routeTransitionInputJob?.cancel()
-            routeTransitionInputJob =
-                coroutineScope.launch {
-                    delay(TandemMotion.ROUTE_MILLIS.toLong() + 80L)
-                    routeTransitionInputBlocked = false
-                    routeTransitionInputJob = null
-                }
-            true
-        }
-    }
+    var backGestureProgress by shell::backGestureProgress
+    var backGestureDirection by shell::backGestureDirection
+    var backGestureCommitPending by shell::backGestureCommitPending
+    var backGestureOutgoingEntry by shell::backGestureOutgoingEntry
+    var backPreviewRoute by shell::backPreviewRoute
+    var backGestureCancelJob by shell::backGestureCancelJob
+    var backButtonTransitionRunning by shell::backButtonTransitionRunning
+    var queuedBackPresses by shell::queuedBackPresses
+    var pendingBackAfterRouteTransition by shell::pendingBackAfterRouteTransition
+    var skipNextRouteTransition by shell::skipNextRouteTransition
+    var showDiscardTransactionDialog by shell::showDiscardTransactionDialog
+    var transactionSheetClosing by shell::transactionSheetClosing
+    var transactionSheetPopCount by shell::transactionSheetPopCount
+    val backStack = shell.backStack
+    var savedTabBackStacks by shell::savedTabBackStacks
+    val navigator = ShellNavigator(shell, state, coroutineScope, reduceMotion)
+    val newRouteEntry: (AppRoute) -> AppRouteEntry = navigator::newRouteEntry
     LaunchedEffect(mobileSession) {
         try {
             mobileSession.loadCachedBudgets()
@@ -537,250 +505,18 @@ fun TandemApp(
             state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)
         }
     }
-    var liveAccounts by remember { mutableStateOf(emptyList<LiveAccountSummary>()) }
-    var liveSchedules by remember { mutableStateOf(emptyList<LiveScheduleSummary>()) }
-    val newTransaction: (String?) -> Unit = { requestedAccountId ->
-        if (!state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
-            transactionSheetClosing = false
-            transactionSheetPopCount = 1
-            val eligibleAccounts = liveAccounts.filterNot { it.offBudget }
-            val defaultAccount =
-                if (state.selectedBudgetId.isNotBlank()) {
-                    eligibleAccounts.firstOrNull { it.id == requestedAccountId }
-                        ?: eligibleAccounts.firstOrNull { it.id == state.lastTransactionAccountId }
-                        ?: eligibleAccounts.firstOrNull()
-                } else {
-                    null
-                }
-            state.transactionAmount = state.formatAmount(0)
-            state.transactionAccount = defaultAccount?.name ?: "Checking"
-            state.newTransactionAccountId = defaultAccount?.id.orEmpty()
-            state.newTransactionInitialAccountId = state.newTransactionAccountId
-            state.newTransactionInitialAccountName = state.transactionAccount
-            state.transactionPayee = ""
-            state.newTransactionPayeeId = ""
-            state.transactionCategory = ""
-            state.newTransactionCategoryId = ""
-            state.transactionDate = platformTodayIsoDate()
-            state.newTransactionInitialDate = state.transactionDate
-            state.transactionType = "Spending"
-            state.transactionNotes = ""
-            state.selectedTransactionRecordId = ""
-            state.selectedTransactionAccountId = ""
-            state.selectedTransactionPayeeId = ""
-            state.selectedTransactionCategoryId = ""
-            state.selectedTransactionDate = ""
-            state.selectedTransactionAmountMinor = null
-            state.selectedTransactionIsLive = false
-            state.selectedTransactionIsTransfer = false
-            backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
-        }
-    }
-    val popRoute: () -> Unit = {
-        if (backStack.size > 1) {
-            routeTransitionDirection = -1f
-            backStack.removeAt(backStack.lastIndex)
-        }
-    }
-    lateinit var startBackButtonTransition: () -> Unit
-    startBackButtonTransition = {
-        if (backStack.size > 1) {
-            val outgoingEntry = backStack.last()
-            val incomingEntry = backStack.getOrNull(backStack.lastIndex - 1)
-            if (incomingEntry == null) {
-                popRoute()
-            } else {
-                backGestureProgress = 0f
-                backGestureDirection = 1f
-                backGestureOutgoingEntry = outgoingEntry
-                backPreviewRoute = incomingEntry
-                backButtonTransitionRunning = true
-                backGestureCancelJob =
-                    coroutineScope.launch {
-                        val returnAnimation = Animatable(0f)
-                        returnAnimation.animateTo(
-                            targetValue = 1f,
-                            animationSpec =
-                                if (reduceMotion) {
-                                    tandemMotionSpec(true, TandemMotion.ROUTE_MILLIS)
-                                } else {
-                                    tween(TandemMotion.ROUTE_MILLIS, easing = TandemMotion.emphasizedEasing)
-                                },
-                        ) {
-                            backGestureProgress = value
-                        }
-                        backButtonTransitionRunning = false
-                        skipNextRouteTransition = true
-                        popRoute()
-                        backGestureCancelJob = null
-                        if (queuedBackPresses > 0) {
-                            backButtonTransitionRunning = true
-                            coroutineScope.launch {
-                                withFrameNanos { }
-                                backButtonTransitionRunning = false
-                                if (queuedBackPresses > 0 && backStack.size > 1) {
-                                    queuedBackPresses -= 1
-                                    startBackButtonTransition()
-                                } else {
-                                    queuedBackPresses = 0
-                                }
-                            }
-                        }
-                    }
-            }
-        }
-    }
-    val selectTab: (AppRoute) -> Unit = { selectedTab ->
-        state.pendingScheduleToOpenId = null
-        val tabSelection = selectAppTabNavigation(backStack.toList(), savedTabBackStacks, selectedTab, newRouteEntry)
-        if (tabSelection.backStack != backStack.toList()) {
-            routeTransitionDirection = 0f
-            backStack.clear()
-            backStack.addAll(tabSelection.backStack)
-        }
-        savedTabBackStacks = tabSelection.savedTabBackStacks
-    }
-    val selectTabRoot: (AppRoute) -> Unit = { selectedTab ->
-        state.pendingScheduleToOpenId = null
-        val tabSelection = selectAppTabRootNavigation(backStack.toList(), savedTabBackStacks, selectedTab, newRouteEntry)
-        if (tabSelection.backStack != backStack.toList()) {
-            routeTransitionDirection = 0f
-            backStack.clear()
-            backStack.addAll(tabSelection.backStack)
-        }
-        savedTabBackStacks = tabSelection.savedTabBackStacks
-    }
-    val performBack: () -> Unit = {
-        when (backRequestDisposition(routeTransitionInputBlocked, backButtonTransitionRunning)) {
-            BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION -> {
-                queuedBackPresses += 1
-            }
-            BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES -> {
-                pendingBackAfterRouteTransition = true
-            }
-            BackRequestDisposition.START -> {
-                if (beginRouteTransition()) {
-                    val backAnimationWasRunning = backGestureCancelJob != null
-                    backGestureCancelJob?.cancel()
-                    backGestureCancelJob = null
-                    if (backGestureCommitPending || backAnimationWasRunning) {
-                        backGestureCommitPending = false
-                        backGestureProgress = 1f
-                        skipNextRouteTransition = true
-                        popRoute()
-                    } else if (backStack.size > 1) {
-                        // Button back runs the same route pair and progress transform as predictive back.
-                        startBackButtonTransition()
-                    }
-                }
-            }
-        }
-    }
-    val handleBack: () -> Unit = {
-        val currentRoute = backStack.lastOrNull()?.route
-        if (currentRoute == AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
-        if (transactionFormHasUnsavedChanges(state, currentRoute)) {
-            backGestureCancelJob?.cancel()
-            backGestureCancelJob = null
-            backGestureCommitPending = false
-            backButtonTransitionRunning = false
-            backGestureProgress = 0f
-            backGestureOutgoingEntry = null
-            backPreviewRoute = null
-            queuedBackPresses = 0
-            showDiscardTransactionDialog = true
-        } else if (backStack.any { it.route.isTransactionForm() }) {
-            val formIndex = backStack.indexOfLast { it.route.isTransactionForm() }
-            if (backStack.lastIndex > formIndex) {
-                routeTransitionDirection = -1f
-                backStack.removeAt(backStack.lastIndex)
-            } else {
-                transactionSheetPopCount = 1
-                transactionSheetClosing = true
-            }
-        } else {
-            val returningToUnlock = backStack.getOrNull(backStack.lastIndex - 1)?.route == AppRoute.BUDGET_UNLOCK
-            if ((currentRoute == AppRoute.FIRST_SYNC && !returningToUnlock) || currentRoute == AppRoute.BUDGET_UNLOCK) {
-                state.restorePendingBudgetSelectionOrigin()
-            }
-            performBack()
-        }
-    }
+    var liveAccounts by shell::liveAccounts
+    var liveSchedules by shell::liveSchedules
+    val newTransaction: (String?) -> Unit = navigator::newTransaction
+    val selectTabRoot: (AppRoute) -> Unit = navigator::selectTabRoot
+    val handleBack: () -> Unit = navigator::handleBack
     LaunchedEffect(routeTransitionInputBlocked, backButtonTransitionRunning, pendingBackAfterRouteTransition) {
         if (!routeTransitionInputBlocked && !backButtonTransitionRunning && pendingBackAfterRouteTransition) {
             pendingBackAfterRouteTransition = false
             handleBack()
         }
     }
-    val navigation =
-        AppNavigation(
-            open = { next ->
-                if (next != AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
-                if (beginRouteTransition()) {
-                    coroutineScope.launch {
-                        // Finish the opening pointer dispatch before swapping in interactive content.
-                        withFrameNanos { }
-                        if (next == AppRoute.NEW_TRANSACTION) {
-                            newTransaction(null)
-                        } else if (backStack.lastOrNull()?.route != next) {
-                            if (next.isTransactionForm()) {
-                                transactionSheetClosing = false
-                                transactionSheetPopCount = 1
-                            }
-                            if (next.isReportDetail() && backStack.lastOrNull()?.route != AppRoute.REPORTS) {
-                                selectTab(AppRoute.REPORTS)
-                            }
-                            routeTransitionDirection = 1f
-                            backStack.add(newRouteEntry(next))
-                        }
-                    }
-                }
-            },
-            openSchedule = { scheduleId ->
-                if (beginRouteTransition()) {
-                    coroutineScope.launch {
-                        withFrameNanos { }
-                        state.pendingScheduleToOpenId = scheduleId
-                        if (backStack.lastOrNull()?.route != AppRoute.SCHEDULES) {
-                            routeTransitionDirection = 1f
-                            backStack.add(newRouteEntry(AppRoute.SCHEDULES))
-                        }
-                    }
-                    true
-                } else {
-                    false
-                }
-            },
-            reset = { next ->
-                state.pendingScheduleToOpenId = null
-                routeTransitionDirection = 0f
-                savedTabBackStacks = ""
-                backStack.clear()
-                backStack.add(newRouteEntry(next))
-            },
-            replaceTop = { next ->
-                if (next != AppRoute.SCHEDULES) state.pendingScheduleToOpenId = null
-                routeTransitionDirection = 1f
-                if (backStack.isNotEmpty()) backStack.removeAt(backStack.lastIndex)
-                backStack.add(newRouteEntry(next))
-            },
-            newTransaction = newTransaction,
-            selectTab = selectTab,
-            back = handleBack,
-            backToList = {
-                if (backStack.lastOrNull()?.route?.isTransactionForm() == true && backStack.size > 2) {
-                    transactionSheetPopCount = 2
-                    transactionSheetClosing = true
-                } else if (backStack.size > 2) {
-                    routeTransitionDirection = -1f
-                    backStack.removeAt(backStack.lastIndex)
-                    backStack.removeAt(backStack.lastIndex)
-                } else {
-                    handleBack()
-                }
-            },
-            selectTabRoot = selectTabRoot,
-        )
+    val navigation = navigator.appNavigation()
     val routeEntry = backStack.last()
     val route = routeEntry.route
     SideEffect { mobileSession.feedback.setBudgetActionRoute(routeEntry) }
@@ -840,28 +576,7 @@ fun TandemApp(
     }
     val transactionSheetIndex = backStack.indexOfLast { it.route.isTransactionForm() }
     val transactionSheetActive = transactionSheetIndex >= 0
-    val handleCurrentRouteBack: () -> Unit = {
-        val payeesOverTransactionSheet =
-            backStack.lastOrNull()?.route == AppRoute.MANAGE_PAYEES &&
-                (
-                    backStack.size == 1 ||
-                        backStack[backStack.lastIndex - 1].route.let { it == AppRoute.CHOOSE_PAYEE || it.isTransactionForm() }
-                )
-        if (payeesOverTransactionSheet) {
-            routeTransitionInputJob?.cancel()
-            routeTransitionInputJob = null
-            routeTransitionInputBlocked = false
-            pendingBackAfterRouteTransition = false
-            routeTransitionDirection = -1f
-            if (backStack.size > 1) {
-                backStack.removeAt(backStack.lastIndex)
-            } else {
-                backStack[backStack.lastIndex] = newRouteEntry(AppRoute.CHOOSE_PAYEE)
-            }
-        } else {
-            handleBack()
-        }
-    }
+    val handleCurrentRouteBack: () -> Unit = navigator::handleCurrentRouteBack
     val transactionSheetBaseEntry = backStack.getOrNull(transactionSheetIndex - 1)
     val backgroundRouteEntry =
         if (transactionSheetActive && transactionSheetBaseEntry != null) transactionSheetBaseEntry else routeEntry
@@ -923,7 +638,7 @@ fun TandemApp(
             backPreviewRoute = null
         }
     }
-    var previousRoute by remember { mutableStateOf(route) }
+    var previousRoute by shell::previousRoute
     val currentNetworkKind by currentNetwork.collectAsState()
     LaunchedEffect(state.localServerUrl, mobileSession.authenticatedDevice?.deviceId, currentNetworkKind) {
         mobileSession.configureLocalServer(state.localServerUrl.ifBlank { null })
@@ -1101,7 +816,7 @@ fun TandemApp(
         delay((BUDGET_SWITCH_SPLASH_MIN_MS - shown.elapsedNow().inWholeMilliseconds).coerceAtLeast(0))
         if (state.budgetSwitchSplashId == budgetId) state.budgetSwitchSplashId = null
     }
-    val appLockState = remember { AppLockState(nowEpochMillis) }
+    val appLockState = shell.appLockState
     LaunchedEffect(isAppInForeground) { appLockState.onForegroundChanged(isAppInForeground) }
     LaunchedEffect(
         isAppInForeground,
@@ -1142,8 +857,8 @@ fun TandemApp(
                 mobileSession.budgetDisplaySettingsBudgetId == state.selectedBudgetId
             }
     }
-    var liveTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
-    var liveActivityTransactions by remember { mutableStateOf(emptyList<TransactionItem>()) }
+    var liveTransactions by shell::liveTransactions
+    var liveActivityTransactions by shell::liveActivityTransactions
     val transactionRecords = mobileSession.transactionRecords
     val activityTransactionRecords = mobileSession.activity.activityTransactionRecords
     val activityTransactionRecordsVersion = mobileSession.activity.activityTransactionRecordsVersion
@@ -1214,7 +929,7 @@ fun TandemApp(
                 liveScheduleSummaries(schedules, payees, accountRecords, pendingScheduleActions)
             }
     }
-    var liveBudgetMonth by remember { mutableStateOf<LiveBudgetMonthSummary?>(null) }
+    var liveBudgetMonth by shell::liveBudgetMonth
     val categoryVisibilityOverrides = mobileSession.budgetQueue.categoryVisibilityOverridesFor(state.selectedBudgetId)
     val categoryGroupNameOverrides = mobileSession.budgetQueue.categoryGroupNameOverridesFor(state.selectedBudgetId)
     val categoryNameOverrides = mobileSession.budgetQueue.categoryNameOverridesFor(state.selectedBudgetId)
@@ -1609,44 +1324,7 @@ fun TandemApp(
             onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
         }
         TandemSystemBars(isDark, palette.background)
-        val updateBackGesture: (Float, Float) -> Unit = { progress, direction ->
-            backGestureDirection = direction
-            if (progress > 0f) {
-                backGestureCommitPending = progress >= 1f
-                backGestureCancelJob?.cancel()
-                backGestureCancelJob = null
-                backButtonTransitionRunning = false
-                backGestureProgress = progress
-                if (backGestureOutgoingEntry == null) {
-                    backGestureOutgoingEntry = backStack.lastOrNull()
-                }
-                if (backPreviewRoute == null) {
-                    backPreviewRoute = backStack.getOrNull(backStack.lastIndex - 1)
-                }
-            } else if (backGestureProgress > 0f) {
-                backGestureCommitPending = false
-                backButtonTransitionRunning = false
-                backGestureCancelJob?.cancel()
-                backGestureCancelJob =
-                    coroutineScope.launch {
-                        val returnAnimation = Animatable(backGestureProgress)
-                        returnAnimation.animateTo(
-                            targetValue = 0f,
-                            animationSpec = tandemMotionSpec(reduceMotion, TandemMotion.BACK_CANCEL_MILLIS),
-                        ) {
-                            backGestureProgress = value
-                        }
-                        backGestureOutgoingEntry = null
-                        backPreviewRoute = null
-                        backGestureCancelJob = null
-                    }
-            } else {
-                backGestureCommitPending = false
-                backGestureProgress = 0f
-                backGestureOutgoingEntry = null
-                backPreviewRoute = null
-            }
-        }
+        val updateBackGesture: (Float, Float) -> Unit = navigator::updateBackGesture
         TandemBackHandler(
             enabled = backStack.size > 1 && !transactionSheetActive,
             onBack = handleCurrentRouteBack,
