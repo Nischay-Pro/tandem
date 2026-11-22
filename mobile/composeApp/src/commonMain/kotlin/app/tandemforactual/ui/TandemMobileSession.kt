@@ -36,6 +36,7 @@ import app.tandemforactual.data.planning.PlanningStore
 import app.tandemforactual.data.planning.PlanningSync
 import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
@@ -287,6 +288,8 @@ internal class TandemMobileSession(
     var planningSettings by mutableStateOf(PlanningSettings())
     var customReports by mutableStateOf<List<CustomReport>>(emptyList())
         private set
+    var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
+        private set
 
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
@@ -450,6 +453,18 @@ internal class TandemMobileSession(
         id: String,
     ) {
         planningStore(budgetId)?.deleteCustomReport(id)
+    }
+
+    suspend fun saveSearch(
+        budgetId: String,
+        search: SavedSearch,
+    ): Boolean = planningStore(budgetId)?.save(search) != null
+
+    suspend fun deleteSavedSearch(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteSavedSearch(id)
     }
 
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
@@ -5725,6 +5740,7 @@ internal class TandemMobileSession(
                 launch { planning.reimbursements().collect { reimbursements = it } }
                 launch { planning.settings().collect { planningSettings = it } }
                 launch { planning.customReports().collect { customReports = it } }
+                launch { planning.savedSearches().collect { savedSearches = it } }
             }
         }
     }

@@ -107,6 +107,13 @@ class PlanningStoreTest {
                 assertEquals(listOf(food, trips), store.customReports().first())
                 store.deleteCustomReport("r-1")
                 assertEquals(listOf(trips), store.customReports().first())
+                val coffee = SavedSearch("s-1", "coffee", "cafe", listOf(SavedSearchFilter("TAG", "treat", "#treat")))
+                val big = SavedSearch("s-2", "Big", filters = listOf(SavedSearchFilter("OUTFLOW_AT_LEAST", "10000", "Over 100")))
+                store.save(coffee)
+                store.save(big)
+                assertEquals(listOf(big, coffee), store.savedSearches().first())
+                store.deleteSavedSearch("s-2")
+                assertEquals(listOf(coffee), store.savedSearches().first())
             } finally {
                 db.close()
             }
