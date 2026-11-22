@@ -26,20 +26,6 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
-import app.tandemforactual.data.planning.AccountCurrency
-import app.tandemforactual.data.planning.CustomReport
-import app.tandemforactual.data.planning.DebtTerms
-import app.tandemforactual.data.planning.DeviceName
-import app.tandemforactual.data.planning.ExchangeRate
-import app.tandemforactual.data.planning.PlanningCipher
-import app.tandemforactual.data.planning.PlanningKeyMismatchException
-import app.tandemforactual.data.planning.PlanningSettings
-import app.tandemforactual.data.planning.PlanningStore
-import app.tandemforactual.data.planning.PlanningSync
-import app.tandemforactual.data.planning.Reimbursement
-import app.tandemforactual.data.planning.RetirementProfile
-import app.tandemforactual.data.planning.SavedSearch
-import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
@@ -67,6 +53,7 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.transactionAmountInputError
 import app.tandemforactual.ui.core.format.transactionDateValidationMessage
 import app.tandemforactual.ui.core.format.validateTransactionDate
+import app.tandemforactual.ui.core.session.planning.PlanningController
 import app.tandemforactual.ui.core.state.AccountActivitySnapshot
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
@@ -315,143 +302,12 @@ internal class TandemMobileSession(
     private var budgetStorage by mutableStateOf<BudgetStorage?>(null)
     private val storage: BudgetStorage? get() = budgetStorage ?: mainStorage
     private val repository: LocalBudgetRepository? get() = storage?.repository
-    internal var planningKeyring = PlanningKeyring(null)
-    var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
-        private set
-    var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
-        private set
-    var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
-    var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
-    var planningSettings by mutableStateOf(PlanningSettings())
-    var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
-        private set
-    var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
-        private set
-    var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
-        private set
 
-    suspend fun saveAccountCurrency(
-        budgetId: String,
-        accountId: String,
-        currency: String,
-    ) {
-        planningStore(budgetId)?.save(AccountCurrency(accountId, currency))
-    }
-
-    suspend fun saveExchangeRate(
-        budgetId: String,
-        rate: ExchangeRate,
-    ) {
-        planningStore(budgetId)?.save(rate)
-    }
-
-    suspend fun deleteExchangeRate(
-        budgetId: String,
-        rate: ExchangeRate,
-    ) {
-        planningStore(budgetId)?.deleteExchangeRate(rate)
-    }
-
-    /** Names this device's Actual node, so change history on every device can say which device made an edit. */
-    suspend fun nameDevice(
-        budgetId: String,
-        node: String,
-        name: String,
-    ) {
-        if (node.isBlank() || name.isBlank()) return
-        planningStore(budgetId)?.save(DeviceName(node, name.trim().take(40)))
-    }
-
-    var customReports by mutableStateOf<List<CustomReport>>(emptyList())
-        private set
-    var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
-        private set
+    /** Goals, debts, retirement, reimbursements and the other planning records Actual doesn't hold. */
+    val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
 
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
-
-    private fun planningStore(budgetId: String): PlanningStore? =
-        storage?.database?.let { PlanningStore(it.planningRecordDao(), budgetId, { planningKeyring.cipherFor(budgetId) }, nowEpochMillis) }
-
-    var planningSyncStatus by mutableStateOf(PlanningSyncStatus.OFF)
-        private set
-
-    /**
-     * Shares planning records through extension sync when the server runs it. It never blocks budget sync: any failure
-     * leaves the records on this device to try again next time.
-     */
-    suspend fun syncPlanning(budgetId: String) {
-        val dao = storage?.database?.planningRecordDao() ?: return
-        val transport = apiClient.planningTransport(budgetId)
-        if (transport == null) {
-            planningSyncStatus = PlanningSyncStatus.OFF
-            return
-        }
-        planningSyncStatus =
-            try {
-                withContext(Dispatchers.Default) {
-                    val keyring = planningKeyring
-                    val sync = PlanningSync(dao, budgetId, transport)
-                    val local = keyring.key(budgetId)
-                    val shared = sync.agreeOnKey(local, apiClient.budgetSecret(budgetId) ?: keyring.recoveryKey(budgetId))
-                    if (!shared.contentEquals(local)) {
-                        keyring.replaceKey(budgetId, shared)
-                        sync.rekey(PlanningCipher(local), PlanningCipher(shared))
-                    }
-                    val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId))
-                    keyring.setCursor(budgetId, result.cursor)
-                }
-                PlanningSyncStatus.SYNCED
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: PlanningKeyMismatchException) {
-                PlanningSyncStatus.NEEDS_RECOVERY_KEY
-            } catch (_: Exception) {
-                PlanningSyncStatus.WAITING
-            }
-    }
-
-    /** Uses the recovery key from another device, then tries planning sync again. */
-    suspend fun useRecoveryKey(
-        budgetId: String,
-        key: ByteArray,
-    ) {
-        planningKeyring.setRecoveryKey(budgetId, key)
-        syncPlanning(budgetId)
-    }
-
-    suspend fun saveReimbursement(
-        budgetId: String,
-        reimbursement: Reimbursement,
-    ) {
-        planningStore(budgetId)?.save(reimbursement)
-    }
-
-    suspend fun deleteReimbursement(
-        budgetId: String,
-        transactionId: String,
-    ) {
-        planningStore(budgetId)?.deleteReimbursement(transactionId)
-    }
-
-    suspend fun saveRetirementProfile(
-        budgetId: String,
-        profile: RetirementProfile,
-    ) {
-        planningStore(budgetId)?.save(profile)
-    }
-
-    /** Saves the wizard's answers in one go: the chosen countries and the plans kept, removing plans no longer picked. */
-    suspend fun saveRetirementSetup(
-        budgetId: String,
-        regions: List<String>,
-        profiles: List<RetirementProfile>,
-    ) {
-        val store = planningStore(budgetId) ?: return
-        store.save(PlanningSettings(regions))
-        retirementProfiles.filter { old -> profiles.none { it.planId == old.planId } }.forEach { store.deleteRetirementProfile(it.planId) }
-        profiles.forEach { store.save(it) }
-    }
 
     suspend fun loadAccountInflows(
         budgetId: String,
@@ -526,53 +382,6 @@ internal class TandemMobileSession(
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t unlink this account. Try again.") {
             apiClient.unlinkBudgetBankAccount(budgetId, accountId, encryptionPassword)
         }
-
-    suspend fun saveSavingsGoal(
-        budgetId: String,
-        goal: SavingsGoal,
-    ) {
-        planningStore(budgetId)?.save(goal)
-    }
-
-    suspend fun deleteSavingsGoal(
-        budgetId: String,
-        goalId: String,
-    ) {
-        planningStore(budgetId)?.delete(goalId, SavingsGoal.TYPE)
-    }
-
-    suspend fun saveDebtTerms(
-        budgetId: String,
-        terms: DebtTerms,
-    ) {
-        planningStore(budgetId)?.save(terms)
-    }
-
-    suspend fun saveCustomReport(
-        budgetId: String,
-        report: CustomReport,
-    ) {
-        planningStore(budgetId)?.save(report)
-    }
-
-    suspend fun deleteCustomReport(
-        budgetId: String,
-        id: String,
-    ) {
-        planningStore(budgetId)?.deleteCustomReport(id)
-    }
-
-    suspend fun saveSearch(
-        budgetId: String,
-        search: SavedSearch,
-    ): Boolean = planningStore(budgetId)?.save(search) != null
-
-    suspend fun deleteSavedSearch(
-        budgetId: String,
-        id: String,
-    ) {
-        planningStore(budgetId)?.deleteSavedSearch(id)
-    }
 
     private val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
         get() = queuePersistenceOverride ?: storage?.queuePersistence
@@ -3661,7 +3470,7 @@ internal class TandemMobileSession(
                 budgetReorderQueue = budgetReorderQueue.clearCompletedVisibilityOverrides(budgetId)
                 if (retryQueuedBudgetMutations) retryQueuedBudgetReorders(budgetId, encryptionPassword)
             }
-            syncPlanning(budgetId)
+            planning.sync(budgetId)
             return summary
         } catch (error: CancellationException) {
             throw error
@@ -3767,16 +3576,6 @@ internal class TandemMobileSession(
         } catch (_: Exception) {
             null
         }
-
-    /** Writes every planning record back from a backup; records already on the device with the same id are replaced. */
-    suspend fun restorePlanning(
-        budgetId: String,
-        records: List<Triple<String, String, kotlinx.serialization.json.JsonObject>>,
-    ): Int {
-        val store = planningStore(budgetId) ?: return 0
-        records.forEach { (id, type, body) -> store.put(id, type, body) }
-        return records.size
-    }
 
     suspend fun previewRule(
         budgetId: String,
@@ -5618,7 +5417,7 @@ internal class TandemMobileSession(
         synchronize(budgetId, encryptionPassword)
         loadLocalRecords(budgetId)
         if (bankLinks.any { it.failure != null }) runBankSync(budgetId, encryptionPassword)
-        if (planningSyncStatus == PlanningSyncStatus.WAITING) syncPlanning(budgetId)
+        if (planning.syncStatus == PlanningSyncStatus.WAITING) planning.sync(budgetId)
     }
 
     suspend fun checkUncertainWriteStatus(
@@ -5876,22 +5675,7 @@ internal class TandemMobileSession(
                 }
             }
             launch { localRepository.observeSyncState(budgetId).collect { localSyncState = it } }
-            planningStore(budgetId)?.let { planning ->
-                launch { planning.savingsGoals().collect { savingsGoals = it } }
-                launch { planning.debtTerms().collect { debtTerms = it } }
-                launch { planning.retirementProfiles().collect { retirementProfiles = it } }
-                launch { planning.reimbursements().collect { reimbursements = it } }
-                launch { planning.settings().collect { planningSettings = it } }
-                launch {
-                    planning.accountCurrencies().collect { list ->
-                        accountCurrencies = list.associate { it.accountId to it.currency }
-                    }
-                }
-                launch { planning.exchangeRates().collect { exchangeRates = it } }
-                launch { planning.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
-                launch { planning.customReports().collect { customReports = it } }
-                launch { planning.savedSearches().collect { savedSearches = it } }
-            }
+            with(planning) { observe(budgetId) }
         }
     }
 

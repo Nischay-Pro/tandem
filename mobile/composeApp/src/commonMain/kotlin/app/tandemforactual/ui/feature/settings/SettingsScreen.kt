@@ -231,7 +231,7 @@ internal fun SettingsScreen(
             )
         }
         SectionCard(stringResource(Res.string.settings_section_privacy)) {
-            if (!state.selectedBudgetEncrypted && mobileSession.planningSyncStatus != PlanningSyncStatus.OFF) {
+            if (!state.selectedBudgetEncrypted && mobileSession.planning.syncStatus != PlanningSyncStatus.OFF) {
                 var showingRecoveryKey by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
                 ListRow(
@@ -243,10 +243,10 @@ internal fun SettingsScreen(
                 RecoveryKeySheet(
                     showingRecoveryKey,
                     remember(state.selectedBudgetId, showingRecoveryKey) {
-                        formatRecoveryKey(mobileSession.planningKeyring.recoveryKey(state.selectedBudgetId))
+                        formatRecoveryKey(mobileSession.planning.keyring.recoveryKey(state.selectedBudgetId))
                     },
                     onUseKey = { key ->
-                        scope.launch { mobileSession.useRecoveryKey(state.selectedBudgetId, key) }
+                        scope.launch { mobileSession.planning.useRecoveryKey(state.selectedBudgetId, key) }
                         showingRecoveryKey = false
                     },
                     onDismiss = { showingRecoveryKey = false },

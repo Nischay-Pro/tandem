@@ -200,7 +200,7 @@ internal fun SyncCenterScreen(
     val vault = LocalEncryptedBudgetVault.current
     val retryable =
         transactionsNeedingReview.count { it.status == "uncertain" } + mobileSession.bankLinks.count { it.failure != null } +
-            (if (mobileSession.planningSyncStatus == PlanningSyncStatus.WAITING) 1 else 0)
+            (if (mobileSession.planning.syncStatus == PlanningSyncStatus.WAITING) 1 else 0)
     val conflictCount = transactionsNeedingReview.count { it.status == "conflict" }
     var retrying by remember { mutableStateOf(false) }
     val budgetOverview by produceState(

@@ -254,7 +254,8 @@ internal fun AccountOptionsScreen(
     val liveAccount = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
     val accountName = liveAccount?.name
     val accountBalance =
-        liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, mobileSession.accountCurrencies[liveAccount.id]) } ?: "Unavailable"
+        liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, mobileSession.planning.accountCurrencies[liveAccount.id]) }
+            ?: "Unavailable"
     val accountScope = if (liveAccount?.offBudget == true) "Off budget" else "On budget"
     var confirmClose by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     var renameDialog by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
@@ -301,7 +302,7 @@ internal fun AccountOptionsScreen(
                 ListRow(
                     "Currency",
                     "What this account holds. Converted totals use your rates.",
-                    liveAccount?.let { mobileSession.accountCurrencies[it.id] } ?: state.budgetCurrencyCode,
+                    liveAccount?.let { mobileSession.planning.accountCurrencies[it.id] } ?: state.budgetCurrencyCode,
                     onClick = { navigation.open(AppRoute.EXCHANGE_RATES) },
                 )
             }

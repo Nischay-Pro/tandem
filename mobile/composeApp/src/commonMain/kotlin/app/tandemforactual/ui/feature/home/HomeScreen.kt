@@ -88,8 +88,8 @@ internal fun HomeScreen(
     onSyncNow: () -> Unit = {},
 ) {
     val data =
-        remember(accounts, month, schedules, transactions, mobileSession.savingsGoals) {
-            homeData(accounts, month, schedules, transactions).copy(savingsGoalCount = mobileSession.savingsGoals.size)
+        remember(accounts, month, schedules, transactions, mobileSession.planning.savingsGoals) {
+            homeData(accounts, month, schedules, transactions).copy(savingsGoalCount = mobileSession.planning.savingsGoals.size)
         }
     val editors = rememberPlanningEditors(state, mobileSession, month)
     val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
@@ -298,7 +298,7 @@ private fun HomeEntryCard(
         HomeModule.DEBT_OVERVIEW ->
             DebtOverviewCard(
                 open.filter { (it.balanceMinor ?: 0) < 0 },
-                mobileSession.debtTerms,
+                mobileSession.planning.debtTerms,
                 settings,
                 state.privacyModeEnabled,
                 money,
@@ -347,7 +347,7 @@ private fun HomeEntryCard(
             }
         HomeModule.SAVINGS_GOALS ->
             SavingsGoalsCard(
-                mobileSession.savingsGoals,
+                mobileSession.planning.savingsGoals,
                 month,
                 accounts,
                 settings,

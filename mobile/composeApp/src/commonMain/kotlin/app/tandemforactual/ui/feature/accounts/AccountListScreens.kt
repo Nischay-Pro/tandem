@@ -645,8 +645,8 @@ internal fun AccountsScreen(
             orderedLiveAccounts,
             state.budgetDisplaySettings,
             mobileSession.localSyncState?.lastSyncedAtEpochMs,
-            mobileSession.accountCurrencies,
-            mobileSession.exchangeRates,
+            mobileSession.planning.accountCurrencies,
+            mobileSession.planning.exchangeRates,
         ) {
             if (isLiveBudget) {
                 val groupedAccounts =
@@ -671,7 +671,7 @@ internal fun AccountsScreen(
                                         account.balanceMinor?.let {
                                             state.formatAccountMoney(
                                                 it,
-                                                mobileSession.accountCurrencies[account.id],
+                                                mobileSession.planning.accountCurrencies[account.id],
                                             )
                                         }
                                             ?: "Unavailable",
@@ -729,7 +729,7 @@ internal fun AccountsScreen(
         val hasForeignAccounts =
             orderedLiveAccounts.any {
                 !it.closed &&
-                    mobileSession.accountCurrencies[it.id]?.let { code -> code != state.budgetCurrencyCode } == true
+                    mobileSession.planning.accountCurrencies[it.id]?.let { code -> code != state.budgetCurrencyCode } == true
             }
         if (!closedOnly && hasForeignAccounts) {
             item(key = "account-net-worth") {

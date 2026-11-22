@@ -67,7 +67,7 @@ internal fun HouseholdScreen(
     }
     LaunchedEffect(thisNode) {
         val node = thisNode ?: return@LaunchedEffect
-        if (node !in mobileSession.deviceNames) mobileSession.nameDevice(state.selectedBudgetId, node, deviceName)
+        if (node !in mobileSession.planning.deviceNames) mobileSession.planning.nameDevice(state.selectedBudgetId, node, deviceName)
     }
     var renaming by remember { mutableStateOf(false) }
     val openId =
@@ -111,7 +111,7 @@ internal fun HouseholdScreen(
                                 "This budget is encrypted. Tell them its password in person, never in the invite.",
                         )
                     }
-                    if (mobileSession.planningSyncStatus != PlanningSyncStatus.OFF) {
+                    if (mobileSession.planning.syncStatus != PlanningSyncStatus.OFF) {
                         add(
                             "Share planning details" to
                                 "Shared goals and debt details reach their device once it has the planning recovery key from Settings.",
@@ -137,7 +137,7 @@ internal fun HouseholdScreen(
             }
         }
         SectionCard("Devices", "Names show in change history. They come from each device and aren’t verified by Actual.") {
-            val names = mobileSession.deviceNames
+            val names = mobileSession.planning.deviceNames
             val node = thisNode
             ListRow(
                 node?.let { names[it] } ?: deviceName,
@@ -150,14 +150,14 @@ internal fun HouseholdScreen(
                 ListRow(name, "Another device", leading = RowLeading.Icon(Lucide.Users), options = ListRowOptions(showChevron = false))
             }
         }
-        val goals = mobileSession.savingsGoals
-        val debts = mobileSession.debtTerms
+        val goals = mobileSession.planning.savingsGoals
+        val debts = mobileSession.planning.debtTerms
         val privateCount = goals.count { !it.shared } + debts.count { !it.shared }
         val sharedCount = goals.size + debts.size - privateCount
         SectionCard("Shared and private", "Savings goals and debt details") {
             ListRow(
                 "$sharedCount shared",
-                if (mobileSession.planningSyncStatus == PlanningSyncStatus.OFF) {
+                if (mobileSession.planning.syncStatus == PlanningSyncStatus.OFF) {
                     "Stay on this device until your server runs Tandem’s extension service"
                 } else {
                     "Reach every device on this budget"
@@ -174,7 +174,7 @@ internal fun HouseholdScreen(
             )
         }
     }
-    var draft by remember(renaming) { mutableStateOf(thisNode?.let { mobileSession.deviceNames[it] } ?: deviceName) }
+    var draft by remember(renaming) { mutableStateOf(thisNode?.let { mobileSession.planning.deviceNames[it] } ?: deviceName) }
     TandemChoiceDialog(visible = renaming, onDismissRequest = { renaming = false }) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
@@ -183,7 +183,7 @@ internal fun HouseholdScreen(
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = draft.isNotBlank()) {
                     val node = thisNode
                     renaming = false
-                    if (node != null) scope.launch { mobileSession.nameDevice(state.selectedBudgetId, node, draft) }
+                    if (node != null) scope.launch { mobileSession.planning.nameDevice(state.selectedBudgetId, node, draft) }
                 }
             }
         }

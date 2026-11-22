@@ -59,7 +59,7 @@ internal fun RetirementScreen(
     mobileSession: TandemMobileSession,
     liveAccounts: List<LiveAccountSummary>,
 ) {
-    val profiles = mobileSession.retirementProfiles.filter { RetirementPlans.byId(it.planId) != null }
+    val profiles = mobileSession.planning.retirementProfiles.filter { RetirementPlans.byId(it.planId) != null }
     val palette = tandemPalette
     if (profiles.isEmpty()) {
         PageColumn(verticalSpacing = TandemSpacing.large) {
@@ -83,7 +83,7 @@ internal fun RetirementScreen(
     var year by rememberSaveable { mutableStateOf(currentYear) }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (years.size > 1) FilterPills(years.map { it to it.toString() }, year, { year = it })
-        val order = mobileSession.planningSettings.regions
+        val order = mobileSession.planning.settings.regions
         profiles
             .groupBy { RetirementPlans.byId(it.planId)!!.region }
             .entries

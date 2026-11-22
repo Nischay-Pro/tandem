@@ -256,7 +256,7 @@ fun TandemApp(
                 nowEpochMillis,
                 deviceCredentialStore,
                 openIdLoginProofState = openIdLoginProofState,
-            ).apply { planningKeyring = PlanningKeyring(planningKeyStore) }
+            ).apply { planning.keyring = PlanningKeyring(planningKeyStore) }
         }
     LaunchedEffect(mobileSession) {
         if (mobileSession.boundEncryptedBudgetId == null && state.selectedBudgetEncrypted) state.encryptedPassword = ""
@@ -2239,7 +2239,10 @@ fun TandemApp(
                     scheduleCount = liveSchedules.size,
                     payeeCount = mobileSession.payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null },
                     conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
-                    reimbursementsOwedMinor = mobileSession.reimbursements.filterNot { it.received }.sumOf { it.amountMinor },
+                    reimbursementsOwedMinor =
+                        mobileSession.planning.reimbursements
+                            .filterNot { it.received }
+                            .sumOf { it.amountMinor },
                     formatMoney = state::formatCurrency,
                     readOnly = state.readOnlyMode,
                     open = openFromMenu,

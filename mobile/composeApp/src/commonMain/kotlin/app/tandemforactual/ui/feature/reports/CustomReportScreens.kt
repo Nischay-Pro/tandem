@@ -142,7 +142,7 @@ internal fun CustomReportsScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
 ) {
-    val reports = mobileSession.customReports
+    val reports = mobileSession.planning.customReports
     val transactions = rememberBudgetTransactions(state, mobileSession)
     val income = remember(mobileSession.categoryRecords, mobileSession.categoryGroupRecords) { mobileSession.incomeCategoryIds() }
     val today = platformTodayIsoDate()
@@ -192,7 +192,7 @@ internal fun CustomReportScreen(
 ) {
     val palette = tandemPalette
     val scope = rememberCoroutineScope()
-    val saved = mobileSession.customReports.firstOrNull { it.id == state.selectedCustomReportId }
+    val saved = mobileSession.planning.customReports.firstOrNull { it.id == state.selectedCustomReportId }
     var draft by remember(state.selectedCustomReportId) { mutableStateOf(saved ?: CustomReport("", "")) }
     var naming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -234,7 +234,7 @@ internal fun CustomReportScreen(
                 if (saved == null) {
                     naming = true
                 } else {
-                    scope.launch { mobileSession.saveCustomReport(state.selectedBudgetId, draft) }
+                    scope.launch { mobileSession.planning.saveCustomReport(state.selectedBudgetId, draft) }
                 }
             }
         }
@@ -242,7 +242,7 @@ internal fun CustomReportScreen(
     val suggestedName = draft.name.ifBlank { "${draft.flow.label} by ${draft.grouping.label.lowercase()}" }
     ReportNameSheet(naming, suggestedName, { naming = false }) { name ->
         val report = draft.copy(id = draft.id.ifBlank { Uuid.random().toString() }, name = name)
-        scope.launch { mobileSession.saveCustomReport(state.selectedBudgetId, report) }
+        scope.launch { mobileSession.planning.saveCustomReport(state.selectedBudgetId, report) }
         draft = report
         state.selectedCustomReportId = report.id
         state.selectedCustomReportName = report.name
@@ -271,7 +271,7 @@ internal fun CustomReportScreen(
             onDismissRequest = { confirmDelete = false },
         ) {
             confirmDelete = false
-            scope.launch { mobileSession.deleteCustomReport(state.selectedBudgetId, saved.id) }
+            scope.launch { mobileSession.planning.deleteCustomReport(state.selectedBudgetId, saved.id) }
             navigation.back()
         }
     }

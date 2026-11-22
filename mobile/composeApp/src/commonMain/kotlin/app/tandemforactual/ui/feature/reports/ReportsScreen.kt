@@ -173,7 +173,7 @@ internal fun ReportsScreen(
         }
         item(key = "reports-more") {
             SurfaceCard {
-                val saved = mobileSession.customReports.size
+                val saved = mobileSession.planning.customReports.size
                 ListRow(
                     "Custom reports",
                     if (saved == 0) "Build your own by category, payee or account" else "$saved saved",

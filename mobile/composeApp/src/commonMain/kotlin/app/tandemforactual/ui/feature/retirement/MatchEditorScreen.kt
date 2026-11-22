@@ -74,7 +74,7 @@ internal fun MatchEditorScreen(
     mobileSession: TandemMobileSession,
 ) {
     val scope = rememberCoroutineScope()
-    val profile = mobileSession.retirementProfiles.firstOrNull { it.planId == K401.id } ?: RetirementProfile(K401.id)
+    val profile = mobileSession.planning.retirementProfiles.firstOrNull { it.planId == K401.id } ?: RetirementProfile(K401.id)
     val tiers =
         remember {
             mutableStateListOf<TierDraft>().apply {
@@ -178,7 +178,7 @@ internal fun MatchEditorScreen(
         }
         TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
             scope.launch {
-                mobileSession.saveRetirementProfile(
+                mobileSession.planning.saveRetirementProfile(
                     state.selectedBudgetId,
                     profile.copy(
                         match = match.takeIf { it.tiers.isNotEmpty() },

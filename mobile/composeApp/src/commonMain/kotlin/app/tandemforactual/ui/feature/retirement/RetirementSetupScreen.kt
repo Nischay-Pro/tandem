@@ -80,11 +80,14 @@ internal fun RetirementSetupScreen(
     liveAccounts: List<LiveAccountSummary>,
 ) {
     val scope = rememberCoroutineScope()
-    val existing = mobileSession.retirementProfiles.associateBy { it.planId }
+    val existing = mobileSession.planning.retirementProfiles.associateBy { it.planId }
     val regions =
         remember {
             mutableStateListOf<Region>().apply {
-                addAll(mobileSession.planningSettings.regions.mapNotNull { code -> Region.entries.firstOrNull { it.name == code } })
+                addAll(
+                    mobileSession.planning.settings.regions
+                        .mapNotNull { code -> Region.entries.firstOrNull { it.name == code } },
+                )
             }
         }
     val chosen =
@@ -211,7 +214,7 @@ internal fun RetirementSetupScreen(
                         (existing[id] ?: RetirementProfile(id)).copy(accountId = accountId, age = age.toIntOrNull(), family = family)
                     }
                 scope.launch {
-                    mobileSession.saveRetirementSetup(state.selectedBudgetId, regions.map { it.name }, profiles)
+                    mobileSession.planning.saveRetirementSetup(state.selectedBudgetId, regions.map { it.name }, profiles)
                     navigation.back()
                 }
             }

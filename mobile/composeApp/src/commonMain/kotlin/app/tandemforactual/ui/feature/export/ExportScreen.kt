@@ -86,7 +86,7 @@ internal fun ExportScreen(
                 return@rememberStatementFilePicker
             }
             scope.launch {
-                val count = mobileSession.restorePlanning(state.selectedBudgetId, records)
+                val count = mobileSession.planning.restore(state.selectedBudgetId, records)
                 message = "Restored $count planning records." to InlineMessageKind.SUCCESS
             }
         }
@@ -161,13 +161,13 @@ internal fun ExportScreen(
 
 private fun planningBackup(session: TandemMobileSession): String {
     val records =
-        session.savingsGoals.map { Triple(it.id, SavingsGoal.TYPE, it.toJson()) } +
-            session.debtTerms.map { Triple(it.id, DebtTerms.TYPE, it.toJson()) } +
-            session.retirementProfiles.map { Triple(it.planId, RetirementProfile.TYPE, it.toJson()) } +
-            session.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
-            session.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
-            session.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
-            listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planningSettings.toJson()))
+        session.planning.savingsGoals.map { Triple(it.id, SavingsGoal.TYPE, it.toJson()) } +
+            session.planning.debtTerms.map { Triple(it.id, DebtTerms.TYPE, it.toJson()) } +
+            session.planning.retirementProfiles.map { Triple(it.planId, RetirementProfile.TYPE, it.toJson()) } +
+            session.planning.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
+            session.planning.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
+            session.planning.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
+            listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))
     return buildJsonObject {
         put("format", BACKUP_FORMAT)
         put("version", 1)

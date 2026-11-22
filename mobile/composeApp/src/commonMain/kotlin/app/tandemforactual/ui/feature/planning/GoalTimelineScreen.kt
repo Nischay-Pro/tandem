@@ -73,7 +73,7 @@ internal fun GoalTimelineScreen(
 ) {
     val palette = tandemPalette
     val editors = rememberPlanningEditors(state, mobileSession, month)
-    val goals = mobileSession.savingsGoals
+    val goals = mobileSession.planning.savingsGoals
     val today = platformTodayIsoDate()
     if (goals.isEmpty()) {
         PageColumn {

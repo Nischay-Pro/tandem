@@ -61,7 +61,7 @@ internal fun DebtPayoffScreen(
     var strategy by rememberSaveable { mutableStateOf(PayoffStrategy.AVALANCHE) }
     var extra by rememberSaveable { mutableStateOf(10_000L) }
     var scrub by remember { mutableStateOf<Int?>(null) }
-    val terms = mobileSession.debtTerms
+    val terms = mobileSession.planning.debtTerms
 
     fun termsFor(account: LiveAccountSummary) = terms.firstOrNull { it.accountId == account.id }
     val debts = liveAccounts.filter { !it.closed && (it.balanceMinor ?: 0) < 0 && termsFor(it)?.kind != DebtKind.NOT_DEBT }

@@ -389,7 +389,7 @@ internal fun AccountDetailScreen(
     val reconciliationCandidates =
         shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
     val description = liveAccount?.let { if (it.offBudget) "Off budget" else "On budget" }.orEmpty()
-    val accountCurrency = liveAccount?.let { mobileSession.accountCurrencies[it.id] }
+    val accountCurrency = liveAccount?.let { mobileSession.planning.accountCurrencies[it.id] }
     val balance = liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, accountCurrency) } ?: "Unavailable"
     val converted = liveAccount?.let { mobileSession.approximateInBudgetCurrency(state, it.id, it.balanceMinor) }
     PageColumn {

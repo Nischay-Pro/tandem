@@ -58,7 +58,7 @@ internal fun ReimbursementsScreen(
     mobileSession: TandemMobileSession,
 ) {
     val scope = rememberCoroutineScope()
-    val all = mobileSession.reimbursements.sortedByDescending { it.date }
+    val all = mobileSession.planning.reimbursements.sortedByDescending { it.date }
     val pending = all.filterNot { it.received }
     val received = all.filter { it.received }
     PageColumn(verticalSpacing = TandemSpacing.large) {
@@ -80,7 +80,7 @@ internal fun ReimbursementsScreen(
                         leading = RowLeading.Icon(Lucide.HandCoins),
                         onClick = {
                             scope.launch {
-                                mobileSession.saveReimbursement(
+                                mobileSession.planning.saveReimbursement(
                                     state.selectedBudgetId,
                                     item.copy(receivedOn = platformTodayIsoDate()),
                                 )
@@ -120,7 +120,7 @@ internal fun ReimbursementCard(
     val amount = state.selectedTransactionAmountMinor ?: return
     if (amount >= 0 || state.selectedTransactionIsTransfer) return
     val scope = rememberCoroutineScope()
-    val existing = mobileSession.reimbursements.firstOrNull { it.transactionId == state.selectedTransactionRecordId }
+    val existing = mobileSession.planning.reimbursements.firstOrNull { it.transactionId == state.selectedTransactionRecordId }
     var editing by remember { mutableStateOf(false) }
     SectionCard(title = "") {
         ListRow(
@@ -153,7 +153,7 @@ internal fun ReimbursementCard(
                         val minor = state.parseAmountMinorUnits(owed)?.let { kotlin.math.abs(it) } ?: -amount
                         editing = false
                         scope.launch {
-                            mobileSession.saveReimbursement(
+                            mobileSession.planning.saveReimbursement(
                                 state.selectedBudgetId,
                                 Reimbursement(
                                     state.selectedTransactionRecordId,

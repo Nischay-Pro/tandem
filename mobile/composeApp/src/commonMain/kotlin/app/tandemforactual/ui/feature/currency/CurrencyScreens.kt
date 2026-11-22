@@ -81,7 +81,13 @@ internal fun TandemMobileSession.convertedBalance(
     state: AppState,
     accounts: List<Pair<String, Long?>>,
 ): ConvertedTotal =
-    convertedTotal(accounts.map { (id, balance) -> (balance ?: 0L) to accountCurrencies[id] }, state.budgetCurrencyCode, exchangeRates)
+    convertedTotal(
+        accounts.map { (id, balance) ->
+            (balance ?: 0L) to planning.accountCurrencies[id]
+        },
+        state.budgetCurrencyCode,
+        planning.exchangeRates,
+    )
 
 /** "≈ $1,234 in USD" for an account in another currency, or null when it's in the budget's currency or has no rate. */
 internal fun TandemMobileSession.approximateInBudgetCurrency(
@@ -89,8 +95,8 @@ internal fun TandemMobileSession.approximateInBudgetCurrency(
     accountId: String,
     balanceMinor: Long?,
 ): String? {
-    val currency = accountCurrencies[accountId]?.takeIf { it != state.budgetCurrencyCode } ?: return null
-    val rate = rateBetween(currency, state.budgetCurrencyCode, exchangeRates) ?: return null
+    val currency = planning.accountCurrencies[accountId]?.takeIf { it != state.budgetCurrencyCode } ?: return null
+    val rate = rateBetween(currency, state.budgetCurrencyCode, planning.exchangeRates) ?: return null
     return "≈ ${state.formatCurrency(convertMinor(balanceMinor ?: 0L, rate))} in ${state.budgetCurrencyCode}"
 }
 
@@ -138,7 +144,7 @@ internal fun ExchangeRatesScreen(
     val palette = tandemPalette
     val budgetCurrency = state.budgetCurrencyCode
     val open = liveAccounts.filter { !it.closed }
-    val currencies = mobileSession.accountCurrencies
+    val currencies = mobileSession.planning.accountCurrencies
     val foreign =
         open
             .mapNotNull { currencies[it.id] }
@@ -175,7 +181,7 @@ internal fun ExchangeRatesScreen(
             SectionCard("Exchange rates", "Entered by you, with the date you checked them") {
                 foreign.forEachIndexed { index, code ->
                     if (index > 0) DividerLine()
-                    val rate = rateBetween(code, budgetCurrency, mobileSession.exchangeRates)
+                    val rate = rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates)
                     ListRow(
                         "1 $code = ${rate?.let { "${formatRate(it.value!!)} $budgetCurrency" } ?: "?"}",
                         rate?.let { "As of ${formatLiveDate(it.asOf)}" } ?: "No rate yet · Tap to add one",
@@ -223,13 +229,15 @@ internal fun ExchangeRatesScreen(
                                 val account = target ?: return@ListRow
                                 picking = null
                                 scope.launch {
-                                    mobileSession.saveAccountCurrency(
+                                    mobileSession.planning.saveAccountCurrency(
                                         state.selectedBudgetId,
                                         account.id,
                                         if (code == budgetCurrency) "" else code,
                                     )
                                 }
-                                if (code != budgetCurrency && rateBetween(code, budgetCurrency, mobileSession.exchangeRates) == null) {
+                                if (code != budgetCurrency &&
+                                    rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates) == null
+                                ) {
                                     editing = code
                                 }
                             },
@@ -239,13 +247,13 @@ internal fun ExchangeRatesScreen(
             }
         }
     }
-    ExchangeRateDialog(editing, budgetCurrency, mobileSession.exchangeRates, onDismiss = { editing = null }) { rate, delete ->
+    ExchangeRateDialog(editing, budgetCurrency, mobileSession.planning.exchangeRates, onDismiss = { editing = null }) { rate, delete ->
         editing = null
         scope.launch {
-            mobileSession.exchangeRates
+            mobileSession.planning.exchangeRates
                 .filter { (it.from == rate.from && it.to == rate.to) || (it.from == rate.to && it.to == rate.from) }
-                .forEach { mobileSession.deleteExchangeRate(state.selectedBudgetId, it) }
-            if (!delete) mobileSession.saveExchangeRate(state.selectedBudgetId, rate)
+                .forEach { mobileSession.planning.deleteExchangeRate(state.selectedBudgetId, it) }
+            if (!delete) mobileSession.planning.saveExchangeRate(state.selectedBudgetId, rate)
         }
     }
 }

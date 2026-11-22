@@ -96,12 +96,12 @@ internal fun ActivitySearchScreen(
     val scope = rememberCoroutineScope()
     val todayIso = platformTodayIsoDate()
     var search by rememberSaveable { mutableStateOf(state.activitySearchQuery) }
-    val savedSearches = mobileSession.savedSearches
+    val savedSearches = mobileSession.planning.savedSearches
     LaunchedEffect(state.selectedBudgetId, state.savedActivitySearchesJson, mobileSession.databaseGeneration) {
         val legacy = decodeSavedActivitySearches(state.savedActivitySearchesJson)
         val moving = legacy.filter { it.budgetId == state.selectedBudgetId }
         if (moving.isEmpty() || state.selectedBudgetId.isBlank()) return@LaunchedEffect
-        if (moving.all { mobileSession.saveSearch(state.selectedBudgetId, it.toSavedSearch(newSavedSearchId())) }) {
+        if (moving.all { mobileSession.planning.saveSearch(state.selectedBudgetId, it.toSavedSearch(newSavedSearchId())) }) {
             state.savedActivitySearchesJson = encodeSavedActivitySearches(legacy - moving.toSet())
         }
     }
@@ -384,7 +384,7 @@ internal fun ActivitySearchScreen(
                                     sizeDp = 36,
                                     iconSizeDp = 16,
                                 ) {
-                                    scope.launch { mobileSession.deleteSavedSearch(state.selectedBudgetId, savedSearch.id) }
+                                    scope.launch { mobileSession.planning.deleteSavedSearch(state.selectedBudgetId, savedSearch.id) }
                                 }
                             }
                         }
@@ -662,7 +662,7 @@ internal fun ActivitySearchScreen(
                             val name = savedSearchNameDraft.trim()
                             val id = savedSearches.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id ?: newSavedSearchId()
                             val entry = SavedActivitySearch(state.selectedBudgetId, name, search, filters).toSavedSearch(id)
-                            scope.launch { mobileSession.saveSearch(state.selectedBudgetId, entry) }
+                            scope.launch { mobileSession.planning.saveSearch(state.selectedBudgetId, entry) }
                             showSaveSearchDialog = false
                         },
                     )

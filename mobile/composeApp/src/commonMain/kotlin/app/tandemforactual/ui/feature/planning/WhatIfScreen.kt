@@ -71,7 +71,7 @@ internal fun WhatIfScreen(
     val goalExtra = spare - debtExtra
     val debts =
         liveAccounts.mapNotNull { account ->
-            val terms = mobileSession.debtTerms.firstOrNull { it.accountId == account.id }
+            val terms = mobileSession.planning.debtTerms.firstOrNull { it.accountId == account.id }
             val owed = -(account.balanceMinor ?: 0)
             val apr = terms?.aprBasisPoints
             val minimum = terms?.minimumPaymentMinor
@@ -87,7 +87,7 @@ internal fun WhatIfScreen(
                 DebtInput(account.id, owed, apr, minimum)
             }
         }
-    val goals = mobileSession.savingsGoals
+    val goals = mobileSession.planning.savingsGoals
     val today = platformTodayIsoDate()
 
     fun monthLabel(offset: Int): String {

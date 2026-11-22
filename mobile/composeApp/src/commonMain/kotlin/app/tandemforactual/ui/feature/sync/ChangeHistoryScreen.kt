@@ -100,8 +100,8 @@ internal fun ChangeHistoryScreen(
         loading = true
         history = mobileSession.loadChangeHistory(state.selectedBudgetId, password)
         loading = false
-        history?.deviceNode?.takeIf { it !in mobileSession.deviceNames }?.let {
-            mobileSession.nameDevice(
+        history?.deviceNode?.takeIf { it !in mobileSession.planning.deviceNames }?.let {
+            mobileSession.planning.nameDevice(
                 state.selectedBudgetId,
                 it,
                 deviceName,
@@ -174,7 +174,13 @@ internal fun ChangeHistoryScreen(
                     set = set,
                     describe = describe,
                     deviceLabel =
-                        if (set.node == history?.deviceNode) "This device" else mobileSession.deviceNames[set.node] ?: "Another device",
+                        if (set.node ==
+                            history?.deviceNode
+                        ) {
+                            "This device"
+                        } else {
+                            mobileSession.planning.deviceNames[set.node] ?: "Another device"
+                        },
                     expanded = expanded == set.id,
                     undoing = mobileSession.isPerformingBudgetAction,
                     onToggle = { expanded = if (expanded == set.id) null else set.id },

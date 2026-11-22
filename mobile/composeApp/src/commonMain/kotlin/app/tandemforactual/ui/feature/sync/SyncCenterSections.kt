@@ -130,7 +130,7 @@ internal fun SyncCenterServices(
     onRecoveryKey: () -> Unit,
 ) {
     val palette = tandemPalette
-    val status = mobileSession.planningSyncStatus
+    val status = mobileSession.planning.syncStatus
     SectionCard("Extension sync", "Optional, for planning details") {
         ListRow(
             when (status) {

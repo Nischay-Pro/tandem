@@ -391,21 +391,21 @@ internal fun rememberPlanningEditors(
         month,
         settings,
         onSave = { goal ->
-            scope.launch { mobileSession.saveSavingsGoal(state.selectedBudgetId, goal) }
+            scope.launch { mobileSession.planning.saveSavingsGoal(state.selectedBudgetId, goal) }
             editors.goalVisible = false
         },
         onDelete = { goal ->
-            scope.launch { mobileSession.deleteSavingsGoal(state.selectedBudgetId, goal.id) }
+            scope.launch { mobileSession.planning.deleteSavingsGoal(state.selectedBudgetId, goal.id) }
             editors.goalVisible = false
         },
         onDismiss = { editors.goalVisible = false },
     )
     DebtTermsSheet(
         editors.debtAccount,
-        mobileSession.debtTerms.firstOrNull { it.accountId == editors.debtAccount?.id },
+        mobileSession.planning.debtTerms.firstOrNull { it.accountId == editors.debtAccount?.id },
         settings,
         onSave = { terms ->
-            scope.launch { mobileSession.saveDebtTerms(state.selectedBudgetId, terms) }
+            scope.launch { mobileSession.planning.saveDebtTerms(state.selectedBudgetId, terms) }
             editors.debtAccount = null
         },
         onDismiss = { editors.debtAccount = null },
