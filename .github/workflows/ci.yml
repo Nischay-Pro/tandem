@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
   push:
     branches:
       - main
@@ -87,6 +88,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: python3 scripts/check-pr-title.py "$PR_TITLE"
 
+      - name: Check pull request description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/check-pr-body.py
+
   merchant_icon_pack:
     name: Generate merchant icon resources on Linux
     needs: changes
@@ -152,6 +158,9 @@ jobs:
 
       - name: Test mobile UI vocabulary guard
         run: python3 -m unittest discover -s scripts/tests -p 'test_mobile_ui_vocabulary.py'
+
+      - name: Test pull request description guard
+        run: python3 -m unittest discover -s scripts/tests -p 'test_pr_body.py'
 
   api_android_jvm:
     name: API client · Android and JVM
@@ -603,7 +612,7 @@ jobs:
     if: always()
     runs-on: ubuntu-26.04
     steps:
-      - name: Require documentation, applicable suites, and the pull request title
+      - name: Require documentation, applicable suites, and the pull request title and description
         env:
           EVENT_NAME: ${{ github.event_name }}
           CHANGE_RESULT: ${{ needs.changes.result }}
