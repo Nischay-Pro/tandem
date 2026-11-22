@@ -6,7 +6,6 @@ cross-feature ActivityScreen -> transactions
 cross-feature ActivitySearchScreen -> transactions
 cross-feature AppLockGate -> sync
 cross-feature BankConnectionsScreen -> sync
-cross-feature BudgetChooserScreen -> auth
 cross-feature BudgetRulesScreen -> activity
 cross-feature BudgetScreen -> schedules
 cross-feature BudgetScreen -> transactions
@@ -21,19 +20,14 @@ cross-feature HomeScreen -> planning
 cross-feature HomeScreen -> schedules
 cross-feature HomeScreen -> transactions
 cross-feature InsightScreens -> planning
-cross-feature LocalDataScreen -> auth
 cross-feature ManagePayeesScreen -> activity
 cross-feature ManagePayeesScreen -> schedules
 cross-feature PersonalizeScreen -> onboarding
 cross-feature ReimbursementScreens -> planning
 cross-feature RetirementSetupScreen -> onboarding
 cross-feature RuleChoiceField -> activity
-cross-feature SecurityScreen -> auth
-cross-feature ServerDeviceScreen -> auth
 cross-feature SettingsScreen -> planning
 cross-feature StatementImportDialog -> transactions
-cross-feature SwitchBudgetScreen -> auth
-cross-feature SyncCenterScreen -> auth
 cross-feature SyncCenterScreen -> transactions
 cross-feature SyncCenterSections -> banking
 cross-feature SyncCenterSections -> planning
@@ -53,7 +47,6 @@ function-size data:PlanningSync.sync
 layering AppState -> app
 layering AppState -> feature.reports
 layering DragReorderUpdate -> feature.budget
-layering IosDeviceAuthenticator -> feature.auth
 layering RouteNavigation -> app
 layering TandemMobileSession -> feature.reports
 layering TandemThemeScreen -> app

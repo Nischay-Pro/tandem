@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -31,7 +32,6 @@ import app.tandemforactual.ui.design.feedback.LabelText
 import app.tandemforactual.ui.design.templates.ChoiceRow
 import app.tandemforactual.ui.design.templates.OnboardingLayout
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.setup_ask_the_budget_owner_to
 import app.tandemforactual.ui.generated.resources.setup_available_budgets

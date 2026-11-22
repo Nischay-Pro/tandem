@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -26,7 +27,6 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.setup_budgets
 import app.tandemforactual.ui.generated.resources.setup_encrypted

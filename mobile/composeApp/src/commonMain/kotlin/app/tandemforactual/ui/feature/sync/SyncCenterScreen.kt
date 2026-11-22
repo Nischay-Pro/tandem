@@ -16,6 +16,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budgetSyncOverview
@@ -32,7 +33,6 @@ import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.feature.transactions.SyncNoticeCard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TriangleAlert

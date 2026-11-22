@@ -12,6 +12,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
+import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.removeBudgetFromDevice
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -32,9 +35,6 @@ import app.tandemforactual.ui.design.templates.AnimatedPreviewNote
 import app.tandemforactual.ui.design.templates.Heading
 import app.tandemforactual.ui.design.templates.InfoBubble
 import app.tandemforactual.ui.design.templates.PageColumn
-import app.tandemforactual.ui.feature.auth.LocalDeviceAuthenticator
-import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
-import app.tandemforactual.ui.feature.auth.budgetPasswordSecretId
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Lucide

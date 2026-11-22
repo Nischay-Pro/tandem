@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.api.client.BudgetCatalogItem
+import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.restorePendingBudgetSelectionOrigin
@@ -15,7 +16,6 @@ import app.tandemforactual.ui.design.templates.OnboardingLayout
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.feature.auth.BiometricPasswordCheckbox
-import app.tandemforactual.ui.feature.auth.LocalDeviceAuthenticator
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.setup_budget_encryption_password
 import app.tandemforactual.ui.generated.resources.setup_budget_is_encrypted

@@ -3,6 +3,8 @@ package app.tandemforactual.ui.feature.auth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.security.DeviceAuthenticator
+import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.EncryptedBudgetUnlockResult
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession

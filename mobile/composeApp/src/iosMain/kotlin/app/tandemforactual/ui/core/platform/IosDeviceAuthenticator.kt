@@ -1,6 +1,6 @@
 package app.tandemforactual.ui.core.platform
 
-import app.tandemforactual.ui.feature.auth.DeviceAuthenticator
+import app.tandemforactual.ui.core.security.DeviceAuthenticator
 import kotlinx.cinterop.CValuesRef
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc

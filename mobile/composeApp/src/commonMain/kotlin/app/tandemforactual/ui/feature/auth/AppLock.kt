@@ -19,13 +19,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -34,52 +32,6 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
-
-interface DeviceAuthenticator {
-    fun isAvailable(): Boolean
-
-    fun authenticate(
-        title: String,
-        onResult: (Boolean) -> Unit,
-    )
-
-    fun canStoreSecrets(): Boolean = false
-
-    fun hasStoredSecret(id: String): Boolean = false
-
-    fun storeSecret(
-        id: String,
-        secret: String,
-        title: String,
-        onResult: (Boolean) -> Unit,
-    ) = onResult(false)
-
-    fun readSecret(
-        id: String,
-        title: String,
-        onResult: (String?) -> Unit,
-    ) = onResult(null)
-
-    fun deleteSecret(id: String) = Unit
-
-    fun rememberPasswordCheck(
-        id: String,
-        password: String,
-    ) = Unit
-
-    fun matchesPasswordCheck(
-        id: String,
-        password: String,
-    ): Boolean? = null
-
-    fun forgetPasswordCheck(id: String) = Unit
-
-    fun deleteAllSecrets() = Unit
-}
-
-internal val LocalDeviceAuthenticator = staticCompositionLocalOf<DeviceAuthenticator?> { null }
-
-internal val LocalEncryptedBudgetVault = staticCompositionLocalOf<EncryptedBudgetVault?> { null }
 
 internal const val APP_LOCK_GRACE_MILLIS = 60_000L
 
@@ -92,8 +44,6 @@ internal fun unlockWaitMillis(failures: Int): Long {
     val step = failures / UNLOCK_ATTEMPTS_BEFORE_WAIT - 1
     return UNLOCK_WAIT_STEPS_MILLIS[step.coerceAtMost(UNLOCK_WAIT_STEPS_MILLIS.lastIndex)]
 }
-
-internal fun budgetPasswordSecretId(budgetId: String): String = "budget-password:$budgetId"
 
 internal class AppLockState(
     private val now: () -> Long,

@@ -8,13 +8,13 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.LocalAlert
 import app.tandemforactual.ui.app.shell.AppShell
 import app.tandemforactual.ui.app.shell.ShellEnvironment
+import app.tandemforactual.ui.core.security.DeviceAuthenticator
 import app.tandemforactual.ui.core.session.CrashReports
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.state.AppRoute
-import app.tandemforactual.ui.feature.auth.DeviceAuthenticator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

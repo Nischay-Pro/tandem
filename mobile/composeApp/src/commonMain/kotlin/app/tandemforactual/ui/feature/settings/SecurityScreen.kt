@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
+import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -16,8 +18,6 @@ import app.tandemforactual.ui.design.templates.AnimatedPreviewNote
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.auth.LocalDeviceAuthenticator
-import app.tandemforactual.ui.feature.auth.budgetPasswordSecretId
 
 @Composable
 internal fun SecurityScreen(
