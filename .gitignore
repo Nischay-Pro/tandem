@@ -41,3 +41,4 @@ Thumbs.db
 core
 core.*
 !**/src/**/core/
+__pycache__/
