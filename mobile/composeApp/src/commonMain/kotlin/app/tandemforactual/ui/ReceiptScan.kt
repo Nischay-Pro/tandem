@@ -26,7 +26,7 @@ internal class ReceiptScanner(
 /** Opens the camera or photo library and reads the text of the chosen receipt on the device. */
 @Composable
 internal expect fun rememberReceiptScanner(
-    onStarted: () -> Unit,
+    onStarted: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
     onResult: (ReceiptScanResult) -> Unit,
 ): ReceiptScanner
 

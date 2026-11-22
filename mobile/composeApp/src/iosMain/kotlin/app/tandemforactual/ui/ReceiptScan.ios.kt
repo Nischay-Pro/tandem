@@ -33,13 +33,13 @@ import platform.darwin.NSObject
 
 @Composable
 internal actual fun rememberReceiptScanner(
-    onStarted: () -> Unit,
+    onStarted: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
     onResult: (ReceiptScanResult) -> Unit,
 ): ReceiptScanner {
     val scope = rememberCoroutineScope()
     val started = rememberUpdatedState(onStarted)
     val result = rememberUpdatedState(onResult)
-    val delegate = remember { ReceiptPickerDelegate(scope, { started.value() }) { result.value(it) } }
+    val delegate = remember { ReceiptPickerDelegate(scope, { started.value(null) }) { result.value(it) } }
     return remember(delegate) {
         val camera = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
         ReceiptScanner(

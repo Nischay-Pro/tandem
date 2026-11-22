@@ -159,13 +159,15 @@ internal fun TransactionFormScreen(
                 }
 
             var scanningReceipt by remember { mutableStateOf(false) }
+            var receiptPreview by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
             var showReceiptMenu by remember { mutableStateOf(false) }
             var receiptMessage by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
             val scanScope = rememberCoroutineScope()
             val receiptScanner =
                 rememberReceiptScanner(
-                    onStarted = {
+                    onStarted = { preview ->
                         scanningReceipt = true
+                        if (preview != null) receiptPreview = preview
                         receiptMessage = null
                     },
                 ) { result ->
@@ -481,6 +483,7 @@ internal fun TransactionFormScreen(
                     )
                 }
             }
+            ReceiptScanOverlay(scanningReceipt, receiptPreview)
             TransactionAccountPickerDialog(
                 visible = showAccountPicker,
                 liveAccounts,
