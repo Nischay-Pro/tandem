@@ -80,6 +80,7 @@ internal class AppState {
     var isBudgetMonthPickerOpen by mutableStateOf(false)
     var accountsSearchExpanded by mutableStateOf(false)
     var accountsRequestedAction by mutableStateOf<String?>(null)
+    var menuOpen by mutableStateOf(false)
     var reportsMonthId by mutableStateOf(currentMonthId())
     var selectedReportKindName by mutableStateOf(ReportKind.SPENDING_BY_CATEGORY.name)
     var reportsBudgetId by mutableStateOf("")

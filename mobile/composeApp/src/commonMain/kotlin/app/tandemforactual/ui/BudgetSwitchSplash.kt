@@ -130,11 +130,12 @@ internal fun BudgetSwitchSplash(
 internal fun AdvancedModeSwitch(
     state: AppState,
     modifier: Modifier = Modifier,
+    labeled: Boolean = true,
 ) {
     val palette = tandemPalette
     val advanced = (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED
     val thumbOffset by animateDpAsState(
-        if (advanced) 16.dp else 0.dp,
+        if (advanced) (if (labeled) 16.dp else 22.dp) else 0.dp,
         tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
         label = "advanced-thumb",
     )
@@ -148,6 +149,25 @@ internal fun AdvancedModeSwitch(
         tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
         label = "advanced-thumb-color",
     )
+    if (!labeled) {
+        Box(
+            modifier
+                .width(52.dp)
+                .height(30.dp)
+                .clip(CircleShape)
+                .background(trackColor)
+                .padding(3.dp),
+        ) {
+            Box(
+                Modifier
+                    .offset(x = thumbOffset)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(thumbColor),
+            )
+        }
+        return
+    }
     Row(
         modifier
             .clip(CircleShape)

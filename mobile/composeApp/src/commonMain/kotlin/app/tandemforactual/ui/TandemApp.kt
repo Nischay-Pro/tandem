@@ -90,7 +90,9 @@ import app.tandemforactual.ui.model.LiveScheduleSummary
 import app.tandemforactual.ui.model.liveAccountSummaries
 import app.tandemforactual.ui.model.liveBudgetMonthSummary
 import app.tandemforactual.ui.model.liveScheduleSummaries
+import app.tandemforactual.ui.model.recordBody
 import app.tandemforactual.ui.model.recordName
+import app.tandemforactual.ui.model.stringValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1555,6 +1557,7 @@ fun TandemApp(
                         ),
                     onRefreshBudgets = refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
                     refreshingBudgets = mobileSession.isLoadingBudgets,
+                    onOpenMenu = if (!useRail && state.selectedBudgetId.isNotBlank()) ({ state.menuOpen = true }) else null,
                 )
             }
         }
@@ -1791,6 +1794,7 @@ fun TandemApp(
                         },
                     layout = workspaceLayout,
                     onLayout = { layout -> state.workspace = Workspace(layout, workspacePanes) },
+                    onOpenMenu = if (state.selectedBudgetId.isNotBlank()) ({ state.menuOpen = true }) else null,
                 )
             }
             Column(
@@ -2073,6 +2077,56 @@ fun TandemApp(
                 },
             )
         }
+        val openFromMenu: (AppRoute) -> Unit = { target ->
+            state.menuOpen = false
+            if (target in navigationRoutes(state.interfaceMode) ||
+                target == AppRoute.SETTINGS
+            ) {
+                navigation.selectTab(target)
+            } else {
+                navigation.open(target)
+            }
+        }
+        AppMenu(
+            visible = state.menuOpen && state.selectedBudgetId.isNotBlank(),
+            state = state,
+            syncStatus = mainCloudStatus,
+            syncCaption =
+                headerSyncCaption(
+                    mainCloudStatus,
+                    mobileSession.pendingWrites.map { it.status },
+                    mobileSession.localSyncState?.lastSyncedAtEpochMs,
+                    headerClockMs,
+                ),
+            items =
+                appMenuItems(
+                    advanced = state.interfaceMode == InterfaceMode.ADVANCED,
+                    ruleCount = mobileSession.ruleRecords.size,
+                    scheduleCount = liveSchedules.size,
+                    payeeCount = mobileSession.payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null },
+                    conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
+                    readOnly = state.readOnlyMode,
+                    open = openFromMenu,
+                    onAddTransaction = {
+                        state.menuOpen = false
+                        navigation.newTransaction(null)
+                    },
+                    onManageBanks = {
+                        state.accountsRequestedAction = "banks"
+                        openFromMenu(AppRoute.ACCOUNTS)
+                    },
+                    onFeedback = { uriHandler.openUri("https://github.com/Nischay-Pro/tandem/issues") },
+                ),
+            onClose = { state.menuOpen = false },
+            onBudgetSettings = { openFromMenu(AppRoute.SETTINGS) },
+            onSwitchBudget = {
+                state.menuOpen = false
+                navigation.open(AppRoute.SWITCH_BUDGET)
+            },
+            onSyncCenter = { openFromMenu(AppRoute.SYNC_CENTER) },
+            onAbout = { openFromMenu(AppRoute.ABOUT) },
+            onLicenses = { openFromMenu(AppRoute.MERCHANT_ICON_LICENSES) },
+        )
         BudgetSwitchSplash(
             state.selectedBudget.takeIf { state.modeSwitchTarget == null && state.budgetSwitchSplashId != null },
             state.modeSwitchTarget,
