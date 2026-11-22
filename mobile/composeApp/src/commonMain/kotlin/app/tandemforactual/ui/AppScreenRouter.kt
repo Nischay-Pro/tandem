@@ -649,6 +649,7 @@ internal fun ScreenContent(
         AppRoute.DATA_HEALTH -> DataHealthScreen(state, navigation, mobileSession, liveTransactions)
         AppRoute.DEBT_PAYOFF -> DebtPayoffScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
         AppRoute.SPENDING_TRENDS -> SpendingTrendsScreen(state, mobileSession)
+        AppRoute.SPENDING_FORECAST -> SpendingForecastScreen(state, mobileSession, liveBudgetMonth)
     }
 }
 

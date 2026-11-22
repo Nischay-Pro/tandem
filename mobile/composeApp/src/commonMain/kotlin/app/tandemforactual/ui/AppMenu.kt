@@ -59,6 +59,7 @@ import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.FileDown
 import com.composables.icons.lucide.FileUp
 import com.composables.icons.lucide.FlaskConical
+import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.GitMerge
 import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.History
@@ -384,6 +385,7 @@ internal fun appMenuItems(
         if (!advanced) add(AppMenuItem(Lucide.ChartColumn, "Reports") { open(AppRoute.REPORTS) })
         add(AppMenuItem(Lucide.CalendarCheck, "Monthly review", "How this month went") { open(AppRoute.MONTHLY_REVIEW) })
         add(AppMenuItem(Lucide.TrendingUp, "Spending trends", "Compared with past months") { open(AppRoute.SPENDING_TRENDS) })
+        add(AppMenuItem(Lucide.Gauge, "Spending forecast", "Where this month lands") { open(AppRoute.SPENDING_FORECAST) })
         add(AppMenuItem(Lucide.FlaskConical, "What if", "Try income and spending changes") { open(AppRoute.WHAT_IF) })
         add(AppMenuItem(Lucide.ChartSpline, "Cash flow", "Your balance ahead") { open(AppRoute.CASH_FLOW) })
         add(AppMenuItem(Lucide.Stethoscope, "Budget checkup", "Find things to fix") { open(AppRoute.DATA_HEALTH) })

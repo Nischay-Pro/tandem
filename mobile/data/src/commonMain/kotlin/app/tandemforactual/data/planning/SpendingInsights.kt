@@ -39,9 +39,47 @@ data class TrendReport(
     val baselineMonths: Int,
 )
 
-/** Month-over-month spending trends, worked out on the device from recorded transactions. */
+/** How a category's month-end spending was estimated. */
+enum class ForecastBasis {
+    /** Recent months show how much usually lands after today, scaled to this month's pace. */
+    HISTORY,
+
+    /** No history yet, so spending so far is stretched over the whole month. */
+    PACE,
+
+    /** The month is over, so the spending is final. */
+    FINAL,
+}
+
+enum class ForecastStatus { ON_TRACK, AT_RISK, OVER }
+
+data class CategoryForecast(
+    val categoryId: String,
+    val spentMinor: Long,
+    val projectedMinor: Long,
+    val limitMinor: Long?,
+    val basis: ForecastBasis,
+    val historyMonths: Int,
+    val status: ForecastStatus,
+    /** The estimated day the budget runs out, when it's on pace to run out before the month ends. */
+    val runOutDate: String?,
+)
+
+data class SpendingForecast(
+    val monthId: String,
+    val dayOfMonth: Int,
+    val daysInMonth: Int,
+    val categories: List<CategoryForecast>,
+    val spentMinor: Long,
+    val projectedMinor: Long,
+    val limitMinor: Long,
+)
+
+/** Month-over-month spending trends and month-end spending estimates, worked out on the device from recorded transactions. */
 object SpendingInsights {
     private const val FLAT_BASIS_POINTS = 500
+    private const val MIN_PACE_PERCENT = 50
+    private const val MAX_PACE_PERCENT = 200
 
     /**
      * Spending from the budget's transactions, matching the reports: transfers, split parents and income categories are
@@ -81,6 +119,102 @@ object SpendingInsights {
                 .sortedWith(compareByDescending<CategoryTrend> { kotlin.math.abs(it.changeMinor) }.thenBy { it.categoryId })
         val total = trend("", current.values.sum(), average(history.map { it.values.sum() }))
         return TrendReport(trends, total, earlier.size)
+    }
+
+    /**
+     * Where each category's spending lands by the end of [monthId], seen from [today]. [limits] is what each category had
+     * to spend this month, carryover included; a category without one is projected but never flagged.
+     */
+    fun forecast(
+        entries: List<SpendingEntry>,
+        monthId: String,
+        today: String,
+        limits: Map<String, Long>,
+        historyMonths: Int = 6,
+    ): SpendingForecast {
+        val length = daysInMonth(monthId)
+        val day =
+            when {
+                today.take(7) > monthId -> length
+                today.take(7) < monthId -> 0
+                else -> today.substring(8, 10).toInt()
+            }
+        val byMonth = entries.groupBy { it.date.take(7) }
+        val earlier = historyMonths(entries, monthId, historyMonths).map { byMonth[it].orEmpty() }
+        val current = byMonth[monthId].orEmpty().filter { it.date.substring(8, 10).toInt() <= day }
+        val spent = totals(current)
+        val ids = (spent.keys + limits.keys + earlier.flatMap { month -> month.map { it.categoryId } }).toSortedSet()
+        val categories =
+            ids
+                .map { id ->
+                    val history = earlier.map { month -> month.filter { it.categoryId == id } }
+                    categoryForecast(id, spent[id] ?: 0, limits[id], history, monthId, day, length)
+                }.filterNot { it.spentMinor == 0L && it.projectedMinor == 0L && it.limitMinor == null }
+        return SpendingForecast(
+            monthId,
+            day,
+            length,
+            categories,
+            categories.sumOf { it.spentMinor },
+            categories.sumOf { it.projectedMinor },
+            categories.sumOf { (it.limitMinor ?: 0).coerceAtLeast(0) },
+        )
+    }
+
+    private fun categoryForecast(
+        id: String,
+        spent: Long,
+        limit: Long?,
+        history: List<List<SpendingEntry>>,
+        monthId: String,
+        day: Int,
+        length: Int,
+    ): CategoryForecast {
+        val remainingDays = length - day
+        val (basis, projected) =
+            when {
+                remainingDays == 0 -> ForecastBasis.FINAL to spent
+                history.isNotEmpty() -> {
+                    val toDate =
+                        average(
+                            history.map { month ->
+                                month.filter { it.date.substring(8, 10).toInt() <= day }.sumOf { it.amountMinor }
+                            },
+                        )
+                    val total = average(history.map { month -> month.sumOf { it.amountMinor } })
+                    val after = (total - toDate).coerceAtLeast(0)
+                    val projected =
+                        if (toDate <= 0) {
+                            maxOf(spent, total)
+                        } else {
+                            val pace = (spent * 100 / toDate).coerceIn(MIN_PACE_PERCENT.toLong(), MAX_PACE_PERCENT.toLong())
+                            spent + after * pace / 100
+                        }
+                    ForecastBasis.HISTORY to projected.coerceAtLeast(spent)
+                }
+                day == 0 -> ForecastBasis.PACE to spent
+                else -> ForecastBasis.PACE to spent + (spent.coerceAtLeast(0) * remainingDays + day - 1) / day
+            }
+        val status =
+            when {
+                limit == null -> ForecastStatus.ON_TRACK
+                spent > limit -> ForecastStatus.OVER
+                projected > limit -> ForecastStatus.AT_RISK
+                else -> ForecastStatus.ON_TRACK
+            }
+        val runOut =
+            if (status == ForecastStatus.AT_RISK && limit != null) {
+                val perDay = (projected - spent).toDouble() / remainingDays
+                val days =
+                    kotlin.math
+                        .ceil((limit - spent) / perDay)
+                        .toLong()
+                        .coerceIn(1, remainingDays.toLong())
+                Day.parse("$monthId-01").plus(day - 1L + days).toString()
+            } else {
+                null
+            }
+        return CategoryForecast(id, spent, projected, limit, basis, history.size, status, runOut)
     }
 
     private fun trend(
