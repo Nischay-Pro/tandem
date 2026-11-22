@@ -73,16 +73,12 @@ function-size BudgetChooserScreen.BudgetChooserScreen
 function-size BudgetEditRecovery.correctRejectedCategoryRename
 function-size BudgetEditRecovery.retryBudgetMutation
 function-size BudgetEditSender.processQueuedBudgetReorders
-function-size BudgetMutationReviewScreen.BudgetMutationReviewScreen
 function-size BudgetScreen.BudgetCategoryCard
 function-size BudgetScreen.BudgetScreen
 function-size BudgetSwitchSplash.AdvancedModeSwitch
 function-size CategoryDetailScreen.CategoryDetailScreen
 function-size CategoryGroupScreen.CategoryGroupScreen
-function-size ChangeHistoryScreen.ChangeHistoryScreen
 function-size ConflictController.discardWrite
-function-size ConflictInboxScreen.ConflictInboxScreen
-function-size ConflictReviewScreen.ConflictReviewScreen
 function-size CurrencyScreens.ExchangeRatesScreen
 function-size DataHealthScreen.DataHealthScreen
 function-size ExportScreen.ExportScreen
@@ -103,7 +99,6 @@ function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
 function-size NotificationsScreen.NotificationsScreen
 function-size PageTemplates.PageLazyColumnContent
-function-size PendingChangesScreen.PendingChangesScreen
 function-size PersonalizeScreen.ModePreviewCard
 function-size PrivacyAmountText.PrivacyAmountText
 function-size QueueStateCompletion.complete
@@ -121,8 +116,6 @@ function-size SignInScreen.SignInScreen
 function-size SpendingForecastScreen.SpendingForecastScreen
 function-size SpendingTrendsScreen.SpendingTrendsScreen
 function-size StatementImport.parseCsv
-function-size SyncCenterScreen.SyncCenterScreen
-function-size SyncCenterScreen.SyncOverviewCard
 function-size TandemApp.TandemApp
 function-size TandemThemeScreen.TandemTheme
 function-size TextFieldCard.TextFieldCard
@@ -133,7 +126,6 @@ function-size TransactionDelete.deleteTransaction
 function-size TransactionDetailScreen.TransactionDetailScreen
 function-size TransactionSelectorScreens.TransactionDatePickerDialog
 function-size TransactionUpdate.updateTransaction
-function-size UncertainWriteDetailsScreen.UncertainWriteDetailsScreen
 layering ActivitySearchCache -> feature.activity
 layering AppState -> app
 layering AppState -> feature.activity
@@ -154,11 +146,8 @@ size BudgetReorderQueue
 size BudgetScreen
 size CategoryDetailScreen
 size CategoryGroupScreen
-size ConflictReviewScreen
 size LiveBudgetModels
 size PersonalizeScreen
 size StatementImport
-size SyncCenterScreen
-size SyncCenterScreenParts
 size TandemApp
 size TandemMobileSession

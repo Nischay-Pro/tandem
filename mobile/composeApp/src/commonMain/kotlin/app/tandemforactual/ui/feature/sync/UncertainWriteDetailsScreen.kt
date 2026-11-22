@@ -66,105 +66,29 @@ internal fun UncertainWriteDetailsScreen(
             Heading("Nothing to check")
             InfoBubble("This edit no longer needs a status check.")
         } else {
-            val heading =
-                when {
-                    checkErrorForOperation != null -> "Couldn’t check this change"
-                    operation.status == "committed" -> "Saved to Actual"
-                    operation.status == "conflict" -> "Needs review"
-                    operation.status == "rejected" -> "Rejected"
-                    operation.status == "discarded" -> "Change discarded"
-                    operation.status == "queued" -> "Waiting to sync"
-                    operation.status == "sending" -> "Syncing"
-                    isNotFound -> "Status not found"
-                    isChecked -> "Status unknown"
-                    operation.status == "uncertain" -> "Status unknown"
-                    isSyncing -> "Checking status"
-                    else -> "Status unknown"
-                }
-            val message =
-                when {
-                    checkErrorForOperation != null -> checkErrorForOperation
-                    operation.status == "committed" -> "Actual saved this edit."
-                    operation.status == "conflict" -> "Actual has a different version. Compare before choosing."
-                    operation.status == "rejected" -> "Actual rejected this edit. The previous value is unchanged."
-                    operation.status == "discarded" -> "This edit was removed from this device."
-                    operation.status == "queued" && isChecked -> "Actual did not save this edit. It is still on this device."
-                    operation.status == "queued" -> "Saved on this device. Waiting to sync."
-                    operation.status == "sending" && isSyncing -> "Sending this edit to Actual."
-                    operation.status == "sending" -> "Tandem couldn’t confirm the save. Check Actual before retrying."
-                    isNotFound -> "Actual has no record of this edit. Keep it here or remove it."
-                    isChecked -> "Actual couldn’t confirm whether this was saved. Check Actual before retrying."
-                    isSyncing -> "Checking Actual for this edit."
-                    else -> "Tandem couldn’t confirm whether Actual saved this edit. Check before retrying."
-                }
+            val heading = uncertainWriteHeading(operation.status, checkErrorForOperation, isNotFound, isChecked, isSyncing)
+            val message = uncertainWriteMessage(operation.status, checkErrorForOperation, isNotFound, isChecked, isSyncing)
             ReviewOutcomeCard(
                 title = heading,
                 explanation = message,
                 isRejected = operation.status == "rejected" || checkErrorForOperation != null,
             )
-            SectionCard(
-                transaction?.payee ?: "Transaction",
-                transaction?.dateLabel ?: "Saved on this device",
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                    Text(
-                        operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
-                        color = tandemPalette.text,
-                        fontSize = TandemTypography.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            when {
-                checkErrorForOperation != null -> {
-                    UncertainWriteRecoveryActions(
-                        showCheckAgain = true,
-                        showRetryAndRemove = canRetryOrRemove,
-                        isSyncing = isSyncing,
-                        readOnly = state.readOnlyMode,
-                        onCheckAgain = onCheckStatus,
-                        onRetry = onRetry,
-                        onRemove = { confirmDiscard = true },
-                    )
-                }
-                canRetryOrRemove -> {
-                    UncertainWriteRecoveryActions(
-                        showCheckAgain = isNotFound,
-                        showRetryAndRemove = true,
-                        isSyncing = isSyncing,
-                        readOnly = state.readOnlyMode,
-                        onCheckAgain = onCheckStatus,
-                        onRetry = onRetry,
-                        onRemove = { confirmDiscard = true },
-                    )
-                }
-                operation.status == "uncertain" -> {
-                    PrimaryButton(
-                        if (isChecked) "Check again" else "Check status",
-                        enabled = !isSyncing,
-                        loading = isSyncing,
-                    ) { onCheckStatus() }
-                }
-                operation.status == "queued" -> Spacer(Modifier.height(72.dp))
-                operation.status == "sending" ->
-                    PrimaryButton(
-                        if (isSyncing) "Syncing" else "Check status",
-                        enabled = !isSyncing,
-                        loading = isSyncing,
-                    ) {
-                        if (!isSyncing) onCheckStatus()
-                    }
-                operation.status == "conflict" -> PrimaryButton("Review", onClick = onReviewConflict)
-                operation.status == "rejected" -> PrimaryButton("Review change", onClick = onReviewRejected)
-                else -> PrimaryButton("Done", onClick = onDone)
-            }
+            UncertainWriteAmountCard(state, operation, transaction)
+            UncertainWriteActions(
+                state = state,
+                status = operation.status,
+                hasCheckError = checkErrorForOperation != null,
+                canRetryOrRemove = canRetryOrRemove,
+                isChecked = isChecked,
+                isNotFound = isNotFound,
+                isSyncing = isSyncing,
+                onCheckStatus = onCheckStatus,
+                onRetry = onRetry,
+                onRemove = { confirmDiscard = true },
+                onReviewConflict = onReviewConflict,
+                onReviewRejected = onReviewRejected,
+                onDone = onDone,
+            )
         }
     }
     if (confirmDiscard && operation != null) {
@@ -180,5 +104,141 @@ internal fun UncertainWriteDetailsScreen(
                 onDiscard()
             },
         )
+    }
+}
+
+private fun uncertainWriteHeading(
+    status: String,
+    checkError: String?,
+    isNotFound: Boolean,
+    isChecked: Boolean,
+    isSyncing: Boolean,
+): String =
+    when {
+        checkError != null -> "Couldn’t check this change"
+        status == "committed" -> "Saved to Actual"
+        status == "conflict" -> "Needs review"
+        status == "rejected" -> "Rejected"
+        status == "discarded" -> "Change discarded"
+        status == "queued" -> "Waiting to sync"
+        status == "sending" -> "Syncing"
+        isNotFound -> "Status not found"
+        isChecked -> "Status unknown"
+        status == "uncertain" -> "Status unknown"
+        isSyncing -> "Checking status"
+        else -> "Status unknown"
+    }
+
+private fun uncertainWriteMessage(
+    status: String,
+    checkError: String?,
+    isNotFound: Boolean,
+    isChecked: Boolean,
+    isSyncing: Boolean,
+): String =
+    when {
+        checkError != null -> checkError
+        status == "committed" -> "Actual saved this edit."
+        status == "conflict" -> "Actual has a different version. Compare before choosing."
+        status == "rejected" -> "Actual rejected this edit. The previous value is unchanged."
+        status == "discarded" -> "This edit was removed from this device."
+        status == "queued" && isChecked -> "Actual did not save this edit. It is still on this device."
+        status == "queued" -> "Saved on this device. Waiting to sync."
+        status == "sending" && isSyncing -> "Sending this edit to Actual."
+        status == "sending" -> "Tandem couldn’t confirm the save. Check Actual before retrying."
+        isNotFound -> "Actual has no record of this edit. Keep it here or remove it."
+        isChecked -> "Actual couldn’t confirm whether this was saved. Check Actual before retrying."
+        isSyncing -> "Checking Actual for this edit."
+        else -> "Tandem couldn’t confirm whether Actual saved this edit. Check before retrying."
+    }
+
+/** The transaction's payee, date and the amount this device saved. */
+@Composable
+private fun UncertainWriteAmountCard(
+    state: AppState,
+    operation: OutboxOperationEntity,
+    transaction: TransactionItem?,
+) {
+    SectionCard(
+        transaction?.payee ?: "Transaction",
+        transaction?.dateLabel ?: "Saved on this device",
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.large),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Amount", color = tandemPalette.muted, fontSize = TandemTypography.body)
+            Text(
+                operation.optimisticAmountMinor?.let { state.formatSignedCurrency(it) } ?: "Unavailable",
+                color = tandemPalette.text,
+                fontSize = TandemTypography.cardTitle,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** The recovery or follow-up buttons that fit the edit's current status. */
+@Composable
+private fun UncertainWriteActions(
+    state: AppState,
+    status: String,
+    hasCheckError: Boolean,
+    canRetryOrRemove: Boolean,
+    isChecked: Boolean,
+    isNotFound: Boolean,
+    isSyncing: Boolean,
+    onCheckStatus: () -> Unit,
+    onRetry: () -> Unit,
+    onRemove: () -> Unit,
+    onReviewConflict: () -> Unit,
+    onReviewRejected: () -> Unit,
+    onDone: () -> Unit,
+) {
+    when {
+        hasCheckError -> {
+            UncertainWriteRecoveryActions(
+                showCheckAgain = true,
+                showRetryAndRemove = canRetryOrRemove,
+                isSyncing = isSyncing,
+                readOnly = state.readOnlyMode,
+                onCheckAgain = onCheckStatus,
+                onRetry = onRetry,
+                onRemove = onRemove,
+            )
+        }
+        canRetryOrRemove -> {
+            UncertainWriteRecoveryActions(
+                showCheckAgain = isNotFound,
+                showRetryAndRemove = true,
+                isSyncing = isSyncing,
+                readOnly = state.readOnlyMode,
+                onCheckAgain = onCheckStatus,
+                onRetry = onRetry,
+                onRemove = onRemove,
+            )
+        }
+        status == "uncertain" -> {
+            PrimaryButton(
+                if (isChecked) "Check again" else "Check status",
+                enabled = !isSyncing,
+                loading = isSyncing,
+            ) { onCheckStatus() }
+        }
+        status == "queued" -> Spacer(Modifier.height(72.dp))
+        status == "sending" ->
+            PrimaryButton(
+                if (isSyncing) "Syncing" else "Check status",
+                enabled = !isSyncing,
+                loading = isSyncing,
+            ) {
+                if (!isSyncing) onCheckStatus()
+            }
+        status == "conflict" -> PrimaryButton("Review", onClick = onReviewConflict)
+        status == "rejected" -> PrimaryButton("Review change", onClick = onReviewRejected)
+        else -> PrimaryButton("Done", onClick = onDone)
     }
 }

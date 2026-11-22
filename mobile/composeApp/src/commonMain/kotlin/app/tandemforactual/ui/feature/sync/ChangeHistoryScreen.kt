@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetChangeHistory
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.ui.core.format.platformFormatTimeAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.platformIsoDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
@@ -87,11 +89,7 @@ internal fun ChangeHistoryScreen(
         history = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)
         loading = false
         history?.deviceNode?.takeIf { it !in mobileSession.planning.deviceNames }?.let {
-            mobileSession.planning.nameDevice(
-                state.selectedBudgetId,
-                it,
-                deviceName,
-            )
+            mobileSession.planning.nameDevice(state.selectedBudgetId, it, deviceName)
         }
     }
     val names =
@@ -101,21 +99,7 @@ internal fun ChangeHistoryScreen(
                 .toMap()
         }
     val describe = ChangeDescriber(names, state)
-    val visible =
-        history
-            ?.changes
-            .orEmpty()
-            .mapNotNull { set ->
-                set.copy(rows = set.rows.filter { it.dataset !in INTERNAL_DATASETS }).takeIf { it.rows.isNotEmpty() }
-            }.filter { set ->
-                when (filter) {
-                    ChangeFilter.ALL -> true
-                    ChangeFilter.TRANSACTIONS -> set.rows.any { it.dataset == "transactions" }
-                    ChangeFilter.BUDGET -> set.rows.any { it.dataset in BUDGET_DATASETS }
-                    ChangeFilter.SETUP -> set.rows.any { it.dataset in SETUP_DATASETS }
-                    ChangeFilter.OTHER_DEVICES -> set.node != history?.deviceNode
-                }
-            }
+    val visible = visibleChangeSets(history, filter)
     PageLazyColumn(
         verticalSpacing = TandemSpacing.small,
         isRefreshing = loading && history != null,
@@ -123,31 +107,14 @@ internal fun ChangeHistoryScreen(
     ) {
         item(key = "filters") {
             FilterPills(
-                ChangeFilter.entries.map {
-                    it to it.label
-                },
+                ChangeFilter.entries.map { it to it.label },
                 filter,
                 { filter = it },
                 contentPadding = PaddingValues(bottom = TandemSpacing.small),
             )
         }
         notice?.let { (text, kind) -> item(key = "notice") { InlineMessage(text, kind, onDismiss = { notice = null }) } }
-        when {
-            history == null && loading ->
-                item(key = "loading") {
-                    Box(Modifier.fillMaxWidth().padding(TandemSpacing.extraLarge), contentAlignment = Alignment.Center) {
-                        TandemLoadingIndicator(Modifier.size(24.dp), tandemPalette.accent, 2.dp)
-                    }
-                }
-            history == null ->
-                item(key = "error") {
-                    EmptyState("Couldn’t read the change history", "Open the budget while connected to Actual, then try again.")
-                }
-            visible.isEmpty() ->
-                item(key = "empty") {
-                    EmptyState("No changes yet", "Edits made on any device after this one opened the budget appear here.")
-                }
-        }
+        changeHistoryStatusItems(history, loading, visible.isEmpty())
         var lastDay: String? = null
         visible.forEach { set ->
             val day = platformIsoDateAtEpochMilliseconds(set.millis)
@@ -159,32 +126,14 @@ internal fun ChangeHistoryScreen(
                 ChangeRow(
                     set = set,
                     describe = describe,
-                    deviceLabel =
-                        if (set.node ==
-                            history?.deviceNode
-                        ) {
-                            "This device"
-                        } else {
-                            mobileSession.planning.deviceNames[set.node] ?: "Another device"
-                        },
+                    deviceLabel = changeDeviceLabel(set.node, history?.deviceNode, mobileSession.planning.deviceNames),
                     expanded = expanded == set.id,
                     undoing = mobileSession.isPerformingBudgetAction,
                     onToggle = { expanded = if (expanded == set.id) null else set.id },
                     onUndo = {
                         scope.launch {
                             val result = mobileSession.insights.undoChange(state.selectedBudgetId, set.id, password)
-                            notice =
-                                when {
-                                    result == null ->
-                                        (mobileSession.budgetActionMessage ?: "Couldn’t undo this change.") to
-                                            InlineMessageKind.ERROR
-                                    result.skipped > 0 && result.reverted == 0 ->
-                                        "Nothing to undo. These fields were changed again later." to InlineMessageKind.WARNING
-                                    result.skipped > 0 ->
-                                        "Undone, except fields that were changed again later." to
-                                            InlineMessageKind.SUCCESS
-                                    else -> "Change undone." to InlineMessageKind.SUCCESS
-                                }
+                            notice = undoNotice(result, mobileSession.budgetActionMessage)
                             expanded = null
                             reload++
                         }
@@ -194,6 +143,70 @@ internal fun ChangeHistoryScreen(
         }
     }
 }
+
+private fun changeDeviceLabel(
+    node: String,
+    thisDevice: String?,
+    deviceNames: Map<String, String>,
+): String = if (node == thisDevice) "This device" else deviceNames[node] ?: "Another device"
+
+private fun visibleChangeSets(
+    history: BudgetChangeHistory?,
+    filter: ChangeFilter,
+): List<ChangeSet> =
+    history
+        ?.changes
+        .orEmpty()
+        .mapNotNull { set ->
+            set.copy(rows = set.rows.filter { it.dataset !in INTERNAL_DATASETS }).takeIf { it.rows.isNotEmpty() }
+        }.filter { set ->
+            when (filter) {
+                ChangeFilter.ALL -> true
+                ChangeFilter.TRANSACTIONS -> set.rows.any { it.dataset == "transactions" }
+                ChangeFilter.BUDGET -> set.rows.any { it.dataset in BUDGET_DATASETS }
+                ChangeFilter.SETUP -> set.rows.any { it.dataset in SETUP_DATASETS }
+                ChangeFilter.OTHER_DEVICES -> set.node != history?.deviceNode
+            }
+        }
+
+private fun LazyListScope.changeHistoryStatusItems(
+    history: BudgetChangeHistory?,
+    loading: Boolean,
+    isEmpty: Boolean,
+) {
+    when {
+        history == null && loading ->
+            item(key = "loading") {
+                Box(Modifier.fillMaxWidth().padding(TandemSpacing.extraLarge), contentAlignment = Alignment.Center) {
+                    TandemLoadingIndicator(Modifier.size(24.dp), tandemPalette.accent, 2.dp)
+                }
+            }
+        history == null ->
+            item(key = "error") {
+                EmptyState("Couldn’t read the change history", "Open the budget while connected to Actual, then try again.")
+            }
+        isEmpty ->
+            item(key = "empty") {
+                EmptyState("No changes yet", "Edits made on any device after this one opened the budget appear here.")
+            }
+    }
+}
+
+private fun undoNotice(
+    result: UndoResult?,
+    budgetActionMessage: String?,
+): Pair<String, InlineMessageKind> =
+    when {
+        result == null ->
+            (budgetActionMessage ?: "Couldn’t undo this change.") to
+                InlineMessageKind.ERROR
+        result.skipped > 0 && result.reverted == 0 ->
+            "Nothing to undo. These fields were changed again later." to InlineMessageKind.WARNING
+        result.skipped > 0 ->
+            "Undone, except fields that were changed again later." to
+                InlineMessageKind.SUCCESS
+        else -> "Change undone." to InlineMessageKind.SUCCESS
+    }
 
 private enum class ChangeFilter(
     val label: String,
