@@ -18,6 +18,16 @@ class ArchitectureTest {
             .files
             .filter { it.packagee?.name?.startsWith(root) == true }
 
+    private val allModules =
+        listOf("composeApp", "data", "api-client", "androidApp").flatMap { module ->
+            Konsist.scopeFromProduction(module).files.map { module to it }
+        }
+
+    private fun sizeKey(
+        module: String,
+        name: String,
+    ) = if (module == "composeApp") name else "$module:$name"
+
     private val baselineFile = File("src/androidHostTest/resources/architecture-baseline.txt")
 
     private val baseline: Set<String> =
@@ -122,21 +132,24 @@ class ArchitectureTest {
 
     @Test
     fun filesStaySmall() {
-        check("size", files.filter { it.text.lines().size > MAX_FILE_LINES }.map { it.name })
+        check(
+            "size",
+            allModules.filter { (_, f) -> f.text.lines().size > MAX_FILE_LINES }.map { (m, f) -> sizeKey(m, f.name) },
+        )
     }
 
     @Test
     fun functionsStaySmall() {
         check(
             "function-size",
-            files
-                .flatMap { f ->
+            allModules
+                .flatMap { (m, f) ->
                     f
                         .functions(
                             includeNested = true,
                             includeLocal = false,
                         ).filter { it.text.lines().size > MAX_FUNCTION_LINES }
-                        .map { "${f.name}.${it.name}" }
+                        .map { "${sizeKey(m, f.name)}.${it.name}" }
                 }.distinct(),
         )
     }
