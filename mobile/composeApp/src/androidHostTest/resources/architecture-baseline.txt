@@ -116,7 +116,6 @@ function-size ListRow.ListRow
 function-size LiveBudgetModels.liveBudgetMonthSummary
 function-size LiveBudgetModels.liveScheduleSummaries
 function-size LocalDataScreen.LocalDataScreen
-function-size ManagePayeesScreen.ManagePayeesScreen
 function-size MatchEditorScreen.MatchEditorScreen
 function-size MerchantIconLicensesScreen.MerchantIconLicensesScreen
 function-size NavigationGlyph.NavigationGlyph
@@ -189,7 +188,6 @@ size CategoryGroupScreen
 size ConflictReviewScreen
 size CustomReportScreen
 size LiveBudgetModels
-size ManagePayeesScreen
 size PersonalizeScreen
 size ReportModels
 size ReportsScreenParts
