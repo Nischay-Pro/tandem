@@ -67,24 +67,6 @@ import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.WalletCards
 
-private sealed interface LinkStep {
-    data object Country : LinkStep
-
-    data class Banks(
-        val country: String,
-    ) : LinkStep
-
-    data class Waiting(
-        val institution: BankInstitution,
-        val link: BrowserLink?,
-    ) : LinkStep
-
-    data class Accounts(
-        val institution: BankInstitution,
-        val accounts: List<BankProviderAccount>,
-    ) : LinkStep
-}
-
 /**
  * Links a bank that needs a browser sign-in, as Actual's web app does: choose the country and bank, sign in at the bank,
  * then come back and pick which of its accounts to link. The server keeps the provider's credentials throughout.
@@ -151,6 +133,24 @@ internal fun BankBrowserLinkSheet(
             }
         }
     }
+}
+
+private sealed interface LinkStep {
+    data object Country : LinkStep
+
+    data class Banks(
+        val country: String,
+    ) : LinkStep
+
+    data class Waiting(
+        val institution: BankInstitution,
+        val link: BrowserLink?,
+    ) : LinkStep
+
+    data class Accounts(
+        val institution: BankInstitution,
+        val accounts: List<BankProviderAccount>,
+    ) : LinkStep
 }
 
 @Composable
@@ -402,39 +402,3 @@ private fun bankLinkFailureMessage(
         code == "address_unreachable" -> "Couldn’t reach your Actual server. Check your connection and try again."
         else -> "Couldn’t reach ${provider.displayName} through your Actual server. Try again."
     }
-
-/** English names for the countries European bank providers serve. */
-internal fun countryName(code: String): String =
-    mapOf(
-        "GB" to "United Kingdom",
-        "DE" to "Germany",
-        "FR" to "France",
-        "ES" to "Spain",
-        "IT" to "Italy",
-        "NL" to "Netherlands",
-        "BE" to "Belgium",
-        "IE" to "Ireland",
-        "AT" to "Austria",
-        "PT" to "Portugal",
-        "FI" to "Finland",
-        "SE" to "Sweden",
-        "DK" to "Denmark",
-        "NO" to "Norway",
-        "PL" to "Poland",
-        "CZ" to "Czechia",
-        "SK" to "Slovakia",
-        "SI" to "Slovenia",
-        "HR" to "Croatia",
-        "HU" to "Hungary",
-        "RO" to "Romania",
-        "BG" to "Bulgaria",
-        "GR" to "Greece",
-        "CY" to "Cyprus",
-        "MT" to "Malta",
-        "LU" to "Luxembourg",
-        "EE" to "Estonia",
-        "LV" to "Latvia",
-        "LT" to "Lithuania",
-        "IS" to "Iceland",
-        "LI" to "Liechtenstein",
-    )[code] ?: code

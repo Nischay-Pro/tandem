@@ -104,25 +104,6 @@ import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-internal fun selectTransactionType(
-    state: AppState,
-    type: String,
-) {
-    val previousType = state.transactionType
-    if (previousType != type) {
-        if (type == "Transfer") {
-            state.transactionPayee = ""
-            state.newTransactionPayeeId = ""
-            state.transactionCategory = ""
-            state.newTransactionCategoryId = ""
-        } else if (previousType == "Transfer") {
-            state.transactionPayee = ""
-            state.newTransactionPayeeId = ""
-        }
-    }
-    state.transactionType = type
-}
-
 @Composable
 internal fun TransactionFormScreen(
     route: AppRoute,

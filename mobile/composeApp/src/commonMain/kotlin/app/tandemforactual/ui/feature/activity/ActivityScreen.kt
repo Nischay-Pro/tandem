@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.DropdownMenu
-import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
-import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +62,6 @@ import app.tandemforactual.ui.feature.transactions.deleteTransactionSelection
 import app.tandemforactual.ui.feature.transactions.openTransaction
 import app.tandemforactual.ui.feature.transactions.transactionSyncNeedsReview
 import app.tandemforactual.ui.feature.transactions.transactionSyncOperations
-import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Lucide
@@ -381,42 +377,6 @@ internal fun ActivityScreen(
             if (deleted) {
                 selectedTransactionIds = emptySet()
                 selectionMode = false
-            }
-        }
-    }
-}
-
-internal fun shouldShowActivityDateHeader(
-    currentDateLabel: String,
-    previousDateLabel: String?,
-): Boolean = previousDateLabel != currentDateLabel
-
-@Composable
-internal fun ActivitySortControl(
-    selected: ActivitySortOrder,
-    onSelect: (ActivitySortOrder) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text("Sort: ${selected.label}", color = tandemPalette.text, fontSize = TandemTypography.caption)
-            Icon(
-                Lucide.ChevronDown,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp).padding(start = 2.dp),
-                tint = tandemPalette.muted,
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ActivitySortOrder.entries.forEach { option ->
-                DropdownMenuItem(
-                    onClick = {
-                        expanded = false
-                        onSelect(option)
-                    },
-                ) {
-                    Text(option.label, color = tandemPalette.text, fontSize = TandemTypography.compactBody)
-                }
             }
         }
     }

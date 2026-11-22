@@ -4,18 +4,9 @@ package app.tandemforactual.ui.design.buttons
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -24,17 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,11 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,7 +50,6 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 
@@ -96,136 +78,6 @@ internal enum class TandemActionButtonTone {
     PRIMARY,
     NEUTRAL,
     DESTRUCTIVE,
-}
-
-@Composable
-internal fun TandemActionButton(
-    label: String,
-    tone: TandemActionButtonTone,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    val shape = RoundedCornerShape(TandemShapes.medium)
-    val containerColor =
-        when (tone) {
-            TandemActionButtonTone.PRIMARY -> if (enabled) palette.accent else palette.raised
-            TandemActionButtonTone.NEUTRAL -> palette.surface
-            TandemActionButtonTone.DESTRUCTIVE -> palette.negative.copy(alpha = 0.12f)
-        }
-    val contentColor =
-        when {
-            !enabled -> palette.muted
-            tone == TandemActionButtonTone.PRIMARY -> palette.accentContent
-            tone == TandemActionButtonTone.DESTRUCTIVE -> palette.negative
-            else -> palette.text
-        }
-    val outlineColor =
-        when (tone) {
-            TandemActionButtonTone.PRIMARY -> containerColor
-            TandemActionButtonTone.NEUTRAL -> palette.border
-            TandemActionButtonTone.DESTRUCTIVE -> palette.negative.copy(alpha = 0.32f)
-        }
-    Row(
-        modifier =
-            modifier
-                .heightIn(min = 50.dp)
-                .clip(shape)
-                .background(containerColor)
-                .border(1.dp, outlineColor, shape)
-                .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
-                .padding(horizontal = TandemSpacing.small),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (loading) {
-            TandemLoadingIndicator(Modifier.size(16.dp), contentColor, 2.dp)
-        } else if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp), tint = contentColor)
-        }
-        Text(
-            label,
-            modifier = if (loading || icon != null) Modifier.padding(start = TandemSpacing.extraSmall) else Modifier,
-            color = contentColor,
-            fontSize = TandemTypography.label,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-        )
-    }
-}
-
-@Composable
-internal fun TandemIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClickLabel: String = contentDescription,
-    modifier: Modifier = Modifier,
-    sizeDp: Int = 44,
-    iconSizeDp: Int = 22,
-    enabled: Boolean = true,
-    tint: Color? = null,
-    containerColor: Color? = null,
-    hoveredContainerColor: Color? = null,
-    shape: Shape = CircleShape,
-    borderColor: Color? = null,
-    modalClose: Boolean = icon == Lucide.X && contentDescription == "Close",
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    val closeHoverColor = if (palette.surface.luminance() < 0.5f) palette.border else palette.surface
-    val resolvedContainerColor = containerColor ?: palette.raised.takeIf { modalClose }
-    val resolvedHoveredContainerColor = hoveredContainerColor ?: closeHoverColor.takeIf { modalClose }
-    val resolvedBorderColor = borderColor ?: palette.border.copy(alpha = 0.56f).takeIf { modalClose }
-    val interactionSource = remember { MutableInteractionSource() }
-    val hovered by interactionSource.collectIsHoveredAsState()
-    val pressed by interactionSource.collectIsPressedAsState()
-    val backgroundTarget =
-        when {
-            (hovered || pressed) && resolvedHoveredContainerColor != null -> resolvedHoveredContainerColor
-            else -> resolvedContainerColor
-        }
-    val animatedContainerColor by
-        animateColorAsState(
-            targetValue = backgroundTarget ?: Color.Transparent,
-            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-            label = "icon-button-background",
-        )
-    Box(
-        modifier =
-            modifier
-                .sizeIn(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
-                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    enabled = enabled,
-                    role = Role.Button,
-                    onClickLabel = onClickLabel,
-                    onClick = onClick,
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(sizeDp.dp)
-                .clip(shape)
-                .then(
-                    if (resolvedContainerColor != null || resolvedHoveredContainerColor != null) {
-                        Modifier.background(animatedContainerColor)
-                    } else {
-                        Modifier
-                    },
-                ).hoverable(interactionSource)
-                .then(resolvedBorderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
-                .indication(interactionSource, LocalIndication.current),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(iconSizeDp.dp), tint = tint ?: palette.text)
-        }
-    }
 }
 
 /** Android and Apple both ask for touch targets of at least 48dp / 44pt; the larger one covers both. */
@@ -316,98 +168,6 @@ internal fun TandemModalHeader(
             overflow = TextOverflow.Ellipsis,
         )
         TandemModalCloseButton(enabled = enabled, onClick = onClose)
-    }
-}
-
-@Composable
-internal fun ReorderDragHandle(
-    itemName: String = "item",
-    enabled: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onDragStarted: (() -> Unit)? = null,
-    onDragBy: ((Float) -> Unit)? = null,
-    onDragStopped: (() -> Unit)? = null,
-) {
-    val density = LocalDensity.current
-    val stepPixels = with(density) { 52.dp.toPx() }
-    val latestMoveUp by rememberUpdatedState(onMoveUp)
-    val latestMoveDown by rememberUpdatedState(onMoveDown)
-    val latestOnDragStarted by rememberUpdatedState(onDragStarted)
-    val latestOnDragBy by rememberUpdatedState(onDragBy)
-    val latestOnDragStopped by rememberUpdatedState(onDragStopped)
-    val latestCanMoveUp by rememberUpdatedState(canMoveUp)
-    val latestCanMoveDown by rememberUpdatedState(canMoveDown)
-    var dragDistance by remember { mutableFloatStateOf(0f) }
-    val dragState =
-        rememberDraggableState { delta ->
-            val dragHandler = latestOnDragBy
-            if (dragHandler != null) {
-                dragHandler(delta)
-            } else {
-                dragDistance += delta
-                if (dragDistance >= stepPixels && latestCanMoveDown) {
-                    latestMoveDown()
-                    dragDistance -= stepPixels
-                }
-                if (dragDistance <= -stepPixels && latestCanMoveUp) {
-                    latestMoveUp()
-                    dragDistance += stepPixels
-                }
-                if (!latestCanMoveDown && dragDistance > 0f || !latestCanMoveUp && dragDistance < 0f) {
-                    dragDistance = 0f
-                }
-            }
-        }
-    val actionList =
-        buildList {
-            if (enabled && canMoveUp) {
-                add(
-                    CustomAccessibilityAction("Move $itemName up") {
-                        latestMoveUp()
-                        true
-                    },
-                )
-            }
-            if (enabled && canMoveDown) {
-                add(
-                    CustomAccessibilityAction("Move $itemName down") {
-                        latestMoveDown()
-                        true
-                    },
-                )
-            }
-        }
-    val reorderSemantics =
-        Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "Drag to reorder $itemName"
-            customActions = actionList
-        }
-    val handleModifier =
-        Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(TandemShapes.medium))
-            .then(reorderSemantics)
-            .draggable(
-                orientation = Orientation.Vertical,
-                state = dragState,
-                enabled = enabled && (canMoveUp || canMoveDown),
-                onDragStarted = {
-                    dragDistance = 0f
-                    latestOnDragStarted?.invoke()
-                },
-                onDragStopped = {
-                    dragDistance = 0f
-                    latestOnDragStopped?.invoke()
-                },
-            )
-    androidx.compose.foundation.layout.Box(
-        modifier = handleModifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Lucide.GripVertical, contentDescription = null, modifier = Modifier.size(21.dp), tint = tandemPalette.muted)
     }
 }
 

@@ -1,0 +1,219 @@
+@file:Suppress("ktlint:standard:function-naming")
+
+package app.tandemforactual.ui.feature.settings
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.pendingDeviceChangeNotice
+import app.tandemforactual.ui.core.session.signOutAndClearLocalData
+import app.tandemforactual.ui.core.state.AppNavigation
+import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.rows.DividerLine
+import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.ListRowOptions
+import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
+import app.tandemforactual.ui.design.templates.AnimatedPreviewNote
+import app.tandemforactual.ui.design.templates.AttentionBanner
+import app.tandemforactual.ui.design.templates.InfoBubble
+import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.feature.auth.LocalEncryptedBudgetVault
+import com.composables.icons.lucide.FolderKey
+import com.composables.icons.lucide.House
+import com.composables.icons.lucide.KeyRound
+import com.composables.icons.lucide.LogIn
+import com.composables.icons.lucide.LogOut
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Server
+import com.composables.icons.lucide.Smartphone
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Wifi
+import kotlinx.coroutines.launch
+
+@Composable
+internal fun ServerDeviceScreen(
+    state: AppState,
+    deviceName: String,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onForgetDevice: () -> Unit,
+    onForgetDeviceLocally: () -> Unit,
+) {
+    val encryptedBudgetVault = LocalEncryptedBudgetVault.current
+    val device = mobileSession.authenticatedDevice
+    val scope = rememberCoroutineScope()
+    var confirmation by rememberSaveable { mutableStateOf("") }
+    PageColumn {
+        SectionCard("Server") {
+            ListRow(
+                "Server URL",
+                state.serverUrl,
+                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+                leading = RowLeading.Icon(Lucide.Server),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                    ),
+                onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+            )
+            DividerLine()
+            ListRow(
+                "Local address",
+                state.localServerUrl.ifBlank { "Optional · faster on your home network" },
+                when {
+                    state.localServerUrl.isBlank() -> null
+                    mobileSession.isUsingLocalServer -> "In use"
+                    else -> "Not in use"
+                },
+                leading = RowLeading.Icon(Lucide.House),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isUsingLocalServer) tandemPalette.positive else tandemPalette.muted,
+                    ),
+                onClick = { navigation.open(AppRoute.LOCAL_SERVER_ADDRESS) },
+            )
+            DividerLine()
+            ListRow(
+                "Connection status",
+                if (mobileSession.isServerReachable) "Server is reachable" else "Server can’t be reached",
+                if (mobileSession.isServerReachable) "Connected" else "Disconnected",
+                leading = RowLeading.Icon(Lucide.Wifi),
+                options =
+                    ListRowOptions(
+                        trailingColor = if (mobileSession.isServerReachable) tandemPalette.positive else tandemPalette.negative,
+                    ),
+            )
+        }
+        SectionCard(
+            "This device",
+            when {
+                device == null -> "No device is signed in"
+                else -> null
+            },
+        ) {
+            ListRow(
+                "Device name",
+                if (device != null) deviceName else "Not signed in",
+                leading = RowLeading.Icon(Lucide.Smartphone),
+            )
+            DividerLine()
+            ListRow(
+                "Budgets this device can open",
+                if (device == null) "Not signed in" else "${device.budgetIds.size} available",
+                leading = RowLeading.Icon(Lucide.FolderKey),
+            )
+            DividerLine()
+            ListRow(
+                "Saved sign-in",
+                if (mobileSession.isCredentialStored) "Protected on this device" else "Available until the app closes",
+                when {
+                    mobileSession.isCredentialStored -> "Saved"
+                    device != null -> "Active"
+                    else -> "None"
+                },
+                leading = RowLeading.Icon(Lucide.KeyRound),
+            )
+        }
+        InfoBubble("Passwords are used to sign in and aren’t saved on this device.")
+        if (mobileSession.signOutError != null) {
+            InfoBubble(mobileSession.signOutError.orEmpty())
+        }
+        mobileSession.deviceRevocationError?.let { message ->
+            AttentionBanner("Couldn’t unlink this device", message, "Try again", onForgetDevice)
+        }
+        AnimatedPreviewNote(mobileSession.credentialStorageError)
+        SectionCard("Unlink", "Your budgets in Actual are never changed.") {
+            when {
+                device == null ->
+                    ListRow(
+                        "Sign in to this server",
+                        "Link this device to Tandem again",
+                        leading = RowLeading.Icon(Lucide.LogIn),
+                        onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
+                    )
+                mobileSession.deviceRevocationError != null ->
+                    ListRow(
+                        "Unlink on this device only",
+                        "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
+                        leading = RowLeading.Icon(Lucide.LogOut),
+                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "local" },
+                    )
+                else ->
+                    ListRow(
+                        if (mobileSession.isRevokingDevice) "Unlinking…" else "Unlink this device",
+                        "Signs out. Budgets and unsynced edits stay on this device for when you link again.",
+                        leading = RowLeading.Icon(Lucide.LogOut),
+                        options = ListRowOptions(muted = mobileSession.isRevokingDevice),
+                        onClick = { if (!mobileSession.isRevokingDevice) confirmation = "server" },
+                    )
+            }
+            DividerLine()
+            ListRow(
+                if (mobileSession.isSigningOut) "Erasing…" else "Unlink and erase data",
+                "Signs out and deletes every saved budget from this device. Edits must be synced first.",
+                leading = RowLeading.Icon(Lucide.Trash2),
+                options = ListRowOptions(muted = mobileSession.isSigningOut, trailingColor = tandemPalette.negative),
+                onClick = { if (!mobileSession.isSigningOut) confirmation = "signout" },
+            )
+        }
+    }
+    when (confirmation) {
+        "signout" ->
+            DestructiveConfirmationDialog(
+                title = "Unlink and erase data?",
+                message =
+                    "This signs out and deletes every saved budget from this device. Your budgets in Actual stay unchanged. Edits waiting to sync must be synced or resolved first.",
+                confirmLabel = "Unlink and erase",
+                dismissLabel = "Cancel",
+                enabled = !mobileSession.isSigningOut,
+                onDismissRequest = { if (!mobileSession.isSigningOut) confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    scope.launch {
+                        if (mobileSession.signOutAndClearLocalData()) {
+                            encryptedBudgetVault?.deleteAll()
+                            state.clearBudgetSession()
+                            navigation.reset(AppRoute.WELCOME)
+                        }
+                    }
+                },
+            )
+        "server" ->
+            DestructiveConfirmationDialog(
+                title = "Unlink this device?",
+                message =
+                    "Tandem will stop trusting this device and you’ll need to sign in again to link it. Your saved budgets stay on this device. ${pendingDeviceChangeNotice()}",
+                confirmLabel = "Unlink",
+                dismissLabel = "Cancel",
+                enabled = !mobileSession.isRevokingDevice,
+                onDismissRequest = { if (!mobileSession.isRevokingDevice) confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    onForgetDevice()
+                },
+            )
+        "local" ->
+            DestructiveConfirmationDialog(
+                title = "Unlink on this device only?",
+                message =
+                    "This clears the sign-in saved on this device. The server keeps it linked until you unlink it from another signed-in device. ${pendingDeviceChangeNotice()}",
+                confirmLabel = "Unlink here",
+                dismissLabel = "Cancel",
+                onDismissRequest = { confirmation = "" },
+                onConfirm = {
+                    confirmation = ""
+                    onForgetDeviceLocally()
+                },
+            )
+    }
+}

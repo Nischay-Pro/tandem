@@ -8,13 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,13 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -51,7 +45,6 @@ import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SegmentedSelector
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -60,7 +53,6 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
-import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -69,8 +61,6 @@ import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.activity.ActivitySearchInput
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Trash2
@@ -436,78 +426,6 @@ private fun RuleActionEditor(
         }
     }
 }
-
-@Composable
-internal fun RuleChoiceField(
-    label: String,
-    selectedLabel: String,
-    options: List<Pair<String, String>>,
-    selectedIds: Set<String>,
-    multiple: Boolean = false,
-    onSelect: (List<String>) -> Unit,
-) {
-    var expanded by rememberSaveable(label) { mutableStateOf(false) }
-    var query by rememberSaveable(label) { mutableStateOf("") }
-    var picked by remember(expanded, selectedIds) { mutableStateOf(selectedIds) }
-    ListRow(
-        label,
-        trailing = selectedLabel,
-        leading = RowLeading.None,
-        options = ListRowOptions(dense = true),
-        onClick = { expanded = true },
-    )
-    val close = {
-        expanded = false
-        query = ""
-    }
-    TandemChoiceDialog(visible = expanded, onDismissRequest = close) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.medium), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                TandemModalHeader(title = "Choose ${label.lowercase()}", titleSize = TandemTypography.cardTitle, onClose = close)
-                if (options.size > SEARCH_THRESHOLD) {
-                    ActivitySearchInput(query, onValueChange = { query = it }, placeholder = "Find ${label.lowercase()}")
-                }
-                val shown =
-                    remember(options, query) {
-                        val needle = query.trim().lowercase()
-                        if (needle.isEmpty()) options else options.filter { it.second.lowercase().contains(needle) }
-                    }
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(shown, key = { it.first }) { (id, name) ->
-                        val selected = id in picked
-                        ListRow(
-                            name,
-                            leading = RowLeading.None,
-                            options = ListRowOptions(dense = true),
-                            trailingContent =
-                                if (selected) {
-                                    { Icon(Lucide.Check, contentDescription = "Selected", tint = tandemPalette.accent) }
-                                } else {
-                                    null
-                                },
-                            onClick = {
-                                if (multiple) {
-                                    picked = if (selected) picked - id else picked + id
-                                } else {
-                                    onSelect(listOf(id))
-                                    close()
-                                }
-                            },
-                        )
-                    }
-                }
-                if (multiple) {
-                    PrimaryButton("Done", enabled = picked.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-                        onSelect(options.map { it.first }.filter { it in picked })
-                        close()
-                    }
-                }
-            }
-        }
-    }
-}
-
-private const val SEARCH_THRESHOLD = 8
 
 /** Shows which existing transactions the rule's conditions match while it's being edited. */
 @Composable

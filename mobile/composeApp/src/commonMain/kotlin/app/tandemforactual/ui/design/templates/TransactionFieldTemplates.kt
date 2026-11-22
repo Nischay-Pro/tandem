@@ -2,87 +2,50 @@
 
 package app.tandemforactual.ui.design.templates
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
-import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.money.amountAnnotatedString
-import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemPalette
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
-import app.tandemforactual.ui.design.theme.tandemFadeEnter
-import app.tandemforactual.ui.design.theme.tandemFadeExit
-import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Eye
-import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Trash2
@@ -90,46 +53,6 @@ import com.composables.icons.lucide.Trash2
 @Composable
 internal fun FieldLabel(label: String) {
     Text(label, color = tandemPalette.muted, fontSize = TandemTypography.label, fontWeight = FontWeight.Medium)
-}
-
-@Composable
-internal fun FieldFrame(
-    label: String,
-    modifier: Modifier = Modifier,
-    large: Boolean = false,
-    onClickLabel: String? = null,
-    onClick: (() -> Unit)? = null,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(TandemSpacing.medium),
-    content: @Composable RowScope.() -> Unit,
-) {
-    val palette = tandemPalette
-    val shape = RoundedCornerShape(TandemShapes.medium)
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        FieldLabel(label)
-        Row(
-            modifier =
-                modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
-                    .clip(shape)
-                    .background(palette.surface)
-                    .border(1.dp, palette.border, shape)
-                    .then(
-                        if (onClick != null) {
-                            Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
-                        } else {
-                            Modifier
-                        },
-                    ).padding(
-                        horizontal = if (large) TandemSpacing.screen else TandemSpacing.large,
-                        vertical = if (large) TandemSpacing.screen else TandemSpacing.medium,
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = horizontalArrangement,
-        ) {
-            content()
-        }
-    }
 }
 
 internal data class TextFieldOptions(
@@ -201,147 +124,6 @@ internal fun amountFractionTransformation(fractionDigits: Int): VisualTransforma
         TransformedText(amountAnnotatedString(value.text, fractionDigits), OffsetMapping.Identity)
     }
 
-@Composable
-internal fun TextFieldCard(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    options: TextFieldOptions = TextFieldOptions(),
-) {
-    val palette = tandemPalette
-    var secretRevealed by remember { mutableStateOf(false) }
-    FieldFrame(label, large = options.large) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = options.singleLine,
-            keyboardOptions =
-                options.keyboardOptions ?: if (options.isSecret) {
-                    KeyboardOptions(
-                        capitalization = KeyboardCapitalization.None,
-                        autoCorrectEnabled = false,
-                        keyboardType = options.secretKeyboardType,
-                    )
-                } else {
-                    KeyboardOptions.Default
-                },
-            keyboardActions = options.keyboardActions ?: KeyboardActions.Default,
-            visualTransformation =
-                when {
-                    options.isSecret && secretRevealed -> VisualTransformation.None
-                    options.isSecret -> PasswordVisualTransformation()
-                    !options.currencySymbol.isNullOrBlank() ->
-                        currencySymbolTransformation(
-                            options.currencySymbol,
-                            options.currencySymbolAfter,
-                            options.currencySymbolSpace,
-                            options.amountFractionDigits ?: 0,
-                        )
-                    options.amountFractionDigits != null -> amountFractionTransformation(options.amountFractionDigits)
-                    else -> VisualTransformation.None
-                },
-            textStyle =
-                TextStyle(
-                    color = palette.text,
-                    fontSize = if (options.large) TandemTypography.amount else TandemTypography.action,
-                    lineHeight = if (options.large) TandemTypography.largeInputLineHeight else TandemTypography.bodyLineHeight,
-                    fontWeight = if (options.large) FontWeight.SemiBold else FontWeight.Normal,
-                    textAlign = options.textAlign,
-                ),
-            cursorBrush = SolidColor(palette.accent),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { focusState -> options.onFocusedChange?.invoke(focusState.isFocused) }
-                    .semantics { contentDescription = label },
-            decorationBox = { innerTextField ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    options.leadingIcon?.let { icon ->
-                        Icon(
-                            icon,
-                            contentDescription = options.leadingIconDescription,
-                            modifier = Modifier.padding(end = TandemSpacing.small).size(18.dp),
-                            tint = options.leadingIconTint ?: palette.muted,
-                        )
-                    }
-                    Box(Modifier.weight(1f)) {
-                        if (value.isEmpty() && options.placeholder.isNotEmpty()) {
-                            Text(
-                                options.placeholder,
-                                modifier = Modifier.fillMaxWidth(),
-                                color = palette.muted,
-                                fontSize = if (options.large) TandemTypography.keypadNumber else TandemTypography.body,
-                                textAlign = options.textAlign,
-                            )
-                        }
-                        innerTextField()
-                    }
-                    if (options.isSecret) {
-                        TandemIconButton(
-                            if (secretRevealed) Lucide.EyeOff else Lucide.Eye,
-                            if (secretRevealed) "Hide password" else "Show password",
-                            sizeDp = 32,
-                            iconSizeDp = 18,
-                            tint = palette.muted,
-                        ) { secretRevealed = !secretRevealed }
-                    }
-                }
-            },
-        )
-    }
-}
-
-@Composable
-internal fun MoneyAmountInput(
-    label: String,
-    value: String,
-    placeholder: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    fractionDigits: Int = 2,
-) {
-    val palette = tandemPalette
-    val entered = value.isNotBlank()
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        FieldLabel(label)
-        AmountFieldShell(
-            fill = if (entered) palette.accent.copy(alpha = 0.08f) else palette.surface,
-            outline = if (entered) palette.accent else palette.border,
-        ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                visualTransformation = amountFractionTransformation(fractionDigits),
-                textStyle =
-                    TextStyle(
-                        color = palette.accent,
-                        fontSize = TandemTypography.amountField,
-                        lineHeight = TandemTypography.amountFieldLineHeight,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    ),
-                cursorBrush = SolidColor(palette.accent),
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
-                decorationBox = { innerTextField ->
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        if (value.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(
-                                placeholder,
-                                color = palette.muted,
-                                fontSize = TandemTypography.keypadNumber,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-            )
-        }
-    }
-}
-
 internal fun transactionTypeColor(
     type: String,
     palette: TandemPalette,
@@ -352,7 +134,7 @@ internal fun transactionTypeColor(
 }
 
 @Composable
-private fun AmountFieldShell(
+internal fun AmountFieldShell(
     fill: Color,
     outline: Color,
     modifier: Modifier = Modifier,
@@ -380,72 +162,6 @@ private fun AmountFieldShell(
 }
 
 @Composable
-internal fun TransactionAmountField(
-    amount: String,
-    amountMinorUnits: Long,
-    transactionType: String,
-    neutralDisplay: Boolean = false,
-    showCursor: Boolean = false,
-    fractionDigits: Int = 2,
-    onShowKeypad: () -> Unit,
-    amountColorOverride: Color? = null,
-) {
-    val palette = tandemPalette
-    val entered = amountMinorUnits != 0L
-    val amountColor =
-        amountColorOverride ?: if (neutralDisplay) {
-            palette.text
-        } else {
-            transactionTypeColor(transactionType, palette)
-        }
-    val outline = if (entered && !neutralDisplay) amountColor else palette.border
-    val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
-    val display = amount.ifBlank { "0.00" }
-    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val cursorAlpha by
-        rememberInfiniteTransition(label = "amount-cursor").animateFloat(
-            initialValue = 1f,
-            targetValue = 0.45f,
-            animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
-            label = "amount-cursor-alpha",
-        )
-    AmountFieldShell(
-        fill = fill,
-        outline = outline,
-        onClick = onShowKeypad,
-    ) {
-        Text(
-            amountAnnotatedString(display, fractionDigits),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = "Amount, $display" }
-                    .drawWithContent {
-                        drawContent()
-                        val caret = textLayout?.getCursorRect(display.length)
-                        if (showCursor && caret != null) {
-                            val inset = 3.dp.toPx()
-                            drawLine(
-                                color = palette.text.copy(alpha = cursorAlpha),
-                                start = Offset(caret.left, caret.top + inset),
-                                end = Offset(caret.left, caret.bottom - inset),
-                                strokeWidth = 2.dp.toPx(),
-                                cap = StrokeCap.Round,
-                            )
-                        }
-                    },
-            color = amountColor,
-            fontSize = TandemTypography.amountField,
-            lineHeight = TandemTypography.amountFieldLineHeight,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            onTextLayout = { textLayout = it },
-        )
-    }
-}
-
-@Composable
 internal fun TransactionTypeChip(
     type: String,
     onClick: () -> Unit,
@@ -469,45 +185,6 @@ internal fun TransactionTypeChip(
     }
 }
 
-@Composable
-internal fun TransactionPickerRow(
-    value: String,
-    placeholder: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    val label = value.ifBlank { placeholder }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 62.dp)
-                .clickable(role = Role.Button, onClickLabel = placeholder, onClick = onClick)
-                .semantics { contentDescription = "$placeholder: $label" }
-                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-    ) {
-        Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(TandemShapes.control)).background(palette.raised),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = palette.accent)
-        }
-        Text(
-            label,
-            modifier = Modifier.weight(1f),
-            color = if (value.isBlank()) palette.muted else palette.text,
-            fontSize = TandemTypography.body,
-            fontWeight = if (value.isBlank()) FontWeight.Normal else FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(Lucide.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.muted)
-    }
-}
-
 internal enum class AmountPadKeyStyle {
     NUMBER,
     OPERATOR,
@@ -515,158 +192,7 @@ internal enum class AmountPadKeyStyle {
     DONE,
 }
 
-@Composable
-internal fun AmountPadKey(
-    label: String,
-    modifier: Modifier = Modifier,
-    style: AmountPadKeyStyle = AmountPadKeyStyle.NUMBER,
-    accessibilityLabel: String = label,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    val background =
-        when (style) {
-            AmountPadKeyStyle.NUMBER -> Color.Transparent
-            AmountPadKeyStyle.DONE -> palette.accent
-            else -> palette.raised
-        }
-    val color =
-        when (style) {
-            AmountPadKeyStyle.DONE -> palette.accentContent
-            AmountPadKeyStyle.NUMBER -> palette.text
-            else -> palette.muted
-        }
-    val shape =
-        when (style) {
-            AmountPadKeyStyle.NUMBER -> RoundedCornerShape(TandemShapes.roomy)
-            AmountPadKeyStyle.OPERATOR -> CircleShape
-            else -> RoundedCornerShape(TandemShapes.capsule)
-        }
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .padding(TandemSpacing.xxSmall)
-                .clip(shape)
-                .background(background)
-                .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
-                .clickable(role = Role.Button, onClickLabel = accessibilityLabel, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = color,
-            fontSize = if (style == AmountPadKeyStyle.NUMBER) TandemTypography.keypadNumber else TandemTypography.keypadOperator,
-            fontWeight = if (style == AmountPadKeyStyle.DONE) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-internal fun TransactionAmountKeypad(
-    onDigit: (Int) -> Unit,
-    onDelete: () -> Unit,
-    onOperator: (String) -> Unit,
-    onEquals: () -> Unit,
-    onDone: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val palette = tandemPalette
-    Surface(modifier = modifier.fillMaxWidth().height(AMOUNT_KEYPAD_HEIGHT), color = palette.surface) {
-        Row(
-            Modifier.fillMaxSize().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-        ) {
-            Column(
-                Modifier.weight(3.15f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            ) {
-                listOf(listOf(7, 8, 9), listOf(4, 5, 6), listOf(1, 2, 3)).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        row.forEach { digit ->
-                            AmountPadKey(digit.toString(), Modifier.weight(1f)) { onDigit(digit) }
-                        }
-                    }
-                }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                    Spacer(Modifier.weight(1f).fillMaxSize())
-                    AmountPadKey("0", Modifier.weight(1f)) { onDigit(0) }
-                    AmountPadKey("⌫", Modifier.weight(1f), accessibilityLabel = "Delete last digit", onClick = onDelete)
-                }
-            }
-            Column(
-                Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-            ) {
-                listOf(listOf("×", "÷"), listOf("+", "−")).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        row.forEach { operator ->
-                            AmountPadKey(operator, Modifier.weight(1f), AmountPadKeyStyle.OPERATOR) { onOperator(operator) }
-                        }
-                    }
-                }
-                AmountPadKey("=", Modifier.weight(1f), AmountPadKeyStyle.EQUALS, "Calculate", onEquals)
-                AmountPadKey("Done", Modifier.weight(1f), AmountPadKeyStyle.DONE, "Finish entering amount", onDone)
-            }
-        }
-    }
-}
-
 internal val AMOUNT_KEYPAD_HEIGHT = 252.dp
-
-@Composable
-internal fun FloatingTransactionSave(
-    compact: Boolean,
-    enabled: Boolean,
-    saved: Boolean = false,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val palette = tandemPalette
-    Row(
-        modifier =
-            modifier
-                .animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
-                .height(56.dp)
-                .clip(if (compact) CircleShape else RoundedCornerShape(TandemShapes.large))
-                .background(
-                    if (saved) {
-                        palette.positive
-                    } else if (enabled) {
-                        palette.accent
-                    } else {
-                        palette.raised
-                    },
-                ).semantics(mergeDescendants = true) {
-                    contentDescription = if (saved) "Saved on this device" else "Save transaction"
-                }.clickable(enabled = enabled && !saved, role = Role.Button, onClickLabel = "Save transaction", onClick = onClick)
-                .padding(horizontal = if (compact) TandemSpacing.large else TandemSpacing.extraLarge),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else TandemSpacing.small),
-    ) {
-        Icon(
-            Lucide.Check,
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint =
-                when {
-                    saved -> palette.background
-                    enabled -> palette.accentContent
-                    else -> palette.muted
-                },
-        )
-        AnimatedVisibility(visible = !compact, enter = tandemFadeEnter(tandemReduceMotion), exit = tandemFadeExit(tandemReduceMotion)) {
-            Text(
-                if (saved) "Saved" else "Save",
-                color = if (saved || enabled) palette.accentContent else palette.muted,
-                fontSize = TandemTypography.action,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-        }
-    }
-}
 
 @Composable
 internal fun FloatingTransactionDeleteAction(
