@@ -63,6 +63,7 @@ internal enum class AppRoute(
     RETIREMENT_SETUP("Retirement accounts"),
     RETIREMENT_MATCH("Employer match"),
     WHAT_IF("What if"),
+    EXTRA_MONEY("Extra money"),
     SPENDING_TRENDS("Spending trends"),
     SPENDING_FORECAST("Spending forecast"),
     GOAL_TIMELINE("Goal timeline"),

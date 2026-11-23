@@ -44,7 +44,7 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.ui.rememberPlanningEditors
 import app.tandemforactual.ui.core.ui.saved
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -80,7 +80,7 @@ internal fun GoalTimelineScreen(
     val today = platformTodayIsoDate()
     if (goals.isEmpty()) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Add a savings goal",
                 "Add two or more goals to see when each one is reached.",
                 actionLabel = "Add goal",

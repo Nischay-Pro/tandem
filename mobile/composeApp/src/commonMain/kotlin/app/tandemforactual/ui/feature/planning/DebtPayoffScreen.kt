@@ -33,7 +33,7 @@ import app.tandemforactual.ui.core.ui.rememberPlanningEditors
 import app.tandemforactual.ui.core.ui.saved
 import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -83,12 +83,12 @@ internal fun DebtPayoffScreen(
 
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (debts.isEmpty()) {
-            EmptyState("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
+            EmptyStateCard("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
             return@PageColumn
         }
         val palette = tandemPalette
         if (ready.isEmpty()) {
-            EmptyState("Add your debt details", "Enter each debt’s APR and minimum payment to see when you’ll be debt-free.")
+            EmptyStateCard("Add your debt details", "Enter each debt’s APR and minimum payment to see when you’ll be debt-free.")
             YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
             return@PageColumn
         }

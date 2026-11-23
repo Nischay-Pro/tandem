@@ -40,7 +40,7 @@ import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
@@ -87,7 +87,7 @@ internal fun ReportsScreen(
     val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today, mobileSession.budgetMonthIds)
     if (state.selectedBudgetId.isBlank()) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to view reports.",
                 actionLabel = "Choose budget",
@@ -97,7 +97,7 @@ internal fun ReportsScreen(
         return
     }
     if (window == null) {
-        PageColumn { EmptyState("Choose a report period", "Choose a month to see your reports.") }
+        PageColumn { EmptyStateCard("Choose a report period", "Choose a month to see your reports.") }
         return
     }
     val netWorthMonthIds = mobileSession.budgetMonthIds
@@ -158,7 +158,7 @@ private fun ReportCard(
                 ReportSummary(kind, data, compact = true, selectedNetWorthIndex = selectedNetWorthIndex)
             }
             if (empty) {
-                EmptyState(
+                EmptyStateCard(
                     "No data for this period",
                     "Add transactions and sync to build this report.",
                     actionLabel = emptyActionLabel,

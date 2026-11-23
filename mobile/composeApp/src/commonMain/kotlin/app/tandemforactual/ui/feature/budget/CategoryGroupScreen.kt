@@ -35,12 +35,11 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.core.ui.AccountActionDropdown
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageLazyColumn
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.feature.budget.components.AddCategoryDialog
 import app.tandemforactual.ui.feature.budget.components.CategoryGroupListContext
 import app.tandemforactual.ui.feature.budget.components.CategoryGroupReorder
@@ -67,7 +66,7 @@ internal fun CategoryGroupScreen(
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
-        EmptyState(
+        EmptyStateCard(
             "Choose a budget",
             "Open an Actual budget to view its categories.",
             actionLabel = "Choose budget",
@@ -207,10 +206,9 @@ private fun CategoryGroupList(
     PageLazyColumn {
         if (group == null) {
             item(key = "category-group-empty-message") {
-                EmptyState(
+                EmptyStateCard(
                     "No category group",
                     "No category group is available for this month.",
-                    modifier = Modifier.padding(horizontal = TandemSpacing.large),
                 )
             }
         } else {

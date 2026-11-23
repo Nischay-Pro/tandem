@@ -135,6 +135,7 @@ internal class AppState {
     }
 
     var experienceSettingsJson by mutableStateOf("{}")
+    var backupLogJson by mutableStateOf("{}")
 
     /** Personalization for the open budget; null until the person has decided, so setup can ask once. */
     val experience: ExperienceSettings? get() = decodeExperienceSettings(experienceSettingsJson)[selectedBudgetId]
@@ -265,6 +266,7 @@ internal class AppState {
             "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
             "interfaceMode" to interfaceMode.name,
             "experienceSettingsJson" to experienceSettingsJson,
+            "backupLogJson" to backupLogJson,
             "unlockFailureCount" to unlockFailureCount.toString(),
             "localServerUrl" to localServerUrl,
             "lastTransactionAccountId" to lastTransactionAccountId,
@@ -330,6 +332,7 @@ internal class AppState {
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         interfaceMode = InterfaceMode.entries.firstOrNull { it.name == saved["interfaceMode"] } ?: interfaceMode
         experienceSettingsJson = saved["experienceSettingsJson"] ?: experienceSettingsJson
+        backupLogJson = saved["backupLogJson"] ?: backupLogJson
         unlockFailureCount = saved["unlockFailureCount"]?.toIntOrNull()?.coerceAtLeast(0) ?: unlockFailureCount
         localServerUrl = saved["localServerUrl"] ?: localServerUrl
         lastTransactionAccountId = saved["lastTransactionAccountId"] ?: lastTransactionAccountId

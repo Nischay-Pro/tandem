@@ -26,7 +26,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -106,10 +106,9 @@ internal fun LazyListScope.activityEmptyItem(
     navigation: AppNavigation,
 ) {
     item(key = "activity-empty") {
-        EmptyState(
+        EmptyStateCard(
             if (isLiveBudget) "No transactions yet" else "Choose a budget",
             if (isLiveBudget) "Sync the budget to refresh." else "Open an Actual budget to view activity.",
-            modifier = Modifier.padding(TandemSpacing.large),
             actionLabel = "Choose budget".takeIf { !isLiveBudget },
             onAction = { navigation.open(AppRoute.BUDGET_CHOOSER) }.takeIf { !isLiveBudget },
         )

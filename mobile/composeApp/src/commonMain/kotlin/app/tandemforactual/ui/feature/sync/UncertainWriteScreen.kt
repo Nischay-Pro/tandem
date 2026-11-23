@@ -9,7 +9,7 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.TransactionItem
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 
 @Composable
@@ -77,7 +77,7 @@ internal fun UncertainWriteScreen(
         return
     }
     PageColumn {
-        EmptyState(
+        EmptyStateCard(
             "Choose a budget",
             "Open an Actual budget to check pending changes.",
             actionLabel = "Choose budget",

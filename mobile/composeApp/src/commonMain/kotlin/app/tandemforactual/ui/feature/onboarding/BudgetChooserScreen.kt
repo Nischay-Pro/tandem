@@ -26,7 +26,7 @@ import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.LabelText
@@ -206,7 +206,7 @@ private fun BudgetChoices(
             mobileSession.budgetError?.let { error ->
                 InlineMessage(error, InlineMessageKind.ERROR)
             }
-                ?: EmptyState(
+                ?: EmptyStateCard(
                     stringResource(Res.string.setup_no_budgets_available),
                     stringResource(Res.string.setup_ask_the_budget_owner_to),
                 )

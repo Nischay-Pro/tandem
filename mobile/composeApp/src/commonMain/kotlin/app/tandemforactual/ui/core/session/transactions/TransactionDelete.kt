@@ -10,6 +10,7 @@ import app.tandemforactual.data.store.discardWrite
 import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.readPendingWrites
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.UndoNotice
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
@@ -29,7 +30,7 @@ internal suspend fun TransactionController.deleteTransactionsWithUndo(
         undoNotice =
             UndoNotice(
                 id = undoNoticeCount,
-                message = if (deleted.size == 1) "Transaction deleted" else "${deleted.size} transactions deleted",
+                message = if (deleted.size == 1) "Transaction deleted" else "${formatInteger(deleted.size)} transactions deleted",
                 budgetId = budgetId,
                 transactionIds = undoable,
             )

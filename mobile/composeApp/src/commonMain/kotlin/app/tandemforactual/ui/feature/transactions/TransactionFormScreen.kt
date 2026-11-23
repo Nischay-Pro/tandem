@@ -8,7 +8,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.Heading
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.feature.transactions.components.EditTransactionForm
@@ -44,7 +44,7 @@ internal fun TransactionFormScreen(
         return
     }
     PageColumn {
-        EmptyState(
+        EmptyStateCard(
             "Choose a budget",
             "Open an Actual budget before adding or editing a transaction.",
             actionLabel = "Choose budget",

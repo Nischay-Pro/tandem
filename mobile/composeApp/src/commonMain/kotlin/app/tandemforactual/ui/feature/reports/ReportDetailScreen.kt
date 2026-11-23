@@ -41,6 +41,7 @@ import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -73,7 +74,7 @@ internal fun ReportDetailScreen(
     val window = createReportWindow(state.reportsMonthId, periodMode, rangePreset, today, mobileSession.budgetMonthIds)
     if (state.selectedBudgetId.isBlank()) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen)) {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to view this report.",
                 actionLabel = "Choose budget",
@@ -84,7 +85,7 @@ internal fun ReportDetailScreen(
     }
     if (window == null) {
         Column(Modifier.fillMaxSize().padding(TandemSpacing.screen), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-            EmptyState("Choose a report period", "Choose a month to see this report.")
+            EmptyStateCard("Choose a report period", "Choose a month to see this report.")
         }
         return
     }

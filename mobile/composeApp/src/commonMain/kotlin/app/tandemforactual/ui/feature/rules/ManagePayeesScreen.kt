@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -78,7 +79,13 @@ internal fun ManagePayeesScreen(
         }
         item(key = "manage-payees-summary") {
             PayeeListSummary(
-                if (searchQuery.isBlank()) "${payees.size} payees" else "${visiblePayees.size} of ${payees.size} payees",
+                if (searchQuery.isBlank()) {
+                    "${formatInteger(
+                        payees.size,
+                    )} payees"
+                } else {
+                    "${formatInteger(visiblePayees.size)} of ${formatInteger(payees.size)} payees"
+                },
                 addEnabled = !state.readOnlyMode,
             ) {
                 newPayeeName = ""

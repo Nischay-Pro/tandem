@@ -14,7 +14,7 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 
 @Composable
@@ -27,7 +27,7 @@ internal fun AccountOptionsScreen(
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
-        EmptyState(
+        EmptyStateCard(
             "Choose a budget",
             "Open an Actual budget to manage its accounts.",
             actionLabel = "Choose budget",
@@ -48,7 +48,7 @@ internal fun AccountOptionsScreen(
     var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     PageColumn {
         if (accountName == null) {
-            EmptyState("Account unavailable", "This account isn’t saved on this device.")
+            EmptyStateCard("Account unavailable", "This account isn’t saved on this device.")
         } else {
             AccountOptionsHeader(accountName, liveAccount, state, mobileSession) {
                 renameValue = liveAccount.name

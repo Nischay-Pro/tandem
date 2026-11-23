@@ -36,7 +36,7 @@ import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.monthMoneyIn
 import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.inputs.FilterPills
@@ -114,7 +114,7 @@ internal fun CashFlowScreen(
             )
         }
         if (events.isEmpty()) {
-            EmptyState("No scheduled transactions", "Add schedules for bills and paychecks to see where your balance is heading.")
+            EmptyStateCard("No scheduled transactions", "Add schedules for bills and paychecks to see where your balance is heading.")
         } else {
             SectionCard("Coming up", "${events.size} scheduled in the next $horizon days") {
                 events.take(MAX_FLOW_ROWS).forEachIndexed { index, event ->
@@ -198,7 +198,7 @@ internal fun MonthlyReviewScreen(
             }
         }
         if (monthTransactions.isEmpty()) {
-            EmptyState(
+            EmptyStateCard(
                 "Nothing recorded this month yet",
                 "Transactions for ${state.selectedMonth} will be summarized here.",
             )
