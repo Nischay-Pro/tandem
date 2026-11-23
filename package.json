@@ -28,9 +28,9 @@
     "@eslint/js": "10.0.1",
     "@rei/cedar-icons": "2.6.1",
     "@resvg/resvg-js": "2.6.2",
-    "@thesvg/icons": "4.0.6",
-    "eslint": "10.14.0",
+    "@thesvg/icons": "4.0.13",
+    "eslint": "10.15.0",
     "prettier": "3.10.1",
-    "typescript-eslint": "8.72.2"
+    "typescript-eslint": "8.73.0"
   }
 }
