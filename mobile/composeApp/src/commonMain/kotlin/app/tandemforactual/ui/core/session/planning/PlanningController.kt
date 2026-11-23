@@ -191,7 +191,7 @@ internal class PlanningController(
         region: String,
     ) {
         if (region in settings.regions) return
-        planningStore(budgetId)?.save(PlanningSettings(settings.regions + region))
+        planningStore(budgetId)?.save(settings.copy(regions = settings.regions + region))
     }
 
     suspend fun saveSavingsGoal(
