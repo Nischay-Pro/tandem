@@ -17,25 +17,36 @@ data class MatchTier(
     val size: Long,
 )
 
-/** When employer money becomes yours: all at once after [years] of service (a cliff), or a share each year until then (graded). */
-data class Vesting(
-    val graded: Boolean,
+/** One step of a vesting schedule: after [years] of service, [basisPoints] of the employer's money is yours. */
+data class VestingStep(
     val years: Int,
+    val basisPoints: Int,
+)
+
+/** When employer money becomes yours, as steps by years of service. No steps means it's yours right away. */
+data class Vesting(
+    val steps: List<VestingStep>,
 ) {
-    /** The share vested after [service] full years, in basis points. Graded vesting starts after the first year. */
+    /** The share vested after [service] full years, in basis points. */
     fun vestedBasisPoints(service: Int): Int =
-        when {
-            service >= years -> 10_000
-            !graded || service < 1 -> 0
-            else -> (service - 1) * 10_000 / (years - 1)
-        }
+        if (steps.isEmpty()) 10_000 else steps.filter { it.years <= service }.maxOfOrNull { it.basisPoints } ?: 0
+
+    /** Years of service until all of it is yours, or null when no step reaches 100%. */
+    val fullYears: Int? get() = if (steps.isEmpty()) 0 else steps.filter { it.basisPoints >= 10_000 }.minOfOrNull { it.years }
 
     companion object {
-        val IMMEDIATE = Vesting(false, 0)
+        val IMMEDIATE = Vesting(emptyList())
 
-        /** The usual schedules; three-year cliff and six-year graded are the slowest the law allows. */
+        /** All of it after [years]. */
+        fun cliff(years: Int) = Vesting(listOf(VestingStep(years, 10_000)))
+
+        /** Starting points; three-year cliff and six-year graded are the slowest the law allows. Any can be edited step by step. */
         val presets: List<Pair<String, Vesting>> =
-            listOf("Right away" to IMMEDIATE, "3-year cliff" to Vesting(false, 3), "6-year graded" to Vesting(true, 6))
+            listOf(
+                "Right away" to IMMEDIATE,
+                "3-year cliff" to cliff(3),
+                "6-year graded" to Vesting((2..6).map { VestingStep(it, (it - 1) * 2_000) }),
+            )
     }
 }
 
@@ -54,7 +65,13 @@ data class EmployerMatch(
         if (vesting == Vesting.IMMEDIATE) 10_000 else joinedYear?.let { vesting.vestedBasisPoints((year - it).coerceAtLeast(0)) }
 
     /** The year all employer money is yours, or null when it already is or the year you joined isn't known. */
-    val fullyVestedYear: Int? get() = joinedYear?.takeIf { vesting != Vesting.IMMEDIATE }?.plus(vesting.years)
+    val fullyVestedYear: Int? get() =
+        joinedYear?.takeIf { vesting != Vesting.IMMEDIATE }?.let { joined ->
+            vesting.fullYears?.let {
+                joined +
+                    it
+            }
+        }
 
     /** The employer's share for [employeeMinor] contributed in a year on [salaryMinor]. */
     fun on(

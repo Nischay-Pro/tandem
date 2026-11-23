@@ -9,6 +9,7 @@ import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
 import app.tandemforactual.data.regions.us.retirement.k401.Vesting
+import app.tandemforactual.data.regions.us.retirement.k401.VestingStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -43,7 +44,7 @@ class PlanningStoreTest {
                         EmployerMatch(
                             listOf(MatchTier(10_000, MatchBand.AMOUNT, 100_000)),
                             capMinor = 50_000,
-                            vesting = Vesting(true, 6),
+                            vesting = Vesting(listOf(VestingStep(1, 5_000), VestingStep(2, 10_000))),
                             joinedYear = 2022,
                         ),
                     )

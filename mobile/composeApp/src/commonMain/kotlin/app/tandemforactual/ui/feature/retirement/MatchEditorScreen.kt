@@ -90,7 +90,8 @@ internal fun MatchEditorScreen(
     var salary by remember { mutableStateOf(wholeUnits(profile.salaryMinor)) }
     var cap by remember { mutableStateOf(wholeUnits(profile.match?.capMinor)) }
     var percent by remember { mutableStateOf(profile.contributionBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
-    var vesting by remember { mutableStateOf(profile.match?.vesting ?: Vesting.IMMEDIATE) }
+    val steps = rememberStepDrafts(profile.match?.vesting)
+    val vesting = Vesting(steps.mapNotNull { it.toStep() })
     var joined by remember {
         mutableStateOf(
             profile.match
@@ -120,7 +121,7 @@ internal fun MatchEditorScreen(
         TextFieldCard("Yearly match cap ($, optional)", cap, { cap = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("Your yearly salary ($)", salary, { salary = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("You plan to contribute (% of pay)", percent, { percent = it.filter(Char::isDigit) }, numbers)
-        AdvancedMatchCard(vesting, { vesting = it }, joined, { joined = it })
+        AdvancedMatchCard(steps, joined, { joined = it })
         if (salaryMinor != null && match.tiers.isNotEmpty()) MatchPreviewCard(year, profile, salaryMinor, percent, match)
         TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
             scope.launch {
