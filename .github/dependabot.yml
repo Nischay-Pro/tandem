@@ -35,6 +35,9 @@ updates:
       day: sunday
       time: "08:00"
       timezone: America/Los_Angeles
+    ignore:
+      # Robolectric pins the Android jars it can run; they move with Robolectric, never on their own.
+      - dependency-name: org.robolectric:android-all-instrumented
     groups:
       gradle-non-major:
         patterns:
