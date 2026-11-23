@@ -66,6 +66,7 @@ internal enum class AppRoute(
     EXTRA_MONEY("Extra money"),
     SPENDING_TRENDS("Spending trends"),
     SPENDING_FORECAST("Spending forecast"),
+    SUBSCRIPTIONS("Subscriptions"),
     GOAL_TIMELINE("Goal timeline"),
     CUSTOM_REPORTS("Custom reports"),
     CUSTOM_REPORT("Report"),
