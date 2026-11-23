@@ -8,6 +8,7 @@ import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.data.store.overspendingAlert
+import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.SyncNetwork
 import android.content.Context
 import androidx.work.Constraints
@@ -33,6 +34,8 @@ import app.tandemforactual.data.database.TandemDatabase
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 import app.tandemforactual.data.store.readBudgetDisplaySettings
+
+internal const val BACKGROUND_KEY_STORE = "background_budget_key"
 
 internal object BackgroundBudgetSyncScheduler {
     const val UNIQUE_WORK_NAME = "tandem-selected-budget-sync"
@@ -97,13 +100,22 @@ class BackgroundBudgetSyncWorker(
             val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)
             if (budgetId !in authenticatedDevice.budgetIds) return Result.success()
             val budget = sessionClient.listBudgets().firstOrNull { it.budgetId == budgetId } ?: return Result.success()
-            if (budget.isEncrypted) return Result.success()
-
-            val repository = LocalBudgetRepository(database) { System.currentTimeMillis() }
-            val summary = sessionClient.withExclusiveSession {
-                BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
+            val password = if (budget.isEncrypted) backgroundPassword(budgetId) ?: return Result.success() else null
+            val budgetDatabase =
+                if (password == null) database else AndroidEncryptedBudgetVault(applicationContext).open(budgetId, password)
+            if (budgetDatabase == null) {
+                AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE).clear()
+                return Result.success()
             }
-            postAlerts(database, repository, budgetId, preferences, summary)
+            try {
+                val repository = LocalBudgetRepository(budgetDatabase) { System.currentTimeMillis() }
+                val summary = sessionClient.withExclusiveSession {
+                    BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId, password)
+                }
+                postAlerts(database, repository, budgetId, preferences, summary)
+            } finally {
+                if (budgetDatabase !== database) budgetDatabase.close()
+            }
             BudgetWidget.refresh(applicationContext)
             Result.success()
         } catch (error: CancellationException) {
@@ -124,6 +136,11 @@ class BackgroundBudgetSyncWorker(
             database.close()
         }
     }
+
+    private fun backgroundPassword(budgetId: String): String? =
+        BackgroundBudgetKey.decode(runCatching { AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE).read() }.getOrNull())
+            ?.takeIf { it.first == budgetId }
+            ?.second
 
     private suspend fun postAlerts(
         database: TandemDatabase,

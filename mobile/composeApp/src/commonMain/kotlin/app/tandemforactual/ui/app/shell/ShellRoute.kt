@@ -27,6 +27,7 @@ import app.tandemforactual.ui.app.FloatingSyncAction
 import app.tandemforactual.ui.app.FloatingTransactionAction
 import app.tandemforactual.ui.app.LocalWindowHinge
 import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.LocalCrashReports
@@ -148,6 +149,7 @@ private fun ShellRouteContent(
         LocalRouteLazyListState provides routeLazyListState,
         LocalDeviceAuthenticator provides env.deviceAuthenticator,
         LocalEncryptedBudgetVault provides env.encryptedBudgetVault,
+        LocalBackgroundBudgetKeyStore provides env.backgroundBudgetKeyStore,
         LocalCrashReports provides env.crashReports,
         LocalShareText provides env.onShareText,
         LocalWindowHinge provides currentWindowHinge,
