@@ -2,6 +2,7 @@ package app.tandemforactual.ui.feature.budget
 
 import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
+import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -109,6 +110,15 @@ internal fun stillToSpend(
     val total = groups.filterNot { it.isIncome }.flatMap { it.categories }.sumOf { it.balanceMinor.coerceAtLeast(0) }
     return StillToSpend(total, total / (daysInMonth - dayOfMonth + 1))
 }
+
+/** Scheduled payments still due from [today] to the end of its month, which what's left to spend has to cover. */
+internal fun billsStillDue(
+    schedules: List<LiveScheduleSummary>,
+    today: String,
+): Long =
+    schedules
+        .filter { it.nextDate >= today && it.nextDate.take(7) == today.take(7) }
+        .sumOf { -(it.amountMinor ?: 0).coerceAtMost(0) }
 
 /** Offer to assign last month's spending to a category that has nothing assigned yet this month or later. */
 internal fun canQuickAssign(
