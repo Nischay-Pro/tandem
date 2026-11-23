@@ -196,7 +196,13 @@ class ActualDirectBudget private constructor(
     suspend fun previewRule(rule: JsonObject): List<HealthRow> =
         locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
 
-    suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
+    suspend fun dataHealth(today: String): List<HealthIssue> =
+        locked {
+            runCatching {
+                synchronize()
+            }.exceptionOrNull()?.let { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            ActualDataHealth(db).check(today)
+        }
 
     suspend fun changeHistory(limit: Int): List<ChangeSet> =
         locked {
