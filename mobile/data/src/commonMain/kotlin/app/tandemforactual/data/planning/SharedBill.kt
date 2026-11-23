@@ -237,7 +237,11 @@ object SharedBills {
         haystack: String,
     ): Boolean {
         val text = haystack.lowercase()
-        val words = member.name.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 }
+        val words =
+            member.name
+                .lowercase()
+                .split(Regex("[^\\p{L}\\p{N}]+"))
+                .filter { it.length >= 3 }
         val match = member.matchText.trim().lowercase()
         return words.any { it in text } || (match.isNotEmpty() && match in text)
     }

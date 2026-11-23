@@ -111,6 +111,7 @@ class SharedBillTest {
     @Test
     fun suggestsUntaggedPaymentsThatLookLikeAShare() {
         val other = plan.copy(members = listOf(alex, sam.copy(shareMinor = 2_500)))
+
         fun candidate(
             amount: Long,
             payee: String,
