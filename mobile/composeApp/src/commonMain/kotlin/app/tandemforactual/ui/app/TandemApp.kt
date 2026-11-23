@@ -48,6 +48,7 @@ fun TandemApp(
     actualBudgetFiles: ActualBudgetFiles? = null,
     planningKeyStore: DeviceCredentialStore? = null,
     postLocalAlert: ((LocalAlert) -> Unit)? = null,
+    backgroundBudgetKeyStore: DeviceCredentialStore? = null,
 ) {
     AppShell(
         ShellEnvironment(
@@ -76,6 +77,7 @@ fun TandemApp(
             actualBudgetFiles,
             planningKeyStore,
             postLocalAlert,
+            backgroundBudgetKeyStore,
         ),
     )
 }

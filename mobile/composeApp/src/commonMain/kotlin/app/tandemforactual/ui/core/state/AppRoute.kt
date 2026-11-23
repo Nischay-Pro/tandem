@@ -66,6 +66,7 @@ internal enum class AppRoute(
     RESIDENCE("Where you’ve lived"),
     RESIDENCE_PERIOD("Edit period"),
     RELOCATION("Moving countries"),
+    PUBLIC_PENSIONS("Public pensions"),
     WHAT_IF("What if"),
     EXTRA_MONEY("Extra money"),
     SPENDING_TRENDS("Spending trends"),

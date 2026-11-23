@@ -76,17 +76,15 @@ internal fun SyncPreferencesScreen(
                 state.syncOnOpen =
                     it
             }
-            if (backgroundSyncSupported) {
+            if (backgroundSyncSupported && state.selectedBudgetEncrypted) {
+                DividerLine()
+                EncryptedBackgroundSyncToggle(state)
+            } else if (backgroundSyncSupported) {
                 DividerLine()
                 ToggleRow(
                     "Schedule background sync",
-                    if (state.selectedBudgetEncrypted) {
-                        "Encrypted budgets sync only while unlocked."
-                    } else {
-                        "About every six hours, even when Tandem is closed"
-                    },
-                    state.backgroundSyncEnabled && !state.selectedBudgetEncrypted,
-                    enabled = !state.selectedBudgetEncrypted,
+                    "About every six hours, even when Tandem is closed",
+                    state.backgroundSyncEnabled,
                 ) { state.backgroundSyncEnabled = it }
             } else {
                 InfoBubble("Background sync isn’t available on this device.")

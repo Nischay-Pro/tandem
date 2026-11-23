@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.core.security
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 
 interface DeviceAuthenticator {
@@ -46,6 +47,8 @@ interface DeviceAuthenticator {
 }
 
 internal val LocalDeviceAuthenticator = staticCompositionLocalOf<DeviceAuthenticator?> { null }
+
+internal val LocalBackgroundBudgetKeyStore = staticCompositionLocalOf<DeviceCredentialStore?> { null }
 
 internal val LocalEncryptedBudgetVault = staticCompositionLocalOf<EncryptedBudgetVault?> { null }
 
