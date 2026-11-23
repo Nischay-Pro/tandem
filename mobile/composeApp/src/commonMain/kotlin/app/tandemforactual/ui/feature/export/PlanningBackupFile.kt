@@ -8,6 +8,7 @@ import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.planning.SharedBill
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -59,6 +60,7 @@ internal fun planningBackup(session: TandemMobileSession): String {
             session.planning.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
             session.planning.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
             session.planning.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
+            session.planning.sharedBills.map { Triple(it.id, SharedBill.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))
     return buildJsonObject {
         put("format", BACKUP_FORMAT)

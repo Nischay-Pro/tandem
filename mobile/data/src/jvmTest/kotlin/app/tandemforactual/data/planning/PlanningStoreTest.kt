@@ -95,6 +95,11 @@ class PlanningStoreTest {
                         .single()
                         .received,
                 )
+                val bill = SharedBill("b1", "Phone plan", "phone-plan", listOf(SharedBillMember("Alex", "alex", 4_000, "Zelle from Alex")))
+                store.save(bill)
+                store.save(bill.copy(id = "b2"))
+                store.deleteSharedBill("b2")
+                assertEquals(listOf(bill), store.sharedBills().first())
                 assertEquals(PlanningSettings(), store.settings().first())
                 store.save(PlanningSettings(listOf("US", "IN")))
                 assertEquals(listOf("US", "IN"), store.settings().first().regions)

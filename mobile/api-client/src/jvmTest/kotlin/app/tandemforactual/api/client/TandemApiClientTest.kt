@@ -349,6 +349,7 @@ class TandemApiClientTest {
                 "change_not_found",
                 assertFailsWith<TandemApiException> { client.undoBudgetChange("group", "missing", null) }.errorCode,
             )
+            assertEquals(emptyList(), client.budgetTaggedPayments("group", "no-such-tag", "2000-01-01", null))
             assertTrue(server.messages.size > 300)
 
             client.retireBudget("group")

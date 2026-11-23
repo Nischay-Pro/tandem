@@ -104,6 +104,13 @@ class PlanningStore(
 
     suspend fun deleteReimbursement(transactionId: String) = delete(transactionId, Reimbursement.TYPE)
 
+    fun sharedBills(): Flow<List<SharedBill>> =
+        observe(SharedBill.TYPE).map { list -> list.map { (id, body) -> SharedBill.fromJson(id, body) } }
+
+    suspend fun save(bill: SharedBill) = put(bill.id, SharedBill.TYPE, bill.toJson())
+
+    suspend fun deleteSharedBill(id: String) = delete(id, SharedBill.TYPE)
+
     suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
 
     fun accountCurrencies(): Flow<List<AccountCurrency>> =
