@@ -163,9 +163,17 @@ internal class PlanningController(
         profiles: List<RetirementProfile>,
     ) {
         val store = planningStore(budgetId) ?: return
-        store.save(PlanningSettings(regions))
+        store.save(settings.copy(regions = regions))
         retirementProfiles.filter { old -> profiles.none { it.planId == old.planId } }.forEach { store.deleteRetirementProfile(it.planId) }
         profiles.forEach { store.save(it) }
+    }
+
+    /** Hides budget checkup findings the person has marked as fine, keyed `KIND:id`. */
+    suspend fun ignoreChecks(
+        budgetId: String,
+        keys: List<String>,
+    ) {
+        planningStore(budgetId)?.save(settings.copy(ignoredChecks = (settings.ignoredChecks + keys).distinct()))
     }
 
     suspend fun saveSavingsGoal(

@@ -117,15 +117,24 @@ data class DebtTerms(
 /** Planning choices that apply to the whole budget, such as which countries' accounts and rules to use. */
 data class PlanningSettings(
     val regions: List<String> = emptyList(),
+    /** Budget checkup findings marked as fine, as `KIND:id`. */
+    val ignoredChecks: List<String> = emptyList(),
 ) {
-    fun toJson(): JsonObject = jsonOf("regions" to JsonArray(regions.map(::JsonPrimitive)))
+    fun toJson(): JsonObject =
+        jsonOf(
+            "regions" to JsonArray(regions.map(::JsonPrimitive)),
+            "ignoredChecks" to (ignoredChecks.takeIf { it.isNotEmpty() }?.let { JsonArray(it.map(::JsonPrimitive)) } ?: JsonNull),
+        )
 
     companion object {
         const val TYPE = "planning.settings"
         const val ID = "settings"
 
         fun fromJson(body: JsonObject) =
-            PlanningSettings((body["regions"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull })
+            PlanningSettings(
+                (body["regions"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+                (body["ignoredChecks"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+            )
     }
 }
 

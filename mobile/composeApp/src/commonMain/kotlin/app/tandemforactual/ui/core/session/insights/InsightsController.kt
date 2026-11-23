@@ -12,6 +12,7 @@ import app.tandemforactual.api.client.exportBudgetTransactions
 import app.tandemforactual.api.client.previewBudgetRule
 import app.tandemforactual.api.client.undoBudgetChange
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.ui.core.session.insights.InsightsController
@@ -26,6 +27,17 @@ internal class InsightsController(
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
         private set
+
+    /** Takes fixed findings out of the cached checkup right away, before it runs again. */
+    fun dropHealthRows(
+        kind: HealthIssueKind,
+        ids: Set<String>,
+    ) {
+        dataHealthCache =
+            dataHealthCache?.let { (budget, list) ->
+                budget to list.map { if (it.kind == kind) HealthIssue(kind, it.rows.filterNot { row -> row.id in ids }) else it }
+            }
+    }
 
     suspend fun loadAccountInflows(
         budgetId: String,

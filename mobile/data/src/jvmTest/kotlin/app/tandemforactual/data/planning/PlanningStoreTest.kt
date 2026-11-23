@@ -98,6 +98,8 @@ class PlanningStoreTest {
                 assertEquals(PlanningSettings(), store.settings().first())
                 store.save(PlanningSettings(listOf("US", "IN")))
                 assertEquals(listOf("US", "IN"), store.settings().first().regions)
+                store.save(PlanningSettings(listOf("US"), listOf("UNUSED_PAYEES:p1")))
+                assertEquals(listOf("UNUSED_PAYEES:p1"), store.settings().first().ignoredChecks)
                 store.deleteRetirementProfile("us-ira")
                 assertEquals(listOf("us-401k"), store.retirementProfiles().first().map { it.planId })
                 val trips = CustomReport("r-2", "trips", grouping = ReportGrouping.PAYEE)

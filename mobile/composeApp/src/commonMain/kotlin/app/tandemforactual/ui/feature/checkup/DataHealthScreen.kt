@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -24,6 +25,8 @@ import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
+import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.TransactionItem
@@ -31,6 +34,8 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
+import app.tandemforactual.ui.design.feedback.InlineMessage
+import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -52,6 +57,7 @@ import com.composables.icons.lucide.Scale
 import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.UserX
+import kotlinx.coroutines.launch
 
 private fun HealthIssueKind.icon(): ImageVector =
     when (this) {
@@ -107,11 +113,22 @@ internal fun DataHealthScreen(
         mobileSession.insights.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })
         loading = false
     }
-    val issues = cached
+    val ignored =
+        mobileSession.planning.settings.ignoredChecks
+            .toSet()
+    val issues =
+        cached?.mapNotNull { issue ->
+            val rows = issue.rows.filterNot { "${issue.kind.name}:${it.id}" in ignored }
+            val ordered = if (issue.kind == HealthIssueKind.POSSIBLE_DUPLICATES) rows.sortedWith(duplicateOrder) else rows
+            ordered.takeIf { it.isNotEmpty() }?.let { HealthIssue(issue.kind, it) }
+        }
+    var acting by remember { mutableStateOf<Pair<HealthIssue, HealthRow>?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
     val palette = tandemPalette
     PageLazyColumn(isRefreshing = loading && issues != null && reload > 0, onRefresh = { reload++ }) {
         val found = issues
         item(key = "summary") { DataHealthSummary(state.selectedBudget, found, loading) }
+        failure?.let { text -> item(key = "failure") { InlineMessage(text, InlineMessageKind.ERROR, onDismiss = { failure = null }) } }
         when {
             found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
             found == null ->
@@ -141,10 +158,76 @@ internal fun DataHealthScreen(
                     onShowMore = { shown[issue.kind.name] = limit + PAGE },
                     state = state,
                     liveTransactions = liveTransactions,
+                    onAct = { row -> acting = issue to row },
                 ) { item -> openTransaction(state, navigation, item, isLive = true) }
             }
         }
     }
+    CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
+}
+
+@Composable
+private fun CheckupActions(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    liveTransactions: List<TransactionItem>,
+    acting: Pair<HealthIssue, HealthRow>?,
+    onDone: () -> Unit,
+    onFailure: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val password = state.encryptedPassword.takeIf { it.isNotBlank() }
+    val transaction = acting?.second?.let { row -> transactionFor(row, liveTransactions) }
+    CheckupActionDialog(
+        acting,
+        acting?.first?.kind?.icon(),
+        canOpen = transaction != null,
+        onDismiss = onDone,
+        onOpen = {
+            onDone()
+            transaction?.let { openTransaction(state, navigation, it, isLive = true) }
+        },
+        onDelete = { group ->
+            val (issue, row) = acting ?: return@CheckupActionDialog
+            onDone()
+            scope.launch {
+                val deleted =
+                    if (issue.kind == HealthIssueKind.UNUSED_PAYEES) {
+                        mobileSession.budgetEdits.manageBudgetPayee(state.selectedBudgetId, row.id, "delete", null, null, password)
+                    } else {
+                        mobileSession.transactions.deleteTransactionsWithUndo(
+                            state.selectedBudgetId,
+                            setOf(transaction?.recordId ?: row.id),
+                        )
+                    }
+                if (deleted) {
+                    mobileSession.insights.dropHealthRows(
+                        issue.kind,
+                        if (group.size <=
+                            2
+                        ) {
+                            group.map { it.id }.toSet()
+                        } else {
+                            setOf(row.id)
+                        },
+                    )
+                }
+                if (!deleted) {
+                    onFailure(
+                        mobileSession.transactionWriteMessage
+                            ?: mobileSession.budgetActionMessage
+                            ?: "Tandem couldn’t delete it. Pull to check again.",
+                    )
+                }
+            }
+        },
+        onIgnore = { group ->
+            val kind = acting?.first?.kind ?: return@CheckupActionDialog
+            onDone()
+            scope.launch { mobileSession.planning.ignoreChecks(state.selectedBudgetId, group.map { "${kind.name}:${it.id}" }) }
+        },
+    )
 }
 
 /** The budget name and how many things the checkup found. */
@@ -186,6 +269,7 @@ private fun HealthIssueCard(
     onShowMore: () -> Unit,
     state: AppState,
     liveTransactions: List<TransactionItem>,
+    onAct: (HealthRow) -> Unit,
     onOpen: (TransactionItem) -> Unit,
 ) {
     SectionCard(issue.kind.title(issue.rows.size), issue.kind.detail(), if (open) "Hide" else "Show", onClick = onToggle) {
@@ -193,8 +277,12 @@ private fun HealthIssueCard(
             Column {
                 issue.rows.take(limit).forEachIndexed { index, row ->
                     if (index > 0) DividerLine()
-                    HealthRowItem(issue.kind, row, state, liveTransactions.firstOrNull { it.recordId == row.id }) { item ->
-                        onOpen(item)
+                    val transaction = transactionFor(row, liveTransactions)
+                    HealthRowItem(issue.kind, row, state, transaction != null || issue.kind.hasActions()) {
+                        when {
+                            issue.kind.hasActions() -> onAct(row)
+                            transaction != null -> onOpen(transaction)
+                        }
                     }
                 }
                 if (issue.rows.size > limit) {
@@ -219,8 +307,8 @@ private fun HealthRowItem(
     kind: HealthIssueKind,
     row: HealthRow,
     state: AppState,
-    transaction: TransactionItem?,
-    onOpen: (TransactionItem) -> Unit,
+    clickable: Boolean,
+    onClick: () -> Unit,
 ) {
     val detail = listOfNotNull(row.date?.let(::formatLiveDate), row.account).joinToString(" · ").ifBlank { null }
     ListRow(
@@ -228,7 +316,7 @@ private fun HealthRowItem(
         detail,
         row.amount?.let(state::formatCurrency),
         leading = RowLeading.Icon(kind.icon()),
-        options = ListRowOptions(showChevron = transaction != null),
-        onClick = transaction?.let { { onOpen(it) } },
+        options = ListRowOptions(showChevron = clickable),
+        onClick = if (clickable) onClick else null,
     )
 }
