@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.JurisdictionTimeline
+import app.tandemforactual.data.planning.PeriodKind
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
@@ -46,6 +48,7 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plane
 import com.composables.icons.lucide.Settings2
 
 /**
@@ -89,12 +92,21 @@ internal fun RetirementScreen(
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (years.size > 1) FilterPills(years.map { it to it.toString() }, year, { year = it })
         val order = mobileSession.planning.settings.regions
+        val periods = mobileSession.planning.jurisdictionPeriods
+        val livingIn = JurisdictionTimeline.regionsIn(periods, PeriodKind.RESIDENCE, platformTodayIsoDate().take(7))
         profiles
             .groupBy { RetirementPlans.byId(it.planId)!!.region }
             .entries
             .sortedBy { (region, _) -> order.indexOf(region.name).let { if (it < 0) Int.MAX_VALUE else it } }
             .forEach { (region, regionProfiles) ->
                 Text(region.displayName.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
+                if (livingIn.isNotEmpty() && region !in livingIn) {
+                    Text(
+                        "You don’t live here now. These plans keep their history; check the rules before paying in.",
+                        color = palette.muted,
+                        fontSize = TandemTypography.label,
+                    )
+                }
                 regionProfiles.forEach { profile ->
                     val plan = RetirementPlans.byId(profile.planId)!!
                     val accountName = profile.accountId?.let { id -> liveAccounts.firstOrNull { it.id == id }?.name }
@@ -105,6 +117,9 @@ internal fun RetirementScreen(
             }
         TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
             navigation.open(AppRoute.RETIREMENT_SETUP)
+        }
+        TandemActionButton("Moving countries", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Plane) {
+            navigation.open(AppRoute.RELOCATION)
         }
         Text(
             "Limits are each year’s published figures. Contributions are deposits and transfers into the linked account.",

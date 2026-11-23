@@ -20,6 +20,7 @@ import app.tandemforactual.ui.app.routes.onboardingScreens
 import app.tandemforactual.ui.app.routes.planningScreens
 import app.tandemforactual.ui.app.routes.reimbursementsScreens
 import app.tandemforactual.ui.app.routes.reportsScreens
+import app.tandemforactual.ui.app.routes.residenceScreens
 import app.tandemforactual.ui.app.routes.retirementScreens
 import app.tandemforactual.ui.app.routes.rulesScreens
 import app.tandemforactual.ui.app.routes.schedulesScreens
@@ -108,6 +109,7 @@ internal val screenRoutes: List<Map<AppRoute, @Composable (ScreenContext) -> Uni
         sharedBillsScreens,
         reportsScreens,
         retirementScreens,
+        residenceScreens,
         rulesScreens,
         schedulesScreens,
         selectorScreens,

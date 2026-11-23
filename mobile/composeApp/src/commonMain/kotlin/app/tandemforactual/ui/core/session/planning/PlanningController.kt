@@ -10,6 +10,7 @@ import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
 import app.tandemforactual.data.planning.ExchangeRate
+import app.tandemforactual.data.planning.JurisdictionPeriod
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningSettings
@@ -43,6 +44,7 @@ internal class PlanningController(
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var sharedBills by mutableStateOf<List<SharedBill>>(emptyList())
     var settings by mutableStateOf(PlanningSettings())
+    var jurisdictionPeriods by mutableStateOf<List<JurisdictionPeriod>>(emptyList())
     var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
         private set
     var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
@@ -184,6 +186,30 @@ internal class PlanningController(
         profiles.forEach { store.save(it) }
     }
 
+    suspend fun saveJurisdictionPeriods(
+        budgetId: String,
+        periods: List<JurisdictionPeriod>,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        periods.forEach { store.save(it) }
+    }
+
+    suspend fun deleteJurisdictionPeriod(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteJurisdictionPeriod(id)
+    }
+
+    /** Adds [region] to the countries planning covers, so its plans are offered in retirement setup. */
+    suspend fun addRegion(
+        budgetId: String,
+        region: String,
+    ) {
+        if (region in settings.regions) return
+        planningStore(budgetId)?.save(settings.copy(regions = settings.regions + region))
+    }
+
     /** Hides budget checkup findings the person has marked as fine, keyed `KIND:id`. */
     suspend fun ignoreChecks(
         budgetId: String,
@@ -258,6 +284,7 @@ internal class PlanningController(
         launch { store.reimbursements().collect { reimbursements = it } }
         launch { store.sharedBills().collect { sharedBills = it } }
         launch { store.settings().collect { settings = it } }
+        launch { store.jurisdictionPeriods().collect { jurisdictionPeriods = it } }
         launch {
             store.accountCurrencies().collect { list ->
                 accountCurrencies = list.associate { it.accountId to it.currency }

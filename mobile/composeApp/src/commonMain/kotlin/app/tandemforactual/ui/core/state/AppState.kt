@@ -33,6 +33,7 @@ internal class AppState {
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
     var selectedBudget by mutableStateOf("")
     var selectedBudgetId by mutableStateOf("")
+    var selectedJurisdictionPeriodId by mutableStateOf("")
     var selectedBudgetEncrypted by mutableStateOf(false)
     var pendingBudgetSelectionOrigin by mutableStateOf<BudgetSelectionSnapshot?>(null)
     var budgetSwitchSplashId by mutableStateOf<String?>(null)

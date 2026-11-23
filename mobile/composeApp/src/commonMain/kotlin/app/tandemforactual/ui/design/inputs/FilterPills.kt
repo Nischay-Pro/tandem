@@ -7,8 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +30,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -67,10 +70,33 @@ internal fun <T> FilterPills(
     }
 }
 
+/** The same choices as [FilterPills], laid out in rows of [columns] so every option shows at once. */
+@Composable
+internal fun <T> PillGrid(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    columns: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        options.chunked(columns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                row.forEach { (value, label) ->
+                    FilterPill(label, value == selected, Modifier.weight(1f), compact = true) { onSelect(value) }
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
 @Composable
 private fun FilterPill(
     label: String,
     selected: Boolean,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -86,13 +112,14 @@ private fun FilterPill(
     )
     Text(
         label,
-        Modifier
+        modifier
             .clip(RoundedCornerShape(TandemShapes.control))
             .background(background)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .heightIn(min = 40.dp)
-            .padding(horizontal = TandemSpacing.large, vertical = 10.dp),
+            .padding(horizontal = if (compact) TandemSpacing.extraSmall else TandemSpacing.large, vertical = 10.dp),
         color = content,
+        textAlign = TextAlign.Center,
         fontSize = TandemTypography.compactBody,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         maxLines = 1,
