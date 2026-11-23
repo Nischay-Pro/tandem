@@ -63,7 +63,7 @@ internal enum class AppRoute(
     RETIREMENT_SETUP("Retirement accounts"),
     RETIREMENT_MATCH("Employer match"),
     RESIDENCE("Where you’ve lived"),
-    RESIDENCE_PERIOD("Period"),
+    RESIDENCE_PERIOD("Edit period"),
     RELOCATION("Moving countries"),
     WHAT_IF("What if"),
     SPENDING_TRENDS("Spending trends"),

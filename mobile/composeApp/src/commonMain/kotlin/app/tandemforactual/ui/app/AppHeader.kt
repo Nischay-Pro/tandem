@@ -230,6 +230,7 @@ private fun appHeaderTitle(
                 .firstOrNull { it.name == state.selectedReportKindName }
                 ?.title ?: route.title
         AppRoute.CUSTOM_REPORT -> state.selectedCustomReportName.ifBlank { "New report" }
+        AppRoute.RESIDENCE_PERIOD -> if (state.selectedJurisdictionPeriodId.isBlank()) "Add a period" else "Edit period"
         else -> route.title
     }
 }
