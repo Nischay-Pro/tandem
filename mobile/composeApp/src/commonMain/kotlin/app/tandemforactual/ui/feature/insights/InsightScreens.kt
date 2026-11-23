@@ -123,7 +123,7 @@ internal fun CashFlowScreen(
                         event.name,
                         formatLiveDate(event.date),
                         state.formatCurrency(event.amountMinor),
-                        leading = RowLeading.Icon(Lucide.CalendarClock),
+                        leading = RowLeading.Payee(event.name, Lucide.CalendarClock),
                         options = ListRowOptions(showChevron = false),
                     )
                 }

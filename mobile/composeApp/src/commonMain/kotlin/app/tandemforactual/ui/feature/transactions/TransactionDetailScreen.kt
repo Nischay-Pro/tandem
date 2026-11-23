@@ -57,7 +57,6 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.NotepadText
 import com.composables.icons.lucide.Tags
-import com.composables.icons.lucide.WalletCards
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
@@ -192,7 +191,7 @@ private fun TransactionDetailHeader(
 @Composable
 private fun TransactionDetailFields(state: AppState) {
     SectionCard(title = "") {
-        ListRow("Account", leading = RowLeading.Icon(Lucide.WalletCards), trailing = state.transactionAccount)
+        ListRow("Account", leading = RowLeading.Account(state.transactionAccount), trailing = state.transactionAccount)
         DividerLine()
         ListRow("Category", leading = RowLeading.Icon(Lucide.Tags), trailing = state.transactionCategory)
         DividerLine()

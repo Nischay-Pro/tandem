@@ -54,7 +54,7 @@ internal fun ReimbursementsScreen(
                         item.description ?: "Purchase",
                         listOfNotNull(item.from?.let { "From $it" }, item.date?.let(::formatLiveDate)).joinToString(" · ").ifBlank { null },
                         state.formatCurrency(item.amountMinor),
-                        leading = RowLeading.Icon(Lucide.HandCoins),
+                        leading = RowLeading.Payee(item.description, Lucide.HandCoins),
                         onClick = {
                             scope.launch {
                                 mobileSession.planning.saveReimbursement(

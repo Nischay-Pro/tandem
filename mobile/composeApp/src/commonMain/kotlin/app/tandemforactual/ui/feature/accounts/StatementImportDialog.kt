@@ -54,7 +54,6 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
-import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 
 @Composable
@@ -96,7 +95,7 @@ internal fun StatementImportDialog(
             ) {
                 StatementImportHeader(busy, onDismiss)
                 ListRow("File", trailing = filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
-                ListRow("Account", trailing = accountName, leading = RowLeading.Icon(Lucide.WalletCards))
+                ListRow("Account", trailing = accountName, leading = RowLeading.Account(accountName))
                 StatementParseStatus(parseResult != null, parseError, importPreviewLoading, importPreviewError, busy, onRetryImportPreview)
                 actionMessage?.let {
                     InlineMessage(it, actionMessageKind)

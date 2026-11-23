@@ -360,7 +360,7 @@ private fun RulePreview(
                     row.name ?: "No payee",
                     listOfNotNull(row.date?.let(::formatLiveDate), row.account).joinToString(" · "),
                     row.amount?.let(state::formatCurrency),
-                    leading = RowLeading.None,
+                    leading = RowLeading.Payee(row.name),
                     options = ListRowOptions(showChevron = false, dense = true),
                 )
             }

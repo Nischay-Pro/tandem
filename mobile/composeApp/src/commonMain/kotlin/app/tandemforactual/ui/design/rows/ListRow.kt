@@ -47,6 +47,8 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Store
+import com.composables.icons.lucide.WalletCards
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
@@ -112,7 +114,14 @@ private fun ListRowLeadingTile(
     titleColor: Color,
 ) {
     val palette = tandemPalette
-    val merchantResource = (leading as? RowLeading.Merchant)?.resource
+    val logos = LocalRowLogos.current
+    val merchantResource =
+        when (leading) {
+            is RowLeading.Merchant -> leading.resource
+            is RowLeading.Payee -> leading.name?.takeIf(String::isNotBlank)?.let { logos?.payee?.invoke(it) }
+            is RowLeading.Account -> leading.name?.takeIf(String::isNotBlank)?.let { logos?.account?.invoke(it) }
+            else -> null
+        }
     val resolvedPainter = merchantResource?.let { painterResource(it) }
     val resolvedVector =
         when (leading) {
@@ -120,6 +129,8 @@ private fun ListRowLeadingTile(
             RowLeading.None, is RowLeading.Letter -> null
             is RowLeading.Icon -> leading.imageVector ?: financeIcon(title) ?: Lucide.CircleDot
             is RowLeading.Merchant -> leading.fallback ?: financeIcon(title) ?: Lucide.CircleDot
+            is RowLeading.Payee -> leading.fallback ?: financeIcon(leading.name.orEmpty()) ?: Lucide.Store
+            is RowLeading.Account -> leading.fallback ?: Lucide.WalletCards
         }
     Box {
         Box(
