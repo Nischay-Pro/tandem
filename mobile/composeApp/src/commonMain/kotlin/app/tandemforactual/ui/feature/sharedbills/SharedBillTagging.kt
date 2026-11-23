@@ -11,6 +11,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.transactions.createTransaction
 import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.ui.PendingBillTags
 
 /** Rewrites an incoming payment's notes, then syncs so the budget file has the tags too. */
 internal suspend fun TandemMobileSession.retagPayment(
