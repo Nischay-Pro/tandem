@@ -18,6 +18,7 @@ import app.tandemforactual.ui.app.routes.residenceMenu
 import app.tandemforactual.ui.app.routes.retirementMenu
 import app.tandemforactual.ui.app.routes.rulesMenu
 import app.tandemforactual.ui.app.routes.schedulesMenu
+import app.tandemforactual.ui.app.routes.sharedBillsMenu
 import app.tandemforactual.ui.app.routes.syncMenu
 import app.tandemforactual.ui.core.state.AppRoute
 import com.composables.icons.lucide.Lucide
@@ -84,6 +85,7 @@ internal val menuEntries: List<MenuEntry> =
             insightsMenu +
             planningMenu +
             reimbursementsMenu +
+            sharedBillsMenu +
             reportsMenu +
             retirementMenu +
             residenceMenu +

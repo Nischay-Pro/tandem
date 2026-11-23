@@ -8,12 +8,15 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.budgetAccountInflows
 import app.tandemforactual.api.client.budgetChangeHistory
 import app.tandemforactual.api.client.budgetDataHealth
+import app.tandemforactual.api.client.budgetTaggedPayments
 import app.tandemforactual.api.client.exportBudgetTransactions
 import app.tandemforactual.api.client.previewBudgetRule
 import app.tandemforactual.api.client.undoBudgetChange
 import app.tandemforactual.data.actual.HealthIssue
+import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +30,17 @@ internal class InsightsController(
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
         private set
 
+    /** Takes fixed findings out of the cached checkup right away, before it runs again. */
+    fun dropHealthRows(
+        kind: HealthIssueKind,
+        ids: Set<String>,
+    ) {
+        dataHealthCache =
+            dataHealthCache?.let { (budget, list) ->
+                budget to list.map { if (it.kind == kind) HealthIssue(kind, it.rows.filterNot { row -> row.id in ids }) else it }
+            }
+    }
+
     suspend fun loadAccountInflows(
         budgetId: String,
         accountIds: List<String>,
@@ -38,6 +52,20 @@ internal class InsightsController(
             throw error
         } catch (_: Exception) {
             emptyMap()
+        }
+
+    suspend fun loadTaggedPayments(
+        budgetId: String,
+        tag: String,
+        fromDate: String,
+        encryptionPassword: String?,
+    ): List<TaggedPayment>? =
+        try {
+            apiClient.budgetTaggedPayments(budgetId, tag, fromDate, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
         }
 
     suspend fun loadChangeHistory(

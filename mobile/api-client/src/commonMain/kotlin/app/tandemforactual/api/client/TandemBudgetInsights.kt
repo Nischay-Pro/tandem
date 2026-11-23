@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.planning.TaggedPayment
 import kotlinx.serialization.json.JsonObject
 
 suspend fun TandemApiClient.budgetChangeHistory(
@@ -25,6 +26,14 @@ suspend fun TandemApiClient.budgetAccountInflows(
         val budget = budget(budgetId, encryptionPassword)
         accountIds.associateWith { budget.inflowsByYear(it) }
     }
+
+/** Money-in transactions since [fromDate] tagged `#`[tag] in their notes, newest first. */
+suspend fun TandemApiClient.budgetTaggedPayments(
+    budgetId: String,
+    tag: String,
+    fromDate: String,
+    encryptionPassword: String?,
+): List<TaggedPayment> = call { budget(budgetId, encryptionPassword).taggedPayments(tag, fromDate) }
 
 suspend fun TandemApiClient.exportBudgetTransactions(
     budgetId: String,

@@ -22,6 +22,7 @@ import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -193,10 +194,21 @@ class ActualDirectBudget private constructor(
 
     suspend fun inflowsByYear(accountId: String): Map<Int, Long> = locked { reader.inflowsByYear(accountId) }
 
+    suspend fun taggedPayments(
+        tag: String,
+        fromDate: String,
+    ): List<TaggedPayment> = locked { reader.taggedPayments(tag, fromDate) }
+
     suspend fun previewRule(rule: JsonObject): List<HealthRow> =
         locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
 
-    suspend fun dataHealth(today: String): List<HealthIssue> = locked { ActualDataHealth(db).check(today) }
+    suspend fun dataHealth(today: String): List<HealthIssue> =
+        locked {
+            runCatching {
+                synchronize()
+            }.exceptionOrNull()?.let { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            ActualDataHealth(db).check(today)
+        }
 
     suspend fun changeHistory(limit: Int): List<ChangeSet> =
         locked {

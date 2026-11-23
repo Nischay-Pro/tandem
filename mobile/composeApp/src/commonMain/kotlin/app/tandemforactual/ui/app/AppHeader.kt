@@ -231,6 +231,7 @@ private fun appHeaderTitle(
                 ?.title ?: route.title
         AppRoute.CUSTOM_REPORT -> state.selectedCustomReportName.ifBlank { "New report" }
         AppRoute.RESIDENCE_PERIOD -> if (state.selectedJurisdictionPeriodId.isBlank()) "Add a period" else "Edit period"
+        AppRoute.SHARED_BILL_EDIT -> if (state.selectedSharedBillId.isBlank()) "Add shared bill" else route.title
         else -> route.title
     }
 }

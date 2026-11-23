@@ -39,6 +39,8 @@ import app.tandemforactual.ui.core.state.decodeAppTabBackStacks
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.routeContentStateKey
 import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
+import app.tandemforactual.ui.design.rows.LocalRowLogos
+import app.tandemforactual.ui.design.rows.RowLogos
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
@@ -139,6 +141,8 @@ private fun ShellRouteContent(
     val ctx = chrome.ctx
     val env = ctx.env
     val visibleRoute = visibleEntry.route
+    val matcher = ctx.shell.merchantIconMatcher
+    val logos = remember(matcher) { matcher?.let { RowLogos(it::iconFor, it::accountIconFor) } }
     CompositionLocalProvider(
         LocalRouteScrollState provides routeScrollState,
         LocalRouteLazyListState provides routeLazyListState,
@@ -147,6 +151,7 @@ private fun ShellRouteContent(
         LocalCrashReports provides env.crashReports,
         LocalShareText provides env.onShareText,
         LocalWindowHinge provides currentWindowHinge,
+        LocalRowLogos provides logos,
     ) {
         Column(modifier = pageModifier.fillMaxSize()) {
             if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) ShellHeader(chrome, visibleRoute)

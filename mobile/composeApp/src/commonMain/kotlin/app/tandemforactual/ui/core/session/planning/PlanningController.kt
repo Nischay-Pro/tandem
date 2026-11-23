@@ -20,6 +20,7 @@ import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
+import app.tandemforactual.data.planning.SharedBill
 import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import kotlinx.coroutines.CancellationException
@@ -41,6 +42,7 @@ internal class PlanningController(
         private set
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
+    var sharedBills by mutableStateOf<List<SharedBill>>(emptyList())
     var settings by mutableStateOf(PlanningSettings())
     var jurisdictionPeriods by mutableStateOf<List<JurisdictionPeriod>>(emptyList())
     var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
@@ -137,6 +139,20 @@ internal class PlanningController(
         sync(budgetId)
     }
 
+    suspend fun saveSharedBill(
+        budgetId: String,
+        bill: SharedBill,
+    ) {
+        planningStore(budgetId)?.save(bill)
+    }
+
+    suspend fun deleteSharedBill(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteSharedBill(id)
+    }
+
     suspend fun saveReimbursement(
         budgetId: String,
         reimbursement: Reimbursement,
@@ -165,7 +181,7 @@ internal class PlanningController(
         profiles: List<RetirementProfile>,
     ) {
         val store = planningStore(budgetId) ?: return
-        store.save(PlanningSettings(regions))
+        store.save(settings.copy(regions = regions))
         retirementProfiles.filter { old -> profiles.none { it.planId == old.planId } }.forEach { store.deleteRetirementProfile(it.planId) }
         profiles.forEach { store.save(it) }
     }
@@ -192,6 +208,14 @@ internal class PlanningController(
     ) {
         if (region in settings.regions) return
         planningStore(budgetId)?.save(settings.copy(regions = settings.regions + region))
+    }
+
+    /** Hides budget checkup findings the person has marked as fine, keyed `KIND:id`. */
+    suspend fun ignoreChecks(
+        budgetId: String,
+        keys: List<String>,
+    ) {
+        planningStore(budgetId)?.save(settings.copy(ignoredChecks = (settings.ignoredChecks + keys).distinct()))
     }
 
     suspend fun saveSavingsGoal(
@@ -258,6 +282,7 @@ internal class PlanningController(
         launch { store.debtTerms().collect { debtTerms = it } }
         launch { store.retirementProfiles().collect { retirementProfiles = it } }
         launch { store.reimbursements().collect { reimbursements = it } }
+        launch { store.sharedBills().collect { sharedBills = it } }
         launch { store.settings().collect { settings = it } }
         launch { store.jurisdictionPeriods().collect { jurisdictionPeriods = it } }
         launch {
