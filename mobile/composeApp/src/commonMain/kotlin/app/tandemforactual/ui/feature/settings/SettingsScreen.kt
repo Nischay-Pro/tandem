@@ -226,14 +226,18 @@ private fun PrivacySection(
                 leading = RowLeading.Icon(Lucide.KeyRound),
                 onClick = { showingRecoveryKey = true },
             )
+            var keyVersion by remember { mutableStateOf(0) }
             RecoveryKeySheet(
                 showingRecoveryKey,
-                remember(state.selectedBudgetId, showingRecoveryKey) {
+                remember(state.selectedBudgetId, showingRecoveryKey, keyVersion) {
                     formatRecoveryKey(mobileSession.planning.keyring.recoveryKey(state.selectedBudgetId))
                 },
                 onUseKey = { key ->
                     scope.launch { mobileSession.planning.useRecoveryKey(state.selectedBudgetId, key) }
                     showingRecoveryKey = false
+                },
+                onReplaceKey = {
+                    scope.launch { if (mobileSession.planning.replacePlanningKey(state.selectedBudgetId)) keyVersion++ }
                 },
                 onDismiss = { showingRecoveryKey = false },
             )

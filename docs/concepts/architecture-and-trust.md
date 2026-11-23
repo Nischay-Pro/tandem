@@ -44,6 +44,15 @@ caller's Actual session can open that budget.
 If the service is down or not installed, the app keeps working: planning records
 wait on the device and sync when it returns. Budget data never passes through it.
 
+To add a device, enter the planning recovery key from a device that already
+syncs. If you lose a device, replace the key from Settings: Tandem makes a new
+planning key and recovery key, re-encrypts every record with them and uploads
+them again. The lost device can't read anything synced afterwards, and each
+device you still use needs the new recovery key. Records the lost device already
+had stay readable on that device. Encrypted budgets wrap the planning key with
+the budget's own key instead, so for them, change the budget's password in
+Actual.
+
 ## What each part can see
 
 | Part                   | Sees                                                              |
