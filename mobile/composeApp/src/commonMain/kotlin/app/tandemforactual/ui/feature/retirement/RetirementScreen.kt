@@ -51,6 +51,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plane
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Settings2
 
 /**
@@ -106,12 +107,15 @@ internal fun RetirementScreen(
         TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
             navigation.open(AppRoute.RETIREMENT_SETUP)
         }
+        TandemActionButton("Advanced", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings) {
+            navigation.open(AppRoute.RETIREMENT_LIMITS)
+        }
         PublicPensionsSummary(mobileSession) { navigation.open(AppRoute.PUBLIC_PENSIONS) }
         TandemActionButton("Moving countries", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Plane) {
             navigation.open(AppRoute.RELOCATION)
         }
         Text(
-            "Limits are each year’s published figures. Contributions are deposits and transfers into the linked account.",
+            "Limits are each year’s published figures unless you enter your own under Advanced. Contributions are deposits and transfers into the linked account.",
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
@@ -171,8 +175,9 @@ private fun PlanCard(
 ) {
     val palette = tandemPalette
     val lookup = plan.limitFor(year)
-    val ownRoom = profile.rrspRoom(year).takeIf { plan == Rrsp && year == platformTodayIsoDate().take(4).toInt() }
-    val allowance = ownRoom ?: plan.allowance(year, profile.age, profile.family)
+    val custom = year in profile.limitOverrides
+    val ownRoom = profile.rrspRoom(year).takeIf { !custom && plan == Rrsp && year == platformTodayIsoDate().take(4).toInt() }
+    val allowance = ownRoom ?: profile.allowance(plan, year)
     val match = profile.match
     val salary = profile.salaryMinor
     val (yours, employer) =
@@ -205,7 +210,9 @@ private fun PlanCard(
                 color = palette.muted,
                 fontSize = TandemTypography.caption,
             )
-            if (!lookup.published) {
+            if (custom) {
+                Text("Using the limit you entered for $year.", color = palette.muted, fontSize = TandemTypography.caption)
+            } else if (!lookup.published) {
                 Text(
                     "$year limits aren’t published yet; showing ${lookup.limit.year}.",
                     color = palette.warning,
@@ -213,28 +220,7 @@ private fun PlanCard(
                 )
             }
             if (plan == K401) EmployerMatchStatus(year, profile, yours, ::money, onEditMatch)
-            if (sharedWith.isNotEmpty()) {
-                Text(
-                    "Includes ${sharedWith.joinToString()}, which shares this room",
-                    color = palette.muted,
-                    fontSize = TandemTypography.caption,
-                )
-            }
-            if (plan == Rrsp) {
-                Text(
-                    if (ownRoom !=
-                        null
-                    ) {
-                        "Your own room, from your notice of assessment"
-                    } else {
-                        "Work out your own room from your notice of assessment"
-                    },
-                    Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditRoom),
-                    color = palette.accent,
-                    fontSize = TandemTypography.compactBody,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+            PlanRoomNotes(plan == Rrsp, ownRoom != null, sharedWith, onEditRoom)
             if (plan == K401 && employer > 0) VestingStatus(profile.match, year, employer, ::money)
         }
     }
@@ -290,6 +276,37 @@ private fun EmployerMatchStatus(
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.Medium,
     )
+}
+
+/** Which plans share this room, and for an RRSP, a link to work out your own room. */
+@Composable
+private fun PlanRoomNotes(
+    isRrsp: Boolean,
+    ownRoom: Boolean,
+    sharedWith: List<String>,
+    onEditRoom: () -> Unit,
+) {
+    val palette = tandemPalette
+    if (sharedWith.isNotEmpty()) {
+        Text(
+            "Includes ${sharedWith.joinToString()}, which shares this room",
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+        )
+    }
+    if (isRrsp) {
+        Text(
+            if (ownRoom) {
+                "Your own room, from your notice of assessment"
+            } else {
+                "Work out your own room from your notice of assessment"
+            },
+            Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditRoom),
+            color = palette.accent,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
 /** How much of the employer's money is yours yet, when the match vests over time. */

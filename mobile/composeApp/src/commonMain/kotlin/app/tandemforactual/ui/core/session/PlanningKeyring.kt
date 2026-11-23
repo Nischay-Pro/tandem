@@ -59,6 +59,14 @@ internal class PlanningKeyring(
         key: ByteArray,
     ) = set("recovery:$budgetId", Base64.encode(key))
 
+    /** The recovery key in use before a key replacement, kept until the replacement reaches the server. */
+    fun previousRecoveryKey(budgetId: String): ByteArray? = value("previous-recovery:$budgetId")?.let(Base64::decode)
+
+    fun setPreviousRecoveryKey(
+        budgetId: String,
+        key: ByteArray?,
+    ) = set("previous-recovery:$budgetId", key?.let(Base64::encode))
+
     fun cursor(budgetId: String): Long = value("cursor:$budgetId")?.toLongOrNull() ?: 0
 
     fun setCursor(
@@ -68,7 +76,13 @@ internal class PlanningKeyring(
 
     fun forget(budgetId: String) {
         val values = read()
-        val remaining = values.filterKeys { it != budgetId && it != "recovery:$budgetId" && it != "cursor:$budgetId" }
+        val remaining =
+            values.filterKeys {
+                it != budgetId &&
+                    it != "recovery:$budgetId" &&
+                    it != "cursor:$budgetId" &&
+                    it != "previous-recovery:$budgetId"
+            }
         if (remaining.size != values.size) write(remaining)
     }
 }

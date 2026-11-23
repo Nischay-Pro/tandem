@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.BUDGET_GROUP_ORDER_SCOPE
 import app.tandemforactual.ui.core.session.BudgetReorderKind
@@ -119,6 +120,7 @@ internal fun BudgetScreen(
             isLiveBudget = isLiveBudget,
             isTrackingBudget = isTrackingBudget,
             compact = state.homeLayout == "Compact",
+            billsDueMinor = billsStillDue(liveSchedules, platformTodayIsoDate()),
         )
     BudgetScrollToSummaryEffect(state)
     Box(Modifier.fillMaxSize()) {
@@ -278,6 +280,7 @@ private fun LazyListScope.budgetMonthItems(
                 heldForNextMonthMinor = month.figures.heldForNextMonthMinor,
                 heldPending = month.figures.heldPending,
                 isLiveBudget = context.isLiveBudget,
+                billsDueMinor = context.billsDueMinor,
                 sectionSpacing = sectionSpacing,
                 onOpenHold = onOpenHold,
             )

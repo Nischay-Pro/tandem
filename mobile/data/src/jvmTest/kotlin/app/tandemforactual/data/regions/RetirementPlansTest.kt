@@ -89,6 +89,26 @@ class RetirementPlansTest {
     }
 
     @Test
+    fun aLimitEnteredByHandWinsForItsYear() {
+        val profile = RetirementProfile("us-ira", age = 50, limitOverrides = mapOf(2027 to 900_000L))
+        assertEquals(900_000, profile.allowance(Ira, 2027))
+        assertEquals(860_000, profile.allowance(Ira, 2026))
+        val body =
+            kotlinx.serialization.json.buildJsonObject {
+                put(
+                    "limitOverrides",
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("2027", kotlinx.serialization.json.JsonPrimitive(900_000))
+                        put("soon", kotlinx.serialization.json.JsonPrimitive(1))
+                        put("2028", kotlinx.serialization.json.JsonPrimitive("lots"))
+                    },
+                )
+            }
+        assertEquals(mapOf(2027 to 900_000L), RetirementProfile.fromJson("us-ira", body).limitOverrides)
+        assertEquals(profile, RetirementProfile.fromJson("us-ira", profile.toJson()))
+    }
+
+    @Test
     fun vestingDecidesHowMuchOfTheMatchIsYours() {
         val graded = Vesting.presets[2].second
         assertEquals(listOf(0, 0, 2_000, 4_000, 6_000, 8_000, 10_000, 10_000), (0..7).map(graded::vestedBasisPoints))

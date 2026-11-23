@@ -47,6 +47,7 @@ class PlanningStoreTest {
                             vesting = Vesting(listOf(VestingStep(1, 5_000), VestingStep(2, 10_000))),
                             joinedYear = 2022,
                         ),
+                        mapOf(2027 to 2_500_000L),
                     )
                 store.save(profile)
                 store.save(RetirementProfile("us-ira"))

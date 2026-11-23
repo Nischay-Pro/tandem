@@ -55,6 +55,7 @@ internal fun BudgetMonthSummaryCard(
     heldForNextMonthMinor: Long,
     heldPending: Boolean,
     isLiveBudget: Boolean,
+    billsDueMinor: Long,
     sectionSpacing: Dp,
     onOpenHold: () -> Unit,
 ) {
@@ -98,7 +99,7 @@ internal fun BudgetMonthSummaryCard(
                         DividerLine()
                         BudgetHoldRow(state, heldForNextMonthMinor, heldPending, onOpenHold)
                     }
-                    BudgetStillToSpendRow(state, groups, isLiveBudget)
+                    BudgetStillToSpendRow(state, groups, isLiveBudget, billsDueMinor)
                 }
             }
         }
@@ -165,6 +166,7 @@ private fun BudgetStillToSpendRow(
     state: AppState,
     groups: List<LiveCategoryGroupSummary>,
     isLiveBudget: Boolean,
+    billsDueMinor: Long,
 ) {
     val today = remember { platformTodayIsoDate() }
     val left =
@@ -184,9 +186,10 @@ private fun BudgetStillToSpendRow(
             if (state.privacyModeEnabled) {
                 null
             } else {
-                "About ${state.formatCurrency(
-                    left.perDayMinor,
-                )} a day"
+                listOfNotNull(
+                    "About ${state.formatCurrency(left.perDayMinor)} a day",
+                    billsDueMinor.takeIf { it > 0 }?.let { "${state.formatCurrency(it)} of bills still due" },
+                ).joinToString(" · ")
             },
             leading = RowLeading.Icon(Lucide.Gauge),
             trailingContent = {

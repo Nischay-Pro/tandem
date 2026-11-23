@@ -2,7 +2,9 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
+import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.feature.budget.StillToSpend
+import app.tandemforactual.ui.feature.budget.billsStillDue
 import app.tandemforactual.ui.feature.budget.canQuickAssign
 import app.tandemforactual.ui.feature.budget.stillToSpend
 import kotlin.test.Test
@@ -35,5 +37,24 @@ class StillToSpendTest {
         assertFalse(canQuickAssign(false, false, 50_00, 120_00, true))
         assertFalse(canQuickAssign(false, false, 0, 0, true))
         assertFalse(canQuickAssign(false, false, 0, 120_00, false))
+    }
+
+    @Test
+    fun billsStillDueCountsOutflowsLeftThisMonth() {
+        fun bill(
+            date: String,
+            amount: Long?,
+        ) = LiveScheduleSummary("s$date$amount", "Bill", date, "", null, null, null, amount, null, "is", true)
+        val schedules =
+            listOf(
+                bill("2026-11-25", -80_00),
+                bill("2026-11-23", -20_00),
+                bill("2026-11-10", -500_00),
+                bill("2026-12-01", -90_00),
+                bill("2026-11-28", 1_000_00),
+                bill("2026-11-29", null),
+            )
+        assertEquals(100_00, billsStillDue(schedules, "2026-11-23"))
+        assertEquals(0, billsStillDue(emptyList(), "2026-11-23"))
     }
 }

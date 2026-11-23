@@ -63,6 +63,7 @@ internal enum class AppRoute(
     RETIREMENT_SETUP("Retirement accounts"),
     RRSP_ROOM("RRSP room"),
     RETIREMENT_MATCH("Employer match"),
+    RETIREMENT_LIMITS("Plan limits"),
     RESIDENCE("Where you’ve lived"),
     RESIDENCE_PERIOD("Edit period"),
     RELOCATION("Moving countries"),
