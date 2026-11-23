@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -37,13 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.tandemforactual.ui.core.format.platformAppVersionName
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.InterfaceMode
@@ -64,7 +60,6 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
-import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelsTopLeft
 import com.composables.icons.lucide.X
@@ -117,17 +112,7 @@ internal fun AppMenu(
                 ) {
                     BudgetIdentity(state.selectedBudget.ifBlank { "Budget" }, onBudgetSettings)
                     SyncStrip(syncStatus, syncCaption, onSyncCenter)
-                    Spacer(Modifier.height(TandemSpacing.large))
-                    Text(
-                        "MORE YOU CAN DO",
-                        Modifier.semantics { heading() }.padding(vertical = TandemSpacing.small),
-                        color = palette.muted,
-                        fontSize = TandemTypography.caption,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp,
-                    )
-                    AdvancedModeRow(state)
-                    items.forEach { MenuRow(it) }
+                    MenuFeatures(state, items)
                     MenuFooter(onAbout, onLicenses)
                 }
             }
@@ -170,7 +155,7 @@ private fun AppMenuTopBar(
 
 /** The Advanced mode toggle row, following a pending mode switch. */
 @Composable
-private fun AdvancedModeRow(state: AppState) {
+internal fun AdvancedModeRow(state: AppState) {
     val palette = tandemPalette
     val advanced = (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED
     Row(
@@ -276,40 +261,6 @@ private fun SyncStrip(
         )
         Text("Sync Center", color = palette.muted, fontSize = TandemTypography.compactBody)
         Icon(Lucide.ChevronRight, null, Modifier.size(16.dp), tint = palette.muted)
-    }
-}
-
-@Composable
-private fun MenuRow(item: AppMenuItem) {
-    val palette = tandemPalette
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(TandemShapes.control))
-            .clickable(role = Role.Button, onClick = item.onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(item.icon, null, Modifier.size(22.dp), tint = palette.text)
-        Text(
-            item.label,
-            Modifier.weight(1f).padding(start = TandemSpacing.medium),
-            color = palette.text,
-            fontSize = TandemTypography.action,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        item.hint?.let {
-            Text(
-                it,
-                color = if (item.hintIsAlert) palette.negative else palette.muted,
-                fontSize = TandemTypography.compactBody,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
-        }
-        if (item.external) Icon(Lucide.ExternalLink, null, Modifier.padding(start = TandemSpacing.small).size(18.dp), tint = palette.muted)
     }
 }
 

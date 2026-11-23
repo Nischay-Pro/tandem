@@ -28,6 +28,8 @@ internal fun AppState.restorePendingBudgetSelectionOrigin(): Boolean {
     return true
 }
 
+internal const val MENU_PINS_UNSET = "default"
+
 internal class AppState {
     var theme by mutableStateOf(ThemeMode.SYSTEM)
     var accent by mutableStateOf(AccentChoice.ACTUAL_PURPLE)
@@ -112,6 +114,7 @@ internal class AppState {
     var privacyModeEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
+    var menuPins by mutableStateOf(MENU_PINS_UNSET)
     var categoryIconOverrides by mutableStateOf("")
     var readOnlyMode by mutableStateOf(false)
     var hasDismissedBudgetHint by mutableStateOf(false)
@@ -239,6 +242,7 @@ internal class AppState {
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
+            "menuPins" to menuPins,
             "categoryIconOverrides" to categoryIconOverrides,
             "readOnlyMode" to readOnlyMode.toString(),
             "hasDismissedBudgetHint" to hasDismissedBudgetHint.toString(),
@@ -295,6 +299,7 @@ internal class AppState {
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
+        menuPins = saved["menuPins"] ?: menuPins
         categoryIconOverrides = saved["categoryIconOverrides"] ?: categoryIconOverrides
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"]?.toBooleanStrictOrNull() ?: hasDismissedBudgetHint
