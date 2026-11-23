@@ -79,7 +79,7 @@ sealed interface RelocationStep {
 }
 
 object JurisdictionTimeline {
-    private val employerPlans = setOf("us-401k", "us-health-fsa", "in-epf")
+    private val employerPlans = setOf("us-401k", "us-health-fsa", "us-dependent-care-fsa", "in-epf", "in-eps", "in-vpf")
     private val currencies =
         mapOf(
             Region.US to "USD",
@@ -149,7 +149,7 @@ object JurisdictionTimeline {
                 .mapNotNull(RetirementPlans::byId)
                 .filter { it.region != to }
                 .map { if (it.id in employerPlans) RelocationStep.EmployerPlanEnds(it.id) else RelocationStep.ReviewContributions(it.id) }
-        val new = RetirementPlans.forRegion(to).filter { it.id !in setUpPlanIds }.map { RelocationStep.ConsiderPlan(it.id) }
+        val new = RetirementPlans.forRegion(to).filter { it.id !in setUpPlanIds && !it.advanced }.map { RelocationStep.ConsiderPlan(it.id) }
         val tax = if (from != null && from != to) listOf(RelocationStep.SplitTaxYear(from, to)) else emptyList()
         val currency = currencyOf(to)?.takeIf { from == null || it != currencyOf(from) }?.let { listOf(RelocationStep.NewCurrency(it)) }
         return old + new + tax + currency.orEmpty()

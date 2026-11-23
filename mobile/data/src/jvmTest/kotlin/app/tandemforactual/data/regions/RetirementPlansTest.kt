@@ -1,7 +1,11 @@
 package app.tandemforactual.data.regions
 
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
+import app.tandemforactual.data.regions.india.retirement.eps.Eps
+import app.tandemforactual.data.regions.india.retirement.vpf.Vpf
+import app.tandemforactual.data.regions.us.retirement.dcfsa.DependentCareFsa
 import app.tandemforactual.data.regions.us.retirement.hsa.Hsa
 import app.tandemforactual.data.regions.us.retirement.ira.Ira
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
@@ -62,7 +66,7 @@ class RetirementPlansTest {
     @Test
     fun everyPlanIsRegisteredWithSourcesAndHistory() {
         assertEquals(listOf(Region.US, Region.CA, Region.IN), RetirementPlans.regions)
-        assertEquals(4, RetirementPlans.forRegion(Region.US).size)
+        assertEquals(5, RetirementPlans.forRegion(Region.US).size)
         assertEquals(K401, RetirementPlans.byId("us-401k"))
         assertFalse(K401.matchesAccount("Checking"))
         RetirementPlans.all.forEach { plan ->
@@ -95,5 +99,23 @@ class RetirementPlansTest {
             }
         assertEquals(mapOf(2027 to 900_000L), RetirementProfile.fromJson("us-ira", body).limitOverrides)
         assertEquals(profile, RetirementProfile.fromJson("us-ira", profile.toJson()))
+    }
+
+    @Test
+    fun advancedPlansKeepTheirOwnLimits() {
+        assertEquals(800_000, Fhsa.allowance(2026, 30))
+        assertEquals(750_000, DependentCareFsa.allowance(2026, 40))
+        assertEquals(500_000, DependentCareFsa.allowance(2025, 40))
+        assertEquals(1_500_000, Eps.allowance(2026, 30))
+        assertEquals(25_000_000, Vpf.allowance(2026, 30))
+        assertEquals(listOf("in-epf", "in-eps", "in-vpf"), RetirementPlans.all.filter { it.matchesAccount("EPF EPS VPF") }.map { it.id })
+        assertEquals(
+            setOf("ca-fhsa", "in-eps", "in-vpf", "us-dependent-care-fsa"),
+            RetirementPlans.all
+                .filter {
+                    it.advanced
+                }.map { it.id }
+                .toSet(),
+        )
     }
 }
