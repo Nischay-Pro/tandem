@@ -1,5 +1,6 @@
 package app.tandemforactual.data.regions
 
+import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.global.pension.PublicPensions
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
@@ -81,6 +82,26 @@ class RetirementPlansTest {
             assertTrue(plan.matchesAccount("My ${plan.accountKeywords.first()} account"))
             assertTrue(plan.allowance(2026, 70) >= plan.allowance(2026, 30))
         }
+    }
+
+    @Test
+    fun aLimitEnteredByHandWinsForItsYear() {
+        val profile = RetirementProfile("us-ira", age = 50, limitOverrides = mapOf(2027 to 900_000L))
+        assertEquals(900_000, profile.allowance(Ira, 2027))
+        assertEquals(860_000, profile.allowance(Ira, 2026))
+        val body =
+            kotlinx.serialization.json.buildJsonObject {
+                put(
+                    "limitOverrides",
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("2027", kotlinx.serialization.json.JsonPrimitive(900_000))
+                        put("soon", kotlinx.serialization.json.JsonPrimitive(1))
+                        put("2028", kotlinx.serialization.json.JsonPrimitive("lots"))
+                    },
+                )
+            }
+        assertEquals(mapOf(2027 to 900_000L), RetirementProfile.fromJson("us-ira", body).limitOverrides)
+        assertEquals(profile, RetirementProfile.fromJson("us-ira", profile.toJson()))
     }
 
     @Test
