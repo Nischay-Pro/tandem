@@ -112,7 +112,7 @@ internal class PlanningController(
                     val keyring = keyring
                     val sync = PlanningSync(dao, budgetId, transport)
                     val local = keyring.key(budgetId)
-                    val shared = sync.agreeOnKey(local, apiClient.budgetSecret(budgetId) ?: keyring.recoveryKey(budgetId))
+                    val shared = agreeOnKey(sync, budgetId, local)
                     if (!shared.contentEquals(local)) {
                         keyring.replaceKey(budgetId, shared)
                         sync.rekey(PlanningCipher(local), PlanningCipher(shared))
@@ -128,6 +128,54 @@ internal class PlanningController(
             } catch (_: Exception) {
                 PlanningSyncStatus.WAITING
             }
+    }
+
+    /** Agrees on the shared key, falling back to the recovery key from before an unfinished key replacement. */
+    private suspend fun agreeOnKey(
+        sync: PlanningSync,
+        budgetId: String,
+        local: ByteArray,
+    ): ByteArray {
+        val budgetSecret = apiClient.budgetSecret(budgetId)
+        return try {
+            sync.agreeOnKey(local, budgetSecret ?: keyring.recoveryKey(budgetId))
+        } catch (mismatch: PlanningKeyMismatchException) {
+            val previous = keyring.previousRecoveryKey(budgetId)?.takeIf { budgetSecret == null } ?: throw mismatch
+            sync.agreeOnKey(local, previous).also {
+                keyring.setRecoveryKey(budgetId, previous)
+                keyring.setPreviousRecoveryKey(budgetId, null)
+            }
+        }
+    }
+
+    /**
+     * Replaces the planning key and its recovery key, as after losing a device. Other devices need the new recovery key to
+     * keep syncing; the lost one can't read anything synced afterwards. Returns false when it couldn't be replaced.
+     */
+    suspend fun replacePlanningKey(budgetId: String): Boolean {
+        val dao = database()?.planningRecordDao() ?: return false
+        val transport = apiClient.planningTransport(budgetId) ?: return false
+        if (apiClient.budgetSecret(budgetId) != null) return false
+        val replaced =
+            try {
+                withContext(Dispatchers.Default) {
+                    val oldRecovery = keyring.recoveryKey(budgetId)
+                    val newRecovery = PlanningCipher.newKey()
+                    val newKey = PlanningCipher.newKey()
+                    keyring.setPreviousRecoveryKey(budgetId, oldRecovery)
+                    keyring.setRecoveryKey(budgetId, newRecovery)
+                    val done = PlanningSync(dao, budgetId, transport).rotate(keyring.key(budgetId), newKey, newRecovery)
+                    if (done) keyring.replaceKey(budgetId, newKey) else keyring.setRecoveryKey(budgetId, oldRecovery)
+                    keyring.setPreviousRecoveryKey(budgetId, null)
+                    done
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                false
+            }
+        if (replaced) sync(budgetId)
+        return replaced
     }
 
     /** Uses the recovery key from another device, then tries planning sync again. */

@@ -193,4 +193,42 @@ class PlanningSyncTest {
                 db.closeDatabase()
             }
         }
+
+    @Test
+    fun rotatingTheKeyLocksOutDevicesWithoutTheNewSecret(): Unit =
+        runBlocking {
+            val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer().apply { pageSize = 10 }
+                val oldSecret = ByteArray(32) { 4 }
+                val phoneSync = PlanningSync(phoneDb.planningRecordDao(), "b", server.transport())
+                val oldKey = phoneSync.agreeOnKey(PlanningCipher.newKey(), oldSecret)
+                val phone = PlanningStore(phoneDb.planningRecordDao(), "b", PlanningCipher(oldKey)) { 1L }
+                phone.save(SavingsGoal("g", "Holiday", 1_000, "USD"))
+                phoneSync.sync(PlanningCipher(oldKey), 0)
+
+                val newKey = PlanningCipher.newKey()
+                val newSecret = ByteArray(32) { 5 }
+                assertTrue(phoneSync.rotate(oldKey, newKey, newSecret))
+                assertEquals(1, phoneSync.sync(PlanningCipher(newKey), 0).uploaded)
+                assertEquals(2L, server.records.getValue("g").revision)
+                val rotated = PlanningStore(phoneDb.planningRecordDao(), "b", PlanningCipher(newKey)) { 2L }
+                assertEquals(listOf("Holiday"), rotated.savingsGoals().first().map { it.name })
+
+                val tabletSync = PlanningSync(tabletDb.planningRecordDao(), "b", server.transport())
+                assertFailsWith<PlanningKeyMismatchException> { tabletSync.agreeOnKey(PlanningCipher.newKey(), oldSecret) }
+                val shared = tabletSync.agreeOnKey(PlanningCipher.newKey(), newSecret)
+                assertContentEquals(newKey, shared)
+                tabletSync.sync(PlanningCipher(shared), 0)
+                val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", PlanningCipher(shared)) { 3L }
+                assertEquals(listOf("Holiday"), tablet.savingsGoals().first().map { it.name })
+
+                server.raceKey = PlanningKeys.wrap(PlanningCipher.newKey(), oldSecret, "b")
+                assertFalse(phoneSync.rotate(newKey, PlanningCipher.newKey(), ByteArray(32) { 6 }))
+            } finally {
+                phoneDb.closeDatabase()
+                tabletDb.closeDatabase()
+            }
+        }
 }

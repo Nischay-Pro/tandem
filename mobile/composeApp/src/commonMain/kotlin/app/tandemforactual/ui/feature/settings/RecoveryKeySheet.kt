@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.session.parseRecoveryKey
+import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -36,8 +37,10 @@ internal fun RecoveryKeySheet(
     visible: Boolean,
     recoveryKey: String,
     onUseKey: (ByteArray) -> Unit,
+    onReplaceKey: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var confirmingReplace by remember(visible) { mutableStateOf(false) }
     val palette = tandemPalette
     var entered by remember(visible) { mutableStateOf("") }
     var error by remember(visible) { mutableStateOf<String?>(null) }
@@ -67,7 +70,26 @@ internal fun RecoveryKeySheet(
                     val key = parseRecoveryKey(entered)
                     if (key == null) error = "Enter all 64 characters of the key." else onUseKey(key)
                 }
+                ReplaceKeyAction(confirmingReplace, { confirmingReplace = true }, onReplaceKey)
             }
         }
     }
+}
+
+/** Lost a device: replace the key after a confirmation that every other device will need the new one. */
+@Composable
+private fun ReplaceKeyAction(
+    confirming: Boolean,
+    onAsk: () -> Unit,
+    onReplace: () -> Unit,
+) {
+    if (!confirming) {
+        SecondaryButton("Lost a device? Replace this key", Modifier.fillMaxWidth(), onClick = onAsk)
+        return
+    }
+    InlineMessage(
+        "A new key locks out the lost device from anything synced from now on. Enter the new key on each device you still use.",
+        InlineMessageKind.WARNING,
+    )
+    TandemActionButton("Replace the key", TandemActionButtonTone.DESTRUCTIVE, Modifier.fillMaxWidth(), onClick = onReplace)
 }
