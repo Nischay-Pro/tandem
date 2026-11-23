@@ -65,11 +65,11 @@ internal fun EncryptedBackgroundSyncToggle(state: AppState) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader("Sync while locked?", onClose = { confirming = false }, leadingIcon = Lucide.ShieldAlert)
                 BodyText(
-                    "To sync in the background, Tandem keeps this budget’s password in the phone’s protected storage, " +
+                    "To sync in the background, Tandem keeps this budget’s password in this device’s protected storage, " +
                         "where it can be used without your fingerprint or the password.",
                 )
                 BodyText(
-                    "Your budget stays encrypted on the server, but anyone who gets into this phone and its apps could open it. " +
+                    "Your budget stays encrypted on the server, but anyone who gets into this device and its apps could open it. " +
                         "Leave this off to keep the password only in your head and sync while unlocked.",
                 )
                 TandemActionButton("Allow on this device", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
