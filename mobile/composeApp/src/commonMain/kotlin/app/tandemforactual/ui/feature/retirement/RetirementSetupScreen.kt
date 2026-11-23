@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.regions.Region
+import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -58,7 +60,10 @@ import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Settings2
 import kotlinx.coroutines.launch
 
 private sealed interface SetupStep {
@@ -193,7 +198,7 @@ private fun CountriesStep(regions: MutableList<Region>) {
     RetirementPlans.regions.forEach { region ->
         CheckCard(
             region.displayName,
-            RetirementPlans.forRegion(region).joinToString(", ") { it.displayName },
+            RetirementPlans.forRegion(region).filterNot { it.advanced }.joinToString(", ") { it.displayName },
             region in regions,
         ) {
             if (region in regions) regions.remove(region) else regions.add(region)
@@ -214,17 +219,56 @@ private fun CountryStep(
 ) {
     Heading("Your ${region.displayName} accounts")
     BodyText("Choose the ones you have, then the Actual account each one is tracked in.")
-    RetirementPlans.forRegion(region).forEach { plan ->
-        val picked = chosen.containsKey(plan.id)
-        CheckCard(plan.displayName, plan.description, picked) {
-            if (picked) {
-                chosen.remove(plan.id)
-            } else {
-                chosen[plan.id] =
-                    accounts.firstOrNull { plan.matchesAccount(it.name) }?.id
-            }
+    val (advanced, common) = RetirementPlans.forRegion(region).partition { it.advanced }
+    common.forEach { PlanChoice(it, accounts, chosen, navigation) }
+    if (advanced.isEmpty()) return
+    var showAdvanced by remember(region) { mutableStateOf(advanced.any { chosen.containsKey(it.id) }) }
+    AdvancedToggle(advanced.joinToString(", ") { it.displayName }, showAdvanced) { showAdvanced = !showAdvanced }
+    if (showAdvanced) advanced.forEach { PlanChoice(it, accounts, chosen, navigation) }
+}
+
+@Composable
+private fun PlanChoice(
+    plan: RetirementPlan,
+    accounts: List<LiveAccountSummary>,
+    chosen: MutableMap<String, String?>,
+    navigation: AppNavigation,
+) {
+    val picked = chosen.containsKey(plan.id)
+    CheckCard(plan.displayName, plan.description, picked) {
+        if (picked) {
+            chosen.remove(plan.id)
+        } else {
+            chosen[plan.id] = accounts.firstOrNull { plan.matchesAccount(it.name) }?.id
         }
-        if (picked) TrackedAccountPicker(plan.id, accounts, chosen, navigation)
+    }
+    if (picked) TrackedAccountPicker(plan.id, accounts, chosen, navigation)
+}
+
+/** Shows or hides the less common plans behind a settings gear. */
+@Composable
+private fun AdvancedToggle(
+    names: String,
+    open: Boolean,
+    onToggle: () -> Unit,
+) {
+    val palette = tandemPalette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = TandemLayout.listRowMinHeight)
+            .clip(RoundedCornerShape(TandemShapes.large))
+            .clickable(role = Role.Button, onClick = onToggle)
+            .padding(TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        Icon(Lucide.Settings2, null, Modifier.size(20.dp), tint = palette.muted)
+        Column(Modifier.weight(1f)) {
+            Text("Advanced", color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.Medium)
+            Text(names, color = palette.muted, fontSize = TandemTypography.compactBody)
+        }
+        Icon(if (open) Lucide.ChevronUp else Lucide.ChevronDown, null, Modifier.size(20.dp), tint = palette.muted)
     }
 }
 
