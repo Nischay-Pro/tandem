@@ -23,6 +23,7 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.ui.core.format.bankFailureLabel
+import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
@@ -128,7 +129,7 @@ private fun LinkedAccountsSection(
                         when {
                             account.failure != null -> "Last sync failed"
                             last == null -> "Not synced yet"
-                            else -> "Synced ${platformFormatDateAtEpochMilliseconds(last)}"
+                            else -> "Synced ${keepTogether(platformFormatDateAtEpochMilliseconds(last))}"
                         }
                     },
                 ).distinct().joinToString(" · "),

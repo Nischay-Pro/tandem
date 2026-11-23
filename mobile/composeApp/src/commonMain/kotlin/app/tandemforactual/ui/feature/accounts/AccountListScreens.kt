@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
+import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.liveAccountGroupLabel
 
@@ -40,7 +41,7 @@ internal fun accountListSubtitle(
             buildList {
                 if (account.offBudget) add("Off budget")
                 val syncState =
-                    lastSyncedAtEpochMs?.let { "Last synced ${formatDateAtEpochMilliseconds(it)}" }
+                    lastSyncedAtEpochMs?.let { "Last synced ${keepTogether(formatDateAtEpochMilliseconds(it))}" }
                         ?: "Not synced yet"
                 add(syncState)
             }.joinToString(" · ")
