@@ -15,8 +15,10 @@ budgeting to work.
   a port of Actual's own logic, checked against Actual's results in tests.
 - End-to-end encrypted budgets stay encrypted in transit and on Actual's server.
   The app derives the key from the budget password exactly as Actual does and
-  never sends the password or the key anywhere. The key isn't stored on the
-  device; the app asks for the password when it needs it.
+  never sends the password or the key anywhere. By default the password isn't
+  stored on the device; the app asks for it when it needs it. If you allow
+  background sync for an encrypted budget, its password is kept in the device's
+  protected storage so scheduled syncs can open it.
 - Edits made offline are saved on the device first and sent when Actual is
   reachable again. If Actual resets a budget's sync history, the device keeps a
   backup of its copy before downloading the budget again.
