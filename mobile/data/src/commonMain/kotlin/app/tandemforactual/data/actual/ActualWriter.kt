@@ -9,6 +9,8 @@ class ActualWriter(
 ) {
     val db: ActualDatabase get() = store.db
 
+    private var moment: Long? = null
+
     fun uuid(): String = newId()
 
     fun nowMillis(): Long = now()
@@ -37,11 +39,25 @@ class ActualWriter(
         val timestamp = clock.clock.timestamp
         val merkle = clock.merkle
         return try {
-            db.transaction(block)
+            atOneMoment { db.transaction(block) }
         } catch (error: Throwable) {
             clock.clock.timestamp = timestamp
             clock.merkle = merkle
             throw error
+        }
+    }
+
+    /**
+     * Stamps everything [block] writes with the same millisecond, so one edit reads as one change in the history even
+     * when it takes longer than a millisecond. The clock's counter keeps the messages in order.
+     */
+    fun <T> atOneMoment(block: () -> T): T {
+        if (moment != null) return block()
+        moment = now()
+        return try {
+            block()
+        } finally {
+            moment = null
         }
     }
 
@@ -51,7 +67,10 @@ class ActualWriter(
         fields: Map<String, Any?>,
     ) {
         if (fields.isEmpty()) return
-        val messages = fields.map { (column, value) -> CrdtMessage(clock.clock.send(now()), table, id, column, CrdtValue.of(value)) }
+        val messages =
+            fields.map { (column, value) ->
+                CrdtMessage(clock.clock.send(moment ?: now()), table, id, column, CrdtValue.of(value))
+            }
         store.apply(messages, clock, deferUnknownSchema = false)
     }
 }

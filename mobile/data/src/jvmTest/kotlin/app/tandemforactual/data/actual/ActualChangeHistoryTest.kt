@@ -78,4 +78,24 @@ class ActualChangeHistoryTest {
         assertEquals(UndoResult(0, 1), history.undo(recent[2]))
         assertEquals(1, history.recent(limit = 1).size)
     }
+
+    @Test
+    fun keepsAnEditTogetherWhenTheClockTicksDuringIt() {
+        val ticking = writer()
+        val ticks = ActualWriter(ticking.store, ticking.clock, { now++ }) { UUID.randomUUID().toString() }
+        val payee = ticks.insert("payees", mapOf("name" to "Cafe", "favorite" to 0L))
+        ticks.atOneMoment {
+            ticks.update("payees", payee, mapOf("name" to "Corner Cafe"))
+            ticks.atOneMoment { ticks.update("payees", payee, mapOf("favorite" to 1L)) }
+        }
+        val edit = ActualChangeHistory(ticks).recent().first()
+        assertEquals(
+            listOf("name", "favorite"),
+            edit.rows
+                .single()
+                .fields
+                .map { it.column },
+        )
+        assertEquals(2, ActualChangeHistory(ticks).undo(edit).reverted)
+    }
 }
