@@ -29,7 +29,7 @@ build cannot validate Apple toolchains.
 - pnpm 12.16.1
 - PostgreSQL 18.6
 - Kotlin Multiplatform Gradle plugin: 2.4.21
-- Android Gradle plugin: 9.5.1
+- Android Gradle plugin: 9.5.2
 - Gradle wrapper: 9.9.1
 - OpenAPI KMP Gen: 1.6.0
 - ktlint Gradle plugin: 14.2.0
