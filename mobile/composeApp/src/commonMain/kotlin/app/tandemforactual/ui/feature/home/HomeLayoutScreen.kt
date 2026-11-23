@@ -45,6 +45,7 @@ import app.tandemforactual.ui.core.state.withHomeLayout
 import app.tandemforactual.ui.core.state.withSuggestedHome
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.ReorderDragHandle
+import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -182,27 +183,12 @@ private fun LazyListScope.homeLayoutRowItems(
 /** What this screen changes, and how Minimal mode affects it. */
 @Composable
 private fun HomeLayoutIntro(interfaceMode: InterfaceMode) {
-    Column(Modifier.padding(bottom = TandemSpacing.small), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-        Text(
-            stringResource(Res.string.home_layout_detail),
-            color = tandemPalette.text,
-            fontSize = TandemTypography.body,
-            lineHeight = TandemTypography.bodyLineHeight,
-        )
-        val readyNote = stringResource(Res.string.home_layout_when_ready)
-        Text(
-            if (interfaceMode ==
-                InterfaceMode.MINIMAL
-            ) {
-                "${stringResource(Res.string.home_layout_minimal_note)} $readyNote"
-            } else {
-                readyNote
-            },
-            color = tandemPalette.muted,
-            fontSize = TandemTypography.compactBody,
-            lineHeight = TandemTypography.compactLineHeight,
-        )
-    }
+    val readyNote = stringResource(Res.string.home_layout_when_ready)
+    IntroCard(
+        stringResource(Res.string.home_layout_detail),
+        if (interfaceMode == InterfaceMode.MINIMAL) "${stringResource(Res.string.home_layout_minimal_note)} $readyNote" else readyNote,
+        modifier = Modifier.padding(bottom = TandemSpacing.small),
+    )
 }
 
 /** Links to goal-based personalization and to resetting Home's layout. */

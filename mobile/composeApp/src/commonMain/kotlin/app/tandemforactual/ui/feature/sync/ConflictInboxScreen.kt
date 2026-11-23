@@ -19,7 +19,7 @@ import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -43,7 +43,7 @@ internal fun ConflictInboxScreen(
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to review pending changes.",
                 actionLabel = "Choose budget",

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +32,7 @@ import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.feedback.Badge
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
@@ -40,7 +40,6 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.AmountHero
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.feature.budget.BudgetItemReorderActions
@@ -73,7 +72,7 @@ internal fun LazyListScope.categoryGroupHeaderItems(
             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
             Box(Modifier.weight(1f)) {
-                Text(state.selectedMonth, color = tandemPalette.muted, fontSize = TandemTypography.label)
+                Badge(state.selectedMonth, tandemPalette.muted)
             }
             if (context.isLiveBudget) {
                 TandemIconButton(

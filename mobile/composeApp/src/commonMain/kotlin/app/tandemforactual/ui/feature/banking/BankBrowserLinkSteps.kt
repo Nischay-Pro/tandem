@@ -37,7 +37,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -116,7 +116,7 @@ internal fun BanksStep(
     val list = banks
     when {
         failure != null ->
-            EmptyState(
+            EmptyStateCard(
                 "Couldn’t load banks",
                 failure,
                 Modifier.fillMaxWidth().padding(TandemSpacing.screen),
@@ -125,7 +125,7 @@ internal fun BanksStep(
             )
         list == null -> CenteredProgress("Loading banks in ${countryName(country)}…")
         list.isEmpty() ->
-            EmptyState(
+            EmptyStateCard(
                 "No banks found",
                 "${provider.displayName} didn’t list any banks in ${countryName(country)}.",
                 Modifier.fillMaxWidth().padding(TandemSpacing.screen),

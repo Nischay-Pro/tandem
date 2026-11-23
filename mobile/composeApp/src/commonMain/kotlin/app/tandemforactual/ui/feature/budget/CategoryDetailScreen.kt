@@ -2,7 +2,7 @@
 
 package app.tandemforactual.ui.feature.budget
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,9 +26,8 @@ import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.togglePinnedCategory
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.EmptyState
-import app.tandemforactual.ui.design.feedback.LabelText
+import app.tandemforactual.ui.design.feedback.Badge
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.AmountHero
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -56,7 +55,7 @@ internal fun CategoryDetailScreen(
     val scope = rememberCoroutineScope()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     if (!isLiveBudget) {
-        EmptyState(
+        EmptyStateCard(
             "Choose a budget",
             "Open an Actual budget to view its categories.",
             actionLabel = "Choose budget",
@@ -84,8 +83,7 @@ internal fun CategoryDetailScreen(
     }
     PageColumn {
         if (category == null) {
-            LabelText(state.selectedMonth)
-            BodyText("This category isn’t in the saved plan for this month.")
+            EmptyStateCard("Not in this month’s plan", "This category isn’t in the saved plan for ${state.selectedMonth}.")
         } else {
             CategoryDetailContent(
                 state,
@@ -194,7 +192,7 @@ private fun CategoryDetailContent(
     onEdit: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        Column(Modifier.weight(1f)) { LabelText(state.selectedMonth) }
+        Box(Modifier.weight(1f)) { Badge(state.selectedMonth, tandemPalette.muted) }
         if (isLiveBudget) {
             TandemIconButton(
                 Lucide.Pencil,

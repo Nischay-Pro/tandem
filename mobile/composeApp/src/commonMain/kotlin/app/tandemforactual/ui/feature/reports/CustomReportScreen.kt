@@ -44,7 +44,7 @@ import app.tandemforactual.ui.core.state.rememberBudgetTransactions
 import app.tandemforactual.ui.core.state.rememberRecordNames
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.charts.AreaChart
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.ProgressBar
@@ -97,7 +97,7 @@ internal fun CustomReportScreen(
         when {
             !customValid -> InlineMessage("Enter both dates like 2026-01-31.", InlineMessageKind.INFO)
             result == null -> SkeletonRows()
-            result.count == 0 -> EmptyState("Nothing matches", "Try a longer period or fewer filters.")
+            result.count == 0 -> EmptyStateCard("Nothing matches", "Try a longer period or fewer filters.")
             else -> ReportResult(state, draft, result, names)
         }
         CustomReportActions(saved, draft, onDelete = { confirmDelete = true }) {

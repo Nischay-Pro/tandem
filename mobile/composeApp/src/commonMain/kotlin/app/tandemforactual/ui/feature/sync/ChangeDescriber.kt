@@ -9,6 +9,7 @@ import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.CrdtValue
 import app.tandemforactual.data.actual.RowChange
 import app.tandemforactual.ui.core.format.formatCurrency
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
@@ -22,7 +23,7 @@ internal class ChangeDescriber(
         val rows = set.rows
         val kinds = rows.map { it.dataset }.distinct()
         if (rows.size > 1 && kinds.size == 1) return "${verb(rows)} ${rows.size} ${noun(kinds.single(), plural = true)}"
-        if (rows.size > 1) return "Changed ${rows.size} items"
+        if (rows.size > 1) return "Changed ${formatInteger(rows.size)} items"
         val row = rows.single()
         val subject = subject(row)
         return when {

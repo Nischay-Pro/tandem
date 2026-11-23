@@ -15,7 +15,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.design.cards.StatTile
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -44,7 +44,7 @@ internal fun ReimbursementsScreen(
             StatTile("Paid back", state.formatCurrency(received.sumOf { it.amountMinor }), "${received.size} received", Modifier.weight(1f))
         }
         if (all.isEmpty()) {
-            EmptyState("Nothing to be paid back", "Open a purchase and choose Expect a reimbursement to track it here.")
+            EmptyStateCard("Nothing to be paid back", "Open a purchase and choose Expect a reimbursement to track it here.")
         }
         if (pending.isNotEmpty()) {
             SectionCard("Pending", "Tap one when the money arrives") {
