@@ -50,7 +50,8 @@ internal class ShellNavigator(
     fun newTransaction(requestedAccountId: String?) {
         if (!state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             shell.transactionSheetClosing = false
-            shell.transactionSheetPopCount = 1
+            // A new transaction clears the selected one, so a transaction's details underneath close along with the form.
+            shell.transactionSheetPopCount = if (backStack.lastOrNull()?.route == AppRoute.TRANSACTION_DETAIL) 2 else 1
             val eligibleAccounts = shell.liveAccounts.filterNot { it.offBudget }
             val defaultAccount =
                 if (state.selectedBudgetId.isNotBlank()) {
@@ -160,7 +161,6 @@ internal class ShellNavigator(
                 shell.routeTransitionDirection = -1f
                 backStack.removeAt(backStack.lastIndex)
             } else {
-                shell.transactionSheetPopCount = 1
                 shell.transactionSheetClosing = true
             }
         } else {
