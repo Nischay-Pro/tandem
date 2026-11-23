@@ -106,6 +106,13 @@ class PlanningStore(
 
     suspend fun save(profile: RetirementProfile) = put(profile.planId, RetirementProfile.TYPE, profile.toJson())
 
+    fun jurisdictionPeriods(): Flow<List<JurisdictionPeriod>> =
+        observe(JurisdictionPeriod.TYPE).map { list -> list.mapNotNull { (id, body) -> JurisdictionPeriod.fromJson(id, body) } }
+
+    suspend fun save(period: JurisdictionPeriod) = put(period.id, JurisdictionPeriod.TYPE, period.toJson())
+
+    suspend fun deleteJurisdictionPeriod(id: String) = delete(id, JurisdictionPeriod.TYPE)
+
     fun accountCurrencies(): Flow<List<AccountCurrency>> =
         observe(AccountCurrency.TYPE).map { list -> list.map { (_, body) -> AccountCurrency.fromJson(body) } }
 

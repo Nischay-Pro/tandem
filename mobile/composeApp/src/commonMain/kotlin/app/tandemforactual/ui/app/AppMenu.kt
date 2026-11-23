@@ -14,6 +14,7 @@ import app.tandemforactual.ui.app.routes.insightsMenu
 import app.tandemforactual.ui.app.routes.planningMenu
 import app.tandemforactual.ui.app.routes.reimbursementsMenu
 import app.tandemforactual.ui.app.routes.reportsMenu
+import app.tandemforactual.ui.app.routes.residenceMenu
 import app.tandemforactual.ui.app.routes.retirementMenu
 import app.tandemforactual.ui.app.routes.rulesMenu
 import app.tandemforactual.ui.app.routes.schedulesMenu
@@ -85,6 +86,7 @@ internal val menuEntries: List<MenuEntry> =
             reimbursementsMenu +
             reportsMenu +
             retirementMenu +
+            residenceMenu +
             rulesMenu +
             schedulesMenu +
             syncMenu +

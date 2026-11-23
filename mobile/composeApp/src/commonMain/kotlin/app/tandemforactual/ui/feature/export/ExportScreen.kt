@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import app.tandemforactual.data.actual.ActualDates
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.JurisdictionPeriod
 import app.tandemforactual.data.planning.PlanningSettings
 import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.data.planning.RetirementProfile
@@ -184,6 +185,7 @@ private fun planningBackup(session: TandemMobileSession): String {
             session.planning.reimbursements.map { Triple(it.transactionId, Reimbursement.TYPE, it.toJson()) } +
             session.planning.customReports.map { Triple(it.id, CustomReport.TYPE, it.toJson()) } +
             session.planning.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
+            session.planning.jurisdictionPeriods.map { Triple(it.id, JurisdictionPeriod.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))
     return buildJsonObject {
         put("format", BACKUP_FORMAT)

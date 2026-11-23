@@ -4,6 +4,7 @@ import androidx.room3.Room
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.database.openTandemDatabase
+import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
@@ -95,6 +96,12 @@ class PlanningStoreTest {
                         .single()
                         .received,
                 )
+                val home = JurisdictionPeriod("p1", PeriodKind.RESIDENCE, Region.IN, "2018-01", "2023-06")
+                store.save(home)
+                store.save(JurisdictionPeriod("p2", PeriodKind.RESIDENCE, Region.US, "2023-07"))
+                store.put("p3", JurisdictionPeriod.TYPE, JsonObject(mapOf("kind" to JsonPrimitive("NOPE"))))
+                store.deleteJurisdictionPeriod("p2")
+                assertEquals(listOf(home), store.jurisdictionPeriods().first())
                 assertEquals(PlanningSettings(), store.settings().first())
                 store.save(PlanningSettings(listOf("US", "IN")))
                 assertEquals(listOf("US", "IN"), store.settings().first().regions)
