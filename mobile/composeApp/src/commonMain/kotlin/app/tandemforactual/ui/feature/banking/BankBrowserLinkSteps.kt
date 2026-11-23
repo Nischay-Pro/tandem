@@ -52,7 +52,6 @@ import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.WalletCards
 
 @Composable
 private fun StepColumn(content: LazyListScope.() -> Unit) {
@@ -279,7 +278,7 @@ internal fun AccountsStep(
                             account.name,
                             listOfNotNull(account.institution, account.balance).joinToString(" · ").ifBlank { null },
                             "Link",
-                            leading = RowLeading.Icon(Lucide.WalletCards),
+                            leading = RowLeading.Account(account.institution ?: account.name),
                             onClick = { onPick(account) },
                         )
                     }

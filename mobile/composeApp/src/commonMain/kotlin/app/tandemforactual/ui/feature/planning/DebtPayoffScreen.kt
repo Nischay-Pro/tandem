@@ -44,8 +44,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import com.composables.icons.lucide.CreditCard
-import com.composables.icons.lucide.Lucide
 
 private val EXTRA_STEPS = listOf(0L, 5_000L, 10_000L, 25_000L, 50_000L, 100_000L)
 
@@ -244,7 +242,7 @@ private fun PayoffOrderCard(
                 "${index + 1}. ${account.name}",
                 "${formatRateBasisPoints(term.aprBasisPoints!!)} APR · ${state.formatCurrency(term.minimumPaymentMinor!!)} minimum",
                 "Paid off ${monthLabel(plan.payoffMonth.getValue(id))}",
-                leading = RowLeading.Icon(Lucide.CreditCard),
+                leading = RowLeading.Account(account.name),
                 onClick = { onEdit(account) },
             )
         }
@@ -286,7 +284,7 @@ private fun YourDebts(
                     detail,
                 ).joinToString(" · "),
                 state.formatCurrency(owed),
-                leading = RowLeading.Icon(Lucide.CreditCard),
+                leading = RowLeading.Account(account.name),
                 onClick = {
                     onEdit(account)
                 },

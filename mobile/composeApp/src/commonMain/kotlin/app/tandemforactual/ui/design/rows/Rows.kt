@@ -122,6 +122,18 @@ internal sealed interface RowLeading {
     data class Letter(
         val value: String,
     ) : RowLeading
+
+    /** The payee's logo when one is known, otherwise [fallback]. */
+    data class Payee(
+        val name: String?,
+        val fallback: ImageVector? = null,
+    ) : RowLeading
+
+    /** The account's bank or brokerage logo when one is known, otherwise [fallback]. */
+    data class Account(
+        val name: String?,
+        val fallback: ImageVector? = null,
+    ) : RowLeading
 }
 
 @Composable
