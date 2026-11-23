@@ -58,6 +58,7 @@ internal enum class HomeModule(
     BUDGET_SUMMARY(emptySet()),
     RECENT_ACTIVITY(setOf(FinancialGoal.ORGANIZE)),
     NET_WORTH(setOf(FinancialGoal.ANALYSIS), advancedOnly = true),
+    SHARED_BILLS(setOf(FinancialGoal.ORGANIZE)),
 }
 
 /** What the device knows right now, so Home only offers modules that can show something real. */
@@ -69,6 +70,7 @@ internal data class HomeData(
     val hasActivity: Boolean = false,
     val hasDebtAccounts: Boolean = false,
     val savingsGoalCount: Int = 0,
+    val sharedBillCount: Int = 0,
 )
 
 internal sealed interface HomeEntry {
@@ -101,6 +103,7 @@ private fun HomeModule.ready(data: HomeData): Boolean =
         HomeModule.SAVINGS_GOALS -> data.savingsGoalCount > 0
         HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> data.hasAccounts
         HomeModule.RECENT_ACTIVITY -> data.hasActivity
+        HomeModule.SHARED_BILLS -> data.sharedBillCount > 0
     }
 
 /**

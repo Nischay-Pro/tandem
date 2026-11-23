@@ -36,6 +36,8 @@ import app.tandemforactual.ui.generated.resources.module_review_inbox
 import app.tandemforactual.ui.generated.resources.module_review_inbox_detail
 import app.tandemforactual.ui.generated.resources.module_savings_goals
 import app.tandemforactual.ui.generated.resources.module_savings_goals_detail
+import app.tandemforactual.ui.generated.resources.module_shared_bills
+import app.tandemforactual.ui.generated.resources.module_shared_bills_detail
 import app.tandemforactual.ui.generated.resources.module_upcoming_bills
 import app.tandemforactual.ui.generated.resources.module_upcoming_bills_detail
 import com.composables.icons.lucide.CalendarClock
@@ -49,6 +51,7 @@ import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank
 import com.composables.icons.lucide.TrendingUp
+import com.composables.icons.lucide.Users
 import org.jetbrains.compose.resources.StringResource
 
 internal fun FinancialGoal.title(): StringResource =
@@ -81,6 +84,7 @@ internal fun HomeModule.title(): StringResource =
         HomeModule.BUDGET_SUMMARY -> Res.string.module_budget_summary
         HomeModule.RECENT_ACTIVITY -> Res.string.module_recent_activity
         HomeModule.NET_WORTH -> Res.string.module_net_worth
+        HomeModule.SHARED_BILLS -> Res.string.module_shared_bills
     }
 
 internal fun HomeModule.detail(): StringResource =
@@ -95,6 +99,7 @@ internal fun HomeModule.detail(): StringResource =
         HomeModule.BUDGET_SUMMARY -> Res.string.module_budget_summary_detail
         HomeModule.RECENT_ACTIVITY -> Res.string.module_recent_activity_detail
         HomeModule.NET_WORTH -> Res.string.module_net_worth_detail
+        HomeModule.SHARED_BILLS -> Res.string.module_shared_bills_detail
     }
 
 internal fun FinancialGoal.icon(): ImageVector =
@@ -118,6 +123,7 @@ internal fun HomeModule.icon(): ImageVector =
         HomeModule.BUDGET_SUMMARY -> Lucide.LayoutDashboard
         HomeModule.RECENT_ACTIVITY -> Lucide.ListChecks
         HomeModule.NET_WORTH -> Lucide.TrendingUp
+        HomeModule.SHARED_BILLS -> Lucide.Users
     }
 
 /** One suggestion per chosen goal: that goal's first module, never a long setup list. */

@@ -181,6 +181,8 @@
     <string name="module_category_progress">Spending at a glance</string>
     <string name="module_category_progress_detail">How this month’s categories are tracking</string>
     <string name="module_upcoming_bills">Upcoming bills</string>
+    <string name="module_shared_bills">Shared bills</string>
+    <string name="module_shared_bills_detail">Who has paid their share this month</string>
     <string name="module_upcoming_bills_detail">Scheduled payments from Actual</string>
     <string name="module_debt_overview">Debt overview</string>
     <string name="module_debt_overview_detail">Balances owed across your accounts</string>

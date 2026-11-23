@@ -90,7 +90,10 @@ internal fun HomeScreen(
 ) {
     val data =
         remember(accounts, month, schedules, transactions, mobileSession.planning.savingsGoals) {
-            homeData(accounts, month, schedules, transactions).copy(savingsGoalCount = mobileSession.planning.savingsGoals.size)
+            homeData(accounts, month, schedules, transactions).copy(
+                savingsGoalCount = mobileSession.planning.savingsGoals.size,
+                sharedBillCount = mobileSession.planning.sharedBills.size,
+            )
         }
     val editors = rememberPlanningEditors(state, mobileSession, month)
     val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
@@ -195,6 +198,7 @@ private fun HomeEntryCard(
             ) { editors.debtAccount = it }
         HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> AccountsSummaryCard(module, state, navigation, open, money)
         HomeModule.RECENT_ACTIVITY -> RecentActivityCard(module, state, navigation, transactions, money)
+        HomeModule.SHARED_BILLS -> SharedBillsHomeCard(module, state, mobileSession, navigation)
         HomeModule.SAVINGS_GOALS ->
             SavingsGoalsCard(
                 mobileSession.planning.savingsGoals,
