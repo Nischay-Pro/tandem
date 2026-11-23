@@ -235,6 +235,7 @@ private fun PlanCard(
                     fontWeight = FontWeight.Medium,
                 )
             }
+            if (plan == K401 && employer > 0) VestingStatus(profile.match, year, employer, ::money)
         }
     }
 }
@@ -288,6 +289,24 @@ private fun EmployerMatchStatus(
             },
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.Medium,
+    )
+}
+
+/** How much of the employer's money is yours yet, when the match vests over time. */
+@Composable
+private fun VestingStatus(
+    match: app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch?,
+    year: Int,
+    employerMinor: Long,
+    money: (Long) -> String,
+) {
+    val vested = match?.vestedBasisPoints(year)?.takeIf { it < 10_000 } ?: return
+    val fully = match.fullyVestedYear
+    Text(
+        "${money(employerMinor * vested / 10_000)} of the employer’s ${money(employerMinor)} is yours so far" +
+            (fully?.let { "; all of it from $it" } ?: ""),
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
     )
 }
 
