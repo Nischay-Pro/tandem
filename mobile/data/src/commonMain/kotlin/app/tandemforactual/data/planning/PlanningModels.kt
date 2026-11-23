@@ -3,6 +3,8 @@ package app.tandemforactual.data.planning
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import app.tandemforactual.data.regions.us.retirement.k401.Vesting
+import app.tandemforactual.data.regions.us.retirement.k401.VestingStep
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -366,6 +368,13 @@ data class SavedSearch(
 private fun matchJson(match: EmployerMatch): JsonObject =
     jsonOf(
         "capMinor" to match.capMinor.json(),
+        "vesting" to
+            if (match.vesting == Vesting.IMMEDIATE) {
+                JsonNull
+            } else {
+                JsonArray(match.vesting.steps.map { jsonOf("years" to JsonPrimitive(it.years), "share" to JsonPrimitive(it.basisPoints)) })
+            },
+        "joinedYear" to match.joinedYear.json(),
         "tiers" to
             JsonArray(
                 match.tiers.map { tier ->
@@ -386,6 +395,13 @@ private fun matchFrom(body: JsonObject): EmployerMatch =
             MatchTier(tier.int("rate") ?: 0, band, tier.long("size") ?: 0)
         },
         body.long("capMinor"),
+        Vesting(
+            (body["vesting"] as? JsonArray).orEmpty().mapNotNull { element ->
+                val step = element as? JsonObject ?: return@mapNotNull null
+                VestingStep(step.int("years") ?: return@mapNotNull null, step.int("share") ?: return@mapNotNull null)
+            },
+        ),
+        body.int("joinedYear"),
     )
 
 /** The body field that keeps a planning record on this device; [PlanningSync] never uploads such records. */

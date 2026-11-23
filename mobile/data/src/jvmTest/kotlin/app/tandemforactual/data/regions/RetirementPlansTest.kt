@@ -13,6 +13,8 @@ import app.tandemforactual.data.regions.us.retirement.k401.K401
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchResult
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import app.tandemforactual.data.regions.us.retirement.k401.Vesting
+import app.tandemforactual.data.regions.us.retirement.k401.VestingStep
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -79,6 +81,50 @@ class RetirementPlansTest {
             assertTrue(plan.matchesAccount("My ${plan.accountKeywords.first()} account"))
             assertTrue(plan.allowance(2026, 70) >= plan.allowance(2026, 30))
         }
+    }
+
+    @Test
+    fun vestingDecidesHowMuchOfTheMatchIsYours() {
+        val graded = Vesting.presets[2].second
+        assertEquals(listOf(0, 0, 2_000, 4_000, 6_000, 8_000, 10_000, 10_000), (0..7).map(graded::vestedBasisPoints))
+        assertEquals(listOf(0, 0, 0, 10_000), (0..3).map(Vesting.cliff(3)::vestedBasisPoints))
+        val halfThenAll = Vesting(listOf(VestingStep(1, 5_000), VestingStep(2, 10_000)))
+        assertEquals(listOf(0, 5_000, 10_000, 10_000), (0..3).map(halfThenAll::vestedBasisPoints))
+        assertEquals(2, halfThenAll.fullYears)
+        assertEquals(0, Vesting.IMMEDIATE.fullYears)
+        assertEquals(null, Vesting(listOf(VestingStep(1, 5_000))).fullYears)
+        val match = EmployerMatch.simple(5_000, 600)
+        assertEquals(10_000, match.vestedBasisPoints(2026))
+        assertEquals(null, match.fullyVestedYear)
+        val cliff = match.copy(vesting = Vesting.cliff(3))
+        assertEquals(null, cliff.vestedBasisPoints(2026))
+        assertEquals(null, cliff.fullyVestedYear)
+        val joined = cliff.copy(joinedYear = 2024)
+        assertEquals(0, joined.vestedBasisPoints(2026))
+        assertEquals(10_000, joined.vestedBasisPoints(2027))
+        assertEquals(0, joined.vestedBasisPoints(2020))
+        assertEquals(2027, joined.fullyVestedYear)
+        assertEquals(null, match.copy(vesting = Vesting(listOf(VestingStep(1, 5_000))), joinedYear = 2024).fullyVestedYear)
+        assertEquals(2026, match.copy(vesting = halfThenAll, joinedYear = 2024).fullyVestedYear)
+        val plain =
+            app.tandemforactual.data.planning
+                .RetirementProfile("us-401k", match = match)
+        assertEquals(
+            plain,
+            app.tandemforactual.data.planning.RetirementProfile
+                .fromJson("us-401k", plain.toJson()),
+        )
+        val odd =
+            kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"match":{"tiers":[],"vesting":[1,{"years":1},{"share":5000},{"years":2,"share":10000}]}}""",
+            ) as kotlinx.serialization.json.JsonObject
+        assertEquals(
+            Vesting.cliff(2),
+            app.tandemforactual.data.planning.RetirementProfile
+                .fromJson("us-401k", odd)
+                .match
+                ?.vesting,
+        )
     }
 
     @Test
