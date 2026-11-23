@@ -6,6 +6,7 @@ import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.ca.retirement.grouprrsp.GroupRrsp
 import app.tandemforactual.data.regions.ca.retirement.rpp.Rpp
 import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
+import app.tandemforactual.data.regions.global.pension.PublicPensions
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.data.regions.india.retirement.eps.Eps
 import app.tandemforactual.data.regions.india.retirement.vpf.Vpf
@@ -126,5 +127,14 @@ class RetirementPlansTest {
                 },
             ),
         )
+    }
+
+    @Test
+    fun publicPensionsListTheirStartAges() {
+        assertEquals(listOf(62, 67, 70), PublicPensions.byId("us-social-security")!!.startAges)
+        assertEquals(listOf(65, 70), PublicPensions.byId("ca-oas")!!.startAges)
+        assertEquals(null, PublicPensions.byId("nope"))
+        assertEquals(listOf("ca-cpp", "ca-qpp", "ca-oas"), PublicPensions.forRegions(listOf(Region.CA)).map { it.id })
+        PublicPensions.all.forEach { assertTrue(it.source.isNotBlank() && it.description.isNotBlank() && it.currency.length == 3) }
     }
 }

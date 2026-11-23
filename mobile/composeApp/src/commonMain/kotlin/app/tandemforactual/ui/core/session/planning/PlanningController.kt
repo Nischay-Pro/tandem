@@ -11,6 +11,7 @@ import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.JurisdictionPeriod
+import app.tandemforactual.data.planning.PensionEstimate
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningKeyMismatchException
 import app.tandemforactual.data.planning.PlanningSettings
@@ -43,6 +44,8 @@ internal class PlanningController(
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
     var sharedBills by mutableStateOf<List<SharedBill>>(emptyList())
+    var pensionEstimates by mutableStateOf<List<PensionEstimate>>(emptyList())
+        private set
     var settings by mutableStateOf(PlanningSettings())
     var jurisdictionPeriods by mutableStateOf<List<JurisdictionPeriod>>(emptyList())
     var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
@@ -58,6 +61,16 @@ internal class PlanningController(
         currency: String,
     ) {
         planningStore(budgetId)?.save(AccountCurrency(accountId, currency))
+    }
+
+    /** Saves a pension estimate, or removes it when [estimate] has no amount. */
+    suspend fun savePensionEstimate(
+        budgetId: String,
+        pensionId: String,
+        estimate: PensionEstimate?,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        if (estimate == null) store.deletePensionEstimate(pensionId) else store.save(estimate)
     }
 
     suspend fun saveExchangeRate(
@@ -285,6 +298,7 @@ internal class PlanningController(
         launch { store.sharedBills().collect { sharedBills = it } }
         launch { store.settings().collect { settings = it } }
         launch { store.jurisdictionPeriods().collect { jurisdictionPeriods = it } }
+        launch { store.pensionEstimates().collect { pensionEstimates = it } }
         launch {
             store.accountCurrencies().collect { list ->
                 accountCurrencies = list.associate { it.accountId to it.currency }

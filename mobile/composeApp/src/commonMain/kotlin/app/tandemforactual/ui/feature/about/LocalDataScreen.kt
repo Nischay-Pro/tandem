@@ -12,9 +12,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.security.budgetPasswordSecretId
+import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.removeBudgetFromDevice
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -168,6 +170,7 @@ private fun RemoveBudgetFromDeviceDialog(
     val vault = LocalEncryptedBudgetVault.current
     val authenticator = LocalDeviceAuthenticator.current
     val budgetName = state.selectedBudget.ifBlank { "this budget" }
+    val keyStore = LocalBackgroundBudgetKeyStore.current
     DestructiveConfirmationDialog(
         title = "Remove $budgetName from this device?",
         message =
@@ -190,6 +193,7 @@ private fun RemoveBudgetFromDeviceDialog(
                 }
                 authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
                 authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
+                if (BackgroundBudgetKey.budgetIn(keyStore) == budgetId) runCatching { keyStore?.clear() }
                 state.cachedBudgetCatalogJson =
                     encodeCachedBudgetCatalog(
                         decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot {

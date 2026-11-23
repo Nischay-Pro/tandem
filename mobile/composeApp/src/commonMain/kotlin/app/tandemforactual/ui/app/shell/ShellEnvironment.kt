@@ -41,4 +41,5 @@ internal class ShellEnvironment(
     val actualBudgetFiles: ActualBudgetFiles?,
     val planningKeyStore: DeviceCredentialStore?,
     val postLocalAlert: ((LocalAlert) -> Unit)?,
+    val backgroundBudgetKeyStore: DeviceCredentialStore? = null,
 )

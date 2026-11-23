@@ -28,6 +28,7 @@ Choose a page by what you need to do.
 | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | [Architecture and trust](concepts/architecture-and-trust.md) | Operators and developers reviewing data flow and privacy.     |
 | [Actual compatibility](concepts/actual-compatibility.md)     | Operators checking the supported Actual release and behavior. |
+| [Design decisions](concepts/decisions.md)                    | Contributors checking where data lives and why.               |
 | [Glossary](concepts/glossary.md)                             | Anyone checking the meaning of Tandem terms.                  |
 
 ## Build and contribute
