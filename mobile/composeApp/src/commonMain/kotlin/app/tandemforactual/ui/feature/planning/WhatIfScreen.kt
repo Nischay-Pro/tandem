@@ -110,7 +110,7 @@ internal fun WhatIfScreen(
     }
 }
 
-private fun whatIfDebts(
+internal fun whatIfDebts(
     liveAccounts: List<LiveAccountSummary>,
     debtTerms: List<DebtTerms>,
 ): List<DebtInput> =
