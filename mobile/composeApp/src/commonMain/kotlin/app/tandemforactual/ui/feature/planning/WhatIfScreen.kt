@@ -7,6 +7,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +88,13 @@ internal fun WhatIfScreen(
         WhatIfSummary(state, leftover, income, spending)
         WhatIfControls(
             state = state,
+            steps =
+                WhatIfSteps.steps(
+                    income,
+                    spending,
+                    state.budgetDisplaySettings?.currencyCode,
+                    state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                ),
             incomeChange = incomeChange,
             spendingChange = spendingChange,
             toDebt = toDebt,
@@ -154,6 +162,7 @@ private fun WhatIfSummary(
 @Composable
 private fun WhatIfControls(
     state: AppState,
+    steps: List<Long>,
     incomeChange: Long,
     spendingChange: Long,
     toDebt: Int,
@@ -162,24 +171,9 @@ private fun WhatIfControls(
     onToDebtChange: (Int) -> Unit,
 ) {
     val palette = tandemPalette
-    val steps = listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L)
-
-    fun stepLabel(it: Long) =
-        if (it ==
-            0L
-        ) {
-            "No change"
-        } else {
-            (if (it > 0) "+" else "−") + state.formatCurrency(kotlin.math.abs(it)).replace(Regex("[.,]00$"), "")
-        }
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        Text("If I earned each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
-        FilterPills(steps.map { it to stepLabel(it) }, incomeChange, onIncomeChange)
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        Text("If I spent each month", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
-        FilterPills(steps.map { it to stepLabel(it) }, spendingChange, onSpendingChange)
-    }
+    var custom by remember { mutableStateOf<Pair<WhatIfRow, Boolean>?>(null) }
+    WhatIfStepRow("If I earned each month", state, steps, incomeChange, onIncomeChange) { custom = WhatIfRow.INCOME to it }
+    WhatIfStepRow("If I spent each month", state, steps, spendingChange, onSpendingChange) { custom = WhatIfRow.SPENDING to it }
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         Text("And put what’s left toward", color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
         FilterPills(
@@ -187,6 +181,14 @@ private fun WhatIfControls(
             toDebt,
             onToDebtChange,
         )
+    }
+    WhatIfAmountDialog(state, custom?.second, onDismiss = { custom = null }) { amount ->
+        when (custom?.first) {
+            WhatIfRow.INCOME -> onIncomeChange(amount)
+            WhatIfRow.SPENDING -> onSpendingChange(amount)
+            null -> Unit
+        }
+        custom = null
     }
 }
 
