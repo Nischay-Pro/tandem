@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <capability android:name="actions.intent.OPEN_APP_FEATURE">
+    <intent android:action="android.intent.action.VIEW">
+      <url-template android:value="app.tandemforactual://open/{feature}" />
+      <parameter
+        android:name="feature"
+        android:key="feature" />
+    </intent>
+  </capability>
   <shortcut
     android:enabled="true"
     android:icon="@drawable/ic_shortcut_add_transaction"
@@ -9,6 +17,11 @@
     <intent
       android:action="android.intent.action.VIEW"
       android:data="app.tandemforactual://open/add-transaction" />
+    <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+      <parameter-binding
+        android:key="feature"
+        android:value="@array/feature_add_transaction" />
+    </capability-binding>
   </shortcut>
   <shortcut
     android:enabled="true"
@@ -19,6 +32,11 @@
     <intent
       android:action="android.intent.action.VIEW"
       android:data="app.tandemforactual://open/scan-receipt" />
+    <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+      <parameter-binding
+        android:key="feature"
+        android:value="@array/feature_scan_receipt" />
+    </capability-binding>
   </shortcut>
   <shortcut
     android:enabled="true"
@@ -29,6 +47,11 @@
     <intent
       android:action="android.intent.action.VIEW"
       android:data="app.tandemforactual://open/budget-checkup" />
+    <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+      <parameter-binding
+        android:key="feature"
+        android:value="@array/feature_budget_checkup" />
+    </capability-binding>
   </shortcut>
   <shortcut
     android:enabled="true"
@@ -39,5 +62,10 @@
     <intent
       android:action="android.intent.action.VIEW"
       android:data="app.tandemforactual://open/accounts" />
+    <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+      <parameter-binding
+        android:key="feature"
+        android:value="@array/feature_accounts" />
+    </capability-binding>
   </shortcut>
 </shortcuts>
