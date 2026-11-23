@@ -70,6 +70,7 @@ internal enum class AppRoute(
     SHARED_BILLS("Shared bills"),
     SHARED_BILL("Shared bill"),
     SHARED_BILL_EDIT("Edit shared bill"),
+    SHARED_BILL_PAYMENT("Add a payment"),
     CUSTOM_REPORT("Report"),
     EXPORT("Export & backup"),
     EXCHANGE_RATES("Currencies"),

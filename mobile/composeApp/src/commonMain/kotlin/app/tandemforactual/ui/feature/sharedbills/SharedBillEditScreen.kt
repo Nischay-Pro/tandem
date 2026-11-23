@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -27,11 +28,14 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
+import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.TandemTypography
+import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.UserPlus
@@ -44,12 +48,14 @@ private class MemberDraft(
     match: String = "",
     val tag: String = "",
     private val ruleFor: String? = null,
+    everyMonths: Int = 1,
 ) {
     val ruleCreated: Boolean get() = ruleFor != null && ruleFor == match.trim()
 
     var name by mutableStateOf(name)
     var share by mutableStateOf(share)
     var match by mutableStateOf(match)
+    var everyMonths by mutableStateOf(everyMonths)
 }
 
 /** Creates or edits a shared bill and the people who pay into it. */
@@ -76,6 +82,7 @@ internal fun SharedBillEditScreen(
                             it.matchText.takeIf { _ ->
                                 it.ruleCreated
                             },
+                            it.everyMonths,
                         ),
                     )
                 }
@@ -136,6 +143,12 @@ private fun MemberEditor(
                 { member.match = it.take(60) },
                 TextFieldOptions(placeholder = "As it appears in your bank, e.g. Zelle from…"),
             )
+            Text("How often they pay", color = tandemPalette.muted, fontSize = TandemTypography.label)
+            FilterPills(
+                listOf(1 to "Monthly", 2 to "Every 2 months", 3 to "Every 3 months", 6 to "Twice a year", 12 to "Yearly"),
+                member.everyMonths,
+                { member.everyMonths = it },
+            )
             if (removable) {
                 TandemActionButton(
                     "Remove",
@@ -187,6 +200,7 @@ private fun buildSharedBill(
                 shareMinor = parseAmountMinorUnits(draft.share, settings)?.coerceAtLeast(0) ?: 0,
                 matchText = draft.match.trim(),
                 ruleCreated = draft.ruleCreated,
+                everyMonths = draft.everyMonths,
             )
         },
     dueDay = dueDay.toIntOrNull(),

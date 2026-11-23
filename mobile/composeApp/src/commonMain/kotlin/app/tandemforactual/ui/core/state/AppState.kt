@@ -70,6 +70,7 @@ internal class AppState {
     var selectedCustomReportId by mutableStateOf("")
     var selectedCustomReportName by mutableStateOf("")
     var selectedSharedBillId by mutableStateOf("")
+    var selectedSharedBillMemberTag by mutableStateOf("")
     var selectedTransactionAccountId by mutableStateOf("")
     var selectedTransactionPayeeId by mutableStateOf("")
     var selectedTransactionCategoryId by mutableStateOf("")
