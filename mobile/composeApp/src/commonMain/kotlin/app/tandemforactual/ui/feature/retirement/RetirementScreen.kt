@@ -118,6 +118,7 @@ internal fun RetirementScreen(
         TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
             navigation.open(AppRoute.RETIREMENT_SETUP)
         }
+        PublicPensionsSummary(mobileSession) { navigation.open(AppRoute.PUBLIC_PENSIONS) }
         TandemActionButton("Moving countries", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Plane) {
             navigation.open(AppRoute.RELOCATION)
         }

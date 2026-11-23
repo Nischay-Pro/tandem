@@ -135,6 +135,13 @@ class PlanningStoreTest {
                 assertEquals(listOf(big, coffee), store.savedSearches().first())
                 store.deleteSavedSearch("s-2")
                 assertEquals(listOf(coffee), store.savedSearches().first())
+                val cpp = PensionEstimate("ca-cpp", 90_000, 65)
+                store.save(cpp)
+                store.save(PensionEstimate("ca-oas", 70_000, 70))
+                store.put("broken", PensionEstimate.TYPE, JsonObject(mapOf("monthlyMinor" to JsonPrimitive(1))))
+                store.put("no-amount", PensionEstimate.TYPE, JsonObject(emptyMap()))
+                store.deletePensionEstimate("ca-oas")
+                assertEquals(listOf(cpp), store.pensionEstimates().first())
             } finally {
                 db.close()
             }
