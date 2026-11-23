@@ -7,12 +7,14 @@ import app.tandemforactual.ui.app.AppMenuItem
 import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.feature.insights.BillCalendarScreen
 import app.tandemforactual.ui.feature.insights.CashFlowScreen
 import app.tandemforactual.ui.feature.insights.MonthlyReviewScreen
 import app.tandemforactual.ui.feature.insights.SpendingForecastScreen
 import app.tandemforactual.ui.feature.insights.SpendingTrendsScreen
 import app.tandemforactual.ui.feature.insights.SubscriptionsScreen
 import com.composables.icons.lucide.CalendarCheck
+import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChartSpline
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Lucide
@@ -40,6 +42,7 @@ internal val insightsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                     SpendingTrendsScreen(state, mobileSession)
                 }
             },
+        AppRoute.BILL_CALENDAR to @Composable { ctx -> with(ctx) { BillCalendarScreen(state, liveSchedules) } },
         AppRoute.SUBSCRIPTIONS to @Composable { ctx -> with(ctx) { SubscriptionsScreen(state, mobileSession, liveSchedules) } },
         AppRoute.SPENDING_FORECAST to
             @Composable { ctx ->
@@ -65,6 +68,11 @@ internal val insightsMenu: List<MenuEntry> =
         MenuEntry(150) { ctx ->
             with(ctx) {
                 AppMenuItem(Lucide.Gauge, "Spending forecast", "Where this month lands") { open(AppRoute.SPENDING_FORECAST) }
+            }
+        },
+        MenuEntry(172) { ctx ->
+            with(ctx) {
+                AppMenuItem(Lucide.CalendarDays, "Bill calendar", "Bills and paydays by day") { open(AppRoute.BILL_CALENDAR) }
             }
         },
         MenuEntry(155) { ctx ->
