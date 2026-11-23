@@ -17,11 +17,45 @@ data class MatchTier(
     val size: Long,
 )
 
-/** An employer's formula: tiers applied in order to your contributions, with an optional yearly cap on the match. */
+/** When employer money becomes yours: all at once after [years] of service (a cliff), or a share each year until then (graded). */
+data class Vesting(
+    val graded: Boolean,
+    val years: Int,
+) {
+    /** The share vested after [service] full years, in basis points. Graded vesting starts after the first year. */
+    fun vestedBasisPoints(service: Int): Int =
+        when {
+            service >= years -> 10_000
+            !graded || service < 1 -> 0
+            else -> (service - 1) * 10_000 / (years - 1)
+        }
+
+    companion object {
+        val IMMEDIATE = Vesting(false, 0)
+
+        /** The usual schedules; three-year cliff and six-year graded are the slowest the law allows. */
+        val presets: List<Pair<String, Vesting>> =
+            listOf("Right away" to IMMEDIATE, "3-year cliff" to Vesting(false, 3), "6-year graded" to Vesting(true, 6))
+    }
+}
+
+/**
+ * An employer's formula: tiers applied in order to your contributions, with an optional yearly cap on the match, how the
+ * match vests, and the year you joined to count service from.
+ */
 data class EmployerMatch(
     val tiers: List<MatchTier>,
     val capMinor: Long? = null,
+    val vesting: Vesting = Vesting.IMMEDIATE,
+    val joinedYear: Int? = null,
 ) {
+    /** The share of employer money that's yours in [year], or null when the year you joined isn't known. */
+    fun vestedBasisPoints(year: Int): Int? =
+        if (vesting == Vesting.IMMEDIATE) 10_000 else joinedYear?.let { vesting.vestedBasisPoints((year - it).coerceAtLeast(0)) }
+
+    /** The year all employer money is yours, or null when it already is or the year you joined isn't known. */
+    val fullyVestedYear: Int? get() = joinedYear?.takeIf { vesting != Vesting.IMMEDIATE }?.plus(vesting.years)
+
     /** The employer's share for [employeeMinor] contributed in a year on [salaryMinor]. */
     fun on(
         employeeMinor: Long,

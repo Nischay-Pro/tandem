@@ -3,6 +3,7 @@ package app.tandemforactual.data.planning
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import app.tandemforactual.data.regions.us.retirement.k401.Vesting
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -328,6 +329,9 @@ data class SavedSearch(
 private fun matchJson(match: EmployerMatch): JsonObject =
     jsonOf(
         "capMinor" to match.capMinor.json(),
+        "vestingGraded" to (if (match.vesting == Vesting.IMMEDIATE) JsonNull else JsonPrimitive(match.vesting.graded)),
+        "vestingYears" to (if (match.vesting == Vesting.IMMEDIATE) JsonNull else JsonPrimitive(match.vesting.years)),
+        "joinedYear" to match.joinedYear.json(),
         "tiers" to
             JsonArray(
                 match.tiers.map { tier ->
@@ -348,6 +352,8 @@ private fun matchFrom(body: JsonObject): EmployerMatch =
             MatchTier(tier.int("rate") ?: 0, band, tier.long("size") ?: 0)
         },
         body.long("capMinor"),
+        body.int("vestingYears")?.let { Vesting(body.text("vestingGraded") == "true", it) } ?: Vesting.IMMEDIATE,
+        body.int("joinedYear"),
     )
 
 /** The body field that keeps a planning record on this device; [PlanningSync] never uploads such records. */

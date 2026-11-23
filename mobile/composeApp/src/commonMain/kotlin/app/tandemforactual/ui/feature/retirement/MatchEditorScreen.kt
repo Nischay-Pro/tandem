@@ -24,6 +24,7 @@ import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.K401
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import app.tandemforactual.data.regions.us.retirement.k401.Vesting
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -86,17 +87,25 @@ internal fun MatchEditorScreen(
                 )
             }
         }
-    var salary by remember { mutableStateOf(profile.salaryMinor?.let { (it / 100).toString() }.orEmpty()) }
-    var cap by remember {
+    var salary by remember { mutableStateOf(wholeUnits(profile.salaryMinor)) }
+    var cap by remember { mutableStateOf(wholeUnits(profile.match?.capMinor)) }
+    var percent by remember { mutableStateOf(profile.contributionBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
+    var vesting by remember { mutableStateOf(profile.match?.vesting ?: Vesting.IMMEDIATE) }
+    var joined by remember {
         mutableStateOf(
             profile.match
-                ?.capMinor
-                ?.let { (it / 100).toString() }
+                ?.joinedYear
+                ?.toString()
                 .orEmpty(),
         )
     }
-    var percent by remember { mutableStateOf(profile.contributionBasisPoints?.let { (it / 100).toString() }.orEmpty()) }
-    val match = EmployerMatch(tiers.mapNotNull { it.toTier() }, cap.toLongOrNull()?.times(100))
+    val match =
+        EmployerMatch(
+            tiers.mapNotNull { it.toTier() },
+            cap.toLongOrNull()?.times(100),
+            vesting,
+            joined.toIntOrNull()?.takeIf { vesting != Vesting.IMMEDIATE },
+        )
     val salaryMinor = salary.toLongOrNull()?.times(100)
     val palette = tandemPalette
     val year = platformTodayIsoDate().take(4).toInt()
@@ -106,22 +115,12 @@ internal fun MatchEditorScreen(
             color = palette.muted,
             fontSize = TandemTypography.compactBody,
         )
-        FilterPills(
-            EmployerMatch.presets.mapIndexed { index, (label, _) -> index to label },
-            EmployerMatch.presets.indexOfFirst { it.second.tiers == match.tiers },
-            { index ->
-                tiers.clear()
-                tiers.addAll(
-                    EmployerMatch.presets[index]
-                        .second.tiers
-                        .map(TierDraft::of),
-                )
-            },
-        )
+        MatchPresetPills(tiers, match)
         MatchTiersCard(tiers)
         TextFieldCard("Yearly match cap ($, optional)", cap, { cap = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("Your yearly salary ($)", salary, { salary = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("You plan to contribute (% of pay)", percent, { percent = it.filter(Char::isDigit) }, numbers)
+        AdvancedMatchCard(vesting, { vesting = it }, joined, { joined = it })
         if (salaryMinor != null && match.tiers.isNotEmpty()) MatchPreviewCard(year, profile, salaryMinor, percent, match)
         TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
             scope.launch {
@@ -137,6 +136,28 @@ internal fun MatchEditorScreen(
             }
         }
     }
+}
+
+private fun wholeUnits(minor: Long?): String = minor?.let { (it / 100).toString() }.orEmpty()
+
+/** Starts the tiers from a common formula, showing which one they match. */
+@Composable
+private fun MatchPresetPills(
+    tiers: MutableList<TierDraft>,
+    match: EmployerMatch,
+) {
+    FilterPills(
+        EmployerMatch.presets.mapIndexed { index, (label, _) -> index to label },
+        EmployerMatch.presets.indexOfFirst { it.second.tiers == match.tiers },
+        { index ->
+            tiers.clear()
+            tiers.addAll(
+                EmployerMatch.presets[index]
+                    .second.tiers
+                    .map(TierDraft::of),
+            )
+        },
+    )
 }
 
 /** Each match tier with its rate, band and size, and a button to add another. */

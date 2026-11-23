@@ -8,6 +8,7 @@ import app.tandemforactual.data.regions.us.retirement.k401.K401
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchResult
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
+import app.tandemforactual.data.regions.us.retirement.k401.Vesting
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -74,5 +75,23 @@ class RetirementPlansTest {
             assertTrue(plan.matchesAccount("My ${plan.accountKeywords.first()} account"))
             assertTrue(plan.allowance(2026, 70) >= plan.allowance(2026, 30))
         }
+    }
+
+    @Test
+    fun vestingDecidesHowMuchOfTheMatchIsYours() {
+        val graded = Vesting(true, 6)
+        assertEquals(listOf(0, 0, 2_000, 4_000, 6_000, 8_000, 10_000, 10_000), (0..7).map(graded::vestedBasisPoints))
+        assertEquals(listOf(0, 0, 0, 10_000), (0..3).map(Vesting(false, 3)::vestedBasisPoints))
+        val match = EmployerMatch.simple(5_000, 600)
+        assertEquals(10_000, match.vestedBasisPoints(2026))
+        assertEquals(null, match.fullyVestedYear)
+        val cliff = match.copy(vesting = Vesting.presets[1].second)
+        assertEquals(null, cliff.vestedBasisPoints(2026))
+        assertEquals(null, cliff.fullyVestedYear)
+        val joined = cliff.copy(joinedYear = 2024)
+        assertEquals(0, joined.vestedBasisPoints(2026))
+        assertEquals(10_000, joined.vestedBasisPoints(2027))
+        assertEquals(0, joined.vestedBasisPoints(2020))
+        assertEquals(2027, joined.fullyVestedYear)
     }
 }
