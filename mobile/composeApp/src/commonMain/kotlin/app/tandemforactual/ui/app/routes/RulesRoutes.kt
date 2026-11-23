@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.app.AppMenuItem
 import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.rules.BudgetRulesScreen
 import app.tandemforactual.ui.feature.rules.ManagePayeesScreen
@@ -53,12 +54,20 @@ internal val rulesMenu: List<MenuEntry> =
     listOf(
         MenuEntry(90) { ctx ->
             with(ctx) {
-                AppMenuItem(Lucide.Wand, "Rules", ruleCount.takeIf { it > 0 }?.let { "$it rules" }) { open(AppRoute.BUDGET_RULES) }
+                AppMenuItem(
+                    Lucide.Wand,
+                    "Rules",
+                    ruleCount.takeIf { it > 0 }?.let { "${formatInteger(it)} rules" },
+                ) { open(AppRoute.BUDGET_RULES) }
             }
         },
         MenuEntry(100) { ctx ->
             with(ctx) {
-                AppMenuItem(Lucide.Store, "Payees", payeeCount.takeIf { it > 0 }?.let { "$it payees" }) { open(AppRoute.MANAGE_PAYEES) }
+                AppMenuItem(
+                    Lucide.Store,
+                    "Payees",
+                    payeeCount.takeIf { it > 0 }?.let { "${formatInteger(it)} payees" },
+                ) { open(AppRoute.MANAGE_PAYEES) }
             }
         },
     )

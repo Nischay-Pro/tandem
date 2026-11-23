@@ -27,7 +27,8 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.Badge
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.AmountHero
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -42,7 +43,7 @@ import com.composables.icons.lucide.Receipt
 /** Prompt to choose a budget when none is open. */
 @Composable
 internal fun AccountDetailChooseBudget(navigation: AppNavigation) {
-    EmptyState(
+    EmptyStateCard(
         "Choose a budget",
         "Open an Actual budget to view its accounts.",
         actionLabel = "Choose budget",
@@ -67,7 +68,7 @@ internal fun AccountDetailHeader(
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Box(Modifier.weight(1f)) {
-            Text(description, color = tandemPalette.muted, fontSize = TandemTypography.label)
+            if (description.isNotBlank()) Badge(description, tandemPalette.muted)
         }
         if (showEdit) {
             TandemIconButton(

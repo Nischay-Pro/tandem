@@ -3,7 +3,6 @@
 package app.tandemforactual.ui.feature.household
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +19,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
+import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -27,7 +27,6 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
@@ -66,11 +65,9 @@ internal fun HouseholdScreen(
             ?.availableLoginMethods
             ?.any { it.method == "openid" && it.active }
     PageColumn(verticalSpacing = TandemSpacing.large) {
-        Text(
+        IntroCard(
             "Actual decides who can open this budget. Everyone who can sees the same accounts and transactions, and their " +
                 "changes sync to you.",
-            color = palette.muted,
-            fontSize = TandemTypography.compactBody,
         )
         ShareBudgetSection(state, householdShareSteps(state, mobileSession, openId), openId, share)
         DevicesSection(mobileSession.planning.deviceNames, thisNode, deviceName) { renaming = true }

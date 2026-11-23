@@ -30,7 +30,7 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -50,7 +50,7 @@ internal fun SyncCenterScreen(
 ) {
     if (state.selectedBudgetId.isBlank()) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to see changes waiting to sync.",
                 actionLabel = "Choose budget",

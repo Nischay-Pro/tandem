@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.app.AppMenuItem
 import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.schedules.UpcomingSchedulesScreen
 import com.composables.icons.lucide.CalendarClock
@@ -36,7 +37,7 @@ internal val schedulesMenu: List<MenuEntry> =
                 AppMenuItem(
                     Lucide.CalendarClock,
                     "Schedules",
-                    scheduleCount.takeIf { it > 0 }?.let { "$it upcoming" },
+                    scheduleCount.takeIf { it > 0 }?.let { "${formatInteger(it)} upcoming" },
                 ) { open(AppRoute.SCHEDULES) }
             }
         },

@@ -29,17 +29,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.state.MerchantIconCatalog
 import app.tandemforactual.ui.core.state.MerchantIconNotice
+import app.tandemforactual.ui.core.ui.ActivitySearchInput
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.TextFieldCard
-import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -69,7 +69,7 @@ internal fun MerchantIconLicensesScreen(
         modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
     ) {
-        TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Library, icon, license or source"))
+        ActivitySearchInput(query, onValueChange = { query = it }, placeholder = "Library, icon, license or source")
         LazyColumn(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentPadding = PaddingValues(bottom = TandemSpacing.large),
@@ -81,7 +81,7 @@ internal fun MerchantIconLicensesScreen(
                     when {
                         loadError != null -> loadError
                         merchantIconCatalog == null -> "Loading icons…"
-                        else -> "Icons · ${filteredNotices.size} of ${merchantIconCatalog.notices.size}"
+                        else -> "Icons · ${formatInteger(filteredNotices.size)} of ${formatInteger(merchantIconCatalog.notices.size)}"
                     },
                     Modifier.padding(top = TandemSpacing.medium),
                     color = tandemPalette.muted,
@@ -89,7 +89,7 @@ internal fun MerchantIconLicensesScreen(
                 )
             }
             if (merchantIconCatalog != null && filteredNotices.isEmpty() && libraries.isEmpty()) {
-                item(key = "empty") { EmptyState("Nothing matches", "Try another search.") }
+                item(key = "empty") { EmptyStateCard("Nothing matches", "Try another search.") }
             }
             items(filteredNotices, key = { it.resourceName }) { notice ->
                 MerchantIconNoticeCard(

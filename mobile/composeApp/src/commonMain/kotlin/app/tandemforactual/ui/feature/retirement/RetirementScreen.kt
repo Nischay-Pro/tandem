@@ -39,7 +39,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -66,7 +66,7 @@ internal fun RetirementScreen(
     val palette = tandemPalette
     if (profiles.isEmpty()) {
         PageColumn(verticalSpacing = TandemSpacing.large) {
-            EmptyState(
+            EmptyStateCard(
                 "Track your retirement accounts",
                 "Tell Tandem where you save and which Actual accounts hold your 401(k), IRA, PPF or others. It works out each year’s room from your deposits.",
             )

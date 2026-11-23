@@ -21,7 +21,7 @@ import app.tandemforactual.ui.core.state.incomeCategoryIds
 import app.tandemforactual.ui.core.state.rememberBudgetTransactions
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
@@ -55,7 +55,7 @@ internal fun CustomReportsScreen(
     }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (reports.isEmpty()) {
-            EmptyState(
+            EmptyStateCard(
                 "Build your own report",
                 "Pick a period, group by category, payee or account, and filter down to what you want to see. Save it to come back later.",
                 actionLabel = "New report",

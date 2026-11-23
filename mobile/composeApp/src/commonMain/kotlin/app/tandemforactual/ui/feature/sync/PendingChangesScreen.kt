@@ -48,7 +48,7 @@ import app.tandemforactual.ui.core.state.longValue
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.design.buttons.PrimaryButton
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -77,7 +77,7 @@ internal fun PendingChangesScreen(
 ) {
     if (state.selectedBudgetId.isBlank()) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Choose a budget",
                 "Open an Actual budget to see changes saved on this device.",
                 actionLabel = "Choose budget",

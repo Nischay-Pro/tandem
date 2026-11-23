@@ -225,7 +225,7 @@ class ActualDirectBudget private constructor(
         locked {
             synchronize()
             runSchedules(today)
-            val result = block(ActualBudgetEdits(writer, { today }))
+            val result = writer.atOneMoment { block(ActualBudgetEdits(writer, { today })) }
             synchronize()
             result
         }

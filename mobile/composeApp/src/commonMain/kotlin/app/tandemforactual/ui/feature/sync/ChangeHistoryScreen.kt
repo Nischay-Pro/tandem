@@ -47,7 +47,7 @@ import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
@@ -183,11 +183,11 @@ private fun LazyListScope.changeHistoryStatusItems(
             }
         history == null ->
             item(key = "error") {
-                EmptyState("Couldn’t read the change history", "Open the budget while connected to Actual, then try again.")
+                EmptyStateCard("Couldn’t read the change history", "Open the budget while connected to Actual, then try again.")
             }
         isEmpty ->
             item(key = "empty") {
-                EmptyState("No changes yet", "Edits made on any device after this one opened the budget appear here.")
+                EmptyStateCard("No changes yet", "Edits made on any device after this one opened the budget appear here.")
             }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.design.buttons.SecondaryButton
+import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -162,6 +164,19 @@ internal fun EmptyState(
         if (actionLabel != null && onAction != null) {
             SecondaryButton(actionLabel, onClick = onAction)
         }
+    }
+}
+
+@Composable
+internal fun EmptyStateCard(
+    title: String,
+    message: String? = null,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    SurfaceCard(modifier) {
+        EmptyState(title, message, Modifier.fillMaxWidth().padding(TandemSpacing.large), actionLabel, onAction)
     }
 }
 

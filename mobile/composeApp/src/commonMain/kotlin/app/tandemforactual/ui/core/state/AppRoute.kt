@@ -66,6 +66,7 @@ internal enum class AppRoute(
     RESIDENCE_PERIOD("Edit period"),
     RELOCATION("Moving countries"),
     WHAT_IF("What if"),
+    EXTRA_MONEY("Extra money"),
     SPENDING_TRENDS("Spending trends"),
     SPENDING_FORECAST("Spending forecast"),
     GOAL_TIMELINE("Goal timeline"),
