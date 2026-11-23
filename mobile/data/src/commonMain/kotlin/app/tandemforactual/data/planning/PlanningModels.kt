@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
@@ -246,7 +247,15 @@ data class RetirementProfile(
     val salaryMinor: Long? = null,
     val contributionBasisPoints: Int? = null,
     val match: EmployerMatch? = null,
+    /** Limits entered by hand, by year, for when the rules change before Tandem's published figures do. */
+    val limitOverrides: Map<Int, Long> = emptyMap(),
 ) {
+    /** The year's limit: the one entered by hand, or the plan's published one with catch-ups. */
+    fun allowance(
+        plan: RetirementPlan,
+        year: Int,
+    ): Long = limitOverrides[year] ?: plan.allowance(year, age, family)
+
     fun toJson(): JsonObject =
         jsonOf(
             "accountId" to accountId.json(),
@@ -257,6 +266,17 @@ data class RetirementProfile(
             "salaryMinor" to salaryMinor.json(),
             "contributionBasisPoints" to contributionBasisPoints.json(),
             "match" to (match?.let(::matchJson) ?: JsonNull),
+            "limitOverrides" to
+                if (limitOverrides.isEmpty()) {
+                    JsonNull
+                } else {
+                    JsonObject(
+                        limitOverrides.entries.associate { (y, v) ->
+                            y.toString() to
+                                JsonPrimitive(v)
+                        },
+                    )
+                },
         )
 
     companion object {
@@ -275,6 +295,13 @@ data class RetirementProfile(
             salaryMinor = body.long("salaryMinor"),
             contributionBasisPoints = body.int("contributionBasisPoints"),
             match = (body["match"] as? JsonObject)?.let(::matchFrom),
+            limitOverrides =
+                (body["limitOverrides"] as? JsonObject)
+                    ?.entries
+                    ?.mapNotNull { (year, value) ->
+                        year.toIntOrNull()?.let { y -> (value as? JsonPrimitive)?.longOrNull?.let { y to it } }
+                    }?.toMap()
+                    .orEmpty(),
         )
     }
 }

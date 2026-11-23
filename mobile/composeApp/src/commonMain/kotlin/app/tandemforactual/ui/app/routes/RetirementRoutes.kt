@@ -8,6 +8,7 @@ import app.tandemforactual.ui.app.MenuEntry
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.retirement.MatchEditorScreen
+import app.tandemforactual.ui.feature.retirement.PlanLimitsScreen
 import app.tandemforactual.ui.feature.retirement.RetirementScreen
 import app.tandemforactual.ui.feature.retirement.RetirementSetupScreen
 import com.composables.icons.lucide.Lucide
@@ -32,6 +33,12 @@ internal val retirementScreens: Map<AppRoute, @Composable (ScreenContext) -> Uni
             @Composable { ctx ->
                 with(ctx) {
                     MatchEditorScreen(state, navigation, mobileSession)
+                }
+            },
+        AppRoute.RETIREMENT_LIMITS to
+            @Composable { ctx ->
+                with(ctx) {
+                    PlanLimitsScreen(state, navigation, mobileSession)
                 }
             },
     )

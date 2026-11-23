@@ -40,6 +40,7 @@ class PlanningStoreTest {
                         9_000_000,
                         600,
                         EmployerMatch(listOf(MatchTier(10_000, MatchBand.AMOUNT, 100_000)), capMinor = 50_000),
+                        mapOf(2027 to 2_500_000L),
                     )
                 store.save(profile)
                 store.save(RetirementProfile("us-ira"))
