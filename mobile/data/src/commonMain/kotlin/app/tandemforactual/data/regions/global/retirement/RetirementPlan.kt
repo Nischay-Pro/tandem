@@ -41,6 +41,9 @@ abstract class RetirementPlan {
 
     fun matchesAccount(name: String): Boolean = accountKeywords.any { name.contains(it, ignoreCase = true) }
 
+    /** Less common plans, offered behind the advanced options in setup. */
+    open val advanced: Boolean = false
+
     open val catchUpAge: Int? = null
     open val superCatchUpAges: IntRange? = null
 

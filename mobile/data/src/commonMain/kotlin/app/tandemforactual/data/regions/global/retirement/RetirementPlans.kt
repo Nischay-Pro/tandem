@@ -1,11 +1,15 @@
 package app.tandemforactual.data.regions.global.retirement
 
 import app.tandemforactual.data.regions.Region
+import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
 import app.tandemforactual.data.regions.ca.retirement.tfsa.Tfsa
 import app.tandemforactual.data.regions.india.retirement.epf.Epf
+import app.tandemforactual.data.regions.india.retirement.eps.Eps
 import app.tandemforactual.data.regions.india.retirement.nps.Nps
 import app.tandemforactual.data.regions.india.retirement.ppf.Ppf
+import app.tandemforactual.data.regions.india.retirement.vpf.Vpf
+import app.tandemforactual.data.regions.us.retirement.dcfsa.DependentCareFsa
 import app.tandemforactual.data.regions.us.retirement.fsa.HealthFsa
 import app.tandemforactual.data.regions.us.retirement.hsa.Hsa
 import app.tandemforactual.data.regions.us.retirement.ira.Ira
@@ -13,7 +17,7 @@ import app.tandemforactual.data.regions.us.retirement.k401.K401
 
 /** Every retirement and tax-advantaged account type Tandem knows. Register new plans here. */
 object RetirementPlans {
-    val all: List<RetirementPlan> = listOf(K401, Ira, Hsa, HealthFsa, Rrsp, Tfsa, Epf, Ppf, Nps)
+    val all: List<RetirementPlan> = listOf(K401, Ira, Hsa, HealthFsa, DependentCareFsa, Rrsp, Tfsa, Fhsa, Epf, Eps, Vpf, Ppf, Nps)
 
     fun forRegion(region: Region): List<RetirementPlan> = all.filter { it.region == region }
 
