@@ -3,6 +3,7 @@ package app.tandemforactual.ui.feature.export
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.JurisdictionPeriod
+import app.tandemforactual.data.planning.PensionEstimate
 import app.tandemforactual.data.planning.PlanningBackupSeal
 import app.tandemforactual.data.planning.PlanningSettings
 import app.tandemforactual.data.planning.Reimbursement
@@ -63,6 +64,7 @@ internal fun planningBackup(session: TandemMobileSession): String {
             session.planning.savedSearches.map { Triple(it.id, SavedSearch.TYPE, it.toJson()) } +
             session.planning.jurisdictionPeriods.map { Triple(it.id, JurisdictionPeriod.TYPE, it.toJson()) } +
             session.planning.sharedBills.map { Triple(it.id, SharedBill.TYPE, it.toJson()) } +
+            session.planning.pensionEstimates.map { Triple(it.pensionId, PensionEstimate.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))
     return buildJsonObject {
         put("format", BACKUP_FORMAT)

@@ -120,6 +120,13 @@ class PlanningStore(
 
     suspend fun deleteJurisdictionPeriod(id: String) = delete(id, JurisdictionPeriod.TYPE)
 
+    fun pensionEstimates(): Flow<List<PensionEstimate>> =
+        observe(PensionEstimate.TYPE).map { list -> list.mapNotNull { (id, body) -> PensionEstimate.fromJson(id, body) } }
+
+    suspend fun save(estimate: PensionEstimate) = put(estimate.pensionId, PensionEstimate.TYPE, estimate.toJson())
+
+    suspend fun deletePensionEstimate(pensionId: String) = delete(pensionId, PensionEstimate.TYPE)
+
     fun accountCurrencies(): Flow<List<AccountCurrency>> =
         observe(AccountCurrency.TYPE).map { list -> list.map { (_, body) -> AccountCurrency.fromJson(body) } }
 

@@ -175,6 +175,28 @@ data class Reimbursement(
     }
 }
 
+/** What a person expects from a public pension: a monthly amount in today's money if it starts at [startAge]. */
+data class PensionEstimate(
+    val pensionId: String,
+    val monthlyMinor: Long,
+    val startAge: Int,
+) {
+    fun toJson(): JsonObject = jsonOf("monthlyMinor" to JsonPrimitive(monthlyMinor), "startAge" to JsonPrimitive(startAge))
+
+    companion object {
+        const val TYPE = "planning.pension_estimate"
+
+        fun fromJson(
+            pensionId: String,
+            body: JsonObject,
+        ): PensionEstimate? {
+            val monthly = body.long("monthlyMinor") ?: return null
+            val age = body.int("startAge") ?: return null
+            return PensionEstimate(pensionId, monthly, age)
+        }
+    }
+}
+
 /** The currency an Actual account holds. Actual has no per-account currency, so Tandem keeps it as planning data. */
 data class AccountCurrency(
     val accountId: String,
