@@ -1,6 +1,11 @@
 package app.tandemforactual.data.regions
 
+import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.RrspInputs
 import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
+import app.tandemforactual.data.regions.ca.retirement.grouprrsp.GroupRrsp
+import app.tandemforactual.data.regions.ca.retirement.rpp.Rpp
+import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.data.regions.india.retirement.eps.Eps
 import app.tandemforactual.data.regions.india.retirement.vpf.Vpf
@@ -89,12 +94,37 @@ class RetirementPlansTest {
         assertEquals(25_000_000, Vpf.allowance(2026, 30))
         assertEquals(listOf("in-epf", "in-eps", "in-vpf"), RetirementPlans.all.filter { it.matchesAccount("EPF EPS VPF") }.map { it.id })
         assertEquals(
-            setOf("ca-fhsa", "in-eps", "in-vpf", "us-dependent-care-fsa"),
+            setOf("ca-fhsa", "ca-group-rrsp", "ca-rpp", "in-eps", "in-vpf", "us-dependent-care-fsa"),
             RetirementPlans.all
                 .filter {
                     it.advanced
                 }.map { it.id }
                 .toSet(),
+        )
+    }
+
+    @Test
+    fun rrspRoomFollowsIncomePensionAdjustmentAndCarryForward() {
+        assertEquals(1_800_000, Rrsp.personalRoom(2026, 10_000_000, 0, 0))
+        assertEquals(3_381_000, Rrsp.personalRoom(2026, 50_000_000, 0, 0))
+        assertEquals(1_300_000, Rrsp.personalRoom(2026, 10_000_000, 600_000, 100_000))
+        assertEquals(100_000, Rrsp.personalRoom(2026, 1_000_000, 900_000, 100_000))
+        assertEquals(3_381_000, Rpp.limitFor(2025).limit.standardMinor)
+        assertEquals(3_539_000, Rpp.limitFor(2026).limit.standardMinor)
+        assertEquals("ca-rrsp", GroupRrsp.sharesRoomWith)
+        assertEquals(null, Rrsp.sharesRoomWith)
+        val profile = RetirementProfile("ca-rrsp", rrspInputs = RrspInputs(10_000_000, 600_000, 100_000))
+        assertEquals(1_300_000, profile.rrspRoom(2026))
+        assertEquals(null, RetirementProfile("ca-rrsp").rrspRoom(2026))
+        assertEquals(profile, RetirementProfile.fromJson("ca-rrsp", profile.toJson()))
+        assertEquals(null, RrspInputs.fromJson(kotlinx.serialization.json.JsonObject(emptyMap())))
+        assertEquals(
+            RrspInputs(5),
+            RrspInputs.fromJson(
+                kotlinx.serialization.json.buildJsonObject {
+                    put("earnedIncomeMinor", kotlinx.serialization.json.JsonPrimitive(5))
+                },
+            ),
         )
     }
 }
