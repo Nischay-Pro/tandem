@@ -48,8 +48,7 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.feedback.LabelText
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -187,16 +186,15 @@ private fun CategoryIconPicker(
     category: LiveCategorySummary,
     sheets: CategoryDetailSheetState,
 ) {
-    LabelText("Choose an icon")
     TextFieldCard(
-        "Find an icon",
+        "Icon",
         sheets.iconSearch,
         { sheets.iconSearch = it },
-        TextFieldOptions(placeholder = "Search by name"),
+        TextFieldOptions(placeholder = "Search icons"),
     )
     val visibleIconChoices = categoryIconChoices.filter { it.contains(sheets.iconSearch.trim(), ignoreCase = true) }
     if (visibleIconChoices.isEmpty()) {
-        BodyText("No icons match that search.")
+        EmptyStateCard("No icons match", "Try another name.")
     }
     visibleIconChoices.chunked(4).forEach { rowChoices ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -224,7 +222,7 @@ private fun CategoryIconPicker(
                             tint = tandemPalette.accent,
                         )
                         Text(
-                            if (choice == "Automatic") "Auto" else choice,
+                            choice,
                             color = tandemPalette.text,
                             fontSize = TandemTypography.micro,
                             maxLines = 2,

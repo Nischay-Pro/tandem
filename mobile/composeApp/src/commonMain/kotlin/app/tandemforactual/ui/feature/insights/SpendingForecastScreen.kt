@@ -32,7 +32,7 @@ import app.tandemforactual.ui.core.state.rememberBudgetTransactions
 import app.tandemforactual.ui.core.state.rememberRecordNames
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.ProgressBar
@@ -57,7 +57,7 @@ internal fun SpendingForecastScreen(
     val thisMonth = today.take(7)
     if (state.selectedMonthId != thisMonth) {
         PageColumn(verticalSpacing = TandemSpacing.large) {
-            EmptyState("Forecasts look ahead from today", "Switch to this month to see where your spending is heading.")
+            EmptyStateCard("Forecasts look ahead from today", "Switch to this month to see where your spending is heading.")
             TandemActionButton("Show this month", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                 state.selectedMonthId = thisMonth
                 state.selectedMonth = reportMonthLabel(thisMonth)
@@ -95,7 +95,7 @@ internal fun SpendingForecastScreen(
         if (atRisk.isNotEmpty()) ForecastHeadsUp(state, atRisk, names, forecast.daysInMonth)
         val shown = forecast.categories.sortedByDescending { it.projectedMinor }
         if (shown.isEmpty()) {
-            EmptyState("Nothing to forecast yet", "Spending recorded this month will be projected here.")
+            EmptyStateCard("Nothing to forecast yet", "Spending recorded this month will be projected here.")
         } else {
             SectionCard("By category", "Spent so far and where it’s heading") {
                 shown.forEachIndexed { index, category ->

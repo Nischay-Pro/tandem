@@ -41,7 +41,7 @@ import app.tandemforactual.ui.core.ui.TransactionSyncNotice
 import app.tandemforactual.ui.core.ui.transactionSyncOperations
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
-import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
@@ -73,7 +73,7 @@ internal fun TransactionDetailScreen(
     val amount = state.selectedTransactionAmountMinor
     if (!isLive || amount == null || state.selectedTransactionRecordId.isBlank()) {
         PageColumn {
-            EmptyState(
+            EmptyStateCard(
                 "Transaction unavailable",
                 "Choose a transaction from an open Actual budget.",
                 actionLabel = "Choose budget",

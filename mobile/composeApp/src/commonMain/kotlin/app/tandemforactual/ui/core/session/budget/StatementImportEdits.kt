@@ -8,6 +8,7 @@ import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.api.client.previewBudgetAccountStatementImport
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.budgetWrites
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
@@ -72,7 +73,7 @@ internal suspend fun BudgetEdits.importStatementTransactions(
         "imports",
         payload,
         encryptionPassword,
-        "${transactions.size} transactions",
+        "${formatInteger(transactions.size)} transactions",
     )
 }
 
