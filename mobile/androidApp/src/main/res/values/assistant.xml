@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Words people say to Google Assistant for each feature, as in "Open budget checkup in Tandem". -->
+  <string-array name="feature_add_transaction">
+    <item>add transaction</item>
+    <item>new transaction</item>
+    <item>add an expense</item>
+    <item>log a purchase</item>
+  </string-array>
+  <string-array name="feature_scan_receipt">
+    <item>scan a receipt</item>
+    <item>receipt scanner</item>
+    <item>scan receipt</item>
+  </string-array>
+  <string-array name="feature_budget_checkup">
+    <item>budget checkup</item>
+    <item>checkup</item>
+    <item>budget health</item>
+  </string-array>
+  <string-array name="feature_accounts">
+    <item>accounts</item>
+    <item>balances</item>
+    <item>account balances</item>
+  </string-array>
+</resources>

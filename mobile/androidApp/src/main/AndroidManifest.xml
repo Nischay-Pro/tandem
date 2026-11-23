@@ -12,6 +12,7 @@
     android:theme="@style/Theme.Tandem">
     <activity
       android:name=".MainActivity"
+      android:launchMode="singleTask"
       android:windowSoftInputMode="adjustResize"
       android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden"
       android:icon="@mipmap/ic_launcher"
