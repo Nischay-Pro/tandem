@@ -30,6 +30,8 @@ internal class BudgetGroupListContext(
     val isLiveBudget: Boolean,
     val isTrackingBudget: Boolean,
     val compact: Boolean,
+    /** Scheduled bills still due this month, so what's left to spend can say how much is spoken for. */
+    val billsDueMinor: Long = 0,
 )
 
 /** Header card and category rows for one budget category group. */
