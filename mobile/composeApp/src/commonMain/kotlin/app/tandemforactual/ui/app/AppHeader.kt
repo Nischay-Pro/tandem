@@ -230,6 +230,7 @@ private fun appHeaderTitle(
                 .firstOrNull { it.name == state.selectedReportKindName }
                 ?.title ?: route.title
         AppRoute.CUSTOM_REPORT -> state.selectedCustomReportName.ifBlank { "New report" }
+        AppRoute.SHARED_BILL_EDIT -> if (state.selectedSharedBillId.isBlank()) "Add shared bill" else route.title
         else -> route.title
     }
 }
