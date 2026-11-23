@@ -4,9 +4,6 @@ package app.tandemforactual.ui.feature.home
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,6 +35,8 @@ import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
+import app.tandemforactual.ui.design.theme.tandemFadeEnter
+import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -74,8 +73,10 @@ internal fun ModeStep(
                 ModePreviewCard(mode, state.interfaceMode == mode, Modifier.weight(1f)) { state.interfaceMode = mode }
             }
         }
+        val reduceMotion = tandemReduceMotion
         AnimatedContent(state.interfaceMode, transitionSpec = {
-            fadeIn(tween(TandemMotion.CONTROL_MILLIS)) togetherWith fadeOut(tween(90))
+            tandemFadeEnter(reduceMotion, TandemMotion.CONTROL_MILLIS) togetherWith
+                tandemFadeExit(reduceMotion, TandemMotion.TAB_EXIT_MILLIS)
         }, label = "mode-detail") { mode ->
             Text(
                 stringResource(if (mode == InterfaceMode.MINIMAL) Res.string.mode_minimal_detail else Res.string.mode_advanced_detail),

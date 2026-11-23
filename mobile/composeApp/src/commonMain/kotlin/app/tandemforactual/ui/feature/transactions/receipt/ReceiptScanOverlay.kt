@@ -93,7 +93,7 @@ internal fun ReceiptScanOverlay(
                 val progress by sweep.animateFloat(
                     0f,
                     1f,
-                    infiniteRepeatable(tween(if (reduceMotion) 2_400 else 1_600, easing = LinearEasing), RepeatMode.Reverse),
+                    infiniteRepeatable(tween(1_600, easing = LinearEasing), RepeatMode.Reverse),
                     label = "receipt-sweep-progress",
                 )
                 val shape = RoundedCornerShape(TandemShapes.large)
@@ -118,23 +118,32 @@ internal fun ReceiptScanOverlay(
                             Icon(Lucide.ReceiptText, null, Modifier.fillMaxHeight(0.3f).aspectRatio(1f), tint = palette.muted)
                         }
                         val accent = palette.accent
-                        Canvas(Modifier.fillMaxSize()) {
-                            val y = size.height * progress
-                            val glow = size.height * 0.18f
-                            drawRect(
-                                Brush.verticalGradient(listOf(Color.Transparent, accent.copy(alpha = 0.28f)), startY = y - glow, endY = y),
-                                topLeft = Offset(0f, (y - glow).coerceAtLeast(0f)),
-                                size =
-                                    androidx.compose.ui.geometry
-                                        .Size(size.width, glow.coerceAtMost(y)),
-                            )
-                            drawLine(accent, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx())
-                        }
+                        if (!reduceMotion) ScanLine(accent, progress)
                     }
                 }
                 Text("Reading receipt…", color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
                 Text("Finding the total, store and date on this device", color = palette.muted, fontSize = TandemTypography.compactBody)
             }
         }
+    }
+}
+
+/** The sweeping line and glow over the receipt while it's read. */
+@Composable
+private fun ScanLine(
+    accent: Color,
+    progress: Float,
+) {
+    Canvas(Modifier.fillMaxSize()) {
+        val y = size.height * progress
+        val glow = size.height * 0.18f
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, accent.copy(alpha = 0.28f)), startY = y - glow, endY = y),
+            topLeft = Offset(0f, (y - glow).coerceAtLeast(0f)),
+            size =
+                androidx.compose.ui.geometry
+                    .Size(size.width, glow.coerceAtMost(y)),
+        )
+        drawLine(accent, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx())
     }
 }

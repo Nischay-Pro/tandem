@@ -53,6 +53,8 @@ import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
+import app.tandemforactual.ui.design.theme.tandemFadeEnter
+import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -100,9 +102,11 @@ internal fun PersonalizeScreen(
         }
     }
     TandemBackHandler(enabled = history.isNotEmpty(), onBack = back, onBackProgress = { _, _ -> })
+    val reduceMotion = tandemReduceMotion
     AnimatedContent(
         step,
         transitionSpec = {
+            if (reduceMotion) return@AnimatedContent tandemFadeEnter(true) togetherWith tandemFadeExit(true)
             val forward = targetState.ordinal > initialState.ordinal
             (
                 slideInHorizontally(tween(TandemMotion.ROUTE_MILLIS, easing = FastOutSlowInEasing)) { if (forward) it / 6 else -it / 6 } +
