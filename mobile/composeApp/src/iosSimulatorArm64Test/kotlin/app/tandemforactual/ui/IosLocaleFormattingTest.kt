@@ -4,6 +4,7 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.TransactionDateValidationStatus
 import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
+import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.format.platformFormatCurrency
 import app.tandemforactual.ui.core.format.platformFormatDate
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
@@ -346,7 +347,7 @@ class IosLocaleFormattingTest {
         assertTrue(accountListSubtitle(checking, 1_794_087_360_000)?.startsWith("Last synced ") == true)
         assertEquals("Not synced yet", accountListSubtitle(checking, null))
         assertEquals(
-            "Off budget · Last synced ${formatDateAtEpochMilliseconds(1_794_087_360_000)}",
+            "Off budget · Last synced ${keepTogether(formatDateAtEpochMilliseconds(1_794_087_360_000))}",
             accountListSubtitle(offBudget, 1_794_087_360_000),
         )
         assertEquals("Closed", accountListSubtitle(closed, 1_794_087_360_000))

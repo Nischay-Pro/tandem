@@ -197,6 +197,7 @@ private fun SectionCardLayout(
             if (title.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+                    horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SectionTitleText(title, detail, animateDetail)
