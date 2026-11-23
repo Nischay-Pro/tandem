@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.Reimbursement
+import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
@@ -30,6 +31,7 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
@@ -69,35 +71,66 @@ internal fun ReimbursementCard(
             onClick = { if (existing == null) editing = true else navigation.open(AppRoute.REIMBURSEMENTS) },
         )
     }
-    if (editing) {
-        var from by remember { mutableStateOf("") }
-        var owed by remember { mutableStateOf(formatAmount(-amount, state.budgetDisplaySettings)) }
-        TandemChoiceDialog(visible = true, onDismissRequest = { editing = false }) {
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-                Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                    TandemModalHeader("Expect a reimbursement", onClose = { editing = false }, leadingIcon = Lucide.HandCoins)
-                    TextFieldCard("Who pays you back", from, { from = it }, TextFieldOptions(placeholder = "e.g. Sam, work"))
-                    TextFieldCard("Amount owed", owed, { owed = it }, TextFieldOptions(placeholder = "0.00"))
-                    Text(
-                        "It stays on this budget’s encrypted planning data, not in Actual.",
-                        color = tandemPalette.muted,
-                        fontSize = TandemTypography.label,
-                    )
-                    TandemActionButton("Track it", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
-                        val minor = state.parseAmountMinorUnits(owed)?.let { kotlin.math.abs(it) } ?: -amount
-                        editing = false
-                        scope.launch {
-                            mobileSession.planning.saveReimbursement(
-                                state.selectedBudgetId,
-                                Reimbursement(
-                                    state.selectedTransactionRecordId,
-                                    minor,
-                                    from.trim().ifBlank { null },
-                                    state.transactionPayee.ifBlank { null },
-                                    state.transactionDate.takeIf { it.length == 10 && it[4] == '-' },
-                                ),
-                            )
-                        }
+    if (editing) ReimbursementDialog(state, mobileSession, amount) { editing = false }
+}
+
+/** Asks who pays back and how much; when an FSA or HSA is set up, offers it as the payer with its claim deadline. */
+@Composable
+private fun ReimbursementDialog(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    amount: Long,
+    onClose: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var from by remember { mutableStateOf("") }
+    var owed by remember { mutableStateOf(formatAmount(-amount, state.budgetDisplaySettings)) }
+    var claimBy by remember { mutableStateOf("") }
+    val date = state.transactionDate.takeIf { it.length == 10 && it[4] == '-' }
+    val claimPlans =
+        mobileSession.planning.retirementProfiles
+            .map { it.planId }
+            .filter { it in Reimbursement.claimPlans }
+            .mapNotNull(RetirementPlans::byId)
+    TandemChoiceDialog(visible = true, onDismissRequest = onClose) {
+        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
+            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                TandemModalHeader("Expect a reimbursement", onClose = onClose, leadingIcon = Lucide.HandCoins)
+                if (claimPlans.isNotEmpty()) {
+                    FilterPills(claimPlans.map { it.displayName to it.displayName }, from, { name ->
+                        from = name
+                        val plan = claimPlans.first { it.displayName == name }
+                        claimBy = date?.let { Reimbursement.claimDeadline(plan.id, it) }.orEmpty()
+                    })
+                }
+                TextFieldCard("Who pays you back", from, { from = it }, TextFieldOptions(placeholder = "e.g. Sam, work"))
+                TextFieldCard("Amount owed", owed, { owed = it }, TextFieldOptions(placeholder = "0.00"))
+                TextFieldCard(
+                    "Claim by (optional)",
+                    claimBy,
+                    { claimBy = it.filter { c -> c.isDigit() || c == '-' }.take(10) },
+                    TextFieldOptions(placeholder = "YYYY-MM-DD"),
+                )
+                Text(
+                    "It stays on this budget’s encrypted planning data, not in Actual.",
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.label,
+                )
+                TandemActionButton("Track it", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
+                    val minor = state.parseAmountMinorUnits(owed)?.let { kotlin.math.abs(it) } ?: -amount
+                    onClose()
+                    scope.launch {
+                        mobileSession.planning.saveReimbursement(
+                            state.selectedBudgetId,
+                            Reimbursement(
+                                state.selectedTransactionRecordId,
+                                minor,
+                                from.trim().ifBlank { null },
+                                state.transactionPayee.ifBlank { null },
+                                date,
+                                claimBy = claimBy.takeIf { it.length == 10 && it[4] == '-' && it[7] == '-' },
+                            ),
+                        )
                     }
                 }
             }

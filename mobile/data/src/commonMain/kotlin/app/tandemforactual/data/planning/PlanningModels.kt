@@ -146,8 +146,13 @@ data class Reimbursement(
     val description: String? = null,
     val date: String? = null,
     val receivedOn: String? = null,
+    /** The last day to file the claim, as with an FSA's run-out period. */
+    val claimBy: String? = null,
 ) {
     val received get() = receivedOn != null
+
+    /** Pending with a deadline on or before [date]. */
+    fun claimDueBy(date: String): Boolean = !received && claimBy != null && claimBy <= date
 
     fun toJson(): JsonObject =
         jsonOf(
@@ -156,6 +161,7 @@ data class Reimbursement(
             "description" to description.json(),
             "date" to date.json(),
             "receivedOn" to receivedOn.json(),
+            "claimBy" to claimBy.json(),
         )
 
     companion object {
@@ -171,7 +177,17 @@ data class Reimbursement(
             description = body.text("description"),
             date = body.text("date"),
             receivedOn = body.text("receivedOn"),
+            claimBy = body.text("claimBy"),
         )
+
+        /** Plans that pay back expenses through claims. */
+        val claimPlans = listOf("us-health-fsa", "us-dependent-care-fsa", "us-hsa")
+
+        /** The usual claim deadline for an expense on [date]: an FSA's run-out ends March 31 of the next year; an HSA has none. */
+        fun claimDeadline(
+            planId: String,
+            date: String,
+        ): String? = if (planId == "us-hsa") null else "${date.take(4).toInt() + 1}-03-31"
     }
 }
 

@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.tandemforactual.data.actual.ActualDates
+import app.tandemforactual.data.planning.Reimbursement
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -19,11 +21,14 @@ import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
+import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.HandCoins
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.launch
@@ -36,7 +41,8 @@ internal fun ReimbursementsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val all = mobileSession.planning.reimbursements.sortedByDescending { it.date }
-    val pending = all.filterNot { it.received }
+    val pending = all.filterNot { it.received }.sortedBy { it.claimBy ?: "9999" }
+    val today = platformTodayIsoDate()
     val received = all.filter { it.received }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -44,7 +50,10 @@ internal fun ReimbursementsScreen(
             StatTile("Paid back", state.formatCurrency(received.sumOf { it.amountMinor }), "${received.size} received", Modifier.weight(1f))
         }
         if (all.isEmpty()) {
-            EmptyStateCard("Nothing to be paid back", "Open a purchase and choose Expect a reimbursement to track it here.")
+            EmptyStateCard(
+                "Nothing to be paid back",
+                "Open a purchase and choose Expect a reimbursement to track it here, including FSA and HSA claims.",
+            )
         }
         if (pending.isNotEmpty()) {
             SectionCard("Pending", "Tap one when the money arrives") {
@@ -52,9 +61,17 @@ internal fun ReimbursementsScreen(
                     if (index > 0) DividerLine()
                     ListRow(
                         item.description ?: "Purchase",
-                        listOfNotNull(item.from?.let { "From $it" }, item.date?.let(::formatLiveDate)).joinToString(" · ").ifBlank { null },
+                        listOfNotNull(item.from?.let { "From $it" }, item.date?.let(::formatLiveDate), claimLabel(item, today))
+                            .joinToString(" · ")
+                            .ifBlank { null },
                         state.formatCurrency(item.amountMinor),
                         leading = RowLeading.Payee(item.description, Lucide.HandCoins),
+                        options =
+                            ListRowOptions(
+                                badge =
+                                    RowBadge(Lucide.Clock, tandemPalette.warning, "Claim soon")
+                                        .takeIf { item.claimDueBy(ActualDates.addDays(today, 30)) },
+                            ),
                         onClick = {
                             scope.launch {
                                 mobileSession.planning.saveReimbursement(
@@ -85,4 +102,12 @@ internal fun ReimbursementsScreen(
             }
         }
     }
+}
+
+private fun claimLabel(
+    item: Reimbursement,
+    today: String,
+): String? {
+    val deadline = item.claimBy ?: return null
+    return if (deadline < today) "Claim deadline passed" else "Claim by ${formatLiveDate(deadline)}"
 }
