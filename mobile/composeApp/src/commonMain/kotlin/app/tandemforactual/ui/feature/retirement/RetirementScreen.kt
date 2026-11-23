@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.JurisdictionTimeline
 import app.tandemforactual.data.planning.PeriodKind
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.regions.Region
+import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.data.regions.us.retirement.k401.K401
@@ -100,21 +102,7 @@ internal fun RetirementScreen(
             .entries
             .sortedBy { (region, _) -> order.indexOf(region.name).let { if (it < 0) Int.MAX_VALUE else it } }
             .forEach { (region, regionProfiles) ->
-                Text(region.displayName.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
-                if (livingIn.isNotEmpty() && region !in livingIn) {
-                    Text(
-                        "You don’t live here now. These plans keep their history; check the rules before paying in.",
-                        color = palette.muted,
-                        fontSize = TandemTypography.label,
-                    )
-                }
-                regionProfiles.forEach { profile ->
-                    val plan = RetirementPlans.byId(profile.planId)!!
-                    val accountName = profile.accountId?.let { id -> liveAccounts.firstOrNull { it.id == id }?.name }
-                    PlanCard(plan, profile, accountName, year, profile.accountId?.let { inflows[it]?.get(year) } ?: 0) {
-                        navigation.open(AppRoute.RETIREMENT_MATCH)
-                    }
-                }
+                RegionPlans(region, regionProfiles, profiles, liveAccounts, inflows, year, livingIn, navigation)
             }
         TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
             navigation.open(AppRoute.RETIREMENT_SETUP)
@@ -134,6 +122,46 @@ internal fun RetirementScreen(
     }
 }
 
+/** One country's heading and its plans; plans that share another's room are folded into that plan's card. */
+@Composable
+private fun RegionPlans(
+    region: Region,
+    regionProfiles: List<RetirementProfile>,
+    profiles: List<RetirementProfile>,
+    liveAccounts: List<LiveAccountSummary>,
+    inflows: Map<String, Map<Int, Long>>,
+    year: Int,
+    livingIn: List<Region>,
+    navigation: AppNavigation,
+) {
+    val palette = tandemPalette
+    Text(region.displayName.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
+    if (livingIn.isNotEmpty() && region !in livingIn) {
+        Text(
+            "You don’t live here now. These plans keep their history; check the rules before paying in.",
+            color = palette.muted,
+            fontSize = TandemTypography.label,
+        )
+    }
+    val setUp = profiles.map { it.planId }.toSet()
+    regionProfiles.filter { RetirementPlans.byId(it.planId)?.sharesRoomWith !in setUp }.forEach { profile ->
+        val plan = RetirementPlans.byId(profile.planId)!!
+        val sharing = profiles.filter { RetirementPlans.byId(it.planId)?.sharesRoomWith == plan.id }
+        val deposits = (listOf(profile) + sharing).sumOf { p -> p.accountId?.let { inflows[it]?.get(year) } ?: 0 }
+        val accountName = profile.accountId?.let { id -> liveAccounts.firstOrNull { it.id == id }?.name }
+        PlanCard(
+            plan,
+            profile,
+            accountName,
+            year,
+            deposits,
+            onEditMatch = { navigation.open(AppRoute.RETIREMENT_MATCH) },
+            onEditRoom = { navigation.open(AppRoute.RRSP_ROOM) },
+            sharedWith = sharing.mapNotNull { RetirementPlans.byId(it.planId)?.displayName },
+        )
+    }
+}
+
 @Composable
 private fun PlanCard(
     plan: RetirementPlan,
@@ -142,11 +170,14 @@ private fun PlanCard(
     year: Int,
     depositsMinor: Long,
     onEditMatch: () -> Unit,
+    onEditRoom: () -> Unit,
+    sharedWith: List<String>,
 ) {
     val palette = tandemPalette
     val lookup = plan.limitFor(year)
-    val allowance = profile.allowance(plan, year)
     val custom = year in profile.limitOverrides
+    val ownRoom = profile.rrspRoom(year).takeIf { !custom && plan == Rrsp && year == platformTodayIsoDate().take(4).toInt() }
+    val allowance = ownRoom ?: profile.allowance(plan, year)
     val match = profile.match
     val salary = profile.salaryMinor
     val (yours, employer) =
@@ -189,6 +220,7 @@ private fun PlanCard(
                 )
             }
             if (plan == K401) EmployerMatchStatus(year, profile, yours, ::money, onEditMatch)
+            PlanRoomNotes(plan == Rrsp, ownRoom != null, sharedWith, onEditRoom)
             if (plan == K401 && employer > 0) VestingStatus(profile.match, year, employer, ::money)
         }
     }
@@ -244,6 +276,37 @@ private fun EmployerMatchStatus(
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.Medium,
     )
+}
+
+/** Which plans share this room, and for an RRSP, a link to work out your own room. */
+@Composable
+private fun PlanRoomNotes(
+    isRrsp: Boolean,
+    ownRoom: Boolean,
+    sharedWith: List<String>,
+    onEditRoom: () -> Unit,
+) {
+    val palette = tandemPalette
+    if (sharedWith.isNotEmpty()) {
+        Text(
+            "Includes ${sharedWith.joinToString()}, which shares this room",
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+        )
+    }
+    if (isRrsp) {
+        Text(
+            if (ownRoom) {
+                "Your own room, from your notice of assessment"
+            } else {
+                "Work out your own room from your notice of assessment"
+            },
+            Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditRoom),
+            color = palette.accent,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
 /** How much of the employer's money is yours yet, when the match vests over time. */

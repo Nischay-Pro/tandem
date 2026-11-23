@@ -29,4 +29,17 @@ object Rrsp : RetirementPlan() {
             2025 to 3_249_000L,
             2026 to 3_381_000L,
         ).map { (year, amount) -> AnnualLimit(year, amount) }
+
+    /**
+     * Your own room for [year]: 18% of last year's earned income up to the dollar limit, less last year's pension adjustment,
+     * plus unused room carried forward. Your notice of assessment shows the same figure as your deduction limit.
+     */
+    fun personalRoom(
+        year: Int,
+        earnedIncomeMinor: Long,
+        pensionAdjustmentMinor: Long,
+        carryForwardMinor: Long,
+    ): Long =
+        (minOf(earnedIncomeMinor * 18 / 100, limitFor(year).limit.standardMinor) - pensionAdjustmentMinor).coerceAtLeast(0) +
+            carryForwardMinor
 }

@@ -39,7 +39,11 @@ internal fun PlanLimitsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val palette = tandemPalette
-    val profiles = mobileSession.planning.retirementProfiles.filter { RetirementPlans.byId(it.planId) != null }
+    val profiles =
+        mobileSession.planning.retirementProfiles.filter {
+            RetirementPlans.byId(it.planId)?.let { plan -> plan.sharesRoomWith == null } ==
+                true
+        }
     val thisYear = platformTodayIsoDate().take(4).toInt()
     var year by remember { mutableStateOf(thisYear) }
     val drafts = remember(year) { mutableStateMapOf<String, String>() }

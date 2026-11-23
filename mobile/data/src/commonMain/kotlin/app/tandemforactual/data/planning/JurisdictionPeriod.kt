@@ -79,7 +79,8 @@ sealed interface RelocationStep {
 }
 
 object JurisdictionTimeline {
-    private val employerPlans = setOf("us-401k", "us-health-fsa", "us-dependent-care-fsa", "in-epf", "in-eps", "in-vpf")
+    private val employerPlans =
+        setOf("us-401k", "us-health-fsa", "us-dependent-care-fsa", "in-epf", "in-eps", "in-vpf", "ca-group-rrsp", "ca-rpp")
     private val currencies =
         mapOf(
             Region.US to "USD",

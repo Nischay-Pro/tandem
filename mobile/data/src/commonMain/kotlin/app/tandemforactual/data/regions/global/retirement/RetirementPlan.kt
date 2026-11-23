@@ -44,6 +44,9 @@ abstract class RetirementPlan {
     /** Less common plans, offered behind the advanced options in setup. */
     open val advanced: Boolean = false
 
+    /** Another plan whose yearly room this one uses, as a group RRSP uses the RRSP's. */
+    open val sharesRoomWith: String? = null
+
     open val catchUpAge: Int? = null
     open val superCatchUpAges: IntRange? = null
 

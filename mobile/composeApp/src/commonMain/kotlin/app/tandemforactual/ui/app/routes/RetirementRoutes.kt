@@ -12,6 +12,7 @@ import app.tandemforactual.ui.feature.retirement.PlanLimitsScreen
 import app.tandemforactual.ui.feature.retirement.PublicPensionsScreen
 import app.tandemforactual.ui.feature.retirement.RetirementScreen
 import app.tandemforactual.ui.feature.retirement.RetirementSetupScreen
+import app.tandemforactual.ui.feature.retirement.RrspRoomScreen
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank
 
@@ -22,6 +23,12 @@ internal val retirementScreens: Map<AppRoute, @Composable (ScreenContext) -> Uni
             @Composable { ctx ->
                 with(ctx) {
                     RetirementScreen(state, navigation, mobileSession, liveAccounts)
+                }
+            },
+        AppRoute.RRSP_ROOM to
+            @Composable { ctx ->
+                with(ctx) {
+                    RrspRoomScreen(state, navigation, mobileSession)
                 }
             },
         AppRoute.RETIREMENT_SETUP to

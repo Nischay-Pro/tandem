@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
@@ -289,12 +290,18 @@ data class RetirementProfile(
     val match: EmployerMatch? = null,
     /** Limits entered by hand, by year, for when the rules change before Tandem's published figures do. */
     val limitOverrides: Map<Int, Long> = emptyMap(),
+    /** Last year's earned income, pension adjustment and unused room, for working out RRSP room. */
+    val rrspInputs: RrspInputs? = null,
 ) {
     /** The year's limit: the one entered by hand, or the plan's published one with catch-ups. */
     fun allowance(
         plan: RetirementPlan,
         year: Int,
     ): Long = limitOverrides[year] ?: plan.allowance(year, age, family)
+
+    /** RRSP room worked out from [rrspInputs], or null when they aren't entered. */
+    fun rrspRoom(year: Int): Long? =
+        rrspInputs?.let { Rrsp.personalRoom(year, it.earnedIncomeMinor, it.pensionAdjustmentMinor, it.carryForwardMinor) }
 
     fun toJson(): JsonObject =
         jsonOf(
@@ -317,6 +324,7 @@ data class RetirementProfile(
                         },
                     )
                 },
+            "rrsp" to (rrspInputs?.toJson() ?: JsonNull),
         )
 
     companion object {
@@ -342,7 +350,29 @@ data class RetirementProfile(
                         year.toIntOrNull()?.let { y -> (value as? JsonPrimitive)?.longOrNull?.let { y to it } }
                     }?.toMap()
                     .orEmpty(),
+            rrspInputs = (body["rrsp"] as? JsonObject)?.let(RrspInputs::fromJson),
         )
+    }
+}
+
+/** The figures from last year's notice of assessment that set this year's RRSP room. */
+data class RrspInputs(
+    val earnedIncomeMinor: Long,
+    val pensionAdjustmentMinor: Long = 0,
+    val carryForwardMinor: Long = 0,
+) {
+    fun toJson(): JsonObject =
+        jsonOf(
+            "earnedIncomeMinor" to JsonPrimitive(earnedIncomeMinor),
+            "pensionAdjustmentMinor" to JsonPrimitive(pensionAdjustmentMinor),
+            "carryForwardMinor" to JsonPrimitive(carryForwardMinor),
+        )
+
+    companion object {
+        fun fromJson(body: JsonObject): RrspInputs? =
+            body.long("earnedIncomeMinor")?.let {
+                RrspInputs(it, body.long("pensionAdjustmentMinor") ?: 0, body.long("carryForwardMinor") ?: 0)
+            }
     }
 }
 
