@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.OpenIdLoginProofState
 import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -69,7 +70,8 @@ internal fun StartupEffects(
         }
     }
     LaunchedEffect(state.selectedBudgetId, state.selectedBudgetEncrypted) {
-        if (state.selectedBudgetEncrypted) state.backgroundSyncEnabled = false
+        val keyFor = BackgroundBudgetKey.budgetIn(env.backgroundBudgetKeyStore)
+        if (state.selectedBudgetEncrypted && keyFor != state.selectedBudgetId) state.backgroundSyncEnabled = false
     }
     LaunchedEffect(
         shell.cacheDiscoveryComplete,
