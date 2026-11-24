@@ -81,7 +81,7 @@ internal fun BankConnectionsScreen(
         SectionCard("Bank icons") {
             ToggleRow(
                 "Download bank icons",
-                "Fetches each linked bank's icon from its own website. Only the bank's web address is sent.",
+                "Fetches each linked bank’s icon from its own website. Only the bank’s web address is sent.",
                 state.bankIconsEnabled,
             ) { state.bankIconsEnabled = it }
         }
