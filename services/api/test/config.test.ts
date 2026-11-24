@@ -13,7 +13,17 @@ describe("config", () => {
       port: 19753,
       databaseUrl: "postgresql://db",
       actualServerUrl: "https://actual.example",
+      trustProxy: false,
     });
+    expect(parseConfig({ ...base, TRUST_PROXY: " true " }).trustProxy).toBe(
+      true,
+    );
+    expect(parseConfig({ ...base, TRUST_PROXY: "false" }).trustProxy).toBe(
+      false,
+    );
+    expect(parseConfig({ ...base, TRUST_PROXY: "172.18.0.1" }).trustProxy).toBe(
+      "172.18.0.1",
+    );
     expect(
       parseConfig({ ...base, HOST: "127.0.0.1", PORT: "8080" }),
     ).toMatchObject({ host: "127.0.0.1", port: 8080 });

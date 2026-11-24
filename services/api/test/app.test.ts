@@ -36,9 +36,10 @@ const auth = { "x-actual-token": "token" };
 
 describe("extension sync", () => {
   it("limits each session's request rate", async () => {
+    const known = { ...allow(), isKnown: (token: string) => token !== "guess" };
     const server = await buildApp({
       store: new InMemoryExtensionStore(),
-      access: allow(),
+      access: known,
       actualServerUrl: "https://actual.example",
       requestsPerMinute: 2,
     });
@@ -55,6 +56,28 @@ describe("extension sync", () => {
     expect(limited.json().error.code).toBe("rate_limited");
     expect((await get({ "x-actual-token": "other" })).statusCode).toBe(200);
     expect((await get()).statusCode).toBe(401);
+  });
+
+  it("limits unverified tokens by client address", async () => {
+    const access = allow("denied");
+    const server = await buildApp({
+      store: new InMemoryExtensionStore(),
+      access,
+      actualServerUrl: "https://actual.example",
+      requestsPerMinute: 2,
+      trustProxy: true,
+    });
+    const get = (token: string, ip: string) =>
+      server.inject({
+        method: "GET",
+        url: "/extension/v1/budgets/b1/changes",
+        headers: { "x-actual-token": token, "x-forwarded-for": ip },
+      });
+    expect((await get("a", "203.0.113.1")).statusCode).toBe(403);
+    expect((await get("b", "203.0.113.1")).statusCode).toBe(403);
+    expect((await get("c", "203.0.113.1")).statusCode).toBe(429);
+    expect((await get("d", "203.0.113.2")).statusCode).toBe(403);
+    expect(access.calls).toHaveLength(3);
   });
 
   it("reports health and capabilities", async () => {

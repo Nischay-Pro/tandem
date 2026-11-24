@@ -5,6 +5,7 @@ export interface ExtensionConfig {
   port: number;
   databaseUrl: string;
   actualServerUrl: string;
+  trustProxy: boolean | string;
 }
 
 export class ConfigError extends Error {}
@@ -33,5 +34,13 @@ export function parseConfig(environment: Environment): ExtensionConfig {
     port,
     databaseUrl,
     actualServerUrl: origin.toString().replace(/\/$/, ""),
+    trustProxy: parseTrustProxy(environment.TRUST_PROXY),
   };
+}
+
+/** "true" trusts every proxy; anything else is a Fastify trust list such as "loopback" or "10.0.0.0/8". */
+function parseTrustProxy(value: string | undefined): boolean | string {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "false") return false;
+  return trimmed === "true" ? true : trimmed;
 }

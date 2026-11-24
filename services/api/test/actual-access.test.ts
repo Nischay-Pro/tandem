@@ -72,4 +72,54 @@ describe("Actual budget access", () => {
       ActualBudgetAccess,
     );
   });
+
+  it("remembers rejected tokens briefly and knows accepted ones", async () => {
+    let now = 0;
+    const { urls, fetcher } = fakeFetch([
+      { ok: false, status: 401 },
+      { ok: true, status: 200, body: { data: [{ groupId: "a" }] } },
+      { ok: true, status: 200, body: { data: [{ groupId: "a" }] } },
+    ]);
+    const access = new ActualBudgetAccess(
+      "https://actual.example",
+      fetcher,
+      () => now,
+    );
+    expect(await access.check("bad", "a")).toBe("denied");
+    expect(await access.check("bad", "a")).toBe("denied");
+    expect(access.isKnown("bad")).toBe(false);
+    expect(urls).toHaveLength(1);
+    now = 11_000;
+    expect(await access.check("bad", "a")).toBe("allowed");
+    expect(access.isKnown("bad")).toBe(true);
+    expect(access.isKnown("never")).toBe(false);
+    now = 80_000;
+    expect(access.isKnown("bad")).toBe(false);
+    expect(await access.check("bad", "a")).toBe("allowed");
+  });
+
+  it("keeps the cache bounded", async () => {
+    let now = 0;
+    const fetcher = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    });
+    const access = new ActualBudgetAccess(
+      "https://actual.example",
+      fetcher,
+      () => now,
+    );
+    for (let i = 0; i < 10_000; i++) await access.check(`t${i}`, "a");
+    now = 5_000;
+    await access.check("newest", "a");
+    const size = (access as unknown as { cache: Map<string, unknown> }).cache
+      .size;
+    expect(size).toBe(10_000);
+    now = 20_000;
+    await access.check("after-expiry", "a");
+    expect(
+      (access as unknown as { cache: Map<string, unknown> }).cache.size,
+    ).toBe(1);
+  });
 });
