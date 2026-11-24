@@ -102,7 +102,14 @@ internal fun BankConnectionsScreen(
         ui.browserProvider = null
         actions.pickProviderAccount(provider, providerAccount)
     }
-    LinkBankAccountDialog(ui.linking, liveAccounts, linked, onDismiss = { ui.linking = null }, onPick = actions::linkInto)
+    LinkBankAccountDialog(
+        ui.linking,
+        liveAccounts,
+        linked,
+        onDismiss = { ui.linking = null },
+        onPick = actions::linkInto,
+        onCreate = actions::linkIntoNew,
+    )
 }
 
 /** The budget accounts already linked to a bank, with a button to sync them. */

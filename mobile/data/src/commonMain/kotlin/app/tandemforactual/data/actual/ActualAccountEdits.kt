@@ -28,6 +28,21 @@ fun ActualBudgetEdits.createAccount(
         id
     }
 
+/** Creates a budget account for a bank or card account and links it at once; its first sync sets the starting balance. */
+fun ActualBudgetEdits.createLinkedAccount(
+    name: String,
+    offBudget: Boolean,
+    source: String,
+    providerAccountId: String,
+    bankId: String,
+    bankName: String?,
+): String =
+    writer.batch {
+        val id = createAccount(name.trim().ifEmpty { bankName?.trim()?.ifEmpty { null } ?: "Bank account" }, offBudget, null)
+        linkBankAccount(id, source, providerAccountId, bankId, bankName)
+        id
+    }
+
 fun ActualBudgetEdits.renameAccount(
     id: String,
     name: String,

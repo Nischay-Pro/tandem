@@ -21,6 +21,7 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
@@ -29,6 +30,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.WalletCards
 
 /** Picks the unlinked budget account a bank account should sync into. */
@@ -39,13 +41,18 @@ internal fun LinkBankAccountDialog(
     linked: List<LinkedAccount>,
     onDismiss: () -> Unit,
     onPick: (LiveAccountSummary) -> Unit,
+    onCreate: (offBudget: Boolean) -> Unit,
 ) {
     val palette = tandemPalette
     TandemChoiceDialog(visible = target != null, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 TandemModalHeader("Link ${target?.second?.name.orEmpty()}", onClose = onDismiss, leadingIcon = Lucide.Landmark)
-                Text("Choose the budget account it should sync into.", color = palette.muted, fontSize = TandemTypography.compactBody)
+                Text(
+                    "Choose the budget account it should sync into, or create one.",
+                    color = palette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
                 val candidates =
                     remember(target, liveAccounts, linked) {
                         val open = liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }
@@ -65,7 +72,29 @@ internal fun LinkBankAccountDialog(
                         )
                     }
                 }
+                DividerLine()
+                NewLinkedAccountRows(target?.second?.name.orEmpty(), onCreate)
             }
         }
     }
+}
+
+/** Creates the budget account for a bank or card account that doesn't have one yet; the first sync sets its balance. */
+@Composable
+private fun NewLinkedAccountRows(
+    name: String,
+    onCreate: (offBudget: Boolean) -> Unit,
+) {
+    ListRow(
+        "New on-budget account",
+        name.ifBlank { null },
+        leading = RowLeading.Icon(Lucide.Plus),
+        onClick = { onCreate(false) },
+    )
+    ListRow(
+        "New off-budget account",
+        "For accounts you track but don’t budget, such as investments",
+        leading = RowLeading.Icon(Lucide.Plus),
+        onClick = { onCreate(true) },
+    )
 }
