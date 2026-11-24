@@ -16,6 +16,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLParameter
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -88,12 +89,17 @@ class ExtensionSyncClient(
         return true
     }
 
-    override suspend fun changes(after: Long): RemotePlanningPage {
-        val body = json(http.get("$base/changes?after=$after&limit=200") { auth() })
+    override suspend fun changes(
+        after: Long,
+        anchor: String?,
+    ): RemotePlanningPage {
+        val query = anchor?.let { "&anchor=${it.encodeURLParameter()}" }.orEmpty()
+        val body = json(http.get("$base/changes?after=$after&limit=200$query") { auth() })
         return RemotePlanningPage(
             body.getValue("records").jsonArray.map { record(it.jsonObject) },
             body.getValue("cursor").jsonPrimitive.long,
             body.getValue("hasMore").jsonPrimitive.boolean,
+            body["restored"]?.jsonPrimitive?.boolean ?: false,
         )
     }
 

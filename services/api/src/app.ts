@@ -304,7 +304,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
 
   app.get<{
     Params: { budgetId: string };
-    Querystring: { after?: number; limit?: number };
+    Querystring: { after?: number; limit?: number; anchor?: string };
   }>(
     "/extension/v1/budgets/:budgetId/changes",
     {
@@ -317,6 +317,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
           properties: {
             after: { type: "integer", minimum: 0 },
             limit: { type: "integer", minimum: 1, maximum: 500 },
+            anchor: { type: "string", pattern: "^[A-Za-z0-9-]{1,100}$" },
           },
         },
         response: {
@@ -326,6 +327,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
               records: { type: "array", items: sealedRecord },
               cursor: { type: "integer" },
               hasMore: { type: "boolean" },
+              restored: { type: "boolean" },
             },
           },
           401: errorSchema,
@@ -347,6 +349,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
         scope(request.params.budgetId),
         request.query.after ?? 0,
         request.query.limit ?? 200,
+        request.query.anchor,
       );
     },
   );

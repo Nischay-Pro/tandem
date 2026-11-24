@@ -50,7 +50,7 @@ class ExtensionSyncClientTest {
                                 }
                             request.url.encodedPath.endsWith("/changes") ->
                                 respond(
-                                    """{"records":[{"recordId":"r","recordType":"planning.savings_goal","schemaVersion":1,"revision":2,"deleted":false,"iv":"AQ==","ciphertext":"Ag==","seq":7}],"cursor":7,"hasMore":false}""",
+                                    """{"records":[{"recordId":"r","recordType":"planning.savings_goal","schemaVersion":1,"revision":2,"deleted":false,"iv":"AQ==","ciphertext":"Ag==","seq":7}],"cursor":7,"hasMore":false${if ("anchor" in request.url.encodedQuery) ""","restored":true""" else ""}}""",
                                     headers = json,
                                 )
                             request.url.encodedPath.endsWith("/records/fresh") -> respond("""{"seq":8}""", headers = json)
@@ -81,6 +81,9 @@ class ExtensionSyncClientTest {
             assertEquals(7, page.cursor)
             assertFalse(page.hasMore)
             assertContentEquals(byteArrayOf(2), page.records.single().ciphertext)
+            assertFalse(page.restored)
+            assertTrue(client.changes(7, "r 1").restored)
+            assertTrue("GET /extension/v1/budgets/b1/changes?after=7&limit=200&anchor=r%201 session" in seen)
             assertEquals(RemoteWrite.Stored(8), client.put("fresh", "t", 1, 1, null, false, byteArrayOf(1), byteArrayOf(2)))
             assertEquals(
                 4L,

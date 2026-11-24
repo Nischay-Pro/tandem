@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
 /** The extension sync rules in memory: next-revision writes, sequence-ordered changes, one guarded key. */
 private class FakeServer {
     val records = linkedMapOf<String, RemotePlanningRecord>()
+    val writes = mutableMapOf<Long, String>()
     var key: WrappedPlanningKey? = null
     var seq = 0L
     var pageSize = 1
@@ -40,10 +41,14 @@ private class FakeServer {
                 return true
             }
 
-            override suspend fun changes(after: Long): RemotePlanningPage {
+            override suspend fun changes(
+                after: Long,
+                anchor: String?,
+            ): RemotePlanningPage {
                 val all = records.values.filter { it.seq > after }.sortedBy { it.seq }
                 val page = all.take(pageSize)
-                return RemotePlanningPage(page, page.lastOrNull()?.seq ?: after, all.size > pageSize)
+                val restored = after > 0 && if (anchor == null) records.values.none { it.seq >= after } else writes[after] != anchor
+                return RemotePlanningPage(page, page.lastOrNull()?.seq ?: after, all.size > pageSize, restored)
             }
 
             override suspend fun put(
@@ -61,6 +66,7 @@ private class FakeServer {
                 if (baseRevision != current?.revision || revision != (current?.revision ?: 0) + 1) return RemoteWrite.Conflict(current)
                 val stored = RemotePlanningRecord(recordId, recordType, schemaVersion, revision, deleted, iv, ciphertext, ++seq)
                 records[recordId] = stored
+                writes[stored.seq] = recordId
                 return RemoteWrite.Stored(stored.seq)
             }
         }
@@ -89,6 +95,61 @@ class PlanningSyncTest {
         assertFalse(wrapped.equals("x"))
         assertEquals(wrapped.hashCode(), wrapped.copy().hashCode())
     }
+
+    @Test
+    fun aServiceRestoredFromABackupGetsBackWhatItLost(): Unit =
+        runBlocking {
+            val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer().apply { pageSize = 2 }
+                val key = PlanningCipher.newKey()
+                val cipher = PlanningCipher(key)
+                val phoneSync = PlanningSync(phoneDb.planningRecordDao(), "b", server.transport())
+                val tabletSync = PlanningSync(tabletDb.planningRecordDao(), "b", server.transport())
+                val phone = PlanningStore(phoneDb.planningRecordDao(), "b", cipher) { 1L }
+                val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", cipher) { 2L }
+
+                phone.save(SavingsGoal("g", "Holiday", 1_000, "USD"))
+                phone.save(DebtTerms("d", "card", 1_999))
+                var phoneAt = phoneSync.sync(cipher, 0)
+                var tabletAt = tabletSync.sync(cipher, 0)
+                val backup = Triple(LinkedHashMap(server.records), HashMap(server.writes), server.seq)
+
+                phone.save(SavingsGoal("g", "Holiday", 2_000, "USD"))
+                phone.save(SavingsGoal("n", "New car", 9_000, "USD"))
+                phoneAt = phoneSync.sync(cipher, phoneAt.cursor, phoneAt.anchor)
+                tabletAt = tabletSync.sync(cipher, tabletAt.cursor, tabletAt.anchor)
+                phoneAt = phoneSync.sync(cipher, phoneAt.cursor, phoneAt.anchor)
+
+                server.records.clear()
+                server.records.putAll(backup.first)
+                server.writes.clear()
+                server.writes.putAll(backup.second)
+                server.seq = backup.third
+                tablet.save(SavingsGoal("t", "Laptop", 500, "USD"))
+                tabletAt = tabletSync.sync(cipher, tabletAt.cursor, tabletAt.anchor)
+                phoneAt = phoneSync.sync(cipher, phoneAt.cursor, phoneAt.anchor)
+                tabletSync.sync(cipher, tabletAt.cursor, tabletAt.anchor)
+                assertEquals(server.seq, phoneSync.sync(cipher, 99, null).cursor)
+
+                val expected =
+                    setOf(
+                        SavingsGoal("g", "Holiday", 2_000, "USD"),
+                        SavingsGoal("n", "New car", 9_000, "USD"),
+                        SavingsGoal("t", "Laptop", 500, "USD"),
+                    )
+                assertEquals(expected, phone.savingsGoals().first().toSet())
+                assertEquals(expected, tablet.savingsGoals().first().toSet())
+                assertEquals(setOf("g", "d", "n", "t"), server.records.keys)
+                assertEquals(2L, server.records.getValue("g").revision)
+                assertTrue(phoneDb.planningRecordDao().pending("b").isEmpty())
+                assertTrue(tabletDb.planningRecordDao().pending("b").isEmpty())
+            } finally {
+                phoneDb.closeDatabase()
+                tabletDb.closeDatabase()
+            }
+        }
 
     @Test
     fun twoDevicesShareRecordsThroughSealedSync(): Unit =
@@ -120,7 +181,7 @@ class PlanningSyncTest {
                 tabletSync.rekey(PlanningCipher(tabletOwnKey), PlanningCipher(shared))
                 val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", PlanningCipher(shared)) { 2L }
                 val pulled = tabletSync.sync(PlanningCipher(shared), 0)
-                assertEquals(PlanningSyncResult(1, 2, 3), pulled)
+                assertEquals(PlanningSyncResult(1, 2, 3, "t"), pulled)
                 assertEquals(
                     setOf("Holiday", "Laptop"),
                     tablet
