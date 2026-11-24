@@ -55,6 +55,7 @@ internal enum class AppRoute(
     CHANGE_HISTORY("Change history"),
     DEBT_PAYOFF("Debt payoff"),
     DATA_HEALTH("Budget checkup"),
+    REVIEW_TRANSACTIONS("Review transactions"),
     CASH_FLOW("Cash flow"),
     MONTHLY_REVIEW("Monthly review"),
     BANK_CONNECTIONS("Bank connections"),
