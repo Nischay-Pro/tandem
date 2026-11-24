@@ -62,7 +62,7 @@ class ActualDatabase(
             connection.execSQL("COMMIT")
             return result
         } catch (error: Throwable) {
-            connection.execSQL("ROLLBACK")
+            if (connection.inTransaction()) connection.execSQL("ROLLBACK")
             throw error
         } finally {
             depth = 0

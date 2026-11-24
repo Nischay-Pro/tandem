@@ -218,7 +218,46 @@ class ActualEngineEdgeCaseTest {
             }
         }
         assertNull(db.first("SELECT v FROM t WHERE id = 'nested'"))
+        val ended =
+            assertFailsWith<IllegalStateException> {
+                db.transaction {
+                    db.execute("ROLLBACK")
+                    error("already rolled back")
+                }
+            }
+        assertEquals("already rolled back", ended.message)
         db.close()
+    }
+
+    @Test
+    fun aClockCatchesUpWithAnotherConnection() {
+        val file =
+            kotlin.io.path
+                .createTempFile(suffix = ".sqlite")
+                .toFile()
+        try {
+            val first = ActualMessageStore(ActualDatabase(BundledSQLiteDriver().open(file.path)))
+            first.db.execute(
+                "CREATE TABLE messages_crdt (id INTEGER PRIMARY KEY, timestamp TEXT NOT NULL UNIQUE, dataset TEXT, row TEXT, column TEXT, value BLOB)",
+            )
+            first.db.execute("CREATE TABLE messages_clock (id INTEGER PRIMARY KEY, clock TEXT)")
+            first.db.execute("CREATE TABLE payees (id TEXT PRIMARY KEY, name TEXT, tombstone INTEGER DEFAULT 0)")
+            val second = ActualMessageStore(ActualDatabase(BundledSQLiteDriver().open(file.path)))
+            val mine = first.loadClock()
+            val theirs = second.loadClock()
+            theirs.clock.timestamp = mine.clock.timestamp
+            second.apply(listOf(msg(5_000, "payees", "name", CrdtValue.Text("Other"))), theirs, deferUnknownSchema = false)
+            first.reload(mine)
+            assertEquals(theirs.merkle.toJson(), mine.merkle.toJson())
+            mine.clock.send(9_000)
+            val ahead = mine.clock.timestamp
+            first.reload(mine)
+            assertEquals(ahead, mine.clock.timestamp)
+            first.db.close()
+            second.db.close()
+        } finally {
+            file.delete()
+        }
     }
 
     private fun crdtDb(): ActualMessageStore {

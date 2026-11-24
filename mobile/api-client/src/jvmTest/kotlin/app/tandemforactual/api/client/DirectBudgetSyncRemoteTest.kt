@@ -234,4 +234,29 @@ class DirectBudgetSyncRemoteTest {
             val defaults = TandemApiClient()
             assertEquals(10, defaults.today().length)
         }
+
+    @Test
+    fun backgroundSyncAndTheAppShareOneBudgetFileSafely(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val files = TempBudgetFiles()
+            val app = TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" })
+            val background = TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" })
+            app.signInWithPassword("https://budget.example", "test", "Phone")
+            background.signInWithPassword("https://budget.example", "test", "Phone")
+            app.budget("group").sync()
+            background.edit("group") { it.createPayee("From background") }
+            app.edit("group") { it.createPayee("From the app") }
+            background.edit("group") { it.createPayee("Background again") }
+            app.budget("group").sync()
+            val names =
+                app
+                    .budget("group")
+                    .snapshot("2026-11-21")
+                    .records
+                    .filter { it.type == "payee" }
+                    .map { it.body["name"] }
+            assertTrue(JsonPrimitive("From background") in names)
+            assertTrue(JsonPrimitive("Background again") in names)
+        }
 }

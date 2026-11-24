@@ -42,7 +42,6 @@ class ActualDirectBudget private constructor(
     downloaded: Boolean,
     key: ActualBudgetKey?,
 ) {
-    private val mutex = Mutex()
     internal val keySecret: ByteArray? = key?.secret
 
     init {
@@ -53,6 +52,7 @@ class ActualDirectBudget private constructor(
                         "(id INTEGER PRIMARY KEY, file_id TEXT NOT NULL, group_id TEXT NOT NULL, timestamp TEXT)",
                 )
                 db.execute("INSERT INTO tandem_direct_sync (id, file_id, group_id) VALUES (1, ?, ?)", fileId, groupId)
+                ActualMessageStore(db).let { it.resetNode(it.loadClock()) }
             }
         } else {
             val identity = db.first("SELECT file_id, group_id FROM tandem_direct_sync WHERE id = 1")
@@ -63,7 +63,7 @@ class ActualDirectBudget private constructor(
     }
 
     private val store = ActualMessageStore(db)
-    private val clock = store.loadClock().also { if (downloaded) store.resetNode(it) }
+    private val clock = store.loadClock()
     internal val cacheGeneration = "actual:${clock.clock.timestamp.node}"
     private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, cipher = key, now = now)
     private val reader = ActualBudgetReader(db)
@@ -358,5 +358,14 @@ class ActualDirectBudget private constructor(
             }
     }
 
-    private suspend fun <T> locked(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
+    /** Background sync can open a second copy of this budget, so copies share one lock and reload the saved clock. */
+    private suspend fun <T> locked(block: suspend () -> T): T =
+        withContext(Dispatchers.IO) {
+            processLock.withLock {
+                store.reload(clock)
+                block()
+            }
+        }
 }
+
+private val processLock = Mutex()
