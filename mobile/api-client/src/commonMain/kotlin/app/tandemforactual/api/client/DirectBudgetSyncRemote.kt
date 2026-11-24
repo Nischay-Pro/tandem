@@ -147,7 +147,13 @@ class DirectBudgetSyncRemote(
     ): RemoteOperationResult {
         val budget = client.budget(operation.budgetId, encryptionPassword)
         val outcome = client.call { budget.submit(operation) }
-        runCatching { budget.sync() }
+        try {
+            client.call { budget.sync() }
+        } catch (error: TandemApiException) {
+            if (outcome.status == OperationStatus.COMMITTED) {
+                throw BudgetSyncRemoteException(error.errorCode, error.httpStatus, error, awaitingUpload = true)
+            }
+        }
         return result(operation.budgetId, outcome)
     }
 
