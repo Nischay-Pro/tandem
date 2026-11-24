@@ -29,6 +29,7 @@ import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.planHome
+import app.tandemforactual.ui.core.state.uncategorized
 import app.tandemforactual.ui.core.ui.DebtOverviewCard
 import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
 import app.tandemforactual.ui.core.ui.PlanningEditors
@@ -74,8 +75,6 @@ internal fun homeData(
         hasDebtAccounts = open.any { (it.balanceMinor ?: 0) < 0 },
     )
 }
-
-internal fun List<TransactionItem>.uncategorized() = filter { it.categoryId == null && !it.isTransfer && !it.isSplitParent }
 
 @Composable
 internal fun HomeScreen(
@@ -248,8 +247,8 @@ private fun ReviewInboxCard(
     SectionCard(
         stringResource(module.title()),
         "${items.size} to review",
-        "See all",
-        onClick = { navigation.selectTab(AppRoute.ACTIVITY) },
+        "Review",
+        onClick = { navigation.open(AppRoute.REVIEW_TRANSACTIONS) },
     ) {
         items.take(3).forEachIndexed { index, item ->
             if (index > 0) DividerLine()
