@@ -111,7 +111,9 @@ internal class AppState {
     var workspace by mutableStateOf(Workspace())
     var homeLayout by mutableStateOf("Comfortable")
     var budgetShowProgressBars by mutableStateOf(false)
-    var accountSort by mutableStateOf(AccountSort.MANUAL)
+
+    /** The sort the accounts are in right now, or null after they were arranged by hand. */
+    var accountsActiveSort by mutableStateOf<AccountSort?>(null)
     var privacyModeEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
@@ -240,7 +242,6 @@ internal class AppState {
             "workspace" to workspace.encode(),
             "homeLayout" to homeLayout,
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
-            "accountSort" to accountSort.name,
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
@@ -298,7 +299,6 @@ internal class AppState {
         workspace = saved["workspace"]?.let(Workspace::decode) ?: workspace
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
-        accountSort = AccountSort.entries.firstOrNull { it.name == saved["accountSort"] } ?: accountSort
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds

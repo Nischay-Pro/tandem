@@ -87,7 +87,7 @@ internal fun AccountHeaderMenu(
     onManageBanks: () -> Unit,
     onSwitchBudget: () -> Unit,
     onOpenSync: () -> Unit,
-    sort: AccountSort,
+    activeSort: AccountSort?,
     onSort: (AccountSort) -> Unit,
 ) {
     TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
@@ -95,15 +95,11 @@ internal fun AccountHeaderMenu(
         HeaderMenuAction(Lucide.Plus, "Add account", onClick = onAddAccount)
         HeaderMenuAction(Lucide.Landmark, "Manage bank connections", onClick = onManageBanks)
         HeaderMenuDivider()
-        HeaderMenuLabel("Sort by")
+        HeaderMenuLabel("Sort accounts")
+        HeaderMenuChoice(Lucide.GripVertical, "Custom order", selected = activeSort == null, onClick = onDismiss)
         AccountSort.entries.forEach { option ->
-            val icon =
-                when (option.ascending) {
-                    true -> Lucide.ArrowUp
-                    false -> Lucide.ArrowDown
-                    null -> Lucide.GripVertical
-                }
-            HeaderMenuChoice(icon, option.label, selected = sort == option, onClick = { onSort(option) })
+            val icon = if (option.ascending) Lucide.ArrowUp else Lucide.ArrowDown
+            HeaderMenuChoice(icon, option.label, selected = activeSort == option, onClick = { onSort(option) })
         }
         HeaderMenuDivider()
         HeaderMenuAction(Lucide.ArrowLeftRight, "Switch budget", onClick = onSwitchBudget)

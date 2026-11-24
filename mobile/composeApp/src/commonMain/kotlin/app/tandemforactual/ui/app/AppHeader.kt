@@ -343,10 +343,10 @@ private fun AccountsHeaderActions(
                 headerMenuExpanded = false
                 onOpenRoute(AppRoute.SYNC_CENTER)
             },
-            sort = state.accountSort,
+            activeSort = state.accountsActiveSort,
             onSort = {
                 headerMenuExpanded = false
-                state.accountSort = it
+                state.accountsRequestedAction = "sort:${it.name}"
             },
         )
     }
