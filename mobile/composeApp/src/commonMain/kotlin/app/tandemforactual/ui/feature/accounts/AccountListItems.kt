@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.core.session.dragReorderItemModifier
 import app.tandemforactual.ui.core.session.reorderModeConsumesItemTap
+import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -145,7 +146,7 @@ internal fun LazyItemScope.AccountListCard(
                 itemId = account.id,
                 dragState = reorder.drag,
                 reduceMotion = tandemReduceMotion,
-                dragEnabled = !state.readOnlyMode && movableAccountIds.size > 1,
+                dragEnabled = !state.readOnlyMode && state.accountSort == AccountSort.MANUAL && movableAccountIds.size > 1,
                 onDragStarted = startDrag,
                 onDragBy = dragBy,
                 onDragStopped = dropDrag,
@@ -153,7 +154,7 @@ internal fun LazyItemScope.AccountListCard(
         isReordering = isReordering,
         canMoveUp = currentIndex > 0,
         canMoveDown = currentIndex >= 0 && currentIndex < currentGroupOrder.lastIndex,
-        reorderEnabled = !state.readOnlyMode,
+        reorderEnabled = !state.readOnlyMode && state.accountSort == AccountSort.MANUAL,
         highlighted = detailInPane && account.id == state.selectedAccountId,
         onClick = {
             if (reorderModeConsumesItemTap(reorder.selectedAccountOrderId)) {

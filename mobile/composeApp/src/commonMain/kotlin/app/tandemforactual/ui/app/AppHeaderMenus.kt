@@ -23,16 +23,20 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.ArrowDown
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.ChartNoAxesColumn
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.EyeOff
+import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Hash
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lock
@@ -83,11 +87,24 @@ internal fun AccountHeaderMenu(
     onManageBanks: () -> Unit,
     onSwitchBudget: () -> Unit,
     onOpenSync: () -> Unit,
+    sort: AccountSort,
+    onSort: (AccountSort) -> Unit,
 ) {
     TandemHeaderMenu(expanded = expanded, onDismiss = onDismiss) {
         HeaderMenuLabel("Account actions")
         HeaderMenuAction(Lucide.Plus, "Add account", onClick = onAddAccount)
         HeaderMenuAction(Lucide.Landmark, "Manage bank connections", onClick = onManageBanks)
+        HeaderMenuDivider()
+        HeaderMenuLabel("Sort by")
+        AccountSort.entries.forEach { option ->
+            val icon =
+                when (option.ascending) {
+                    true -> Lucide.ArrowUp
+                    false -> Lucide.ArrowDown
+                    null -> Lucide.GripVertical
+                }
+            HeaderMenuChoice(icon, option.label, selected = sort == option, onClick = { onSort(option) })
+        }
         HeaderMenuDivider()
         HeaderMenuAction(Lucide.ArrowLeftRight, "Switch budget", onClick = onSwitchBudget)
         HeaderMenuAction(Lucide.CloudSync, "Sync Center", onClick = onOpenSync)

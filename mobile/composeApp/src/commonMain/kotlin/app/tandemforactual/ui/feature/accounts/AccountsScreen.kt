@@ -64,7 +64,10 @@ internal fun AccountsScreen(
     val isRefreshing = mobileSession.isSyncing || mobileSession.isPerformingBudgetAction
     val reorder = rememberAccountReorder(state, mobileSession, liveAccounts)
     val accountOrderIds = reorder.drag.displayOrder ?: reorder.drag.currentOrder(reorder.queuedOrder)
-    val orderedLiveAccounts = remember(liveAccounts, accountOrderIds) { orderAccountsForList(liveAccounts, accountOrderIds) }
+    val orderedLiveAccounts =
+        remember(liveAccounts, accountOrderIds, state.accountSort) {
+            sortAccountsWithinGroups(orderAccountsForList(liveAccounts, accountOrderIds), state.accountSort)
+        }
     val runBankSync: () -> Unit = {
         if (!isRefreshing && mobileSession.isAuthenticated && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             scope.launch {

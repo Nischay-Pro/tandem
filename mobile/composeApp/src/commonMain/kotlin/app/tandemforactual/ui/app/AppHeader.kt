@@ -343,6 +343,11 @@ private fun AccountsHeaderActions(
                 headerMenuExpanded = false
                 onOpenRoute(AppRoute.SYNC_CENTER)
             },
+            sort = state.accountSort,
+            onSort = {
+                headerMenuExpanded = false
+                state.accountSort = it
+            },
         )
     }
 }
