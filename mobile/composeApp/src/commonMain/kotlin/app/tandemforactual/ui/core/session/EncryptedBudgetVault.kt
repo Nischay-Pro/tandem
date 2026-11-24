@@ -54,7 +54,7 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
     val hadStore = vault.hasStore(budgetId)
     val pending = vault.create(budgetId, password)
     if (!hadStore) {
-        val legacyWrites = mainBudgetWrites(budgetId)
+        val legacyWrites = mainBudgetWrites(budgetId) + writesToReplay[budgetId].orEmpty()
         if (legacyWrites.isNotEmpty()) {
             LocalBudgetRepository(pending.database, nowEpochMillis).importBudgetWrites(legacyWrites)
         }
@@ -63,6 +63,7 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
     synchronize(budgetId = budgetId, encryptionPassword = password)
     if (syncComplete) {
         pending.commit()
+        writesToReplay.remove(budgetId)
         removeBudgetFromMainStorage(budgetId)
         return EncryptedBudgetUnlockResult.UNLOCKED
     }
