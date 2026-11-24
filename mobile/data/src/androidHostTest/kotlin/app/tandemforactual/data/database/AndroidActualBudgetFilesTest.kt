@@ -54,6 +54,11 @@ class AndroidActualBudgetFilesTest {
         assertNull(files.open("budget-3"))
         assertTrue(java.io.File(context.noBackupFilesDir, "actual/backups/budget-3-reset-1.sqlite").isFile)
         files.retire("missing", "reset-2")
+        val orphan = context.noBackupFilesDir.resolve("actual/budget-4.sqlite-journal").apply { writeBytes(byteArrayOf(9, 9, 9)) }
+        val installed = files.install("budget-4", sqlite(4))
+        assertEquals(false, orphan.exists())
+        assertEquals(4L, installed.first("SELECT v FROM t")!!["v"])
+        installed.close()
         assertFailsWith<IllegalArgumentException> { files.open("../other") }
     }
 }

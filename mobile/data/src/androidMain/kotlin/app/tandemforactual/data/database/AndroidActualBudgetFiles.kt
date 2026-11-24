@@ -34,7 +34,7 @@ class AndroidActualBudgetFiles(
     ): ActualDatabase {
         check(root.isDirectory || root.mkdirs() || root.isDirectory) { "Could not create the budget storage directory." }
         val target = file(budgetId)
-        target.delete()
+        remove(budgetId)
         val destination = AtomicFile(target)
         val output = destination.startWrite()
         try {
