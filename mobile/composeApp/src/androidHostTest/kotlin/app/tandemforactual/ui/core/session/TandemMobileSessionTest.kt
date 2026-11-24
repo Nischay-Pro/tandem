@@ -201,6 +201,69 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun offBudgetAccountsTakeTransactionsWithoutACategory() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                repository.applyFullSnapshot(
+                    budgetId = "budget-1",
+                    generation = "generation-1",
+                    cursor = "cursor-1",
+                    expectedCheckpoint = null,
+                    records =
+                        listOf(
+                            RemoteBudgetRecord(
+                                budgetId = "budget-1",
+                                recordType = "account",
+                                recordId = "car",
+                                revision = "car-revision-1",
+                                bodyJson = """{"id":"car","name":"Honda","offbudget":true}""",
+                                generation = "generation-1",
+                            ),
+                            RemoteBudgetRecord(
+                                budgetId = "budget-1",
+                                recordType = "category",
+                                recordId = "category-1",
+                                revision = "category-revision-1",
+                                bodyJson = """{"id":"category-1","name":"Groceries"}""",
+                                generation = "generation-1",
+                            ),
+                        ),
+                )
+                preferences.putValue("internal:budget-cache-owner-v1", cacheOwner("http://127.0.0.1:1", "principal-old"))
+                val session =
+                    TandemMobileSession(
+                        TandemApiClient(allowInsecurePrivateNetwork = true),
+                        database,
+                        { 1_000L },
+                        currentDateIso = { "2026-11-12" },
+                    )
+                session.loadLocalRecords("budget-1")
+
+                assertTrue(
+                    session.transactions.createTransaction(
+                        budgetId = "budget-1",
+                        accountId = "car",
+                        payeeId = null,
+                        categoryId = "category-1",
+                        amountText = "-1500.00",
+                        dateText = "2026-11-12",
+                        notes = "Balance adjustment",
+                        encryptionPassword = null,
+                    ),
+                    session.transactionWriteMessage,
+                )
+                val queued = repository.readPendingWrites("budget-1").single { it.recordType == "transaction" }
+                assertEquals(-150_000L, queued.optimisticAmountMinor)
+                assertTrue(""""category":null""" in queued.patchJson)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun transactionCanUseOfflinePayeeWhileSignedOut() =
         runBlocking {
             val database = newDatabase()

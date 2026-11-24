@@ -21,7 +21,7 @@ import app.tandemforactual.ui.core.session.budget.hasPendingTransactionDependenc
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
 import app.tandemforactual.ui.core.session.stringValue
 import app.tandemforactual.ui.core.session.transactions.TransactionController
-import app.tandemforactual.ui.core.state.booleanValue
+import app.tandemforactual.ui.core.state.isOffBudgetAccount
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
 import kotlin.uuid.Uuid
@@ -65,7 +65,7 @@ internal suspend fun TransactionController.createTransaction(
     if (!validateNewTransactionCategory(budgetId, categoryId)) return false
     val transactionId = "tandem:${Uuid.random()}"
     val operationId = Uuid.random().toString()
-    val requestedCategoryId = categoryId.takeUnless { isTransfer }
+    val requestedCategoryId = categoryId.takeUnless { isTransfer || account.recordBody().isOffBudgetAccount() }
     val patch = newTransactionPatch(account, amount, date, payeeId, requestedCategoryId, notes)
     val optimistic = newTransactionOptimistic(transactionId, account, amount, date, payeeId, categoryId, notes)
     host.markSavingTransaction(true)
@@ -146,11 +146,6 @@ private fun TransactionController.newTransactionAccount(accountId: String): Budg
     val account = host.accountRecords.firstOrNull { it.recordId == accountId }
     if (account == null) {
         host.reportTransactionWriteMessage("Choose an account from this budget before saving.")
-        return null
-    }
-    val accountBody = account.recordBody()
-    if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
-        host.reportTransactionWriteMessage("Choose an on-budget account for this transaction.")
         return null
     }
     return account

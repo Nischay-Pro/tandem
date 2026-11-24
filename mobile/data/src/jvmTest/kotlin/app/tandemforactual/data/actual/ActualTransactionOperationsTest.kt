@@ -183,6 +183,25 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun offBudgetAccountsTakeTransactionsWithoutACategory() =
+        withBudget {
+            val brokerage = account("Brokerage")
+            val id = id()
+            val adjustment = JsonObject(create + mapOf("account" to JsonPrimitive(brokerage), "amount" to JsonPrimitive(25_000)))
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", adjustment).status)
+            val created = checkNotNull(reader.transaction(id))
+            assertEquals(JsonPrimitive(brokerage), created["account"])
+            assertEquals(JsonPrimitive(25_000), created["amount"])
+            assertEquals(JsonNull, created["category"])
+
+            val moved = id()
+            assertEquals(OperationStatus.COMMITTED, submit(moved, "create", create).status)
+            val base = checkNotNull(reader.transaction(moved))
+            assertEquals(OperationStatus.COMMITTED, submit(moved, "update", buildJsonObject { put("account", brokerage) }, base).status)
+            assertEquals(JsonNull, reader.transaction(moved)?.get("category"))
+        }
+
+    @Test
     fun validatesUpdatedAccountsPayeesAndCategories() =
         withBudget {
             val id = id()
