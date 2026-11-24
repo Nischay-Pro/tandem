@@ -37,6 +37,7 @@ services:
       HOST: 0.0.0.0
       PORT: 19753
       ACTUAL_SERVER_URL: ${ACTUAL_SERVER_URL}
+      TRUST_PROXY: ${TRUST_PROXY:-}
     depends_on:
       tandem-postgres:
         condition: service_healthy

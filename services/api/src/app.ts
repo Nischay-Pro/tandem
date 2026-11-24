@@ -72,6 +72,8 @@ export interface AppOptions {
   actualServerUrl: string;
   /** Requests each signed-in session may make per minute. */
   requestsPerMinute?: number;
+  /** Proxies whose X-Forwarded-For is trusted, so limits apply to the real client address. */
+  trustProxy?: boolean | string;
 }
 
 /**
@@ -79,7 +81,11 @@ export interface AppOptions {
  * details can follow its members across devices. Budget data itself never passes through here.
  */
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
-  const app = Fastify({ bodyLimit: 256 * 1024, logger: false });
+  const app = Fastify({
+    bodyLimit: 256 * 1024,
+    logger: false,
+    trustProxy: options.trustProxy ?? false,
+  });
   await app.register(swagger, {
     openapi: {
       info: {
@@ -100,7 +106,9 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     timeWindow: 60_000,
     keyGenerator: (request) => {
       const token = request.headers["x-actual-token"];
-      return typeof token === "string" && token
+      return typeof token === "string" &&
+        token &&
+        options.access.isKnown?.(token)
         ? `t:${token}`
         : `ip:${request.ip}`;
     },
