@@ -27,17 +27,22 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
+import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -63,6 +68,7 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings2
 import kotlinx.coroutines.launch
 
@@ -107,6 +113,10 @@ internal fun RetirementSetupScreen(
     var stepIndex by remember { mutableStateOf(0) }
     val steps = listOf(SetupStep.Countries) + regions.map { SetupStep.Country(it) } + SetupStep.AboutYou
     val step = steps[stepIndex.coerceIn(0, steps.lastIndex)]
+    val lived =
+        mobileSession.planning.jurisdictionPeriods
+            .sortedByDescending { it.isCurrent }
+            .map { it.region }
     val accounts = liveAccounts.filter { !it.closed }.sortedByDescending { it.offBudget }
     val palette = tandemPalette
     OnboardingLayout(
@@ -118,7 +128,7 @@ internal fun RetirementSetupScreen(
             }, label = "retirement-step") { current ->
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     when (current) {
-                        SetupStep.Countries -> CountriesStep(regions)
+                        SetupStep.Countries -> CountriesStep(regions, lived, state.budgetCurrencyCode)
                         is SetupStep.Country -> CountryStep(current.region, accounts, chosen, navigation)
                         SetupStep.AboutYou ->
                             AboutYouStep(
@@ -188,24 +198,78 @@ private fun setupProfiles(
     }
 }
 
-/** Picks every country the person has retirement accounts in. */
+/** Picks every country the person has retirement accounts in: chosen ones, a few suggestions, and search for the rest. */
 @Composable
-private fun CountriesStep(regions: MutableList<Region>) {
+private fun CountriesStep(
+    regions: MutableList<Region>,
+    lived: List<Region>,
+    currencyCode: String,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var browsing by rememberSaveable { mutableStateOf(false) }
+    val available = RetirementPlans.regions
+    val toggle: (Region) -> Unit = { region -> if (region in regions) regions.remove(region) else regions.add(region) }
     Heading("Where do you save?")
-    BodyText(
-        "Pick every country you have retirement or tax-advantaged accounts in. Each has its own accounts and limits.",
+    BodyText("Pick every country you have retirement or tax-advantaged accounts in. Each has its own accounts and limits.")
+    regions.forEach { CountryCard(it, true, toggle) }
+    TextFieldCard(
+        "Find a country",
+        query,
+        { query = it },
+        TextFieldOptions(placeholder = "Country or account, like RRSP", leadingIcon = Lucide.Search),
     )
-    RetirementPlans.regions.forEach { region ->
-        CheckCard(
-            region.displayName,
-            RetirementPlans.forRegion(region).filterNot { it.advanced }.joinToString(", ") { it.displayName },
-            region in regions,
-        ) {
-            if (region in regions) regions.remove(region) else regions.add(region)
+    if (query.isNotBlank()) {
+        val found = searchRegions(available, query)
+        if (found.isEmpty()) {
+            BodyText(
+                "No country matches “${query.trim()}” yet. Tell us which one you need through Share feedback in the menu.",
+            )
         }
+        found.forEach { CountryCard(it, it in regions, toggle) }
+        return
     }
-    BodyText(
-        "Somewhere else? More countries are coming; tell us which one you need through Share feedback in the menu.",
+    val suggested = suggestedRegions(available, lived, currencyCode, regions)
+    if (suggested.isNotEmpty()) SetupLabel("SUGGESTED")
+    suggested.forEach { CountryCard(it, false, toggle) }
+    val rest = available.filter { it !in regions && it !in suggested }
+    if (rest.isEmpty()) return
+    SecondaryButton(
+        when {
+            browsing -> "Hide other countries"
+            rest.size == 1 -> "Browse 1 more country"
+            else -> "Browse ${rest.size} more countries"
+        },
+        Modifier.fillMaxWidth(),
+    ) {
+        browsing = !browsing
+    }
+    if (browsing) rest.forEach { CountryCard(it, false, toggle) }
+}
+
+@Composable
+private fun CountryCard(
+    region: Region,
+    picked: Boolean,
+    toggle: (Region) -> Unit,
+) {
+    CheckCard(
+        region.displayName,
+        RetirementPlans.forRegion(region).filterNot { it.advanced }.joinToString(", ") { it.displayName },
+        picked,
+    ) {
+        toggle(region)
+    }
+}
+
+@Composable
+private fun SetupLabel(text: String) {
+    Text(
+        text,
+        Modifier.semantics { heading() },
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp,
     )
 }
 
