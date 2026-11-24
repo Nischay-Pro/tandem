@@ -32,6 +32,7 @@ class BankIcon(
  */
 class BankIconFetcher(
     http: HttpClient,
+    private val formats: Set<BankIconFormat> = BankIconFormat.entries.toSet(),
 ) {
     private val http =
         http.config {
@@ -62,7 +63,7 @@ class BankIconFetcher(
             } catch (_: Exception) {
                 null
             } ?: return null
-        return bankIconFormat(bytes)?.let { BankIcon(bytes, it) }
+        return bankIconFormat(bytes)?.takeIf { it in formats }?.let { BankIcon(bytes, it) }
     }
 
     /** The final address and body, following up to a few HTTPS redirects within public hosts. */
@@ -119,8 +120,8 @@ class BankIconFetcher(
         private const val MAX_CANDIDATES = 4
         private const val TIMEOUT_MILLIS = 10_000L
 
-        /** A fetcher with the platform's default HTTP engine. */
-        fun connect() = BankIconFetcher(HttpClient())
+        /** A fetcher with the platform's default HTTP engine, keeping only icons in [formats]. */
+        fun connect(formats: Set<BankIconFormat> = BankIconFormat.entries.toSet()) = BankIconFetcher(HttpClient(), formats)
     }
 }
 

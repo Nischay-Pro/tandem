@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.ui.core.session.dragReorderItemModifier
+import app.tandemforactual.ui.core.session.rememberBankIcon
 import app.tandemforactual.ui.core.session.reorderModeConsumesItemTap
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -122,6 +123,7 @@ internal fun LazyItemScope.AccountListCard(
     movableAccountIds: List<String>,
     reorder: AccountReorder,
     bankBadge: RowBadge?,
+    bankId: String?,
     state: AppState,
     navigation: AppNavigation,
     merchantIconMatcher: MerchantIconMatcherPack?,
@@ -138,6 +140,7 @@ internal fun LazyItemScope.AccountListCard(
         bankBadge = bankBadge,
         account = account,
         merchantArtwork = merchantIconMatcher?.accountIconFor(account.name),
+        bankIcon = rememberBankIcon(bankId, download = state.bankIconsEnabled),
         privacyModeEnabled = state.privacyModeEnabled,
         fractionDigits = state.currencyFractionDigitsForDisplay,
         modifier =
