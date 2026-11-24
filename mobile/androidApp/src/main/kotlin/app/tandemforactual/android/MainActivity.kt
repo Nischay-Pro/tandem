@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +39,7 @@ import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
 import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.core.session.LocalBackupPassphraseStore
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -116,6 +118,7 @@ class MainActivity : FragmentActivity() {
         runCatching { ShortcutManagerCompat.removeDynamicShortcuts(this, listOf(LEGACY_QUICK_ADD_SHORTCUT_ID)) }
         notificationPermissionEnabled = hasNotificationPermission()
         BudgetSystemNotifications.initialize(applicationContext)
+        AutomaticBackupScheduler.ensureScheduled(applicationContext)
         val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
         tandemDatabase = database
         setContent {
@@ -125,42 +128,45 @@ class MainActivity : FragmentActivity() {
                         BackgroundBudgetSyncScheduler.update(applicationContext, enabled, network, budgetId)
                     }
                 }
-            TandemApp(
-                actualBudgetFiles =
-                    remember {
-                        app.tandemforactual.data.database
-                            .AndroidActualBudgetFiles(applicationContext)
+            val backupPassphrases = remember { AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE) }
+            CompositionLocalProvider(LocalBackupPassphraseStore provides backupPassphrases) {
+                TandemApp(
+                    actualBudgetFiles =
+                        remember {
+                            app.tandemforactual.data.database
+                                .AndroidActualBudgetFiles(applicationContext)
+                        },
+                    planningKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, "planning_keys") },
+                    backgroundBudgetKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE) },
+                    deviceName =
+                        Settings.Global
+                            .getString(contentResolver, Settings.Global.DEVICE_NAME)
+                            ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
+                    database = database,
+                    deviceCredentialStore = deviceCredentialStore,
+                    nowEpochMillis = { System.currentTimeMillis() },
+                    allowInsecurePrivateNetwork = true,
+                    onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
+                    onRequestNotificationPermission = { requestNotificationPermission() },
+                    onOpenNotificationSettings = { openNotificationSettings() },
+                    notificationPermissionEnabled = notificationPermissionEnabled,
+                    onToggleNotificationPermission = { updateNotificationPermission(it) },
+                    onStartupComplete = {
+                        appStartupComplete = true
                     },
-                planningKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, "planning_keys") },
-                backgroundBudgetKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE) },
-                deviceName =
-                    Settings.Global
-                        .getString(contentResolver, Settings.Global.DEVICE_NAME)
-                        ?.takeIf { it.isNotBlank() } ?: Build.MODEL ?: "Android device",
-                database = database,
-                deviceCredentialStore = deviceCredentialStore,
-                nowEpochMillis = { System.currentTimeMillis() },
-                allowInsecurePrivateNetwork = true,
-                onBackgroundSyncSettingsChanged = onBackgroundSyncSettingsChanged,
-                onRequestNotificationPermission = { requestNotificationPermission() },
-                onOpenNotificationSettings = { openNotificationSettings() },
-                notificationPermissionEnabled = notificationPermissionEnabled,
-                onToggleNotificationPermission = { updateNotificationPermission(it) },
-                onStartupComplete = {
-                    appStartupComplete = true
-                },
-                appResumeEvents = appResumeEvents,
-                appInForeground = appInForeground,
-                networkRestoredEvents = networkRestoredEvents,
-                deviceAuthenticator = deviceAuthenticator,
-                encryptedBudgetVault = encryptedBudgetVault,
-                currentNetwork = currentNetwork,
-                crashReports = crashReports,
-                onShareText = { text -> shareText(text) },
-                windowHinge = windowHinge,
-                screenshotScript = screenshotScript(),
-                postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
-            )
+                    appResumeEvents = appResumeEvents,
+                    appInForeground = appInForeground,
+                    networkRestoredEvents = networkRestoredEvents,
+                    deviceAuthenticator = deviceAuthenticator,
+                    encryptedBudgetVault = encryptedBudgetVault,
+                    currentNetwork = currentNetwork,
+                    crashReports = crashReports,
+                    onShareText = { text -> shareText(text) },
+                    windowHinge = windowHinge,
+                    screenshotScript = screenshotScript(),
+                    postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
+                )
+            }
         }
     }
 
@@ -253,6 +259,7 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         appInForeground.value = true
+        AppVisibility.visible = true
         if (!networkCallbackRegistered) {
             syncSignalState.onNetworkStarted(connectivityManager.activeNetwork)
             connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -262,6 +269,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         appInForeground.value = false
+        AppVisibility.visible = false
         BudgetWidget.refresh(this)
         if (networkCallbackRegistered) {
             connectivityManager.unregisterNetworkCallback(networkCallback)

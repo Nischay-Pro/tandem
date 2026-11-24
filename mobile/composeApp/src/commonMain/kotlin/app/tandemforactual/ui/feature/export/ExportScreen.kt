@@ -102,6 +102,7 @@ internal fun ExportScreen(
                 }
             }
         }
+        AutomaticBackupCard(state)
         PlanningBackupSection(onBackup = backup::startBackup, onRestore = backup::startRestore, onCheck = backup::startCheck)
     }
     BackupPassphraseDialog(backup.purpose, backup.error, backup::dismiss, backup::submit)
