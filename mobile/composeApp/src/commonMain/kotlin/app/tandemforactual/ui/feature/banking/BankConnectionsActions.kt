@@ -108,6 +108,16 @@ internal class BankConnectionsActions(
         }
     }
 
+    fun linkIntoNew(offBudget: Boolean) {
+        val (provider, providerAccount) = ui.linking ?: return
+        ui.linking = null
+        scope.launch {
+            if (mobileSession.banking.linkBankAccountToNewAccount(state.selectedBudgetId, offBudget, provider, providerAccount, password)) {
+                ui.reload++
+            }
+        }
+    }
+
     fun syncLinkedAccounts() {
         scope.launch { mobileSession.banking.runBankSync(state.selectedBudgetId, password) }
     }

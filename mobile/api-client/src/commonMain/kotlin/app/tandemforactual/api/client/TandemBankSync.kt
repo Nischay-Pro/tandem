@@ -2,6 +2,7 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ImportRow
 import app.tandemforactual.data.actual.LinkedAccount
+import app.tandemforactual.data.actual.createLinkedAccount
 import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
@@ -53,6 +54,17 @@ suspend fun TandemApiClient.linkBudgetBankAccount(
     budgetId,
     encryptionPassword,
 ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
+
+suspend fun TandemApiClient.linkBudgetBankAccountToNewAccount(
+    budgetId: String,
+    offBudget: Boolean,
+    provider: BankProvider,
+    account: BankProviderAccount,
+    encryptionPassword: String?,
+): String =
+    edit(budgetId, encryptionPassword) {
+        it.createLinkedAccount(account.name, offBudget, provider.source, account.id, account.bankId, account.institution)
+    }
 
 suspend fun TandemApiClient.unlinkBudgetBankAccount(
     budgetId: String,

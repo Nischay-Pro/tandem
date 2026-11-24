@@ -143,9 +143,10 @@ internal fun SectionCard(
     action: String? = null,
     onClick: (() -> Unit)? = null,
     animateDetail: Boolean = false,
+    actionContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    SectionCardLayout(title, detail, action, null, onClick, animateDetail, null, null, content)
+    SectionCardLayout(title, detail, action, null, onClick, animateDetail, null, actionContent, content)
 }
 
 private data class SectionCollapse(
