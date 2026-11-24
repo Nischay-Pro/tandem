@@ -4,12 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.api.client.automaticBankSyncDue
 import app.tandemforactual.api.client.bankInstitutions
 import app.tandemforactual.api.client.bankLinkStatus
 import app.tandemforactual.api.client.bankProviderAccounts
 import app.tandemforactual.api.client.budgetBankSyncInterval
 import app.tandemforactual.api.client.budgetLinkedAccounts
+import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.linkBudgetBankAccount
 import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.api.client.setBudgetBankSyncInterval
@@ -22,6 +22,7 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.data.regions.global.bank.BrowserLink
 import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
+import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.session.banking.BankingController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -30,6 +31,7 @@ import kotlinx.coroutines.delay
 internal class BankingController(
     private val apiClient: TandemApiClient,
     private val nowEpochMillis: () -> Long,
+    private val preferences: () -> AppPreferencesStore?,
     private val performBudgetAction: suspend (String, String?, String, suspend () -> Unit) -> Boolean,
 ) {
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
@@ -70,7 +72,6 @@ internal class BankingController(
 
     /** Actual's Automatic syncing interval for the open budget in minutes, 0 when off, null until loaded. */
     var syncIntervalMinutes by mutableStateOf<Int?>(null)
-    private val lastAutomaticRun = mutableMapOf<String, Long>()
 
     suspend fun loadSyncInterval(
         budgetId: String,
@@ -94,9 +95,8 @@ internal class BankingController(
         budgetId: String,
         encryptionPassword: String?,
     ): Boolean {
-        val now = nowEpochMillis()
-        if (!apiClient.automaticBankSyncDue(budgetId, encryptionPassword, now, lastAutomaticRun[budgetId])) return false
-        lastAutomaticRun[budgetId] = now
+        val store = preferences() ?: return false
+        if (!apiClient.claimDueBankSync(budgetId, encryptionPassword, store, nowEpochMillis())) return false
         return runBankSync(budgetId, encryptionPassword)
     }
 

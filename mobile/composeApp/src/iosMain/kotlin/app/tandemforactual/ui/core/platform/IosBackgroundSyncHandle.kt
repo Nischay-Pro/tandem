@@ -3,6 +3,8 @@ package app.tandemforactual.ui.core.platform
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.client.claimDueBankSync
+import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -108,10 +110,15 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         if (budget.isEncrypted) return IosBackgroundSyncAlerts(taskSucceeded = true)
 
         val repository = LocalBudgetRepository(database) { Clock.System.now().toEpochMilliseconds() }
-        val summary =
-            sessionClient.withExclusiveSession {
-                BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId)
+        val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient))
+        var summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId) }
+        if (sessionClient.claimDueBankSync(budgetId, null, AppPreferencesStore(database), Clock.System.now().toEpochMilliseconds())) {
+            try {
+                sessionClient.runBudgetBankSync(budgetId, null)
+            } catch (_: TandemApiException) {
             }
+            summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId) }
+        }
         postSyncAlerts(
             database,
             repository,
