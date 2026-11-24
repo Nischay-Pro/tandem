@@ -39,7 +39,8 @@ import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
 import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
-import app.tandemforactual.ui.core.session.LocalBackupPassphraseStore
+import app.tandemforactual.ui.core.session.BackupSecrets
+import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -128,8 +129,14 @@ class MainActivity : FragmentActivity() {
                         BackgroundBudgetSyncScheduler.update(applicationContext, enabled, network, budgetId)
                     }
                 }
-            val backupPassphrases = remember { AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE) }
-            CompositionLocalProvider(LocalBackupPassphraseStore provides backupPassphrases) {
+            val backupSecrets =
+                remember {
+                    BackupSecrets(
+                        AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE),
+                        AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE),
+                    )
+                }
+            CompositionLocalProvider(LocalBackupSecrets provides backupSecrets) {
                 TandemApp(
                     actualBudgetFiles =
                         remember {

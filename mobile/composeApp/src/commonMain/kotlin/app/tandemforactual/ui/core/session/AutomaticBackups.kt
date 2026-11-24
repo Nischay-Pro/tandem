@@ -10,8 +10,14 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Where the device keeps the automatic backup passphrase; the platform provides it, and without one backups stay plain. */
-val LocalBackupPassphraseStore = staticCompositionLocalOf<DeviceCredentialStore?> { null }
+/** Where the device keeps backup secrets: the passphrase that seals backups, and the WebDAV password. */
+class BackupSecrets(
+    val passphrase: DeviceCredentialStore,
+    val webDavPassword: DeviceCredentialStore,
+)
+
+/** The platform's [BackupSecrets]; without them backups stay plain and WebDAV can't be set up. */
+val LocalBackupSecrets = staticCompositionLocalOf<BackupSecrets?> { null }
 
 /** Automatic backup choices, saved with the app's settings so a background task can read them. */
 data class AutomaticBackupSettings(
@@ -21,6 +27,8 @@ data class AutomaticBackupSettings(
     val keep: Int = 7,
     val folder: String? = null,
     val folderLabel: String? = null,
+    val webDavUrl: String? = null,
+    val webDavUser: String? = null,
 ) {
     fun toPreferences(): Map<String, String> =
         mapOf(
@@ -30,6 +38,8 @@ data class AutomaticBackupSettings(
             KEEP to keep.toString(),
             FOLDER to folder.orEmpty(),
             FOLDER_LABEL to folderLabel.orEmpty(),
+            WEBDAV_URL to webDavUrl.orEmpty(),
+            WEBDAV_USER to webDavUser.orEmpty(),
         )
 
     companion object {
@@ -39,6 +49,8 @@ data class AutomaticBackupSettings(
         const val KEEP = "autoBackupKeep"
         const val FOLDER = "autoBackupFolder"
         const val FOLDER_LABEL = "autoBackupFolderLabel"
+        const val WEBDAV_URL = "autoBackupWebDavUrl"
+        const val WEBDAV_USER = "autoBackupWebDavUser"
         const val LAST_RUN = "internal:auto-backup-last-run"
 
         fun from(preferences: Map<String, String>): AutomaticBackupSettings {
@@ -50,6 +62,8 @@ data class AutomaticBackupSettings(
                 keep = preferences[KEEP]?.toIntOrNull()?.takeIf { it > 0 } ?: defaults.keep,
                 folder = preferences[FOLDER]?.takeIf(String::isNotBlank),
                 folderLabel = preferences[FOLDER_LABEL]?.takeIf(String::isNotBlank),
+                webDavUrl = preferences[WEBDAV_URL]?.takeIf(String::isNotBlank),
+                webDavUser = preferences[WEBDAV_USER]?.takeIf(String::isNotBlank),
             )
         }
     }
@@ -58,12 +72,15 @@ data class AutomaticBackupSettings(
 object AutomaticBackups {
     const val FILE_PREFIX = "tandem-backup-"
 
-    /** Whether a backup is due: switched on, given a folder, and the interval has passed since the last one. */
+    /** Whether a backup is due: switched on, with a folder or WebDAV to go to, and the interval has passed since the last. */
     fun due(
         settings: AutomaticBackupSettings,
         lastRun: Long?,
         now: Long,
-    ): Boolean = settings.enabled && settings.folder != null && (lastRun == null || now - lastRun >= settings.intervalHours * 3_600_000L)
+    ): Boolean =
+        settings.enabled &&
+            (settings.folder != null || settings.webDavUrl != null) &&
+            (lastRun == null || now - lastRun >= settings.intervalHours * 3_600_000L)
 
     /** `tandem-backup-household-2026-11-24-0930.zip`; sealed backups aren't zips, so they get their own extension. */
     fun fileName(

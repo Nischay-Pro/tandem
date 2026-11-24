@@ -15,7 +15,8 @@ import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.platform.rememberBackupFolderPicker
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
-import app.tandemforactual.ui.core.session.LocalBackupPassphraseStore
+import app.tandemforactual.ui.core.session.BackupSecrets
+import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.inputs.FilterPills
@@ -27,6 +28,7 @@ import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.FolderOpen
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
@@ -43,7 +45,9 @@ internal fun AutomaticBackupCard(state: AppState) {
     val settings = state.automaticBackup
     val update = { change: (AutomaticBackupSettings) -> AutomaticBackupSettings -> state.automaticBackup = change(state.automaticBackup) }
     val pickFolder = rememberBackupFolderPicker { folder, label -> update { it.copy(folder = folder, folderLabel = label) } }
-    val passphrases = LocalBackupPassphraseStore.current
+    val secrets = LocalBackupSecrets.current
+    val passphrases = secrets?.passphrase
+    var settingWebDav by remember { mutableStateOf(false) }
     var hasPassphrase by remember(passphrases) { mutableStateOf(runCatching { passphrases?.read() }.getOrNull() != null) }
     var settingPassphrase by remember { mutableStateOf(false) }
     SectionCard("Automatic backups", automaticBackupStatus(state)) {
@@ -58,7 +62,7 @@ internal fun AutomaticBackupCard(state: AppState) {
         }
         ToggleRow("Back up automatically", "The whole budget and its planning data", settings.enabled) { on ->
             update { it.copy(enabled = on) }
-            if (on && settings.folder == null) pickFolder()
+            if (on && settings.folder == null && settings.webDavUrl == null) pickFolder()
         }
         DividerLine()
         ListRow(
@@ -68,18 +72,14 @@ internal fun AutomaticBackupCard(state: AppState) {
             onClick = pickFolder,
         )
         DividerLine()
-        Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-            Label("How often")
-            FilterPills(BACKUP_INTERVALS, settings.intervalHours, { hours -> update { it.copy(intervalHours = hours) } })
-            Label("Back up on")
-            FilterPills(
-                SyncNetwork.entries.map { it to it.shortLabel },
-                settings.network,
-                { network -> update { it.copy(network = network) } },
-            )
-            Label("Keep")
-            FilterPills(BACKUP_KEEP.map { it to "Last $it" }, settings.keep, { keep -> update { it.copy(keep = keep) } })
-        }
+        BackupSchedule(settings, update)
+        DividerLine()
+        ListRow(
+            "Upload to WebDAV",
+            settings.webDavUrl ?: "Off. Copy each backup to Nextcloud, a NAS or another WebDAV server.",
+            leading = RowLeading.Icon(Lucide.Cloud),
+            onClick = if (secrets != null) ({ settingWebDav = true }) else null,
+        )
         DividerLine()
         ListRow(
             "Encrypt backups",
@@ -88,11 +88,57 @@ internal fun AutomaticBackupCard(state: AppState) {
             onClick = if (passphrases != null) ({ settingPassphrase = true }) else null,
         )
     }
+    WebDavSetup(settingWebDav, settings, secrets, onClose = { settingWebDav = false }, update = update)
     AutomaticBackupPassphraseDialog(settingPassphrase, hasPassphrase, onDismiss = { settingPassphrase = false }) { passphrase ->
         settingPassphrase = false
         runCatching { if (passphrase == null) passphrases?.clear() else passphrases?.write(passphrase) }
         hasPassphrase = passphrase != null
     }
+}
+
+/** How often backups run, on which networks, and how many are kept. */
+@Composable
+private fun BackupSchedule(
+    settings: AutomaticBackupSettings,
+    update: ((AutomaticBackupSettings) -> AutomaticBackupSettings) -> Unit,
+) {
+    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        Label("How often")
+        FilterPills(BACKUP_INTERVALS, settings.intervalHours, { hours -> update { it.copy(intervalHours = hours) } })
+        Label("Back up on")
+        FilterPills(SyncNetwork.entries.map { it to it.shortLabel }, settings.network, { network -> update { it.copy(network = network) } })
+        Label("Keep")
+        FilterPills(BACKUP_KEEP.map { it to "Last $it" }, settings.keep, { keep -> update { it.copy(keep = keep) } })
+    }
+}
+
+@Composable
+private fun WebDavSetup(
+    visible: Boolean,
+    settings: AutomaticBackupSettings,
+    secrets: BackupSecrets?,
+    onClose: () -> Unit,
+    update: ((AutomaticBackupSettings) -> AutomaticBackupSettings) -> Unit,
+) {
+    WebDavBackupDialog(
+        visible,
+        settings.webDavUrl,
+        settings.webDavUser,
+        onDismiss = onClose,
+        onSave = { url, user, password ->
+            onClose()
+            runCatching { secrets?.webDavPassword?.write(password) }
+            update { it.copy(webDavUrl = url, webDavUser = user) }
+        },
+        onRemove =
+            settings.webDavUrl?.let {
+                {
+                    onClose()
+                    runCatching { secrets?.webDavPassword?.clear() }
+                    update { it.copy(webDavUrl = null, webDavUser = null) }
+                }
+            },
+    )
 }
 
 @Composable
@@ -103,7 +149,7 @@ private fun automaticBackupStatus(state: AppState): String {
     val last = state.automaticBackupLastRun?.let { "Last backup ${platformFormatDateAtEpochMilliseconds(it)}" }
     return when {
         !settings.enabled -> "Off"
-        settings.folder == null -> "Choose a folder to start"
+        settings.folder == null && settings.webDavUrl == null -> "Choose a folder or WebDAV to start"
         else -> last ?: "Waiting for the first backup"
     }
 }

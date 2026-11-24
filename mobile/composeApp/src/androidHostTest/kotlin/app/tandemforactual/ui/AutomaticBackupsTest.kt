@@ -20,6 +20,7 @@ class AutomaticBackupsTest {
         assertTrue(AutomaticBackups.due(on, 10 * hour, 34 * hour))
         assertFalse(AutomaticBackups.due(on.copy(enabled = false), null, 0))
         assertFalse(AutomaticBackups.due(on.copy(folder = null), null, 0))
+        assertTrue(AutomaticBackups.due(on.copy(folder = null, webDavUrl = "https://cloud.example/dav"), null, 0))
     }
 
     @Test
@@ -43,7 +44,15 @@ class AutomaticBackupsTest {
 
     @Test
     fun savesTheChoicesWithTheAppSettings() {
-        val chosen = on.copy(intervalHours = 168, network = SyncNetwork.WIFI, keep = 14, folderLabel = "Documents")
+        val chosen =
+            on.copy(
+                intervalHours = 168,
+                network = SyncNetwork.WIFI,
+                keep = 14,
+                folderLabel = "Documents",
+                webDavUrl = "https://dav",
+                webDavUser = "sam",
+            )
         assertEquals(chosen, AutomaticBackupSettings.from(chosen.toPreferences()))
         assertEquals(AutomaticBackupSettings(), AutomaticBackupSettings.from(mapOf("autoBackupKeep" to "0", "autoBackupNetwork" to "x")))
         val state = AppState()
