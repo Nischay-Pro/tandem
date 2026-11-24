@@ -1,16 +1,10 @@
 package app.tandemforactual.android
 
-import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.os.Build
 import android.provider.DocumentsContract
-import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -37,11 +31,6 @@ import kotlinx.coroutines.CancellationException
 internal const val BACKUP_PASSPHRASE_STORE = "automatic_backup_passphrase"
 internal const val BACKUP_WEBDAV_STORE = "automatic_backup_webdav"
 
-/** Whether an activity is on screen, so background work only notifies when Tandem isn't open. */
-internal object AppVisibility {
-    @Volatile var visible = false
-}
-
 /** Checks hourly whether an automatic backup is due; the worker itself reads the schedule, folder and network choice. */
 internal object AutomaticBackupScheduler {
     private const val UNIQUE_WORK_NAME = "tandem-automatic-backup"
@@ -61,7 +50,7 @@ class AutomaticBackupWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val database = runCatching { openTandemDatabase(tandemDatabaseBuilder(applicationContext)) }.getOrElse { return Result.retry() }
-        val progress = BackupProgress(applicationContext)
+        val progress = BackupProgress(BackgroundWorkProgress(applicationContext, BackgroundWork.BACKUP))
         return try {
             val store = AppPreferencesStore(database)
             val preferences = store.read()
@@ -216,45 +205,10 @@ private class BackupFolder(
     }
 }
 
-/** A progress notification for a backup running while Tandem isn't open; nothing shows when the app is on screen. */
 private class BackupProgress(
-    private val context: Context,
+    private val notification: BackgroundWorkProgress,
 ) {
-    private val manager = context.getSystemService(NotificationManager::class.java)
+    fun show(percent: Int) = notification.show("Backing up your budget", percent)
 
-    fun show(percent: Int) {
-        val manager = manager ?: return
-        if (AppVisibility.visible || !manager.areNotificationsEnabled()) return clear()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Backups", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shows progress while an automatic backup runs in the background."
-            },
-        )
-        manager.notify(
-            NOTIFICATION_ID,
-            NotificationCompat
-                .Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_tandem_notification)
-                .setContentTitle("Backing up your budget")
-                .setProgress(100, percent, percent == 0)
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .setSilent(true)
-                .build(),
-        )
-    }
-
-    fun clear() {
-        manager?.cancel(NOTIFICATION_ID)
-    }
-
-    private companion object {
-        const val CHANNEL_ID = "tandem-backups"
-        const val NOTIFICATION_ID = 4_201
-    }
+    fun clear() = notification.clear()
 }

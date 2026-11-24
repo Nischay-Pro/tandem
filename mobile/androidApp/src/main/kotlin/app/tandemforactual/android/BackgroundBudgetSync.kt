@@ -90,6 +90,7 @@ class BackgroundBudgetSyncWorker(
         val credentialStore = AndroidDeviceCredentialStore(applicationContext)
         var apiClient: TandemApiClient? = null
         var notificationPreferences: Map<String, String>? = null
+        val progress = BackgroundWorkProgress(applicationContext, BackgroundWork.SYNC)
         return try {
             val preferences = AppPreferencesStore(database).read()
             notificationPreferences = preferences
@@ -115,10 +116,15 @@ class BackgroundBudgetSyncWorker(
                 return Result.success()
             }
             try {
+                progress.show("Syncing your budget")
                 val repository = LocalBudgetRepository(budgetDatabase) { System.currentTimeMillis() }
                 val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient))
                 var summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
-                if (syncBanksIfDue(sessionClient, budgetId, password, AppPreferencesStore(database))) {
+                val banksSynced =
+                    syncBanksIfDue(sessionClient, budgetId, password, AppPreferencesStore(database)) {
+                        progress.show("Syncing your banks")
+                    }
+                if (banksSynced) {
                     summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
                 }
                 postAlerts(database, repository, budgetId, preferences, summary)
@@ -142,6 +148,7 @@ class BackgroundBudgetSyncWorker(
             }
             Result.retry()
         } finally {
+            progress.clear()
             database.close()
         }
     }
@@ -272,8 +279,10 @@ internal suspend fun syncBanksIfDue(
     budgetId: String,
     password: String?,
     preferences: AppPreferencesStore,
+    onStart: () -> Unit,
 ): Boolean {
     if (!client.claimDueBankSync(budgetId, password, preferences, System.currentTimeMillis())) return false
+    onStart()
     try {
         client.runBudgetBankSync(budgetId, password)
     } catch (_: TandemApiException) {
