@@ -69,10 +69,17 @@ internal class PlanningKeyring(
 
     fun cursor(budgetId: String): Long = value("cursor:$budgetId")?.toLongOrNull() ?: 0
 
+    /** The record last received at [cursor], so the service can tell if it was restored from an older backup. */
+    fun anchor(budgetId: String): String? = value("anchor:$budgetId")
+
     fun setCursor(
         budgetId: String,
         cursor: Long,
-    ) = set("cursor:$budgetId", cursor.toString())
+        anchor: String?,
+    ) {
+        set("cursor:$budgetId", cursor.toString())
+        set("anchor:$budgetId", anchor)
+    }
 
     fun forget(budgetId: String) {
         val values = read()
@@ -81,6 +88,7 @@ internal class PlanningKeyring(
                 it != budgetId &&
                     it != "recovery:$budgetId" &&
                     it != "cursor:$budgetId" &&
+                    it != "anchor:$budgetId" &&
                     it != "previous-recovery:$budgetId"
             }
         if (remaining.size != values.size) write(remaining)

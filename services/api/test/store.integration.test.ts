@@ -67,7 +67,17 @@ describe.skipIf(!url)("Postgres extension store", () => {
       records: [],
       cursor: rest.cursor,
       hasMore: false,
+      restored: false,
     });
+    expect((await store.changes(scope, rest.cursor, 1, "r2")).restored).toBe(
+      false,
+    );
+    expect((await store.changes(scope, rest.cursor, 1, "r1")).restored).toBe(
+      true,
+    );
+    expect((await store.changes(scope, rest.cursor + 99, 1)).restored).toBe(
+      true,
+    );
   });
 
   it("guards the wrapped key with the expected key id", async () => {

@@ -38,11 +38,18 @@ export interface ChangePage {
   records: SealedRecord[];
   cursor: number;
   hasMore: boolean;
+  /** True when this budget no longer holds the write the device's cursor points at, as after restoring a backup. */
+  restored: boolean;
 }
 
 export interface ExtensionStore {
   ping(): Promise<void>;
-  changes(scope: string, after: number, limit: number): Promise<ChangePage>;
+  changes(
+    scope: string,
+    after: number,
+    limit: number,
+    anchor?: string,
+  ): Promise<ChangePage>;
   write(
     scope: string,
     recordId: string,
@@ -66,19 +73,27 @@ function acceptable(current: SealedRecord | undefined, write: RecordWrite) {
 export class InMemoryExtensionStore implements ExtensionStore {
   private readonly records = new Map<string, Map<string, SealedRecord>>();
   private readonly keys = new Map<string, WrappedKey>();
+  private readonly writes = new Map<string, Map<number, string>>();
   private seq = 0;
 
   async ping() {}
 
-  async changes(scope: string, after: number, limit: number) {
-    const all = [...(this.records.get(scope)?.values() ?? [])]
+  async changes(scope: string, after: number, limit: number, anchor?: string) {
+    const scoped = [...(this.records.get(scope)?.values() ?? [])];
+    const all = scoped
       .filter((record) => record.seq > after)
       .sort((a, b) => a.seq - b.seq);
     const records = all.slice(0, limit);
+    const restored =
+      after > 0 &&
+      (anchor === undefined
+        ? !scoped.some((record) => record.seq >= after)
+        : this.writes.get(scope)?.get(after) !== anchor);
     return {
       records,
       cursor: records.at(-1)?.seq ?? after,
       hasMore: all.length > limit,
+      restored,
     };
   }
 
@@ -90,6 +105,8 @@ export class InMemoryExtensionStore implements ExtensionStore {
       return { status: "conflict" as const, current };
     const stored = { recordId, ...withoutBase(write), seq: ++this.seq };
     scoped.set(recordId, stored);
+    const log = this.writes.get(scope) ?? new Map<number, string>();
+    this.writes.set(scope, log.set(stored.seq, recordId));
     return { status: "stored" as const, seq: stored.seq };
   }
 
@@ -133,6 +150,14 @@ CREATE TABLE IF NOT EXISTS planning_records (
   PRIMARY KEY (scope, record_id)
 );
 CREATE INDEX IF NOT EXISTS planning_records_scope_seq ON planning_records (scope, seq);
+CREATE TABLE IF NOT EXISTS planning_writes (
+  scope TEXT NOT NULL,
+  seq BIGINT NOT NULL,
+  record_id TEXT NOT NULL,
+  PRIMARY KEY (scope, seq)
+);
+INSERT INTO planning_writes (scope, seq, record_id)
+  SELECT scope, seq, record_id FROM planning_records ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS planning_keys (
   scope TEXT PRIMARY KEY,
   key_id TEXT NOT NULL,
@@ -177,16 +202,30 @@ export class PostgresExtensionStore implements ExtensionStore {
     await this.pool.query("SELECT 1");
   }
 
-  async changes(scope: string, after: number, limit: number) {
+  async changes(scope: string, after: number, limit: number, anchor?: string) {
     const result = await this.pool.query<RecordRow>(
       "SELECT * FROM planning_records WHERE scope = $1 AND seq > $2 ORDER BY seq LIMIT $3",
       [scope, after, limit + 1],
     );
     const records = result.rows.slice(0, limit).map(toRecord);
+    const known =
+      after === 0 ||
+      (
+        await (anchor === undefined
+          ? this.pool.query(
+              "SELECT 1 FROM planning_records WHERE scope = $1 AND seq >= $2 LIMIT 1",
+              [scope, after],
+            )
+          : this.pool.query(
+              "SELECT 1 FROM planning_writes WHERE scope = $1 AND seq = $2 AND record_id = $3",
+              [scope, after, anchor],
+            ))
+      ).rows.length > 0;
     return {
       records,
       cursor: records.at(-1)?.seq ?? after,
       hasMore: result.rows.length > limit,
+      restored: !known,
     };
   }
 
@@ -217,7 +256,13 @@ export class PostgresExtensionStore implements ExtensionStore {
           write.ciphertext,
         ],
       );
-      return { status: "stored" as const, seq: Number(stored.rows[0]!.seq) };
+      const seq = Number(stored.rows[0]!.seq);
+      await client.query(
+        `INSERT INTO planning_writes (scope, seq, record_id) VALUES ($1, $2, $3)
+         ON CONFLICT (scope, seq) DO UPDATE SET record_id = EXCLUDED.record_id`,
+        [scope, seq, recordId],
+      );
+      return { status: "stored" as const, seq };
     });
   }
 

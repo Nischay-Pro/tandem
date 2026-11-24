@@ -29,6 +29,7 @@ data class RemotePlanningPage(
     val records: List<RemotePlanningRecord>,
     val cursor: Long,
     val hasMore: Boolean,
+    val restored: Boolean = false,
 )
 
 /** The extension sync service for one budget. */
@@ -40,7 +41,10 @@ interface PlanningTransport {
         expectedKeyId: String?,
     ): Boolean
 
-    suspend fun changes(after: Long): RemotePlanningPage
+    suspend fun changes(
+        after: Long,
+        anchor: String? = null,
+    ): RemotePlanningPage
 
     suspend fun put(
         recordId: String,
@@ -58,6 +62,7 @@ data class PlanningSyncResult(
     val uploaded: Int,
     val downloaded: Int,
     val cursor: Long,
+    val anchor: String? = null,
 )
 
 /**
@@ -113,13 +118,50 @@ class PlanningSync(
         }
     }
 
+    /** [anchor] is the record received at [cursor]; both come from the previous result. */
     suspend fun sync(
         cipher: PlanningCipher,
         cursor: Long,
+        anchor: String? = null,
     ): PlanningSyncResult {
-        val uploaded = uploadPending(cipher)
-        val (downloaded, after) = downloadChanges(cursor)
-        return PlanningSyncResult(uploaded, downloaded, after)
+        var uploaded = uploadPending(cipher)
+        val first = transport.changes(cursor, anchor)
+        if (!first.restored) return downloadChanges(first, anchor).copy(uploaded = uploaded)
+        val result = recoverFromRestore()
+        uploaded += uploadPending(cipher)
+        return result.copy(uploaded = uploaded)
+    }
+
+    /**
+     * The service was restored from a backup older than this device's cursor. Downloads everything again, keeps local
+     * records newer than the restored copies and queues them, and anything the service lost, to upload again.
+     */
+    private suspend fun recoverFromRestore(): PlanningSyncResult {
+        val seen = mutableSetOf<String>()
+        var after = 0L
+        var anchor: String? = null
+        var downloaded = 0
+        do {
+            val page = transport.changes(after)
+            for (remote in page.records) {
+                seen += remote.recordId
+                val local = dao.find(budgetId, remote.recordId)
+                when {
+                    local?.pendingUpload == true || local?.syncedRevision == remote.revision -> Unit
+                    local != null && local.syncedRevision > remote.revision -> dao.upsert(local.copy(pendingUpload = true))
+                    else -> {
+                        dao.upsert(remote.toEntity())
+                        downloaded++
+                    }
+                }
+            }
+            after = page.cursor
+            anchor = page.records.lastOrNull()?.recordId ?: anchor
+        } while (page.hasMore)
+        dao.all(budgetId).filter { it.recordId !in seen && !it.pendingUpload }.forEach {
+            dao.upsert(it.copy(pendingUpload = true, syncedRevision = 0))
+        }
+        return PlanningSyncResult(0, downloaded, after, anchor)
     }
 
     private suspend fun uploadPending(cipher: PlanningCipher): Int {
@@ -179,33 +221,38 @@ class PlanningSync(
         return uploaded
     }
 
-    private suspend fun downloadChanges(cursor: Long): Pair<Int, Long> {
-        var after = cursor
+    private suspend fun downloadChanges(
+        first: RemotePlanningPage,
+        anchor: String?,
+    ): PlanningSyncResult {
+        var page = first
+        var last = anchor
         var downloaded = 0
-        do {
-            val page = transport.changes(after)
+        while (true) {
+            last = page.records.lastOrNull()?.recordId ?: last
             for (remote in page.records) {
                 val local = dao.find(budgetId, remote.recordId)
                 if (local?.pendingUpload == true || (local != null && local.syncedRevision >= remote.revision)) continue
-                dao.upsert(
-                    PlanningRecordEntity(
-                        budgetId,
-                        remote.recordId,
-                        remote.recordType,
-                        remote.schemaVersion,
-                        remote.revision,
-                        remote.seq,
-                        remote.deleted,
-                        remote.iv,
-                        remote.ciphertext,
-                        pendingUpload = false,
-                        syncedRevision = remote.revision,
-                    ),
-                )
+                dao.upsert(remote.toEntity())
                 downloaded++
             }
-            after = page.cursor
-        } while (page.hasMore)
-        return downloaded to after
+            if (!page.hasMore) return PlanningSyncResult(0, downloaded, page.cursor, last)
+            page = transport.changes(page.cursor, last)
+        }
     }
+
+    private fun RemotePlanningRecord.toEntity() =
+        PlanningRecordEntity(
+            budgetId,
+            recordId,
+            recordType,
+            schemaVersion,
+            revision,
+            seq,
+            deleted,
+            iv,
+            ciphertext,
+            pendingUpload = false,
+            syncedRevision = revision,
+        )
 }

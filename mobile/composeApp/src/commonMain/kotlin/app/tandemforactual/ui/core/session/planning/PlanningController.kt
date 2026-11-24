@@ -130,8 +130,8 @@ internal class PlanningController(
                         keyring.replaceKey(budgetId, shared)
                         sync.rekey(PlanningCipher(local), PlanningCipher(shared))
                     }
-                    val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId))
-                    keyring.setCursor(budgetId, result.cursor)
+                    val result = sync.sync(PlanningCipher(shared), keyring.cursor(budgetId), keyring.anchor(budgetId))
+                    keyring.setCursor(budgetId, result.cursor, result.anchor)
                 }
                 PlanningSyncStatus.SYNCED
             } catch (error: CancellationException) {

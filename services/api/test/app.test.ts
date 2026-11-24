@@ -211,7 +211,26 @@ describe("extension sync", () => {
         headers: auth,
       })
     ).json();
-    expect(none).toEqual({ records: [], cursor: 0, hasMore: false });
+    expect(none).toEqual({
+      records: [],
+      cursor: 0,
+      hasMore: false,
+      restored: false,
+    });
+    const restored = async (query: string) =>
+      (
+        await server.inject({
+          url: `/extension/v1/budgets/${budget}/changes?${query}`,
+          headers: auth,
+        })
+      ).json().restored;
+    expect(await restored("after=2&anchor=r2")).toBe(false);
+    expect(await restored("after=2&anchor=r1")).toBe(true);
+    expect(await restored("after=3")).toBe(false);
+    expect(await restored("after=99")).toBe(true);
+    expect(
+      await restored(`after=1&anchor=${encodeURIComponent("bad id")}`),
+    ).toBeUndefined();
     expect(access.calls[0]).toBe(`token:${budget}`);
   });
 

@@ -397,6 +397,12 @@
           },
           {
             "schema": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,100}$" },
+            "in": "query",
+            "name": "anchor",
+            "required": false
+          },
+          {
+            "schema": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,100}$" },
             "in": "path",
             "name": "budgetId",
             "required": true
@@ -438,7 +444,8 @@
                       }
                     },
                     "cursor": { "type": "integer" },
-                    "hasMore": { "type": "boolean" }
+                    "hasMore": { "type": "boolean" },
+                    "restored": { "type": "boolean" }
                   }
                 }
               }

@@ -22,7 +22,10 @@ private class RecordingTransport : PlanningTransport {
         expectedKeyId: String?,
     ) = true
 
-    override suspend fun changes(after: Long) = RemotePlanningPage(records.values.filter { it.seq > after }, seq, false)
+    override suspend fun changes(
+        after: Long,
+        anchor: String?,
+    ) = RemotePlanningPage(records.values.filter { it.seq > after }, seq, false)
 
     override suspend fun put(
         recordId: String,
