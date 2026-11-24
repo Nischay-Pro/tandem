@@ -44,6 +44,9 @@ internal class PlanningKeyring(
 
     fun cipherFor(budgetId: String): PlanningCipher = PlanningCipher(key(budgetId))
 
+    /** The budget's planning key when this device has one, without creating one. */
+    fun existingKey(budgetId: String): ByteArray? = value(budgetId)?.let(Base64::decode)
+
     /** Adopts the key another device shared, after the local records have been re-sealed with it. */
     fun replaceKey(
         budgetId: String,

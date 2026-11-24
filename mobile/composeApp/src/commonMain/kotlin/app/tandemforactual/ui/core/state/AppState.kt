@@ -13,6 +13,7 @@ import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.search.ActivitySortOrder
+import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
@@ -131,6 +132,10 @@ internal class AppState {
     var appLanguage by mutableStateOf("")
     var budgetScrollToSummaryRequested by mutableStateOf(false)
     var backgroundSyncEnabled by mutableStateOf(false)
+    var automaticBackup by mutableStateOf(AutomaticBackupSettings())
+
+    /** When the last automatic backup finished, as the background task recorded it; read on start. */
+    var automaticBackupLastRun by mutableStateOf<Long?>(null)
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
     var interfaceMode by mutableStateOf(InterfaceMode.MINIMAL)
@@ -270,27 +275,29 @@ internal class AppState {
             "syncOnOpen" to syncOnOpen.toString(),
             "appLanguage" to appLanguage,
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
-            "syncNetwork" to syncNetwork.name,
-            "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
-            "interfaceMode" to interfaceMode.name,
-            "experienceSettingsJson" to experienceSettingsJson,
-            "backupLogJson" to backupLogJson,
-            "unlockFailureCount" to unlockFailureCount.toString(),
-            "localServerUrl" to localServerUrl,
-            "lastTransactionAccountId" to lastTransactionAccountId,
-            "recentServerUrls" to recentServerUrls,
-            "unlockRetryAtEpochMillis" to unlockRetryAtEpochMillis.toString(),
-            "syncReminders" to syncReminders.toString(),
-            "conflictReviewAlerts" to conflictReviewAlerts.toString(),
-            "rejectedEditAlerts" to rejectedEditAlerts.toString(),
-            "overspendingAlerts" to overspendingAlerts.toString(),
-            "bankSyncAlerts" to bankSyncAlerts.toString(),
-            "upcomingBillAlerts" to upcomingBillAlerts.toString(),
-            "largeTransactionAlerts" to largeTransactionAlerts.toString(),
-            NotificationPolicy.QUIET_HOURS to quietHours,
-            NotificationPolicy.LARGE_TRANSACTION_MINOR to largeTransactionMinor.toString(),
-            NotificationPolicy.BILL_LEAD_DAYS to billLeadDays.toString(),
-        )
+        ) + automaticBackup.toPreferences() +
+            mapOf(
+                "syncNetwork" to syncNetwork.name,
+                "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
+                "interfaceMode" to interfaceMode.name,
+                "experienceSettingsJson" to experienceSettingsJson,
+                "backupLogJson" to backupLogJson,
+                "unlockFailureCount" to unlockFailureCount.toString(),
+                "localServerUrl" to localServerUrl,
+                "lastTransactionAccountId" to lastTransactionAccountId,
+                "recentServerUrls" to recentServerUrls,
+                "unlockRetryAtEpochMillis" to unlockRetryAtEpochMillis.toString(),
+                "syncReminders" to syncReminders.toString(),
+                "conflictReviewAlerts" to conflictReviewAlerts.toString(),
+                "rejectedEditAlerts" to rejectedEditAlerts.toString(),
+                "overspendingAlerts" to overspendingAlerts.toString(),
+                "bankSyncAlerts" to bankSyncAlerts.toString(),
+                "upcomingBillAlerts" to upcomingBillAlerts.toString(),
+                "largeTransactionAlerts" to largeTransactionAlerts.toString(),
+                NotificationPolicy.QUIET_HOURS to quietHours,
+                NotificationPolicy.LARGE_TRANSACTION_MINOR to largeTransactionMinor.toString(),
+                NotificationPolicy.BILL_LEAD_DAYS to billLeadDays.toString(),
+            )
 
     fun restorePersistentSettings(saved: Map<String, String>) {
         theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
@@ -337,6 +344,8 @@ internal class AppState {
         syncOnOpen = saved["syncOnOpen"]?.toBooleanStrictOrNull() ?: syncOnOpen
         appLanguage = saved["appLanguage"] ?: appLanguage
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
+        automaticBackup = AutomaticBackupSettings.from(saved)
+        automaticBackupLastRun = saved[AutomaticBackupSettings.LAST_RUN]?.toLongOrNull()
         syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         interfaceMode = InterfaceMode.entries.firstOrNull { it.name == saved["interfaceMode"] } ?: interfaceMode
