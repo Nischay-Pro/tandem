@@ -3,6 +3,7 @@
 package app.tandemforactual.ui.app.shell
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import app.tandemforactual.ui.app.AppMenu
 import app.tandemforactual.ui.app.appMenuItems
 import app.tandemforactual.ui.app.navigationRoutes
@@ -19,6 +20,8 @@ internal fun ShellMenu(chrome: ShellChromeState) {
     val state = ctx.state
     val mobileSession = ctx.mobileSession
     val navigation = ctx.navigation
+    val payeeRecords = mobileSession.payeeRecords
+    val payeeCount = remember(payeeRecords) { payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null } }
     val openFromMenu: (AppRoute) -> Unit = { target ->
         state.menuOpen = false
         if (target in navigationRoutes(state.interfaceMode) ||
@@ -39,7 +42,7 @@ internal fun ShellMenu(chrome: ShellChromeState) {
                 advanced = state.interfaceMode == InterfaceMode.ADVANCED,
                 ruleCount = mobileSession.ruleRecords.size,
                 scheduleCount = ctx.shell.liveSchedules.size,
-                payeeCount = mobileSession.payeeRecords.count { it.recordBody()?.stringValue("transfer_acct") == null },
+                payeeCount = payeeCount,
                 conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
                 reimbursementsOwedMinor =
                     mobileSession.planning.reimbursements
