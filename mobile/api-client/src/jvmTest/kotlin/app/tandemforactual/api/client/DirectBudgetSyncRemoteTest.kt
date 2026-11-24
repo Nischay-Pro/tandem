@@ -13,8 +13,12 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.RemoteOperationStatus
+import app.tandemforactual.data.store.budgetWrites
 import app.tandemforactual.data.store.countVisibleRecords
 import app.tandemforactual.data.store.enqueueWrite
+import app.tandemforactual.data.store.importBudgetWrites
+import app.tandemforactual.data.store.removeBudget
+import app.tandemforactual.data.store.unsentWrites
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -263,5 +267,90 @@ class DirectBudgetSyncRemoteTest {
             assertFailsWith<Exception> { reopened.budget("group") }
             val defaults = TandemApiClient()
             assertEquals(10, defaults.today().length)
+        }
+
+    @Test
+    fun editsQueuedBeforeAResetReplayOnceAgainstTheFreshDownload(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
+            client.signInWithPassword("https://budget.example", "test", "Phone")
+            val cache = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val repository = LocalBudgetRepository(cache) { 1_795_255_200_000L }
+                val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(client))
+                coordinator.synchronize("group")
+                val checking =
+                    client
+                        .budget("group")
+                        .snapshot("2026-11-21")
+                        .records
+                        .first { it.type == "account" && it.body["name"] == JsonPrimitive("Checking") }
+                        .id
+
+                fun create(id: String) =
+                    LocalWriteRequest(
+                        operationId = UUID.randomUUID().toString(),
+                        idempotencyKey = UUID.randomUUID().toString(),
+                        budgetId = "group",
+                        recordType = "transaction",
+                        recordId = id,
+                        action = LocalWriteAction.CREATE,
+                        baseRevision = null,
+                        baseSnapshotJson = null,
+                        patchJson =
+                            buildJsonObject {
+                                put("account", checking)
+                                put("amount", -500)
+                                put("date", "2026-11-20")
+                                put("payee", null as String?)
+                                put("category", null as String?)
+                                put("notes", id)
+                                put("cleared", false)
+                            }.toString(),
+                        optimisticJson =
+                            buildJsonObject {
+                                put("id", id)
+                                put("account", checking)
+                                put("amount", -500)
+                                put("date", "2026-11-20")
+                            }.toString(),
+                        createdAtEpochMs = 1L,
+                        optimisticProjection =
+                            app.tandemforactual.data.store.LocalRecordProjection(
+                                recordDate = "2026-11-20",
+                                accountId = checking,
+                                categoryId = null,
+                                payeeId = null,
+                                amountMinor = -500,
+                                budgetMonth = null,
+                            ),
+                    )
+                val uploaded = "tandem:${UUID.randomUUID()}"
+                val waiting = "tandem:${UUID.randomUUID()}"
+                repository.enqueueWrite(create(uploaded))
+                assertEquals(1, coordinator.synchronize("group").writesCommitted)
+                repository.enqueueWrite(create(waiting))
+                val sent = repository.budgetWrites("group").first { it.recordId == uploaded }
+                cache.outboxDao().put(sent.copy(status = "uncertain"))
+
+                client.retireBudget("group")
+                val replay = repository.unsentWrites("group")
+                repository.removeBudget("group")
+                repository.importBudgetWrites(replay)
+                assertEquals(2, coordinator.synchronize("group").writesCommitted)
+
+                val ids =
+                    client
+                        .budget("group")
+                        .snapshot("2026-11-21")
+                        .records
+                        .filter { it.type == "transaction" }
+                        .map { it.id }
+                assertEquals(1, ids.count { it == uploaded })
+                assertEquals(1, ids.count { it == waiting })
+            } finally {
+                cache.closeDatabase()
+            }
         }
 }

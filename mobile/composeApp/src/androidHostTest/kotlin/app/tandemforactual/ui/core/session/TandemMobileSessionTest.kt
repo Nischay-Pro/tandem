@@ -323,6 +323,30 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun downloadingABudgetAgainKeepsItsUnsentEditsToReplay() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val preferences = AppPreferencesStore(database)
+                val repository = LocalBudgetRepository(database) { 1_000L }
+                seedCachedBudget(repository, preferences, withPendingWrite = true)
+                val outbox = database.outboxDao()
+                outbox.put(pendingTransactionWrite(status = "uncertain", serverOperationId = "server-1"))
+                outbox.put(pendingTransactionWrite(status = "committed").copy(operationId = "done", idempotencyKey = "done-key"))
+                val session = TandemMobileSession(TandemApiClient(), database, { 2_000L })
+                session.loadLocalRecords("budget-1")
+
+                assertEquals(2, session.downloadBudgetAgain("budget-1", null))
+                assertFalse(repository.hasCachedSnapshot("budget-1"))
+                val kept = repository.budgetWrites("budget-1")
+                assertEquals(setOf("edit-1", "operation-1"), kept.map { it.operationId }.toSet())
+                assertTrue(kept.all { it.status == "queued" && it.serverOperationId == null && it.attemptCount == 0 })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun deletedTransactionsCanBeUndoneUntilTheyAreSent() =
         runBlocking {
             val database = newDatabase()

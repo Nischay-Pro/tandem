@@ -215,6 +215,36 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun unsentWritesComeBackQueuedForReplay() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 500L }
+                repository.applySnapshot(BUDGET, GENERATION, "c1", listOf(transaction()))
+                repository.enqueueWrite(updateRequest(operationId = "replay-1", idempotencyKey = "replay-key-1"))
+                val queued = repository.budgetWrites(BUDGET).single()
+                val outbox = database.outboxDao()
+                outbox.put(queued.copy(status = "uncertain", attemptCount = 2, serverOperationId = "s", lastErrorCode = "e"))
+                outbox.put(queued.copy(operationId = "sent", idempotencyKey = "sent-key", status = "committed"))
+
+                val replay = repository.unsentWrites(BUDGET)
+                assertEquals(listOf("replay-1"), replay.map { it.operationId })
+                assertEquals(
+                    queued.copy(
+                        status = "queued",
+                        attemptCount = 0,
+                        serverOperationId = null,
+                        lastErrorCode = null,
+                        updatedAtEpochMs = 500L,
+                    ),
+                    replay.single(),
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun aBudgetMovesItsWritesAndLeavesNoCopyBehind() =
         runBlocking {
             val source = newDatabase()

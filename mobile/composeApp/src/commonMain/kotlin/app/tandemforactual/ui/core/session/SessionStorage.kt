@@ -6,8 +6,10 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
 import app.tandemforactual.data.store.budgetWrites
+import app.tandemforactual.data.store.importBudgetWrites
 import app.tandemforactual.data.store.readPendingWrites
 import app.tandemforactual.data.store.removeBudget
+import app.tandemforactual.data.store.unsentWrites
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
 import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
 import kotlinx.coroutines.delay
@@ -74,8 +76,8 @@ internal suspend fun TandemMobileSession.removeBudgetFromDevice(
 }
 
 /**
- * Recovers from a reset in Actual: the device's copy and any edits it could not send are kept as a backup, and the
- * budget is downloaded fresh. Returns how many unsent edits the backup holds.
+ * Recovers from a reset in Actual: the device's copy is kept as a backup, the budget is downloaded fresh, and edits it
+ * could not send are queued again to replay against the new copy. Returns how many unsent edits there were.
  */
 internal suspend fun TandemMobileSession.downloadBudgetAgain(
     budgetId: String,
@@ -84,10 +86,17 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     val unsent =
         budgetQueue.pendingBudgetMutationCount(budgetId) +
             repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
-    if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
+    val replay = repository?.unsentWrites(budgetId).orEmpty()
+    val encrypted = boundEncryptedBudgetId == budgetId
+    if (encrypted) unbindEncryptedBudgetDatabase()
     apiClient.retireBudget(budgetId)
     mainStorage?.repository?.removeBudget(budgetId)
     vault?.delete(budgetId)
+    if (encrypted) {
+        writesToReplay[budgetId] = replay
+    } else {
+        mainStorage?.repository?.importBudgetWrites(replay)
+    }
     cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
     loadLocalRecords(budgetId)
     loadBudgets()

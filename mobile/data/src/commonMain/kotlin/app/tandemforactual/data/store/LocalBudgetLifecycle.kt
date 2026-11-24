@@ -10,6 +10,14 @@ suspend fun LocalBudgetRepository.importBudgetWrites(writes: List<OutboxOperatio
     }
 }
 
+/** Edits that never reached Actual, queued again so they replay against a fresh download of the budget. */
+suspend fun LocalBudgetRepository.unsentWrites(budgetId: String): List<OutboxOperationEntity> =
+    budgetWrites(budgetId).filter { it.status in UNSENT_STATUSES }.map {
+        it.copy(status = "queued", attemptCount = 0, serverOperationId = null, lastErrorCode = null, updatedAtEpochMs = now())
+    }
+
+private val UNSENT_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
+
 suspend fun LocalBudgetRepository.removeBudget(budgetId: String) {
     requireIdentifier(budgetId, "budgetId")
     database.withWriteTransaction {

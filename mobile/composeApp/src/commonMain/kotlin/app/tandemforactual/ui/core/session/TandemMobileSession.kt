@@ -123,6 +123,9 @@ internal class TandemMobileSession(
 
     internal val boundEncryptedBudgetId: String? get() = budgetStorage?.budgetId
 
+    /** Unsent edits of an encrypted budget downloaded again, held until its new vault is created. */
+    internal val writesToReplay = mutableMapOf<String, List<app.tandemforactual.data.database.OutboxOperationEntity>>()
+
     internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
 
     var isUsingLocalServer by mutableStateOf(false)
