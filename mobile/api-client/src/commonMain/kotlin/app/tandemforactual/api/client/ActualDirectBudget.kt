@@ -21,6 +21,7 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.ZipArchive
+import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
@@ -281,6 +282,12 @@ class ActualDirectBudget private constructor(
             operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
         )
     }
+
+    /** A consistent copy of the budget's database, taken under the sync lock so no edit or sync is half written. */
+    suspend fun snapshot(
+        files: ActualBudgetFiles,
+        budgetId: String,
+    ): ByteArray = locked { files.snapshot(budgetId) { path -> db.execute("VACUUM INTO ?", path) } }
 
     suspend fun close() = locked { db.close() }
 

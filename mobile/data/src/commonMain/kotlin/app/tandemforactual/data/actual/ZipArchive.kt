@@ -42,6 +42,93 @@ object ZipArchive {
         return entries
     }
 
+    /** A zip of [entries] stored without compression, which every unzip tool and Actual's import can read. */
+    fun write(entries: Map<String, ByteArray>): ByteArray {
+        val out = ByteSink(entries.values.sumOf { it.size } + 1024)
+        val central = ByteSink(256)
+        for ((name, data) in entries) {
+            val nameBytes = name.encodeToByteArray()
+            val crc = crc32(data)
+            val offset = out.size.toLong()
+            out.header(0x04034b50L, crc, data.size, nameBytes.size, central = false)
+            out.bytes(nameBytes)
+            out.bytes(data)
+            central.header(0x02014b50L, crc, data.size, nameBytes.size, central = true)
+            central.u32(offset)
+            central.bytes(nameBytes)
+        }
+        val centralStart = out.size.toLong()
+        out.bytes(central.toByteArray())
+        out.u32(0x06054b50L)
+        out.u16(0)
+        out.u16(0)
+        out.u16(entries.size)
+        out.u16(entries.size)
+        out.u32(central.size.toLong())
+        out.u32(centralStart)
+        out.u16(0)
+        return out.toByteArray()
+    }
+
+    private class ByteSink(
+        capacity: Int,
+    ) {
+        private var buffer = ByteArray(capacity)
+        var size = 0
+            private set
+
+        fun bytes(data: ByteArray) {
+            if (size + data.size > buffer.size) buffer = buffer.copyOf(maxOf(buffer.size * 2, size + data.size))
+            data.copyInto(buffer, size)
+            size += data.size
+        }
+
+        fun u16(value: Int) = bytes(byteArrayOf(value.toByte(), (value shr 8).toByte()))
+
+        fun u32(value: Long) = bytes(ByteArray(4) { (value shr (8 * it)).toByte() })
+
+        /** A local or central file header up to the name, stored, UTF-8 names, dated 1980-01-01. */
+        fun header(
+            signature: Long,
+            crc: Long,
+            length: Int,
+            nameLength: Int,
+            central: Boolean,
+        ) {
+            u32(signature)
+            if (central) u16(20)
+            u16(20)
+            u16(0x0800)
+            u16(0)
+            u16(0)
+            u16(0x21)
+            u32(crc)
+            u32(length.toLong())
+            u32(length.toLong())
+            u16(nameLength)
+            u16(0)
+            if (central) {
+                repeat(3) { u16(0) }
+                u32(0)
+            }
+        }
+
+        fun toByteArray(): ByteArray = buffer.copyOf(size)
+    }
+
+    private val crcTable =
+        LongArray(256) { n ->
+            var c = n.toLong()
+            repeat(8) { c = if (c and 1L != 0L) 0xEDB88320L xor (c ushr 1) else c ushr 1 }
+            c
+        }
+
+    internal fun crc32(data: ByteArray): Long {
+        var c = 0xFFFFFFFFL
+        for (b in data) c = crcTable[((c xor b.toLong()) and 0xFF).toInt()] xor (c ushr 8)
+        return c xor 0xFFFFFFFFL
+    }
+
     private fun findEndOfCentralDirectory(bytes: ByteArray): Int {
         var i = bytes.size - 22
         while (i >= 0 && i >= bytes.size - 22 - 0xffff) {

@@ -560,6 +560,11 @@ class TandemMobileSessionTest {
 
                     override fun remove(budgetId: String) = Unit
 
+                    override fun snapshot(
+                        budgetId: String,
+                        write: (path: String) -> Unit,
+                    ) = error("offline")
+
                     override fun retire(
                         budgetId: String,
                         label: String,

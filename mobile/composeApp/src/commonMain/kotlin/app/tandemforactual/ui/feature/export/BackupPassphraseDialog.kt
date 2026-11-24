@@ -27,7 +27,7 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 
-private const val MIN_PASSPHRASE = 8
+internal const val MIN_PASSPHRASE = 8
 
 /** What the passphrase is for: sealing a new backup, or opening one to restore or check. */
 internal enum class PassphrasePurpose { BACK_UP, RESTORE, CHECK }

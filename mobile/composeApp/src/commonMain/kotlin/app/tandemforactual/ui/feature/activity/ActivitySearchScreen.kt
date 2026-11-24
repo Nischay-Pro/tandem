@@ -287,7 +287,7 @@ private fun BoxScope.ActivitySearchSelectionBar(
         }
     AnimatedVisibility(
         visible = isLiveBudget && selection.selectionMode,
-        modifier = Modifier.align(Alignment.BottomCenter),
+        modifier = Modifier.align(Alignment.BottomStart),
         enter = tandemFloatingEnter(tandemReduceMotion),
         exit = tandemFloatingExit(tandemReduceMotion),
     ) {

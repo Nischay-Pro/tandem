@@ -35,6 +35,14 @@ class PlanningStore(
             records.mapNotNull { record -> runCatching { record.recordId to open(record) }.getOrNull() }
         }
 
+    /** Every live planning record as id, type and body, for a backup; records this key can't open are left out. */
+    suspend fun backupRecords(): List<Triple<String, String, JsonObject>> =
+        dao
+            .all(budgetId)
+            .filter { !it.deleted && it.recordType.startsWith("planning.") }
+            .mapNotNull { record -> runCatching { Triple(record.recordId, record.recordType, open(record)) }.getOrNull() }
+            .sortedWith(compareBy({ it.second }, { it.first }))
+
     suspend fun put(
         recordId: String,
         recordType: String,

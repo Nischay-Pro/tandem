@@ -197,4 +197,13 @@ internal class TempBudgetFiles : ActualBudgetFiles {
     override fun remove(budgetId: String) {
         file(budgetId).delete()
     }
+
+    override fun snapshot(
+        budgetId: String,
+        write: (path: String) -> Unit,
+    ): ByteArray {
+        val copy = directory.resolve("$budgetId.snapshot").apply { delete() }
+        write(copy.path)
+        return copy.readBytes().also { copy.delete() }
+    }
 }

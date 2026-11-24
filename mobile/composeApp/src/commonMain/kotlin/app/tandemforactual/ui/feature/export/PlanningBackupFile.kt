@@ -11,18 +11,15 @@ import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.planning.SharedBill
+import app.tandemforactual.ui.core.session.PLANNING_BACKUP_FORMAT
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.planningBackupJson
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-
-private const val BACKUP_FORMAT = "tandem-planning-backup"
 
 /** The planning records in a backup file, after opening it with [passphrase] when it is sealed. */
 internal sealed interface BackupContents {
@@ -66,28 +63,13 @@ internal fun planningBackup(session: TandemMobileSession): String {
             session.planning.sharedBills.map { Triple(it.id, SharedBill.TYPE, it.toJson()) } +
             session.planning.pensionEstimates.map { Triple(it.pensionId, PensionEstimate.TYPE, it.toJson()) } +
             listOf(Triple(PlanningSettings.ID, PlanningSettings.TYPE, session.planning.settings.toJson()))
-    return buildJsonObject {
-        put("format", BACKUP_FORMAT)
-        put("version", 1)
-        put(
-            "records",
-            JsonArray(
-                records.map { (id, type, body) ->
-                    buildJsonObject {
-                        put("id", id)
-                        put("type", type)
-                        put("body", body)
-                    }
-                },
-            ),
-        )
-    }.toString()
+    return planningBackupJson(records)
 }
 
 internal fun readPlanningBackup(contents: String): List<Triple<String, String, JsonObject>>? =
     runCatching {
         val root = Json.parseToJsonElement(contents).jsonObject
-        if ((root["format"] as? JsonPrimitive)?.content != BACKUP_FORMAT) return null
+        if ((root["format"] as? JsonPrimitive)?.content != PLANNING_BACKUP_FORMAT) return null
         root
             .getValue("records")
             .jsonArray
