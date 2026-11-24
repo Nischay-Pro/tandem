@@ -9,11 +9,16 @@ import kotlinx.cinterop.usePinned
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSLock
 import platform.Foundation.NSURL
+import platform.posix.SEEK_END
+import platform.posix.SEEK_SET
 import platform.posix.fclose
 import platform.posix.fflush
 import platform.posix.fileno
 import platform.posix.fopen
+import platform.posix.fread
+import platform.posix.fseek
 import platform.posix.fsync
+import platform.posix.ftell
 import platform.posix.fwrite
 import platform.posix.rename
 
@@ -94,6 +99,33 @@ class IosActualBudgetFiles(
             }
         } finally {
             lock.unlock()
+        }
+    }
+
+    override fun snapshot(
+        budgetId: String,
+        write: (path: String) -> Unit,
+    ): ByteArray {
+        val copy = path(budgetId) + ".snapshot"
+        NSFileManager.defaultManager.removeItemAtPath(copy, error = null)
+        try {
+            write(copy)
+            val input = checkNotNull(fopen(copy, "rb")) { "Could not read the budget copy." }
+            try {
+                fseek(input, 0, SEEK_END)
+                val size = ftell(input)
+                fseek(input, 0, SEEK_SET)
+                val bytes = ByteArray(size.toInt())
+                if (size > 0) {
+                    val read = bytes.usePinned { fread(it.addressOf(0), 1uL, size.toULong(), input) }
+                    check(read == size.toULong()) { "Could not read the budget copy." }
+                }
+                return bytes
+            } finally {
+                fclose(input)
+            }
+        } finally {
+            NSFileManager.defaultManager.removeItemAtPath(copy, error = null)
         }
     }
 

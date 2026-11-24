@@ -409,4 +409,53 @@ class DirectBudgetSyncRemoteTest {
                     .map { it.body["name"] }
             names.forEach { name -> assertEquals(1, payees.count { it == JsonPrimitive(name) }, name) }
         }
+
+    @Test
+    fun backsUpTheWholeBudgetSoActualCanImportIt(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
+            client.signInWithPassword("https://budget.example", "test", "Phone")
+            client.budget("group").sync()
+            val plain = client.budgetBackup("group", null, "Household", """{"records":[]}""", passphrase = null)
+            val opened =
+                app.tandemforactual.data.planning.BudgetBackupFile
+                    .read(plain, null)
+            opened as app.tandemforactual.data.planning.BudgetBackupContents.Opened
+            assertEquals("""{"records":[]}""", opened.planningJson)
+            assertTrue(opened.metadataJson!!.contains("\"budgetName\":\"Household\""))
+            val copy =
+                kotlin.io.path
+                    .createTempFile(suffix = ".sqlite")
+                    .toFile()
+                    .apply { writeBytes(opened.database) }
+            val restored =
+                app.tandemforactual.data.actual.ActualDatabase(
+                    androidx.sqlite.driver.bundled
+                        .BundledSQLiteDriver()
+                        .open(copy.path),
+                )
+            val live =
+                client
+                    .budget("group")
+                    .snapshot("2026-11-21")
+                    .records
+                    .count { it.type == "transaction" }
+            assertEquals(live.toLong(), restored.first("SELECT count(*) AS n FROM v_transactions")!!["n"])
+            restored.close()
+            copy.delete()
+
+            val sealed = client.budgetBackup("group", null, "Household", null, passphrase = "secret")
+            assertEquals(
+                app.tandemforactual.data.planning.BudgetBackupContents.WrongPassphrase,
+                app.tandemforactual.data.planning.BudgetBackupFile
+                    .read(sealed, "nope"),
+            )
+            assertEquals(
+                "not_supported",
+                assertFailsWith<TandemApiException> {
+                    TandemApiClient().budgetBackup("group", null, "x", null, null)
+                }.errorCode,
+            )
+        }
 }
