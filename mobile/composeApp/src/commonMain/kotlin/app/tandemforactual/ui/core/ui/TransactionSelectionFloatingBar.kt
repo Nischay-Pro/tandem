@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +32,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.Trash2
 
+/** Select all and delete for selected transactions, as a compact pill on the left so the add button stays reachable. */
 @Composable
 internal fun TransactionSelectionFloatingBar(
     allSelected: Boolean,
@@ -42,17 +42,16 @@ internal fun TransactionSelectionFloatingBar(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    SurfaceCard(modifier.fillMaxWidth()) {
+    SurfaceCard(modifier) {
         Row(
-            Modifier.fillMaxWidth().padding(TandemSpacing.small),
+            Modifier.padding(TandemSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         ) {
             val label = if (allSelected) "Deselect all" else "Select all"
             Row(
                 Modifier
-                    .weight(1f)
-                    .heightIn(min = 50.dp)
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(TandemShapes.medium))
                     .background(tandemPalette.accentSurface)
                     .clickable(enabled = !isWorking, role = Role.Button, onClickLabel = label, onClick = onToggleAll)
