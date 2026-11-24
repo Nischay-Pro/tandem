@@ -16,6 +16,10 @@ class ActualDatabase(
 ) {
     private var depth = 0
 
+    init {
+        connection.execSQL("PRAGMA busy_timeout = 10000")
+    }
+
     fun query(
         sql: String,
         vararg args: Any?,
