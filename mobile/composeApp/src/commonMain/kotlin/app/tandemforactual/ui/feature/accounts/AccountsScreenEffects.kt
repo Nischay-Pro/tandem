@@ -30,6 +30,7 @@ internal fun AccountsScreenEffects(
         when (state.accountsRequestedAction) {
             "add" -> addAccountSheet.open(mobileSession)
             "banks" -> navigation.open(AppRoute.BANK_CONNECTIONS)
+            else -> return@LaunchedEffect
         }
         state.accountsRequestedAction = null
     }

@@ -111,6 +111,9 @@ internal class AppState {
     var workspace by mutableStateOf(Workspace())
     var homeLayout by mutableStateOf("Comfortable")
     var budgetShowProgressBars by mutableStateOf(false)
+
+    /** The sort the accounts are in right now, or null after they were arranged by hand. */
+    var accountsActiveSort by mutableStateOf<AccountSort?>(null)
     var privacyModeEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")

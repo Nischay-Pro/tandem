@@ -24,6 +24,7 @@ import app.tandemforactual.ui.core.session.budget.clearBudgetReorderMessage
 import app.tandemforactual.ui.core.session.budget.moveBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.budgetOrderForScreen
+import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -65,6 +66,7 @@ internal fun AccountsScreen(
     val reorder = rememberAccountReorder(state, mobileSession, liveAccounts)
     val accountOrderIds = reorder.drag.displayOrder ?: reorder.drag.currentOrder(reorder.queuedOrder)
     val orderedLiveAccounts = remember(liveAccounts, accountOrderIds) { orderAccountsForList(liveAccounts, accountOrderIds) }
+    AccountSortEffect(state, reorder, orderedLiveAccounts)
     val runBankSync: () -> Unit = {
         if (!isRefreshing && mobileSession.isAuthenticated && !state.readOnlyMode && state.selectedBudgetId.isNotBlank()) {
             scope.launch {
@@ -345,6 +347,26 @@ internal class AccountReorder(
         }
     }
 
+    /** Saves [sort] as the budget's account order, so Actual and other devices show it too. */
+    fun applySort(
+        sort: AccountSort,
+        ordered: List<LiveAccountSummary>,
+    ) {
+        val next = sortAccountsWithinGroups(ordered, sort).map { it.id }
+        if (next.isEmpty() || next == ordered.map { it.id }) return
+        scope.launch {
+            mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
+            mobileSession.budgetEdits.moveBudgetAccount(
+                state.selectedBudgetId,
+                next.first(),
+                next.getOrNull(1),
+                state.encryptedPassword.takeIf(String::isNotBlank),
+                next,
+                baseOrder = serverOrder,
+            )
+        }
+    }
+
     fun startDrag(
         accountId: String,
         movableAccountIds: List<String>,
@@ -389,5 +411,25 @@ internal class AccountReorder(
                 }
             }
         }
+    }
+}
+
+/** Runs a sort chosen from the accounts menu once the screen has the current order. */
+@Composable
+private fun AccountSortEffect(
+    state: AppState,
+    reorder: AccountReorder,
+    ordered: List<LiveAccountSummary>,
+) {
+    val requested =
+        state.accountsRequestedAction?.removePrefix("sort:")?.takeIf {
+            state.accountsRequestedAction?.startsWith("sort:") ==
+                true
+        }
+    LaunchedEffect(ordered) { state.accountsActiveSort = activeAccountSort(ordered) }
+    LaunchedEffect(requested) {
+        val sort = AccountSort.entries.firstOrNull { it.name == requested } ?: return@LaunchedEffect
+        state.accountsRequestedAction = null
+        reorder.applySort(sort, ordered)
     }
 }

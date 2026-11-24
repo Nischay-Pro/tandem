@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.keepTogether
+import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.liveAccountGroupLabel
 
@@ -129,4 +130,29 @@ internal fun reorderAccountsWithinSlots(
     val reordered = accountIds.toMutableList()
     movablePositions.zip(reorderedMovableIds).forEach { (position, accountId) -> reordered[position] = accountId }
     return reordered
+}
+
+/** Applies [sort] within each account group, keeping the groups and, for ties, the current order. */
+internal fun sortAccountsWithinGroups(
+    accounts: List<LiveAccountSummary>,
+    sort: AccountSort,
+): List<LiveAccountSummary> {
+    val within: Comparator<LiveAccountSummary> =
+        when (sort) {
+            AccountSort.NAME_ASCENDING -> compareBy { it.name.lowercase() }
+            AccountSort.NAME_DESCENDING -> compareByDescending { it.name.lowercase() }
+            AccountSort.BALANCE_ASCENDING -> compareBy { it.balanceMinor ?: Long.MAX_VALUE }
+            AccountSort.BALANCE_DESCENDING -> compareByDescending { it.balanceMinor ?: Long.MIN_VALUE }
+        }
+    return accounts.sortedWith(
+        compareBy<LiveAccountSummary>({ accountGroupOrder(liveAccountGroupLabel(it)) }, { liveAccountGroupLabel(it).lowercase() })
+            .then(within),
+    )
+}
+
+/** The sort [accounts] are already in, so the menu can tick it; null once they were arranged by hand. */
+internal fun activeAccountSort(accounts: List<LiveAccountSummary>): AccountSort? {
+    if (accounts.size < 2) return null
+    val ids = accounts.map { it.id }
+    return AccountSort.entries.firstOrNull { sort -> sortAccountsWithinGroups(accounts, sort).map { it.id } == ids }
 }
