@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +23,7 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
+import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -101,18 +105,28 @@ internal fun SavingsGoalSheet(
             }
         }
     }
-    TandemChoiceDialog(choosingCategory, onDismissRequest = { choosingCategory = false }) {
+    CategoryChoiceDialog(choosingCategory, categories, onDismiss = { choosingCategory = false }) {
+        categoryId = it
+        choosingCategory = false
+    }
+}
+
+/** Picks the budget category a goal tracks, or none. */
+@Composable
+private fun CategoryChoiceDialog(
+    visible: Boolean,
+    categories: List<LiveCategorySummary>,
+    onDismiss: () -> Unit,
+    onPick: (String?) -> Unit,
+) {
+    TandemChoiceDialog(visible, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
-            ListRow("None", onClick = {
-                categoryId = null
-                choosingCategory = false
-            })
-            categories.forEach { category ->
-                DividerLine()
-                ListRow(category.name, onClick = {
-                    categoryId = category.id
-                    choosingCategory = false
-                })
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                ListRow("None", onClick = { onPick(null) })
+                categories.forEach { category ->
+                    DividerLine()
+                    ListRow(category.name, onClick = { onPick(category.id) })
+                }
             }
         }
     }

@@ -5,10 +5,14 @@ package app.tandemforactual.ui.feature.banking
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.LinkedAccount
@@ -42,16 +46,24 @@ internal fun LinkBankAccountDialog(
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 TandemModalHeader("Link ${target?.second?.name.orEmpty()}", onClose = onDismiss, leadingIcon = Lucide.Landmark)
                 Text("Choose the budget account it should sync into.", color = palette.muted, fontSize = TandemTypography.compactBody)
-                liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }.forEach { account ->
-                    ListRow(
-                        account.name,
-                        if (account.offBudget) "Off budget" else "On budget",
-                        leading =
-                            RowLeading.Icon(
-                                Lucide.WalletCards,
-                            ),
-                        onClick = { onPick(account) },
-                    )
+                val candidates =
+                    remember(target, liveAccounts, linked) {
+                        val open = liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }
+                        target?.let { rankLinkCandidates(it.second, open) }.orEmpty()
+                    }
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    candidates.forEach { candidate ->
+                        val account = candidate.account
+                        ListRow(
+                            account.name,
+                            listOfNotNull(
+                                "Best match".takeIf { isBestMatch(candidates, candidate) },
+                                if (account.offBudget) "Off budget" else "On budget",
+                            ).joinToString(" · "),
+                            leading = RowLeading.Icon(Lucide.WalletCards),
+                            onClick = { onPick(account) },
+                        )
+                    }
                 }
             }
         }
