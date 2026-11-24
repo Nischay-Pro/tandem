@@ -62,6 +62,9 @@ internal fun JsonObject.longValue(name: String): Long? =
 
 internal fun JsonObject.booleanValue(name: String): Boolean? = (this[name] as? JsonPrimitive)?.booleanOrNull
 
+/** Whether an account record is off budget; its transactions carry no category. */
+internal fun JsonObject?.isOffBudgetAccount(): Boolean = this?.booleanValue("offbudget") == true || this?.booleanValue("offBudget") == true
+
 internal fun budgetMonthCategoryCarryover(
     remoteJson: String?,
     categoryId: String,

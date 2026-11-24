@@ -125,7 +125,8 @@ class ActualTransactionOperations(
                 "amount" to input["amount"],
                 "payee" to input["payee"],
             )
-        if (input["category"] != null) transaction["category"] = input["category"]
+        val offBudget = truthy(db.first("SELECT offbudget FROM accounts WHERE id = ?", input["account"])?.get("offbudget"))
+        if (input["category"] != null && !offBudget) transaction["category"] = input["category"]
         transaction["notes"] = input["notes"]
         transaction["cleared"] = input["cleared"]
         transaction["imported_id"] = transactionId

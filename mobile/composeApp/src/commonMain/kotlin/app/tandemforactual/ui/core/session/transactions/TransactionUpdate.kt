@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.session.stringValue
 import app.tandemforactual.ui.core.session.toProjection
 import app.tandemforactual.ui.core.session.transactions.TransactionController
 import app.tandemforactual.ui.core.state.booleanValue
+import app.tandemforactual.ui.core.state.isOffBudgetAccount
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
 import kotlin.uuid.Uuid
@@ -102,7 +103,7 @@ internal suspend fun TransactionController.updateTransaction(
     val requestedAccountId = if (updateDetails) accountId?.takeIf(String::isNotBlank) else null
     if (!validateEditedTransactionAccount(updateDetails, requestedAccountId)) return false
     if (!validateEditedTransactionPayee(updateDetails, payeeId, transactionType, requestedAccountId)) return false
-    val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" }
+    val requestedCategoryId = categoryId.takeUnless { transactionType == "Transfer" || isOffBudget(requestedAccountId) }
     if (updateDetails && requestedCategoryId != null && host.categoryRecords.none { it.recordId == requestedCategoryId }) {
         host.reportTransactionWriteMessage("Choose a category from this budget before saving.")
         return false
@@ -136,6 +137,12 @@ private fun TransactionController.parseEditedTransactionAmount(
     return enteredAmount
 }
 
+private fun TransactionController.isOffBudget(accountId: String?): Boolean =
+    host.accountRecords
+        .firstOrNull { it.recordId == accountId }
+        ?.recordBody()
+        .isOffBudgetAccount()
+
 private fun TransactionController.validateEditedTransactionAccount(
     updateDetails: Boolean,
     requestedAccountId: String?,
@@ -149,10 +156,6 @@ private fun TransactionController.validateEditedTransactionAccount(
         val accountBody = account?.recordBody()
         if (account == null || accountBody?.booleanValue("closed") == true) {
             host.reportTransactionWriteMessage("Choose an open account from this budget.")
-            return false
-        }
-        if (accountBody?.booleanValue("offbudget") == true || accountBody?.booleanValue("offBudget") == true) {
-            host.reportTransactionWriteMessage("Choose an on-budget account for this transaction.")
             return false
         }
     }
