@@ -11,6 +11,7 @@ import app.tandemforactual.api.client.budgetBankSyncInterval
 import app.tandemforactual.api.client.budgetLinkedAccounts
 import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.linkBudgetBankAccount
+import app.tandemforactual.api.client.linkBudgetBankAccountToNewAccount
 import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.api.client.setBudgetBankSyncInterval
 import app.tandemforactual.api.client.startBankLink
@@ -114,6 +115,17 @@ internal class BankingController(
     ): Boolean =
         performBudgetAction(budgetId, encryptionPassword, "Couldn’t link this account. Try again.") {
             apiClient.linkBudgetBankAccount(budgetId, accountId, provider, account, encryptionPassword)
+        }
+
+    suspend fun linkBankAccountToNewAccount(
+        budgetId: String,
+        offBudget: Boolean,
+        provider: BankProvider,
+        account: BankProviderAccount,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t create and link this account. Try again.") {
+            apiClient.linkBudgetBankAccountToNewAccount(budgetId, offBudget, provider, account, encryptionPassword)
         }
 
     suspend fun unlinkBankAccount(

@@ -74,13 +74,13 @@ internal fun AccountDetailScreen(
     val scrollRestore = rememberAccountDetailScrollRestore(state)
     val activity = rememberAccountActivityState(state, mobileSession, liveAccount)
     val reconcile = rememberAccountReconcileState(state, liveAccount)
+    val balanceUpdate = remember { mutableStateOf(false) }
     val statementImport = rememberStatementImportState(state, liveAccount)
     val pickStatementFile = rememberStatementFilePicker { file -> statementImport.onFilePicked(file, state, liveAccount) }
     StatementImportEffects(statementImport, state, mobileSession, liveAccount)
     AccountActivityEffects(activity, state, mobileSession, liveAccount, merchantIconMatcher)
     AccountDetailScrollRestoreEffect(scrollRestore, isForegroundRoute, accountName, activity.activity.size, routeScrollState)
     val shownAccountActivity = activity.activity
-    val offBudget = liveAccount?.offBudget ?: false
     val reconciliationCandidates =
         shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
     val description = liveAccount?.let { if (it.offBudget) "Off budget" else "On budget" }.orEmpty()
@@ -96,7 +96,7 @@ internal fun AccountDetailScreen(
             }
             AccountQuickActions(
                 showAccountActions = liveAccount != null,
-                addEnabled = !offBudget && !state.readOnlyMode,
+                addEnabled = !state.readOnlyMode,
                 reconcileEnabled =
                     !liveAccount.closed &&
                         activity.clearedBalanceMinor != null &&
@@ -109,6 +109,7 @@ internal fun AccountDetailScreen(
                     mobileSession.feedback.clearBudgetActionMessage()
                     pickStatementFile()
                 },
+                onUpdateBalance = { balanceUpdate.value = true },
             )
             if (!statementImport.showDialog) {
                 budgetActionFeedbackMessage(mobileSession)
@@ -128,6 +129,7 @@ internal fun AccountDetailScreen(
     }
     if (liveAccount != null) {
         StatementImportFlow(statementImport, state, mobileSession, liveAccount, scope)
+        AccountBalanceUpdate(balanceUpdate, state, mobileSession, liveAccount, scope)
     }
 }
 

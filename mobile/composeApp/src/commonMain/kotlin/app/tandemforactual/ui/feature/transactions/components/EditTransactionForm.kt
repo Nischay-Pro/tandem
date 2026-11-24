@@ -108,7 +108,7 @@ internal fun EditTransactionForm(
                 onShowKeypad = { amountEntry.keypadVisible = true },
                 onDismissKeypad = dismissKeypad,
             )
-            TransactionFormDetailsCard(state, navigation, pickers, dismissKeypad)
+            TransactionFormDetailsCard(state, navigation, pickers, liveAccounts.isOffBudget(state.newTransactionAccountId), dismissKeypad)
             TransactionNotesField(state) { focused ->
                 notesFocused = focused
                 if (focused) amountEntry.keypadVisible = false

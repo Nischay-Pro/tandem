@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
@@ -187,6 +188,7 @@ internal fun TransactionFormDetailsCard(
     state: AppState,
     navigation: AppNavigation,
     pickers: TransactionFormPickerState,
+    offBudget: Boolean,
     onDismissKeypad: () -> Unit,
 ) {
     SectionCard(title = "") {
@@ -205,10 +207,12 @@ internal fun TransactionFormDetailsCard(
                 onDismissKeypad()
                 navigation.open(AppRoute.CHOOSE_PAYEE)
             }
-            DividerLine()
-            TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
-                onDismissKeypad()
-                navigation.open(AppRoute.CHOOSE_CATEGORY)
+            if (!offBudget) {
+                DividerLine()
+                TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
+                    onDismissKeypad()
+                    navigation.open(AppRoute.CHOOSE_CATEGORY)
+                }
             }
             DividerLine()
             TransactionPickerRow(state.transactionAccount, "Choose account", Lucide.WalletCards) {
@@ -273,3 +277,5 @@ internal fun TransactionFormDatePicker(
         onDismiss = { pickers.showDatePicker = false },
     )
 }
+
+internal fun List<LiveAccountSummary>.isOffBudget(accountId: String?): Boolean = firstOrNull { it.id == accountId }?.offBudget == true

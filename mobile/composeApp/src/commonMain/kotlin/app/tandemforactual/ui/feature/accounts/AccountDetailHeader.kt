@@ -39,6 +39,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Scale
 
 /** Prompt to choose a budget when none is open. */
 @Composable
@@ -92,6 +93,7 @@ internal fun AccountQuickActions(
     onAdd: () -> Unit,
     onReconcile: () -> Unit,
     onImport: () -> Unit,
+    onUpdateBalance: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         AccountQuickAction(
@@ -119,6 +121,14 @@ internal fun AccountQuickActions(
                 enabled = importEnabled,
                 modifier = Modifier.weight(1f),
                 onClick = onImport,
+            )
+            AccountQuickAction(
+                Lucide.Scale,
+                "Balance",
+                "Update balance",
+                enabled = addEnabled,
+                modifier = Modifier.weight(1f),
+                onClick = onUpdateBalance,
             )
         }
     }

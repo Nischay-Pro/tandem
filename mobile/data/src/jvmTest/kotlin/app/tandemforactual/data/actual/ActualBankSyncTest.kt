@@ -204,5 +204,22 @@ class ActualBankSyncTest {
         ActualBudgetEdits(writer, { "2026-11-21" }).unlinkBankAccount(empty)
         assertTrue(sync.linkedAccounts().none { it.id == empty })
         assertEquals(null, db.first("SELECT account_sync_source FROM accounts WHERE id = ?", empty)!!["account_sync_source"])
+
+        val edits = ActualBudgetEdits(writer, { "2026-11-21" })
+        val card = edits.createLinkedAccount(" Rewards Card ", true, "simpleFin", "SF-9", "cu.example", "Credit Union")
+        val created = db.first("SELECT name, offbudget, account_id, account_sync_source FROM accounts WHERE id = ?", card)!!
+        assertEquals(listOf("Rewards Card", 1L, "SF-9", "simpleFin"), created.values.toList())
+        assertTrue(sync.linkedAccounts().any { it.id == card })
+        val unnamed = edits.createLinkedAccount("", false, "simpleFin", "SF-8", "cu.example", "Credit Union")
+        val fallback = edits.createLinkedAccount(" ", false, "simpleFin", "SF-7", "", " ")
+        assertEquals("Credit Union", db.first("SELECT name FROM accounts WHERE id = ?", unnamed)!!["name"])
+        assertEquals("Bank account", db.first("SELECT name FROM accounts WHERE id = ?", fallback)!!["name"])
+        assertEquals(
+            "Bank account",
+            db.first(
+                "SELECT name FROM accounts WHERE id = ?",
+                edits.createLinkedAccount("", false, "simpleFin", "SF-6", "", null),
+            )!!["name"],
+        )
     }
 }

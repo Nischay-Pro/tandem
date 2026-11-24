@@ -17,12 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.LinkedAccount
-import app.tandemforactual.data.regions.global.bank.BankLinkMethod
-import app.tandemforactual.data.regions.global.bank.BankProvider
-import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.ui.core.format.bankFailureLabel
+import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -90,6 +88,7 @@ internal fun BankConnectionsScreen(
             ui.providerStates,
             linked,
             liveAccounts,
+            homeBankRegions(state.budgetCurrencyCode),
             relinking = ui.relinkFor != null,
             onLoad = actions::loadAccounts,
             onLink = actions::pickProviderAccount,
@@ -107,7 +106,14 @@ internal fun BankConnectionsScreen(
         ui.browserProvider = null
         actions.pickProviderAccount(provider, providerAccount)
     }
-    LinkBankAccountDialog(ui.linking, liveAccounts, linked, onDismiss = { ui.linking = null }, onPick = actions::linkInto)
+    LinkBankAccountDialog(
+        ui.linking,
+        liveAccounts,
+        linked,
+        onDismiss = { ui.linking = null },
+        onPick = actions::linkInto,
+        onCreate = actions::linkIntoNew,
+    )
 }
 
 /** The budget accounts already linked to a bank, with a button to sync them. */
@@ -151,95 +157,6 @@ private fun LinkedAccountsSection(
                 enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                 loading = mobileSession.isPerformingBudgetAction,
             ) { onSync() }
-        }
-    }
-}
-
-/** Each bank provider, grouped under the regions it serves. */
-@Composable
-private fun BankProviderSections(
-    providerStates: Map<String, BankProviderState>,
-    linked: List<LinkedAccount>,
-    liveAccounts: List<LiveAccountSummary>,
-    relinking: Boolean,
-    onLoad: (BankProvider) -> Unit,
-    onLink: (BankProvider, BankProviderAccount) -> Unit,
-) {
-    val palette = tandemPalette
-    BankProviders.all.groupBy { it.regions.joinToString(" & ") { region -> region.displayName } }.forEach { (regionLabel, providers) ->
-        Text(regionLabel.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
-        providers.forEach { provider ->
-            ProviderCard(
-                provider,
-                providerStates[provider.source] ?: BankProviderState.Idle,
-                linked,
-                liveAccounts,
-                { onLoad(provider) },
-                relinking = relinking,
-            ) { providerAccount -> onLink(provider, providerAccount) }
-        }
-    }
-}
-
-@Composable
-private fun ProviderCard(
-    provider: BankProvider,
-    providerState: BankProviderState,
-    linked: List<LinkedAccount>,
-    liveAccounts: List<LiveAccountSummary>,
-    onLoad: () -> Unit,
-    relinking: Boolean = false,
-    onLink: (BankProviderAccount) -> Unit,
-) {
-    val browser = provider.linkMethod == BankLinkMethod.BROWSER
-    SectionCard(
-        provider.displayName,
-        when {
-            browser -> "Sign in at your bank in the browser, then choose which accounts to link."
-            providerState is BankProviderState.NotSetUp -> "Not set up on your Actual server yet. Add it in Actual’s settings."
-            providerState is BankProviderState.Failed -> providerState.message
-            else -> "Accounts your Actual server can see"
-        },
-        when {
-            browser -> if (relinking) "Sign in again" else "Link a bank"
-            providerState is BankProviderState.Ready -> null
-            providerState is BankProviderState.Loading -> "Loading…"
-            providerState is BankProviderState.Idle -> "Show accounts"
-            else -> "Check again"
-        },
-        onClick =
-            if (!browser &&
-                (providerState is BankProviderState.Ready || providerState is BankProviderState.Loading)
-            ) {
-                null
-            } else {
-                onLoad
-            },
-    ) {
-        if (providerState is BankProviderState.Ready) {
-            if (providerState.accounts.isEmpty()) {
-                ListRow("No accounts found", options = ListRowOptions(showChevron = false), leading = RowLeading.None)
-            }
-            providerState.accounts.forEachIndexed { index, account ->
-                if (index > 0) DividerLine()
-                val linkedTo =
-                    linked.firstOrNull { it.providerAccountId == account.id }?.let { link ->
-                        liveAccounts
-                            .firstOrNull {
-                                it.id ==
-                                    link.id
-                            }?.name
-                            ?: link.name
-                    }
-                ListRow(
-                    account.name,
-                    listOfNotNull(account.institution, account.balance).joinToString(" · ").ifBlank { null },
-                    linkedTo?.let { "Linked to $it" } ?: if (relinking) "Use this" else "Link",
-                    leading = RowLeading.Icon(if (linkedTo != null) Lucide.Link else Lucide.Unlink),
-                    options = ListRowOptions(showChevron = linkedTo == null),
-                    onClick = if (linkedTo == null) ({ onLink(account) }) else null,
-                )
-            }
         }
     }
 }

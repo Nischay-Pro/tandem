@@ -48,7 +48,8 @@ internal fun NewTransactionForm(
     val parsedAmountMinorUnits = state.parseAmountMinorUnits(state.transactionAmount)
     val amountMinorUnits = transactionAmountInputMagnitude(parsedAmountMinorUnits)
     val budgetAmountPreview = transactionBudgetAmountPreview(state, parsedAmountMinorUnits)
-    val transactionTargetIsValid = newTransactionTargetIsValid(state, mobileSession)
+    val transactionTargetIsValid =
+        newTransactionTargetIsValid(state, mobileSession, liveAccounts.isOffBudget(state.newTransactionAccountId))
     val receiptScan = rememberTransactionReceiptScan(state, mobileSession) { amountEntry.keypadVisible = false }
     val dismissKeypad = dismissKeypadAction(amountEntry)
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -64,7 +65,7 @@ internal fun NewTransactionForm(
                 onDismissKeypad = dismissKeypad,
             )
             if (state.transactionType != "Transfer") TransactionReceiptScanButton(receiptScan, dismissKeypad)
-            TransactionFormDetailsCard(state, navigation, pickers, dismissKeypad)
+            TransactionFormDetailsCard(state, navigation, pickers, liveAccounts.isOffBudget(state.newTransactionAccountId), dismissKeypad)
             TransactionNotesField(state) { focused ->
                 notesFocused = focused
                 if (focused) amountEntry.keypadVisible = false
@@ -126,6 +127,7 @@ private fun NewTransactionActionBar(
 private fun newTransactionTargetIsValid(
     state: AppState,
     mobileSession: TandemMobileSession,
+    offBudget: Boolean,
 ): Boolean {
     val transferDestinationAccountId =
         remember(state.newTransactionPayeeId, mobileSession.payeeRecords) {
@@ -137,7 +139,7 @@ private fun newTransactionTargetIsValid(
     return if (state.transactionType == "Transfer") {
         isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
     } else {
-        state.transactionCategory.isNotBlank()
+        offBudget || state.transactionCategory.isNotBlank()
     }
 }
 
