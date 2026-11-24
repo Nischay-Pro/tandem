@@ -13,6 +13,8 @@ import androidx.work.WorkerParameters
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.client.claimDueBankSync
+import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -114,10 +116,11 @@ class BackgroundBudgetSyncWorker(
             }
             try {
                 val repository = LocalBudgetRepository(budgetDatabase) { System.currentTimeMillis() }
-                val summary =
-                    sessionClient.withExclusiveSession {
-                        BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient)).synchronize(budgetId, password)
-                    }
+                val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient))
+                var summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
+                if (syncBanksIfDue(sessionClient, budgetId, password, AppPreferencesStore(database))) {
+                    summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
+                }
                 postAlerts(database, repository, budgetId, preferences, summary)
             } finally {
                 if (budgetDatabase !== database) budgetDatabase.close()
@@ -262,3 +265,18 @@ private fun Int?.toWorkResult(): ListenableWorker.Result =
         this in 400..499 -> ListenableWorker.Result.success()
         else -> ListenableWorker.Result.retry()
     }
+
+/** Runs bank sync on Actual's Automatic syncing schedule even while Tandem is closed; a failing bank doesn't stop the rest. */
+internal suspend fun syncBanksIfDue(
+    client: TandemApiClient,
+    budgetId: String,
+    password: String?,
+    preferences: AppPreferencesStore,
+): Boolean {
+    if (!client.claimDueBankSync(budgetId, password, preferences, System.currentTimeMillis())) return false
+    try {
+        client.runBudgetBankSync(budgetId, password)
+    } catch (_: TandemApiException) {
+    }
+    return true
+}

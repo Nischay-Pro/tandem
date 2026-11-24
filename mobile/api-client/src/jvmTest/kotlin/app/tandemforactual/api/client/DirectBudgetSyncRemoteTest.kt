@@ -411,6 +411,36 @@ class DirectBudgetSyncRemoteTest {
         }
 
     @Test
+    fun aDueBankSyncIsClaimedOncePerInterval(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
+            client.signInWithPassword("https://budget.example", "test", "Phone")
+            val cache = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val preferences =
+                    app.tandemforactual.data.store
+                        .AppPreferencesStore(cache)
+                val checking =
+                    client
+                        .budget("group")
+                        .snapshot("2026-11-21")
+                        .records
+                        .first { it.type == "account" && it.body["name"] == JsonPrimitive("Checking") }
+                        .id
+                val now = System.currentTimeMillis()
+                assertFalse(client.claimDueBankSync("group", null, preferences, now), "automatic syncing is off")
+                client.setBudgetBankSyncInterval("group", 60, null)
+                client.edit("group") { it.linkBankAccount(checking, "simpleFin", "SF-1", "org", "Credit Union") }
+                assertTrue(client.claimDueBankSync("group", null, preferences, now))
+                assertFalse(client.claimDueBankSync("group", null, preferences, now + 30 * 60_000), "a failed attempt waits")
+                assertTrue(client.claimDueBankSync("group", null, preferences, now + 61 * 60_000))
+            } finally {
+                cache.closeDatabase()
+            }
+        }
+
+    @Test
     fun backsUpTheWholeBudgetSoActualCanImportIt(): Unit =
         runBlocking {
             val server = FakeActualServer()

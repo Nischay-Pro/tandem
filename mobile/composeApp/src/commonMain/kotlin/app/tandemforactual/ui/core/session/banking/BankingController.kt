@@ -7,10 +7,13 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.bankInstitutions
 import app.tandemforactual.api.client.bankLinkStatus
 import app.tandemforactual.api.client.bankProviderAccounts
+import app.tandemforactual.api.client.budgetBankSyncInterval
 import app.tandemforactual.api.client.budgetLinkedAccounts
+import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.linkBudgetBankAccount
 import app.tandemforactual.api.client.linkBudgetBankAccountToNewAccount
 import app.tandemforactual.api.client.runBudgetBankSync
+import app.tandemforactual.api.client.setBudgetBankSyncInterval
 import app.tandemforactual.api.client.startBankLink
 import app.tandemforactual.api.client.unlinkBudgetBankAccount
 import app.tandemforactual.data.actual.LinkedAccount
@@ -20,6 +23,7 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.data.regions.global.bank.BrowserLink
 import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
+import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.session.banking.BankingController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -28,6 +32,7 @@ import kotlinx.coroutines.delay
 internal class BankingController(
     private val apiClient: TandemApiClient,
     private val nowEpochMillis: () -> Long,
+    private val preferences: () -> AppPreferencesStore?,
     private val performBudgetAction: suspend (String, String?, String, suspend () -> Unit) -> Boolean,
 ) {
     suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
@@ -65,6 +70,36 @@ internal class BankingController(
 
     /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
     var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
+
+    /** Actual's Automatic syncing interval for the open budget in minutes, 0 when off, null until loaded. */
+    var syncIntervalMinutes by mutableStateOf<Int?>(null)
+
+    suspend fun loadSyncInterval(
+        budgetId: String,
+        encryptionPassword: String?,
+    ) {
+        syncIntervalMinutes = apiClient.budgetBankSyncInterval(budgetId, encryptionPassword)
+    }
+
+    suspend fun setSyncInterval(
+        budgetId: String,
+        minutes: Int,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t save the sync schedule. Try again.") {
+            apiClient.setBudgetBankSyncInterval(budgetId, minutes, encryptionPassword)
+            loadSyncInterval(budgetId, encryptionPassword)
+        }
+
+    /** Runs bank sync when Actual's schedule says it's due, once per interval at most even when a bank keeps failing. */
+    suspend fun runAutomaticBankSyncIfDue(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val store = preferences() ?: return false
+        if (!apiClient.claimDueBankSync(budgetId, encryptionPassword, store, nowEpochMillis())) return false
+        return runBankSync(budgetId, encryptionPassword)
+    }
 
     suspend fun loadLinkedAccounts(
         budgetId: String,

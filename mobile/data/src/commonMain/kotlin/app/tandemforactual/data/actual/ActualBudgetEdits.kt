@@ -30,6 +30,8 @@ class ActualBudgetEdits(
 
     fun unlinkBankAccount(accountId: String) = ActualBankSync(writer, today).unlinkAccount(accountId)
 
+    fun setBankSyncInterval(minutes: Int) = ActualBankSync(writer, today).setSyncIntervalMinutes(minutes)
+
     /** `transactions-import`: reconciles statement rows into an account the way Actual does. */
     fun importTransactions(
         accountId: String,

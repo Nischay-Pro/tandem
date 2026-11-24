@@ -9,6 +9,7 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.data.regions.global.bank.BrowserLink
 import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
+import app.tandemforactual.data.store.AppPreferencesStore
 import kotlinx.coroutines.sync.withLock
 
 /** The provider's accounts, or null when the provider isn't set up on the Actual server. */
@@ -54,6 +55,44 @@ suspend fun TandemApiClient.linkBudgetBankAccount(
     budgetId,
     encryptionPassword,
 ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
+
+/** Minutes between automatic bank syncs, as Actual's Automatic syncing setting stores them; 0 is off. */
+suspend fun TandemApiClient.budgetBankSyncInterval(
+    budgetId: String,
+    encryptionPassword: String?,
+): Int = call { budget(budgetId, encryptionPassword).bankSyncInterval(today()) }
+
+suspend fun TandemApiClient.setBudgetBankSyncInterval(
+    budgetId: String,
+    minutes: Int,
+    encryptionPassword: String?,
+) = edit(budgetId, encryptionPassword) { it.setBankSyncInterval(minutes) }
+
+suspend fun TandemApiClient.automaticBankSyncDue(
+    budgetId: String,
+    encryptionPassword: String?,
+    now: Long,
+    lastAutomaticRun: Long?,
+): Boolean = call { budget(budgetId, encryptionPassword).automaticBankSyncDue(today(), now, lastAutomaticRun) }
+
+/**
+ * Whether Actual's Automatic syncing says a bank sync is due, from the open app or a background task. A due attempt is
+ * recorded before the caller syncs, so a bank that keeps failing waits a full interval wherever the next check runs.
+ */
+suspend fun TandemApiClient.claimDueBankSync(
+    budgetId: String,
+    encryptionPassword: String?,
+    preferences: AppPreferencesStore,
+    now: Long,
+): Boolean {
+    val key = "$LAST_AUTOMATIC_BANK_SYNC_KEY:$budgetId"
+    val lastRun = preferences.read()[key]?.toLongOrNull()
+    if (!automaticBankSyncDue(budgetId, encryptionPassword, now, lastRun)) return false
+    preferences.putValue(key, now.toString())
+    return true
+}
+
+private const val LAST_AUTOMATIC_BANK_SYNC_KEY = "internal:bank-sync-last-automatic-run"
 
 suspend fun TandemApiClient.linkBudgetBankAccountToNewAccount(
     budgetId: String,

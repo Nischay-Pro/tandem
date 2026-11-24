@@ -49,7 +49,11 @@ internal class TandemMobileSession(
 ) : SessionHost {
     /** Bank providers, links and bank sync. */
     val banking =
-        BankingController(apiClient, nowEpochMillis) { budgetId, password, message, action ->
+        BankingController(
+            apiClient,
+            nowEpochMillis,
+            { mainStorage?.database?.let(::AppPreferencesStore) },
+        ) { budgetId, password, message, action ->
             feedback.performBudgetAction(budgetId, password, message, action = action)
         }
 
