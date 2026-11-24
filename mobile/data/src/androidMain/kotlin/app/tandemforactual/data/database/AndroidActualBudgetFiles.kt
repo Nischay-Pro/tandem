@@ -47,6 +47,20 @@ class AndroidActualBudgetFiles(
         return ActualDatabase(driver.open(target.absolutePath))
     }
 
+    override fun snapshot(
+        budgetId: String,
+        write: (path: String) -> Unit,
+    ): ByteArray {
+        check(root.isDirectory || root.mkdirs() || root.isDirectory) { "Could not create the budget storage directory." }
+        val copy = File(file(budgetId).path + ".snapshot").apply { delete() }
+        try {
+            write(copy.absolutePath)
+            return copy.readBytes()
+        } finally {
+            copy.delete()
+        }
+    }
+
     override fun remove(budgetId: String) {
         listOf("", "-wal", "-shm", "-journal").forEach { File(file(budgetId).path + it).delete() }
     }

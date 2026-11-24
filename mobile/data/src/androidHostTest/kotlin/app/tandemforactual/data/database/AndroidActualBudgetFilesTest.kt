@@ -60,5 +60,14 @@ class AndroidActualBudgetFilesTest {
         assertEquals(4L, installed.first("SELECT v FROM t")!!["v"])
         installed.close()
         assertFailsWith<IllegalArgumentException> { files.open("../other") }
+
+        val live = files.install("budget-5", sqlite(5))
+        val copy = files.snapshot("budget-5") { path -> live.execute("VACUUM INTO ?", path) }
+        live.close()
+        val restored = files.install("budget-6", copy)
+        assertEquals(5L, restored.first("SELECT v FROM t")!!["v"])
+        restored.close()
+        assertFailsWith<IllegalStateException> { files.snapshot("budget-5") { error("disk full") } }
+        assertEquals(false, context.noBackupFilesDir.resolve("actual/budget-5.sqlite.snapshot").exists())
     }
 }

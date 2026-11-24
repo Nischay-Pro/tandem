@@ -13,6 +13,12 @@ interface ActualBudgetFiles {
 
     fun remove(budgetId: String)
 
+    /** A copy of the budget's database that [write] makes at the path it's given, read back and then deleted. */
+    fun snapshot(
+        budgetId: String,
+        write: (path: String) -> Unit,
+    ): ByteArray
+
     /** Moves a closed budget aside as a backup instead of deleting it, so a sync reset never discards local changes. */
     fun retire(
         budgetId: String,
