@@ -44,7 +44,6 @@ internal fun LiveDataEffects(ctx: ShellContext) {
     val transactionRecords = mobileSession.transactionRecords
     val activityTransactionRecords = mobileSession.activity.activityTransactionRecords
     val activityTransactionRecordsVersion = mobileSession.activity.activityTransactionRecordsVersion
-    val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
     val accountRecords = mobileSession.budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
@@ -70,6 +69,7 @@ internal fun LiveDataEffects(ctx: ShellContext) {
         displaySettings,
         shell.merchantIconMatcher,
     ) {
+        val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
         shell.liveActivityTransactions =
             withContext(Dispatchers.Default) {
                 buildLiveTransactionItems(
