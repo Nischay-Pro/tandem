@@ -12,11 +12,11 @@ import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.findWrite
 import app.tandemforactual.data.store.readPendingWrites
 import app.tandemforactual.ui.core.session.toProjection
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import kotlin.uuid.Uuid
 
 internal interface ConflictResolutionStore {
     suspend fun readPendingWrites(budgetId: String): List<OutboxOperationEntity>

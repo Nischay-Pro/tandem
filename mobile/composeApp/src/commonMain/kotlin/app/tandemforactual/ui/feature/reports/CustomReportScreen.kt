@@ -65,9 +65,9 @@ import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
-import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.launch
 
 /** Builds a report from a period, a grouping and filters, shows it as a chart and a table, and saves it by name. */
 @OptIn(ExperimentalUuidApi::class)

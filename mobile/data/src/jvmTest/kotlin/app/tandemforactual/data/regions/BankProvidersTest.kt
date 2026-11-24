@@ -9,11 +9,11 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.nz.bank.akahu.Akahu
 import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 class BankProvidersTest {
     private val account = LinkedAccount("a", "Checking", "x", "PROV-1", "bank-1", "Big Bank", "2026-08-01")

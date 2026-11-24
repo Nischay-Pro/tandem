@@ -1,13 +1,13 @@
 package app.tandemforactual.data.planning
 
 import app.tandemforactual.data.regions.Region
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 class JurisdictionTimelineTest {
     private val india = JurisdictionPeriod("a", PeriodKind.RESIDENCE, Region.IN, "2018-01", "2023-06")

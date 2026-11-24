@@ -16,6 +16,11 @@ import app.tandemforactual.ui.core.session.isOrderDraft
 import app.tandemforactual.ui.core.session.normalizeOrderChange
 import app.tandemforactual.ui.core.session.orderBatchScopes
 import app.tandemforactual.ui.core.session.statusFor
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -23,11 +28,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class BudgetOrderBatchTest {
     private val budgetId = "budget-1"

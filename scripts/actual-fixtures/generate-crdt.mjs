@@ -1,23 +1,23 @@
 // Writes byte-level fixtures from Actual's own CRDT package, used to check Tandem's Kotlin port.
-import fs from "node:fs";
-import path from "node:path";
-import { Buffer } from "node:buffer";
-import console from "node:console";
-import process from "node:process";
 import {
-  Timestamp,
-  merkle,
-  makeClock,
-  setClock,
   create,
-  toBinary,
+  EncryptedDataSchema,
   fromBinary,
+  makeClock,
+  merkle,
+  MessageEnvelopeSchema,
+  MessageSchema,
+  setClock,
   SyncRequestSchema,
   SyncResponseSchema,
-  MessageSchema,
-  MessageEnvelopeSchema,
-  EncryptedDataSchema,
+  Timestamp,
+  toBinary,
 } from "../../node_modules/.pnpm/@actual-app+crdt@3.1.4/node_modules/@actual-app/crdt/dist/index.js";
+import { Buffer } from "node:buffer";
+import console from "node:console";
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
 
 const out = process.argv[2];
 const realNow = Date.now;

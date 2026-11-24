@@ -29,13 +29,13 @@ import app.tandemforactual.ui.feature.sync.ConflictCompareTable
 import app.tandemforactual.ui.feature.sync.ConflictFieldComparison
 import app.tandemforactual.ui.feature.sync.ConflictVersionCard
 import app.tandemforactual.ui.feature.sync.SyncPageHeading
+import java.io.File
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w411dp-h891dp-xxhdpi")

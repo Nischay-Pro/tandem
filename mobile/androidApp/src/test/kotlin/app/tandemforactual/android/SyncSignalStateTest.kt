@@ -5,53 +5,53 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncSignalStateTest {
-  @Test
-  fun firstAvailableNetworkDoesNotCountAsRestoration() {
-    val signals = SyncSignalState<String>()
+    @Test
+    fun firstAvailableNetworkDoesNotCountAsRestoration() {
+        val signals = SyncSignalState<String>()
 
-    signals.onNetworkStarted("wifi")
+        signals.onNetworkStarted("wifi")
 
-    assertFalse(signals.onNetworkAvailable("wifi"))
-  }
+        assertFalse(signals.onNetworkAvailable("wifi"))
+    }
 
-  @Test
-  fun availableNetworkAfterCurrentNetworkIsLostTriggersOnce() {
-    val signals = SyncSignalState<String>()
-    signals.onNetworkStarted("wifi")
-    signals.onNetworkLost("wifi")
+    @Test
+    fun availableNetworkAfterCurrentNetworkIsLostTriggersOnce() {
+        val signals = SyncSignalState<String>()
+        signals.onNetworkStarted("wifi")
+        signals.onNetworkLost("wifi")
 
-    assertTrue(signals.onNetworkAvailable("wifi"))
-    assertFalse(signals.onNetworkAvailable("wifi"))
-  }
+        assertTrue(signals.onNetworkAvailable("wifi"))
+        assertFalse(signals.onNetworkAvailable("wifi"))
+    }
 
-  @Test
-  fun defaultNetworkSwitchTriggersSyncAndStaleLossKeepsTheReplacement() {
-    val signals = SyncSignalState<String>()
-    signals.onNetworkStarted("wifi")
+    @Test
+    fun defaultNetworkSwitchTriggersSyncAndStaleLossKeepsTheReplacement() {
+        val signals = SyncSignalState<String>()
+        signals.onNetworkStarted("wifi")
 
-    assertTrue(signals.onNetworkAvailable("cellular"))
-    signals.onNetworkLost("wifi")
+        assertTrue(signals.onNetworkAvailable("cellular"))
+        signals.onNetworkLost("wifi")
 
-    assertFalse(signals.onNetworkAvailable("cellular"))
-    signals.onNetworkLost("cellular")
-    assertTrue(signals.onNetworkAvailable("wifi"))
-  }
+        assertFalse(signals.onNetworkAvailable("cellular"))
+        signals.onNetworkLost("cellular")
+        assertTrue(signals.onNetworkAvailable("wifi"))
+    }
 
-  @Test
-  fun activityResumeSignalSkipsInitialResumeAndEmitsOnReturns() {
-    val signals = SyncSignalState<String>()
+    @Test
+    fun activityResumeSignalSkipsInitialResumeAndEmitsOnReturns() {
+        val signals = SyncSignalState<String>()
 
-    assertFalse(signals.onActivityResumed())
-    assertTrue(signals.onActivityResumed())
-    assertTrue(signals.onActivityResumed())
-  }
+        assertFalse(signals.onActivityResumed())
+        assertTrue(signals.onActivityResumed())
+        assertTrue(signals.onActivityResumed())
+    }
 
-  @Test
-  fun stoppingResetsNetworkBaseline() {
-    val signals = SyncSignalState<String>()
-    signals.onNetworkStarted("wifi")
-    signals.onActivityStopped()
+    @Test
+    fun stoppingResetsNetworkBaseline() {
+        val signals = SyncSignalState<String>()
+        signals.onNetworkStarted("wifi")
+        signals.onActivityStopped()
 
-    assertFalse(signals.onNetworkAvailable("wifi"))
-  }
+        assertFalse(signals.onNetworkAvailable("wifi"))
+    }
 }

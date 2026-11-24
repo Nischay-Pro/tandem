@@ -1,6 +1,6 @@
+import { PostgresExtensionStore } from "../src/store.js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PostgresExtensionStore } from "../src/store.js";
 
 const url = process.env.DATABASE_URL;
 const record = {

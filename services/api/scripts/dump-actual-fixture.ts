@@ -1,8 +1,4 @@
 // Downloads a budget straight from an Actual server and records what Tandem's reader returns for it.
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
-import * as Actual from "@actual-app/api";
 import {
   create,
   fromBinary,
@@ -11,6 +7,10 @@ import {
   toBinary,
 } from "../../../node_modules/.pnpm/@actual-app+crdt@3.1.4/node_modules/@actual-app/crdt/dist/index.js";
 import { ActualBudgetSnapshotReader } from "../src/actual/budget-snapshot-reader.js";
+import * as Actual from "@actual-app/api";
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
 
 const url = process.env.ACTUAL_URL ?? "http://localhost:5006";
 const password = process.env.ACTUAL_PASSWORD ?? "demo-password";

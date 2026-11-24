@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { createPool, run } from "../src/main.js";
+import { describe, expect, it, vi } from "vitest";
 
 describe("startup", () => {
   it("bootstraps the schema, listens and stops on a signal", async () => {

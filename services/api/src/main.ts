@@ -1,8 +1,8 @@
-import pg from "pg";
 import { ActualBudgetAccess } from "./actual-access.js";
 import { buildApp } from "./app.js";
-import { parseConfig, type Environment } from "./config.js";
+import { type Environment, parseConfig } from "./config.js";
 import { PostgresExtensionStore } from "./store.js";
+import pg from "pg";
 
 export type SignalRegistrar = (
   signal: "SIGINT" | "SIGTERM",

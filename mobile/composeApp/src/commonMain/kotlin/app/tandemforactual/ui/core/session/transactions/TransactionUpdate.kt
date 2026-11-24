@@ -32,11 +32,11 @@ import app.tandemforactual.ui.core.session.transactions.TransactionController
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import kotlin.uuid.Uuid
 
 internal suspend fun TransactionController.updateTransaction(
     budgetId: String,

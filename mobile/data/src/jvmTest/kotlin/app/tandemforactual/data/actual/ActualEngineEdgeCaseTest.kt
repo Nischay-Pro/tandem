@@ -1,11 +1,6 @@
 package app.tandemforactual.data.actual
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 import java.util.zip.ZipEntry
@@ -17,6 +12,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 class ActualEngineEdgeCaseTest {
     private fun memoryDb() = ActualDatabase(BundledSQLiteDriver().open(":memory:"))

@@ -42,7 +42,10 @@ internal object BudgetSystemNotifications {
         )
     }
 
-    fun conflicts(context: Context, count: Int) {
+    fun conflicts(
+        context: Context,
+        count: Int,
+    ) {
         if (count <= 0) return
         val noun = if (count == 1) "budget change" else "budget changes"
         val verb = if (count == 1) "needs" else "need"
@@ -54,7 +57,10 @@ internal object BudgetSystemNotifications {
         )
     }
 
-    fun rejected(context: Context, count: Int) {
+    fun rejected(
+        context: Context,
+        count: Int,
+    ) {
         if (count <= 0) return
         val noun = if (count == 1) "edit" else "edits"
         val verb = if (count == 1) "needs" else "need"
@@ -109,7 +115,8 @@ internal object BudgetSystemNotifications {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         val notification =
-            Notification.Builder(applicationContext, CHANNEL_ID)
+            Notification
+                .Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_tandem_notification)
                 .setContentTitle(title)
                 .setContentText(message)
@@ -119,13 +126,13 @@ internal object BudgetSystemNotifications {
                 .setOnlyAlertOnce(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setPublicVersion(
-                    Notification.Builder(applicationContext, CHANNEL_ID)
+                    Notification
+                        .Builder(applicationContext, CHANNEL_ID)
                         .setSmallIcon(R.drawable.ic_tandem_notification)
                         .setContentTitle(title)
                         .setContentText("Unlock to see the details.")
                         .build(),
-                )
-                .build()
+                ).build()
         manager.notify(notificationId, notification)
     }
 

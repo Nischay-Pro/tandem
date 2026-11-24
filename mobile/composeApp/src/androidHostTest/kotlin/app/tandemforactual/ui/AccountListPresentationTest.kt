@@ -21,13 +21,13 @@ import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.feature.accounts.AccountListItemUi
 import app.tandemforactual.ui.feature.accounts.AccountSummaryCard
 import app.tandemforactual.ui.feature.accounts.reorderAccountsWithinSlots
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

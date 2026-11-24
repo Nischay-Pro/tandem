@@ -8,18 +8,18 @@ import android.service.quicksettings.TileService
 
 /** Quick Settings tile that opens a new transaction. */
 class QuickAddTileService : TileService() {
-  @SuppressLint("StartActivityAndCollapseDeprecated")
-  override fun onClick() {
-    super.onClick()
-    val intent =
-      Intent(this, MainActivity::class.java)
-        .setAction(ACTION_ADD_TRANSACTION)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-      startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
-    } else {
-      @Suppress("DEPRECATION")
-      startActivityAndCollapse(intent)
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    override fun onClick() {
+        super.onClick()
+        val intent =
+            Intent(this, MainActivity::class.java)
+                .setAction(ACTION_ADD_TRANSACTION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
+        } else {
+            @Suppress("DEPRECATION")
+            startActivityAndCollapse(intent)
+        }
     }
-  }
 }

@@ -10,12 +10,6 @@ import app.tandemforactual.data.regions.us.retirement.k401.MatchBand
 import app.tandemforactual.data.regions.us.retirement.k401.MatchTier
 import app.tandemforactual.data.regions.us.retirement.k401.Vesting
 import app.tandemforactual.data.regions.us.retirement.k401.VestingStep
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -23,6 +17,12 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 class PlanningStoreTest {
     @Test

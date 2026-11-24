@@ -1,7 +1,7 @@
 // Creates an end-to-end encrypted budget on an Actual server with Actual's own client, for direct sync tests.
+import * as Actual from "@actual-app/api";
 import fs from "node:fs";
 import process from "node:process";
-import * as Actual from "@actual-app/api";
 
 const url = process.env.ACTUAL_URL ?? "http://localhost:5006";
 const password = process.env.ACTUAL_PASSWORD ?? "demo-password";

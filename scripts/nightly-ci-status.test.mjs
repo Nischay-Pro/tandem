@@ -1,8 +1,7 @@
+import { nightlyCiDecision } from "./nightly-ci-status.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
-
-import { nightlyCiDecision } from "./nightly-ci-status.mjs";
 
 test("waits until a push CI run exists", () => {
   assert.deepEqual(nightlyCiDecision([]), {

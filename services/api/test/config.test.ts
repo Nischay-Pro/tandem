@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { ConfigError, parseConfig } from "../src/config.js";
+import { describe, expect, it } from "vitest";
 
 const base = {
   DATABASE_URL: "postgresql://db",

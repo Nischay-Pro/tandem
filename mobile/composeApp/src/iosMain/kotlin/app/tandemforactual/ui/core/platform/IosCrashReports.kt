@@ -3,6 +3,8 @@ package app.tandemforactual.ui.core.platform
 import app.tandemforactual.ui.core.session.CrashReports
 import app.tandemforactual.ui.core.session.MAX_CRASH_REPORTS
 import app.tandemforactual.ui.core.session.crashReportText
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.setUnhandledExceptionHook
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSBundle
@@ -18,8 +20,6 @@ import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
-import kotlin.experimental.ExperimentalNativeApi
-import kotlin.native.setUnhandledExceptionHook
 
 /** Keeps the last few Kotlin crash reports in Application Support. */
 @OptIn(ExperimentalForeignApi::class)

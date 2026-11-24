@@ -32,8 +32,8 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
-import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 
 /** Countries a period can be in; everywhere isn't a place to live. */
 internal val countries = Region.entries.filter { it != Region.GLOBAL }

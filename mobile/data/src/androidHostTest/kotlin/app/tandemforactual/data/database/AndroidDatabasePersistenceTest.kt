@@ -10,6 +10,8 @@ import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.observeRecords
 import app.tandemforactual.data.store.readPendingWrites
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -22,8 +24,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])

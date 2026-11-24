@@ -2,6 +2,10 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.OperationStatus
 import app.tandemforactual.data.actual.createPayee
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -13,10 +17,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.util.UUID
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /** Hammers one budget from many coroutines at once and checks nothing is lost, doubled or left half-written. */
 class ConcurrencyStressTest {

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import type { Access, BudgetAccess } from "../src/actual-access.js";
 import { buildApp } from "../src/app.js";
-import { InMemoryExtensionStore, type ExtensionStore } from "../src/store.js";
+import { type ExtensionStore, InMemoryExtensionStore } from "../src/store.js";
+import { describe, expect, it } from "vitest";
 
 const budget = "9f1c2a6e-budget";
 const record = {
