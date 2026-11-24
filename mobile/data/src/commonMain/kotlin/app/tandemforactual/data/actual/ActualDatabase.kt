@@ -16,6 +16,10 @@ class ActualDatabase(
 ) {
     private var depth = 0
 
+    init {
+        connection.execSQL("PRAGMA busy_timeout = 10000")
+    }
+
     fun query(
         sql: String,
         vararg args: Any?,
@@ -62,7 +66,7 @@ class ActualDatabase(
             connection.execSQL("COMMIT")
             return result
         } catch (error: Throwable) {
-            connection.execSQL("ROLLBACK")
+            if (connection.inTransaction()) connection.execSQL("ROLLBACK")
             throw error
         } finally {
             depth = 0
