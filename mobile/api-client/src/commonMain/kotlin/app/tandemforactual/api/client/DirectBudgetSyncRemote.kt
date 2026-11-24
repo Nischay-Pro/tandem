@@ -60,8 +60,13 @@ class DirectBudgetSyncRemote(
         encryptionPassword: String?,
     ): RemoteBudgetSnapshotPage =
         pages.withLock {
-            val current =
+            val continuing =
                 staged?.takeIf { afterType != null && it.budgetId == budgetId && it.generation == generation && it.cursor == cursor }
+            if (afterType != null && continuing == null) {
+                return@withLock restartSnapshot(budgetId, generation, cursor)
+            }
+            val current =
+                continuing
                     ?: snapshot(budgetId, encryptionPassword).also {
                         staged = it
                         client.budget(budgetId, encryptionPassword).saveServedProjection(
@@ -76,13 +81,12 @@ class DirectBudgetSyncRemote(
                         )
                     }
             val start =
-                if (afterType ==
-                    null
-                ) {
+                if (afterType == null) {
                     0
                 } else {
                     current.records.indexOfFirst { it.recordType == afterType && it.recordId == afterId } + 1
                 }
+            if (afterType != null && start == 0) return@withLock restartSnapshot(budgetId, generation, cursor)
             val page = current.records.drop(start).take(limit)
             val hasMore = start + page.size < current.records.size
             RemoteBudgetSnapshotPage(
@@ -97,6 +101,23 @@ class DirectBudgetSyncRemote(
                 displaySettings = current.displaySettings,
             )
         }
+
+    /** The staged snapshot this page continues is gone, so the caller has to start the snapshot over. */
+    private fun restartSnapshot(
+        budgetId: String,
+        generation: String?,
+        cursor: String?,
+    ) = RemoteBudgetSnapshotPage(
+        budgetId = budgetId,
+        generation = generation.orEmpty(),
+        cursor = cursor.orEmpty(),
+        records = emptyList(),
+        hasMore = false,
+        resetRequired = true,
+        nextAfterType = null,
+        nextAfterId = null,
+        displaySettings = null,
+    )
 
     /** Sends only the records whose revision changed since the cache's cursor, or asks for a full snapshot. */
     override suspend fun readChanges(
