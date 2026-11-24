@@ -172,16 +172,18 @@ interface BudgetSyncRemote {
     ): RemoteTransactionRecord?
 }
 
+/** [awaitingUpload] means the write is saved locally and safe to resend, but the server hasn't accepted it yet. */
 class BudgetSyncRemoteException(
     val errorCode: String,
     val httpStatus: Int? = null,
     cause: Throwable? = null,
+    val awaitingUpload: Boolean = false,
 ) : Exception(errorCode, cause) {
     val isDefinitiveClientError: Boolean
-        get() = httpStatus != null && httpStatus in setOf(400, 409, 422)
+        get() = !awaitingUpload && httpStatus != null && httpStatus in setOf(400, 409, 422)
 
     val isRetryableBeforeSubmission: Boolean
-        get() = httpStatus != null && httpStatus in setOf(401, 403, 404)
+        get() = awaitingUpload || httpStatus != null && httpStatus in setOf(401, 403, 404)
 }
 
 class BudgetSyncProtocolException(

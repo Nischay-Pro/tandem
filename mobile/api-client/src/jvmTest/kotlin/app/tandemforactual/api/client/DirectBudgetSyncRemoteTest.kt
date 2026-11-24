@@ -227,6 +227,31 @@ class DirectBudgetSyncRemoteTest {
                 RemoteOperationStatus.COMMITTED,
                 remote.submitOperation(op("DELETE", id, "{}", remote.readTransaction("group", id, null)!!.bodyJson), null).status,
             )
+            val pendingId = "tandem:${UUID.randomUUID()}"
+            val pending =
+                op(
+                    "CREATE",
+                    pendingId,
+                    """{"account":"$checking","amount":-42,"date":"2026-11-19","payee":null,"category":null,"notes":null,"cleared":false}""",
+                )
+            server.syncFailure = "token-expired"
+            val awaiting = assertFailsWith<BudgetSyncRemoteException> { remote.submitOperation(pending, null) }
+            assertTrue(awaiting.awaitingUpload)
+            assertTrue(awaiting.isRetryableBeforeSubmission)
+            assertFalse(awaiting.isDefinitiveClientError)
+            val rejectedOffline =
+                remote.submitOperation(
+                    op(
+                        "CREATE",
+                        "tandem:${UUID.randomUUID()}",
+                        """{"account":"missing","amount":-5,"date":"2026-11-19","payee":null,"category":null,"notes":null,"cleared":false}""",
+                    ),
+                    null,
+                )
+            assertEquals(RemoteOperationStatus.REJECTED, rejectedOffline.status)
+            server.syncFailure = null
+            assertEquals(RemoteOperationStatus.COMMITTED, remote.submitOperation(pending, null).status)
+            assertEquals(-42L, remote.readTransaction("group", pendingId, null)!!.projection.amountMinor)
             assertFailsWith<TandemApiException> { remote.submitOperation(op("MOVE", id, "{}"), null) }
             assertFailsWith<TandemApiException> { remote.submitOperation(op("CREATE", id, "{}", recordType = "payee"), null) }
             assertFailsWith<TandemApiException> { remote.submitOperation(op("CREATE", id, "[]"), null) }

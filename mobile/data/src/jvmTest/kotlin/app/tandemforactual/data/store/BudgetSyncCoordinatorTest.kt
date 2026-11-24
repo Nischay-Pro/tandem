@@ -15,6 +15,7 @@ import kotlinx.coroutines.yield
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -429,6 +430,33 @@ class BudgetSyncCoordinatorTest {
                 assertEquals(1, database.outboxDao().find(request.operationId)?.attemptCount)
                 assertNull(repository.findRecord(BUDGET, "transaction", TXN)?.localJson)
                 assertEquals("revision-2", repository.findRecord(BUDGET, "transaction", TXN)?.remoteRevision)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun writeSavedLocallyButNotUploadedStaysQueued() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                val request = updateRequest()
+                repository.enqueueWrite(request)
+                val awaiting = BudgetSyncRemoteException("invalid_credentials", 400, awaitingUpload = true)
+                assertFalse(awaiting.isDefinitiveClientError)
+                assertTrue(awaiting.isRetryableBeforeSubmission)
+                remote.submitError = awaiting
+
+                assertFailsWith<BudgetSyncRemoteException> { coordinator.synchronize(BUDGET) }
+
+                val pending = repository.readPendingWrites(BUDGET).single()
+                assertEquals("queued", pending.status)
+                assertEquals("invalid_credentials", pending.lastErrorCode)
+                assertEquals(0, remote.operationPolls)
             } finally {
                 database.close()
             }
