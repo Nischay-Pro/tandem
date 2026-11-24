@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.baselineProfile)
   alias(libs.plugins.jetbrainsCompose)
   alias(libs.plugins.composeCompiler)
+  alias(libs.plugins.ktlint)
 }
 
 val nightlyKeystorePath =

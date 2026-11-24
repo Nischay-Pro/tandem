@@ -273,7 +273,7 @@ jobs:
 
       - name: Run Android app unit tests
         working-directory: mobile
-        run: ./gradlew :androidApp:testDebugUnitTest
+        run: ./gradlew :androidApp:testDebugUnitTest :androidApp:ktlintCheck :baselineprofile:ktlintCheck
 
   android_app_release_lint:
     name: Android app · release lint
