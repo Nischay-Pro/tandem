@@ -39,6 +39,13 @@ class ActualMessageStore(
         return StoredClock(HybridLogicalClock(timestamp), merkle)
     }
 
+    /** Catches [clock] up with what another connection to this database saved since it was loaded. */
+    fun reload(clock: StoredClock) {
+        val saved = loadClock()
+        if (saved.clock.timestamp > clock.clock.timestamp) clock.clock.timestamp = saved.clock.timestamp
+        clock.merkle = saved.merkle
+    }
+
     /** Gives this device a fresh node id, as Actual does when it opens a newly downloaded budget. */
     fun resetNode(clock: StoredClock) {
         clock.clock.timestamp = clock.clock.timestamp.copy(node = makeClientId())

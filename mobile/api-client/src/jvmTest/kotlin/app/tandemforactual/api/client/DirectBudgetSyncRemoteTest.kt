@@ -20,6 +20,7 @@ import app.tandemforactual.data.store.importBudgetWrites
 import app.tandemforactual.data.store.removeBudget
 import app.tandemforactual.data.store.unsentWrites
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -352,5 +353,60 @@ class DirectBudgetSyncRemoteTest {
             } finally {
                 cache.closeDatabase()
             }
+        }
+
+    @Test
+    fun backgroundSyncAndTheAppShareOneBudgetFileSafely(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val files = TempBudgetFiles()
+            val app = TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" })
+            val background = TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" })
+            app.signInWithPassword("https://budget.example", "test", "Phone")
+            background.signInWithPassword("https://budget.example", "test", "Phone")
+            app.budget("group").sync()
+            background.edit("group") { it.createPayee("From background") }
+            app.edit("group") { it.createPayee("From the app") }
+            background.edit("group") { it.createPayee("Background again") }
+            app.budget("group").sync()
+            val names =
+                app
+                    .budget("group")
+                    .snapshot("2026-11-21")
+                    .records
+                    .filter { it.type == "payee" }
+                    .map { it.body["name"] }
+            assertTrue(JsonPrimitive("From background") in names)
+            assertTrue(JsonPrimitive("Background again") in names)
+        }
+
+    @Test
+    fun theAppAndBackgroundSyncCanWriteToOneBudgetAtTheSameTime(): Unit =
+        runBlocking(Dispatchers.Default) {
+            val server = FakeActualServer()
+            val files = TempBudgetFiles()
+            val clients = List(3) { TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" }) }
+            clients.forEach { it.signInWithPassword("https://budget.example", "test", "Phone") }
+            clients.first().budget("group").sync()
+            val names = List(45) { "Payee $it" }
+            names
+                .mapIndexed { index, name ->
+                    val client = clients[index % clients.size]
+                    async {
+                        client.edit("group") { it.createPayee(name) }
+                        if (index % 5 == 0) client.budget("group").sync()
+                    }
+                }.forEach { it.await() }
+            clients.forEach { it.budget("group").sync() }
+            val other = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
+            other.signInWithPassword("https://budget.example", "test", "Tablet")
+            val budget = other.budget("group").also { it.sync() }
+            val payees =
+                budget
+                    .snapshot("2026-11-21")
+                    .records
+                    .filter { it.type == "payee" }
+                    .map { it.body["name"] }
+            names.forEach { name -> assertEquals(1, payees.count { it == JsonPrimitive(name) }, name) }
         }
 }
