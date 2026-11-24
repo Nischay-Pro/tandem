@@ -40,6 +40,37 @@ class ActualBankSync(
         default: Boolean,
     ): Boolean = (db.first("SELECT value FROM preferences WHERE id = ?", name)?.get("value") as String?)?.let { it == "true" } ?: default
 
+    /** Actual's synced `bank-sync-interval`: minutes between automatic bank syncs, or 0 when they're off. */
+    fun syncIntervalMinutes(): Int =
+        (db.first("SELECT value FROM preferences WHERE id = ?", SYNC_INTERVAL_PREF)?.get("value") as String?)
+            ?.trim()
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 } ?: 0
+
+    /** Saves the interval for every device; 0 turns automatic syncing off, and a custom one is at least 15 minutes. */
+    fun setSyncIntervalMinutes(minutes: Int) =
+        writer.update(
+            "preferences",
+            SYNC_INTERVAL_PREF,
+            mapOf("value" to (if (minutes <= 0) 0 else maxOf(minutes, MIN_SYNC_INTERVAL_MINUTES)).toString()),
+        )
+
+    /**
+     * `isAutomaticSyncDue`: due once any linked account went the interval without syncing, here or on another device.
+     * [lastAutomaticRun] keeps a failing bank from being retried more than once per interval.
+     */
+    fun automaticSyncDue(
+        now: Long,
+        lastAutomaticRun: Long?,
+    ): Boolean {
+        val intervalMillis = syncIntervalMinutes() * 60_000L
+        if (intervalMillis <= 0) return false
+        if (lastAutomaticRun != null && now - lastAutomaticRun < intervalMillis) return false
+        val linked = linkedAccounts()
+        if (linked.isEmpty()) return false
+        return now - linked.minOf { it.lastSyncMillis ?: 0L } >= intervalMillis
+    }
+
     /** `link*Account` with `upgradingId`: points an existing account at a provider account, reusing its bank row. */
     fun linkAccount(
         accountId: String,
@@ -252,6 +283,9 @@ class ActualBankSync(
     }
 
     companion object {
+        const val SYNC_INTERVAL_PREF = "bank-sync-interval"
+        const val MIN_SYNC_INTERVAL_MINUTES = 15
+
         /** `amountToInteger`: a decimal amount string or number in cents, rounded like Actual. */
         fun amountToInteger(amount: String): Long {
             val value = amount.trim().toBigDecimalOrZero()

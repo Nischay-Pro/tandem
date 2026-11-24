@@ -162,6 +162,14 @@ class ActualDirectBudget private constructor(
 
     private val bankFailures = mutableMapOf<String, Pair<String, String>>()
 
+    suspend fun bankSyncInterval(today: String): Int = locked { ActualBankSync(writer, { today }).syncIntervalMinutes() }
+
+    suspend fun automaticBankSyncDue(
+        today: String,
+        now: Long,
+        lastAutomaticRun: Long?,
+    ): Boolean = locked { ActualBankSync(writer, { today }).automaticSyncDue(now, lastAutomaticRun) }
+
     /** Which of these statement ids the account already holds, so an import can say how many rows are new. */
     suspend fun importedIds(
         accountId: String,

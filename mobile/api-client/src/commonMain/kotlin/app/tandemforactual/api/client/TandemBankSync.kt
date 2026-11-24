@@ -54,6 +54,25 @@ suspend fun TandemApiClient.linkBudgetBankAccount(
     encryptionPassword,
 ) { it.linkBankAccount(accountId, provider.source, account.id, account.bankId, account.institution) }
 
+/** Minutes between automatic bank syncs, as Actual's Automatic syncing setting stores them; 0 is off. */
+suspend fun TandemApiClient.budgetBankSyncInterval(
+    budgetId: String,
+    encryptionPassword: String?,
+): Int = call { budget(budgetId, encryptionPassword).bankSyncInterval(today()) }
+
+suspend fun TandemApiClient.setBudgetBankSyncInterval(
+    budgetId: String,
+    minutes: Int,
+    encryptionPassword: String?,
+) = edit(budgetId, encryptionPassword) { it.setBankSyncInterval(minutes) }
+
+suspend fun TandemApiClient.automaticBankSyncDue(
+    budgetId: String,
+    encryptionPassword: String?,
+    now: Long,
+    lastAutomaticRun: Long?,
+): Boolean = call { budget(budgetId, encryptionPassword).automaticBankSyncDue(today(), now, lastAutomaticRun) }
+
 suspend fun TandemApiClient.unlinkBudgetBankAccount(
     budgetId: String,
     accountId: String,

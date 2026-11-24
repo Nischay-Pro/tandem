@@ -4,12 +4,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.api.client.automaticBankSyncDue
 import app.tandemforactual.api.client.bankInstitutions
 import app.tandemforactual.api.client.bankLinkStatus
 import app.tandemforactual.api.client.bankProviderAccounts
+import app.tandemforactual.api.client.budgetBankSyncInterval
 import app.tandemforactual.api.client.budgetLinkedAccounts
 import app.tandemforactual.api.client.linkBudgetBankAccount
 import app.tandemforactual.api.client.runBudgetBankSync
+import app.tandemforactual.api.client.setBudgetBankSyncInterval
 import app.tandemforactual.api.client.startBankLink
 import app.tandemforactual.api.client.unlinkBudgetBankAccount
 import app.tandemforactual.data.actual.LinkedAccount
@@ -64,6 +67,38 @@ internal class BankingController(
 
     /** Bank links for the open budget, with when each last synced and whether its last sync failed. */
     var bankLinks by mutableStateOf<List<LinkedAccount>>(emptyList())
+
+    /** Actual's Automatic syncing interval for the open budget in minutes, 0 when off, null until loaded. */
+    var syncIntervalMinutes by mutableStateOf<Int?>(null)
+    private val lastAutomaticRun = mutableMapOf<String, Long>()
+
+    suspend fun loadSyncInterval(
+        budgetId: String,
+        encryptionPassword: String?,
+    ) {
+        syncIntervalMinutes = apiClient.budgetBankSyncInterval(budgetId, encryptionPassword)
+    }
+
+    suspend fun setSyncInterval(
+        budgetId: String,
+        minutes: Int,
+        encryptionPassword: String?,
+    ): Boolean =
+        performBudgetAction(budgetId, encryptionPassword, "Couldn’t save the sync schedule. Try again.") {
+            apiClient.setBudgetBankSyncInterval(budgetId, minutes, encryptionPassword)
+            loadSyncInterval(budgetId, encryptionPassword)
+        }
+
+    /** Runs bank sync when Actual's schedule says it's due, once per interval at most even when a bank keeps failing. */
+    suspend fun runAutomaticBankSyncIfDue(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): Boolean {
+        val now = nowEpochMillis()
+        if (!apiClient.automaticBankSyncDue(budgetId, encryptionPassword, now, lastAutomaticRun[budgetId])) return false
+        lastAutomaticRun[budgetId] = now
+        return runBankSync(budgetId, encryptionPassword)
+    }
 
     suspend fun loadLinkedAccounts(
         budgetId: String,

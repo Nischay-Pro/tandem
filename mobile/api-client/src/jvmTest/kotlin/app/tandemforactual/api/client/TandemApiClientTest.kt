@@ -307,6 +307,13 @@ class TandemApiClientTest {
             client.linkBudgetBankAccount("group", checking, SimpleFin, providers.first(), null)
             assertEquals("SF-9", client.budgetLinkedAccounts("group", null).first { it.id == checking }.providerAccountId)
             client.unlinkBudgetBankAccount("group", checking, null)
+            assertEquals(0, client.budgetBankSyncInterval("group", null))
+            client.setBudgetBankSyncInterval("group", 720, null)
+            assertEquals(720, client.budgetBankSyncInterval("group", null))
+            assertFalse(client.automaticBankSyncDue("group", null, System.currentTimeMillis(), null))
+            client.linkBudgetBankAccount("group", checking, SimpleFin, providers.first(), null)
+            assertTrue(client.automaticBankSyncDue("group", null, System.currentTimeMillis() + 2 * 86_400_000L, null))
+            client.unlinkBudgetBankAccount("group", checking, null)
             assertTrue(client.budgetLinkedAccounts("group", null).none { it.id == checking })
             server.simpleFinAccounts = """{"status":"ok","data":{"error_code":"INVALID_ACCESS_TOKEN"}}"""
             assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.bankProviderAccounts(SimpleFin) }.errorCode)

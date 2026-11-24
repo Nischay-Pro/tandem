@@ -6,6 +6,7 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -106,6 +107,35 @@ class ActualBankSyncTest {
         assertEquals(0, sync.apply(account, json("""{"transactions":[]}""")).added.size)
         assertEquals(1234L, ActualBankSync.amountToInteger("12.34"))
         assertEquals(0L, ActualBankSync.amountToInteger("n/a"))
+    }
+
+    @Test
+    fun syncsAutomaticallyOnActualsSchedule() {
+        val (db, writer) = fixture()
+        val sync = ActualBankSync(writer) { "2026-11-21" }
+        val day = 1_440 * 60_000L
+        assertEquals(0, sync.syncIntervalMinutes())
+        assertFalse(sync.automaticSyncDue(10 * day, null))
+        db.execute("INSERT OR REPLACE INTO preferences (id, value) VALUES ('bank-sync-interval', 'soon')")
+        assertEquals(0, sync.syncIntervalMinutes())
+        sync.setSyncIntervalMinutes(1_440)
+        assertEquals(1_440, sync.syncIntervalMinutes())
+        assertFalse(sync.automaticSyncDue(10 * day, null), "nothing is linked yet")
+
+        val account = db.first("SELECT id FROM accounts WHERE tombstone = 0 AND closed = 0")!!["id"] as String
+        sync.linkAccount(account, "simpleFin", "SF-1", "bank", "Bank")
+        assertTrue(sync.automaticSyncDue(10 * day, null), "a never-synced account is due")
+        db.execute("UPDATE accounts SET last_sync = ? WHERE id = ?", (10 * day).toString(), account)
+        assertFalse(sync.automaticSyncDue(10 * day + day - 1, null))
+        assertTrue(sync.automaticSyncDue(11 * day, null))
+        assertFalse(sync.automaticSyncDue(11 * day, 11 * day - 60_000), "a failed attempt waits an interval")
+        assertTrue(sync.automaticSyncDue(12 * day, 11 * day - 60_000))
+
+        sync.setSyncIntervalMinutes(5)
+        assertEquals(ActualBankSync.MIN_SYNC_INTERVAL_MINUTES, sync.syncIntervalMinutes())
+        ActualBudgetEdits(writer, { "2026-11-21" }).setBankSyncInterval(0)
+        assertEquals(0, sync.syncIntervalMinutes())
+        assertFalse(sync.automaticSyncDue(99 * day, null))
     }
 
     @Test

@@ -52,6 +52,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Unlink
 import com.composables.icons.lucide.WalletCards
+import kotlinx.coroutines.launch
 
 /** Links budget accounts to the bank providers set up on the Actual server, grouped by where each provider works. */
 @Composable
@@ -66,6 +67,7 @@ internal fun BankConnectionsScreen(
     val ui = remember { BankConnectionsState() }
     LaunchedEffect(state.selectedBudgetId, ui.reload) {
         runCatching { mobileSession.banking.loadLinkedAccounts(state.selectedBudgetId, password) }
+        runCatching { mobileSession.banking.loadSyncInterval(state.selectedBudgetId, password) }
     }
     val actions = BankConnectionsActions(ui, scope, state, mobileSession, password)
     val palette = tandemPalette
@@ -74,6 +76,9 @@ internal fun BankConnectionsScreen(
             "Your Actual server keeps the bank credentials. Link accounts here, then sync them from the device.",
         )
         LinkedAccountsSection(state, mobileSession, linked, onManage = { ui.managing = it }, onSync = actions::syncLinkedAccounts)
+        BankSyncScheduleCard(mobileSession.banking.syncIntervalMinutes, enabled = !state.readOnlyMode) { minutes ->
+            scope.launch { mobileSession.banking.setSyncInterval(state.selectedBudgetId, minutes, password) }
+        }
         ui.relinkFor?.let { target ->
             InlineMessage(
                 "Choose the bank account ${target.name} should sync from.",

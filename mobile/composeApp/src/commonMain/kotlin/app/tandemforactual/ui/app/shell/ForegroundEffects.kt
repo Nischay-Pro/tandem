@@ -79,11 +79,9 @@ internal fun PeriodicSyncEffects(
                 !mobileSession.isPerformingBudgetAction &&
                 state.syncNetwork.allows(ctx.env.currentNetwork.value)
             ) {
-                mobileSession.synchronize(
-                    state.selectedBudgetId,
-                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                    background = true,
-                )
+                val password = state.encryptedPassword.takeIf { it.isNotBlank() }
+                mobileSession.synchronize(state.selectedBudgetId, password, background = true)
+                if (!state.readOnlyMode) runCatching { mobileSession.banking.runAutomaticBankSyncIfDue(state.selectedBudgetId, password) }
             }
         }
     }
