@@ -352,7 +352,7 @@ internal class AccountReorder(
         sort: AccountSort,
         ordered: List<LiveAccountSummary>,
     ) {
-        val next = sortAccountsWithinGroups(ordered, sort).map { it.id }
+        val next = sortAccountsForBudget(ordered, sort).map { it.id }
         if (next.isEmpty() || next == ordered.map { it.id }) return
         scope.launch {
             mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")

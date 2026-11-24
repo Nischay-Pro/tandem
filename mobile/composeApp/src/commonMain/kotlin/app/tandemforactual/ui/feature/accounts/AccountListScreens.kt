@@ -136,19 +136,37 @@ internal fun reorderAccountsWithinSlots(
 internal fun sortAccountsWithinGroups(
     accounts: List<LiveAccountSummary>,
     sort: AccountSort,
-): List<LiveAccountSummary> {
-    val within: Comparator<LiveAccountSummary> =
-        when (sort) {
-            AccountSort.NAME_ASCENDING -> compareBy { it.name.lowercase() }
-            AccountSort.NAME_DESCENDING -> compareByDescending { it.name.lowercase() }
-            AccountSort.BALANCE_ASCENDING -> compareBy { it.balanceMinor ?: Long.MAX_VALUE }
-            AccountSort.BALANCE_DESCENDING -> compareByDescending { it.balanceMinor ?: Long.MIN_VALUE }
-        }
-    return accounts.sortedWith(
+): List<LiveAccountSummary> =
+    accounts.sortedWith(
         compareBy<LiveAccountSummary>({ accountGroupOrder(liveAccountGroupLabel(it)) }, { liveAccountGroupLabel(it).lowercase() })
-            .then(within),
+            .then(sort.comparator()),
     )
-}
+
+/**
+ * The order to save for [sort]: sorted within Actual's own sections, on budget, off budget and closed, so Actual's
+ * sidebar reads sorted too. Tandem's type groups follow the saved order, so they stay sorted as well.
+ */
+internal fun sortAccountsForBudget(
+    accounts: List<LiveAccountSummary>,
+    sort: AccountSort,
+): List<LiveAccountSummary> =
+    accounts.sortedWith(
+        compareBy<LiveAccountSummary> {
+            when {
+                it.closed -> 2
+                it.offBudget -> 1
+                else -> 0
+            }
+        }.then(sort.comparator()),
+    )
+
+private fun AccountSort.comparator(): Comparator<LiveAccountSummary> =
+    when (this) {
+        AccountSort.NAME_ASCENDING -> compareBy { it.name.lowercase() }
+        AccountSort.NAME_DESCENDING -> compareByDescending { it.name.lowercase() }
+        AccountSort.BALANCE_ASCENDING -> compareBy { it.balanceMinor ?: Long.MAX_VALUE }
+        AccountSort.BALANCE_DESCENDING -> compareByDescending { it.balanceMinor ?: Long.MIN_VALUE }
+    }
 
 /** The sort [accounts] are already in, so the menu can tick it; null once they were arranged by hand. */
 internal fun activeAccountSort(accounts: List<LiveAccountSummary>): AccountSort? {
