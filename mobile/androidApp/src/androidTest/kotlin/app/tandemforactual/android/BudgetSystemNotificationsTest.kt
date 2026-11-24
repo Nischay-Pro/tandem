@@ -9,9 +9,9 @@ import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
-import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -48,10 +48,20 @@ class BudgetSystemNotificationsTest {
         assertNotification(active.getValue(4102).notification, "Needs review")
         assertNotification(active.getValue(4103).notification, "Rejected")
         assertNotification(active.getValue(4104).notification, "Sign in to Tandem")
-        val failureMessage = active.getValue(4101).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        val failureMessage =
+            active
+                .getValue(4101)
+                .notification.extras
+                .getCharSequence(Notification.EXTRA_TEXT)
+                .toString()
         assertEquals(true, failureMessage.contains("couldn’t"))
         assertEquals(false, failureMessage.contains("couldn't"))
-        val signInMessage = active.getValue(4104).notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        val signInMessage =
+            active
+                .getValue(4104)
+                .notification.extras
+                .getCharSequence(Notification.EXTRA_TEXT)
+                .toString()
         assertEquals(true, signInMessage.contains("Sign in again"))
     }
 

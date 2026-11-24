@@ -6,12 +6,12 @@ import app.tandemforactual.data.regions.global.bank.BankInstitution
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BrowserLink
 import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 class BrowserBankProvidersTest {
     private fun json(text: String) = Json.parseToJsonElement(text)

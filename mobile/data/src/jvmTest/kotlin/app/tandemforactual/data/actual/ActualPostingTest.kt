@@ -1,7 +1,6 @@
 package app.tandemforactual.data.actual
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.UUID
 import kotlin.test.Test
@@ -9,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class ActualPostingTest {
     private class Fixture(

@@ -1,8 +1,8 @@
 // Creates the "Demo household" budget used for app screenshots on a fresh Actual server.
+import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 import console from "node:console";
 import fs from "node:fs";
 import process from "node:process";
-import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 
 const url = process.env.ACTUAL_URL ?? "http://localhost:5006";
 const password = process.env.ACTUAL_PASSWORD ?? "demo-password";

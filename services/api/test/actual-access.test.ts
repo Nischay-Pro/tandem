@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { ActualBudgetAccess } from "../src/actual-access.js";
+import { describe, expect, it } from "vitest";
 
 function fakeFetch(
   responses: Array<{ ok: boolean; status: number; body?: unknown } | Error>,

@@ -36,6 +36,8 @@ import app.tandemforactual.data.actual.setPayeeDefaultCategory
 import app.tandemforactual.data.actual.updateRule
 import app.tandemforactual.data.database.ActualBudgetFiles
 import io.ktor.client.HttpClient
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -51,8 +53,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlin.time.Clock
-import kotlin.uuid.Uuid
 
 /**
  * Talks to the user's Actual server directly. Budgets are downloaded into [budgetFiles], synced with Actual's own

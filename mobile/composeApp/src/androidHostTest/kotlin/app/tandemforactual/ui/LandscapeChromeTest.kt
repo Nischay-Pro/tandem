@@ -17,12 +17,12 @@ import app.tandemforactual.ui.design.buttons.PeriodStepper
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

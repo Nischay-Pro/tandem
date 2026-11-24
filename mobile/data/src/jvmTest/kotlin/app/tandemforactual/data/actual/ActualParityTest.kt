@@ -1,15 +1,15 @@
 package app.tandemforactual.data.actual
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.io.File
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 class ActualParityTest {
     private fun resource(path: String): ByteArray = checkNotNull(javaClass.getResource("/actual/$path")).readBytes()

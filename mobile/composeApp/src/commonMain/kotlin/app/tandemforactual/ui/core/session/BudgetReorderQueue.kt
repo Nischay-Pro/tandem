@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.core.session
 
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -10,7 +11,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlin.uuid.Uuid
 
 internal const val BUDGET_GROUP_ORDER_SCOPE = "category-groups"
 

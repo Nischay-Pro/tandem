@@ -2,6 +2,8 @@ package app.tandemforactual.ui.core.format
 
 import androidx.compose.runtime.Composable
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import kotlin.math.abs
+import kotlin.math.pow
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitHour
@@ -21,8 +23,6 @@ import platform.Foundation.NSNumberFormatterDecimalStyle
 import platform.Foundation.NSNumberFormatterPercentStyle
 import platform.Foundation.NSRecursiveLock
 import platform.Foundation.currentLocale
-import kotlin.math.abs
-import kotlin.math.pow
 
 private const val APPLE_REFERENCE_DATE_UNIX_SECONDS = 978_307_200.0
 

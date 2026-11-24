@@ -25,16 +25,16 @@ import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Lucide
+import java.io.File
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w411dp-h891dp-xxhdpi")

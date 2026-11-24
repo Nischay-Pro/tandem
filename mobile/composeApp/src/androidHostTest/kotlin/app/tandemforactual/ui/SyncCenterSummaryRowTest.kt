@@ -11,12 +11,12 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.sync.SyncCountTile
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.Lucide
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

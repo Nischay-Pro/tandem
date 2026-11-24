@@ -35,8 +35,8 @@ import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 
 /**
  * Records a move to another country and lists what to look at: plans you hold there and here, plans you could add, the

@@ -1,8 +1,8 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.ui.core.state.writeStatusLabel
-import org.junit.Test
 import kotlin.test.assertEquals
+import org.junit.Test
 
 class SyncStatusLabelTest {
     @Test

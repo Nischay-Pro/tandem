@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
-import org.tensorflow.lite.Interpreter
 import java.io.Closeable
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -17,6 +16,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import org.tensorflow.lite.Interpreter
 
 /**
  * PP-OCRv6 on LiteRT: finds text lines, straightens the photo when the lines are tilted, then reads each line and joins

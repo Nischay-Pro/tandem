@@ -18,13 +18,13 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemPalette
+import java.io.File
+import kotlin.test.Test
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
-import kotlin.test.Test
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w411dp-h891dp-xxhdpi")

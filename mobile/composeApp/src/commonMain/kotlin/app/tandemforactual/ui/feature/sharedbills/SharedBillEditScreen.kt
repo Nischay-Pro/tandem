@@ -39,8 +39,8 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.UserPlus
-import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 
 private class MemberDraft(
     name: String = "",

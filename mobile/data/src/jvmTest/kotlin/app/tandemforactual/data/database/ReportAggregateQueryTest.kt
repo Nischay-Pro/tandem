@@ -8,11 +8,11 @@ import app.tandemforactual.data.store.observeAccountDailyActivity
 import app.tandemforactual.data.store.observeCategoryMonthAggregates
 import app.tandemforactual.data.store.observeMonthlyIncomeAndSpending
 import app.tandemforactual.data.store.observeRecordIds
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 class ReportAggregateQueryTest {
     @Test

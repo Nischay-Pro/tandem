@@ -7,11 +7,11 @@ import app.tandemforactual.data.store.LocalScheduleActionOutboxItem
 import app.tandemforactual.data.store.enqueueScheduleAction
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
 import app.tandemforactual.ui.core.session.schedules.ScheduleActionController
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlin.uuid.Uuid
 
 internal suspend fun ScheduleActionController.manageBudgetSchedule(
     budgetId: String,

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
+import console from "node:console";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import process from "node:process";
-import console from "node:console";
 import { fileURLToPath } from "node:url";
 
 export function obsoleteNightlyVersionIds(pages, keepDates = 14) {

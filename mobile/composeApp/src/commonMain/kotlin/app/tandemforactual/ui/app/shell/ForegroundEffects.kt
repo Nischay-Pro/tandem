@@ -8,10 +8,10 @@ import androidx.compose.runtime.snapshotFlow
 import app.tandemforactual.ui.app.BUDGET_PERIODIC_SYNC_INTERVAL_MS
 import app.tandemforactual.ui.core.session.hasLoadedBudget
 import app.tandemforactual.ui.core.session.refreshServerCapabilities
+import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.TimeSource
 
 /** Refreshes server capabilities and budget flags, and times the interface mode and budget switch covers. */
 @Composable

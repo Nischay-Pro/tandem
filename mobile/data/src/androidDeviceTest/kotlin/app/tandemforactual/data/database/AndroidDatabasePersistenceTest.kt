@@ -12,6 +12,10 @@ import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.observeRecords
 import app.tandemforactual.data.store.readPendingWrites
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -21,10 +25,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class AndroidDatabasePersistenceTest {

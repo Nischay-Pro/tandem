@@ -1,8 +1,8 @@
-import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
-import rateLimit from "@fastify/rate-limit";
-import swagger from "@fastify/swagger";
 import type { BudgetAccess } from "./actual-access.js";
 import type { ExtensionStore, RecordWrite, WrappedKey } from "./store.js";
+import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 
 export const API_VERSION = 1;
 const MAX_CIPHERTEXT = 65_536;

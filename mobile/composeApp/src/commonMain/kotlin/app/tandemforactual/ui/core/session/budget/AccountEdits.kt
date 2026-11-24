@@ -20,6 +20,7 @@ import app.tandemforactual.ui.core.session.rewriteAccountIds
 import app.tandemforactual.ui.core.session.stringValue
 import app.tandemforactual.ui.core.session.toProjection
 import app.tandemforactual.ui.core.state.booleanValue
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -29,7 +30,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlin.uuid.Uuid
 
 internal suspend fun BudgetEdits.createBudgetAccount(
     budgetId: String,

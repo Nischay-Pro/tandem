@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { error } from "node:console";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 

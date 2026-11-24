@@ -9,12 +9,12 @@ import app.tandemforactual.ui.core.state.resolveMainCloudStatus
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
+import kotlin.test.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertEquals
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

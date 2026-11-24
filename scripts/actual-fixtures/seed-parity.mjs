@@ -1,8 +1,8 @@
 // Seeds budgets on a local Actual server that exercise the accounting rules Tandem's on-device engine must match.
+import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 import console from "node:console";
 import fs from "node:fs";
 import process from "node:process";
-import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 
 const url = process.env.ACTUAL_URL ?? "http://localhost:5006";
 const password = process.env.ACTUAL_PASSWORD ?? "demo-password";

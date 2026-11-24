@@ -22,13 +22,13 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Shirt
 import com.composables.icons.lucide.ShoppingCart
 import com.composables.icons.lucide.WalletCards
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class MerchantIconMatchingTest {
     @Test

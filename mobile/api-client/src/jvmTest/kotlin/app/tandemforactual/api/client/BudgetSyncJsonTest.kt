@@ -4,12 +4,12 @@ import app.tandemforactual.data.actual.ActualRecord
 import app.tandemforactual.data.actual.ActualSnapshot
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.BudgetSyncProtocolException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 class BudgetSyncJsonTest {
     private fun record(

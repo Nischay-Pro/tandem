@@ -11,10 +11,10 @@ import app.tandemforactual.ui.core.session.enqueueIfMissing
 import app.tandemforactual.ui.core.state.defaultCategoryRulesByPayee
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlin.uuid.Uuid
 
 internal suspend fun BudgetEdits.createBudgetPayee(
     budgetId: String,

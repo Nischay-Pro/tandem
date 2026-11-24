@@ -1,5 +1,5 @@
-import process from "node:process";
 import { run } from "./main.js";
+import process from "node:process";
 
 run(process.env, (signal, handler) => process.once(signal, handler)).catch(
   (error: unknown) => {

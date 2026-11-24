@@ -1,7 +1,6 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
-
 import { obsoleteNightlyVersionIds } from "./prune-nightly-api-versions.mjs";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 
 test("keeps the rolling tag and latest fourteen dated nightly versions", () => {
   const versions = Array.from({ length: 16 }, (_, index) => {

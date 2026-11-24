@@ -1,9 +1,9 @@
 // Writes the extension service's OpenAPI description, or checks that the committed copy is current.
+import { buildApp } from "../src/app.js";
+import { InMemoryExtensionStore } from "../src/store.js";
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 import { format } from "prettier";
-import { buildApp } from "../src/app.js";
-import { InMemoryExtensionStore } from "../src/store.js";
 
 const target = "../../docs/api/openapi-v1.json";
 const app = await buildApp({

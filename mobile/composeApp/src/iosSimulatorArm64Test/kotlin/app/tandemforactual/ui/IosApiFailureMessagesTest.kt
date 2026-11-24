@@ -6,11 +6,11 @@ import app.tandemforactual.ui.core.session.ApiFailureContext
 import app.tandemforactual.ui.core.session.apiFailureMessage
 import app.tandemforactual.ui.core.session.indicatesTandemReachable
 import app.tandemforactual.ui.core.session.userFacingMessage
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class IosApiFailureMessagesTest {
     @Test

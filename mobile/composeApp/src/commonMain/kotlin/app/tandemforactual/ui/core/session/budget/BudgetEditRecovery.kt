@@ -36,11 +36,11 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.budgetMonthCategoryCarryover
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
-import kotlin.uuid.Uuid
 
 internal fun BudgetEditQueue.retryQueuedBudgetReorders(
     budgetId: String? = null,

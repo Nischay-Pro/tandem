@@ -16,11 +16,11 @@ import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
 import app.tandemforactual.ui.core.platform.shareTextOnIos
 import app.tandemforactual.ui.core.session.SyncNetwork
+import kotlin.native.Platform
+import kotlin.time.Clock
 import platform.Foundation.NSProcessInfo
 import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
-import kotlin.native.Platform
-import kotlin.time.Clock
 
 @Suppress("ktlint:standard:function-naming")
 fun MainViewController(

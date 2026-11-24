@@ -8,6 +8,11 @@ import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.readPendingWrites
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
@@ -16,11 +21,6 @@ import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
 import platform.Foundation.dataWithContentsOfFile
 import platform.posix.memcpy
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class IosSqlCipherDatabaseTest {
     private val key = "x'" + "0123456789abcdef".repeat(4) + "'"

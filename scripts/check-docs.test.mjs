@@ -1,8 +1,3 @@
-import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import test from "node:test";
 import {
   findBrokenLinks,
   findStaleTerms,
@@ -10,6 +5,11 @@ import {
   markdownFiles,
   versionMentionErrors,
 } from "./check-docs.mjs";
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
 
 test("discovers Markdown files without Git and skips generated data", () => {
   const root = mkdtempSync(join(tmpdir(), "tandem-doc-files-"));

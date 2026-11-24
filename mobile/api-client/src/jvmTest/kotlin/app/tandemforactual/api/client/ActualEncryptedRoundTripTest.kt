@@ -2,12 +2,12 @@ package app.tandemforactual.api.client
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Runs only with ACTUAL_TEST_URL set: opens and edits a budget that Actual encrypted end to end. */
 class ActualEncryptedRoundTripTest {

@@ -1,16 +1,16 @@
 import { log } from "node:console";
-import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
-import process from "node:process";
 import {
   copyFile,
   mkdir,
-  readFile,
   readdir,
+  readFile,
   rm,
   stat,
   writeFile,
 } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);

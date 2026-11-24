@@ -1,6 +1,10 @@
 package app.tandemforactual.data.actual
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import java.io.File
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -13,10 +17,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import java.io.File
-import java.util.UUID
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 class ActualImportTest {
     private fun resource(name: String) = checkNotNull(javaClass.getResource("/actual/import-parity/$name")).readBytes()

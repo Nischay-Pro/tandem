@@ -5,9 +5,9 @@ import app.tandemforactual.ui.core.navigation.openNeedsReview
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
-import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Test
 
 class SyncCenterNavigationTest {
     @Test

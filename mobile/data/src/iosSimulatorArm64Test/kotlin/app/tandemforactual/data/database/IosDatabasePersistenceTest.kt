@@ -7,10 +7,10 @@ import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.readPendingWrites
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlinx.coroutines.runBlocking
 
 class IosDatabasePersistenceTest {
     @Test

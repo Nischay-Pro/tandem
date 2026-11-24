@@ -4,15 +4,15 @@ import app.tandemforactual.ui.core.platform.IosCredentialUnavailableBeforeFirstU
 import app.tandemforactual.ui.core.platform.IosDeviceCredentialStore
 import app.tandemforactual.ui.core.platform.IosKeychainClient
 import app.tandemforactual.ui.core.platform.IosKeychainReadResult
-import platform.Security.errSecDuplicateItem
-import platform.Security.errSecInteractionNotAllowed
-import platform.Security.errSecItemNotFound
-import platform.Security.errSecSuccess
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import platform.Security.errSecDuplicateItem
+import platform.Security.errSecInteractionNotAllowed
+import platform.Security.errSecItemNotFound
+import platform.Security.errSecSuccess
 
 class IosDeviceCredentialStoreTest {
     @Test

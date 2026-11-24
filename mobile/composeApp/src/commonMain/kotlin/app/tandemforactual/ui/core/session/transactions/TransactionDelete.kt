@@ -15,8 +15,8 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.UndoNotice
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
 import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
-import kotlinx.coroutines.CancellationException
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.CancellationException
 
 /** Deletes right away and offers an undo while the deletions are still waiting to sync. */
 internal suspend fun TransactionController.deleteTransactionsWithUndo(

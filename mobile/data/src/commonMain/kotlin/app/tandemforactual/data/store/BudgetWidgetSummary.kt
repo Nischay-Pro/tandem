@@ -1,10 +1,10 @@
 package app.tandemforactual.data.store
 
+import kotlin.math.abs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import kotlin.math.abs
 
 /** What a home-screen widget shows for the selected budget; amounts are null when unknown or hidden. */
 data class BudgetWidgetSummary(

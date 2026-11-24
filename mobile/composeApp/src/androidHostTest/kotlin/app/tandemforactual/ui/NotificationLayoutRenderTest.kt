@@ -18,13 +18,13 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.home.HomeScreen
 import app.tandemforactual.ui.feature.home.PersonalizeScreen
 import app.tandemforactual.ui.feature.onboarding.WelcomeScreen
+import java.io.File
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w411dp-h891dp-xxhdpi")

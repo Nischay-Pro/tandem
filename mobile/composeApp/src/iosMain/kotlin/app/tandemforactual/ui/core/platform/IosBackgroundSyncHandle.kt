@@ -19,6 +19,7 @@ import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 /** Runs the selected cached budget's regular sync coordinator for an iOS background task. */
 class IosBackgroundSyncHandle internal constructor(
