@@ -10,6 +10,7 @@ import app.tandemforactual.ui.core.session.loadBudgets
 import app.tandemforactual.ui.core.session.observeLocalRecords
 import app.tandemforactual.ui.core.session.observeSelectedBudgetMonth
 import app.tandemforactual.ui.core.session.unbindEncryptedBudgetDatabase
+import app.tandemforactual.ui.core.session.unlockSecret
 import app.tandemforactual.ui.core.state.AppRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -86,7 +87,11 @@ private fun FirstSyncEffect(ctx: ShellContext) {
                 val secretId = budgetPasswordSecretId(state.selectedBudgetId)
                 withContext(Dispatchers.Default) { deviceAuthenticator?.rememberPasswordCheck(secretId, unlockedPassword) }
                 if (state.rememberBudgetPasswordWithBiometrics && deviceAuthenticator?.canStoreSecrets() == true) {
-                    deviceAuthenticator.storeSecret(secretId, unlockedPassword, "Use biometrics for ${state.selectedBudget}") {}
+                    deviceAuthenticator.storeSecret(
+                        secretId,
+                        unlockSecret(ctx.env.encryptedBudgetVault, state.selectedBudgetId, unlockedPassword),
+                        "Use biometrics for ${state.selectedBudget}",
+                    ) {}
                 } else {
                     deviceAuthenticator?.deleteSecret(secretId)
                 }
