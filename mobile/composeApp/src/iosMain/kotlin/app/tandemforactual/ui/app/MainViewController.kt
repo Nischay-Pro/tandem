@@ -88,6 +88,7 @@ private fun createTandemViewController(
                 onSystemAppearanceChanged = onSystemAppearanceChanged,
                 onRequestNotificationPermission = onRequestNotificationPermission,
                 onOpenNotificationSettings = onOpenNotificationSettings,
+                appInForeground = syncEvents.appInForeground,
                 appResumeEvents = syncEvents.appResumeEvents,
                 networkRestoredEvents = syncEvents.networkRestoredEvents,
                 screenshotScript = remember { iosScreenshotScript() },
