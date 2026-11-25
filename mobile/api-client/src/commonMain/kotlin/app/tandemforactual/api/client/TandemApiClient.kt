@@ -62,12 +62,7 @@ class TandemApiClient(
     private val allowInsecurePrivateNetwork: Boolean = false,
     private val http: HttpClient = HttpClient(),
     var budgetFiles: ActualBudgetFiles? = null,
-    var today: () -> String = {
-        Clock.System
-            .now()
-            .toString()
-            .take(10)
-    },
+    var today: () -> String = ::localTodayIsoDate,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val newId: () -> String = { Uuid.random().toString() },
 ) {
