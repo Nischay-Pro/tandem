@@ -36,6 +36,7 @@ internal class FakeActualServer {
             """"org":{"name":"Credit Union","domain":"cu.example"}},{"id":"SF-10","name":"Plain","org":{"id":"org-1"}},""" +
             """{"name":"Bare"}]}}"""
     var syncFailure: String? = null
+    var failUploads = false
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
     var syncCalls = 0
@@ -135,6 +136,7 @@ internal class FakeActualServer {
                         syncCalls++
                         syncFailure?.let { return@MockEngine respond(it, HttpStatusCode.BadRequest) }
                         val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
+                        if (failUploads && sent.messages.isNotEmpty()) return@MockEngine respond("", HttpStatusCode.ServiceUnavailable)
                         val locked = sent.fileId == "encrypted"
                         val store = if (locked) lockedMessages else messages
                         for (message in sent.messages) {

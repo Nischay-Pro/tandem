@@ -114,6 +114,31 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun anEditStillCountsWhenItsUploadFailsAndGoesUpWithTheNextSync(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = client(server, TempBudgetFiles())
+            client.signInWithPassword(url, "test", "Phone")
+            val budget = client.budget("group")
+            budget.sync()
+            server.failUploads = true
+
+            val wallet = client.createBudgetAccount("group", "Wallet", false, null, null)
+
+            server.failUploads = false
+            budget.sync()
+            val other = client(server, TempBudgetFiles())
+            other.signInWithPassword(url, "test", "Phone")
+            val otherBudget = other.budget("group").also { it.sync() }
+            val accounts =
+                otherBudget.snapshot("2026-11-21").records.filter {
+                    it.type == "account" &&
+                        it.body["name"] == JsonPrimitive("Wallet")
+                }
+            assertEquals(listOf(wallet), accounts.map { it.id })
+        }
+
+    @Test
     fun opensBudgetsAndEditsThem(): Unit =
         runBlocking {
             val server = FakeActualServer()
