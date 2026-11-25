@@ -77,7 +77,7 @@ class ActualTransactions(
             }
         }
 
-    private fun makeSplit(
+    internal fun makeSplit(
         parent: Map<String, Any?>,
         subtransactions: List<Map<String, Any?>>,
     ): List<MutableMap<String, Any?>> {
