@@ -16,11 +16,13 @@ import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.readPendingWrites
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.bindEncryptedBudgetDatabase
 import app.tandemforactual.ui.core.session.restoreStoredSession
 import app.tandemforactual.ui.core.session.signOutAndClearLocalData
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -184,6 +186,54 @@ class SignOutCacheClearFailureTest {
                 } finally {
                     database.close()
                 }
+            }
+        }
+
+    @Test
+    fun signingOutWithAnEncryptedBudgetOpenChecksAndClearsBothStores() =
+        runBlocking {
+            val main = newInMemoryDatabase()
+            val vault = newInMemoryDatabase()
+            try {
+                val mainRepository = LocalBudgetRepository(main) { NOW }
+                val vaultRepository = LocalBudgetRepository(vault) { NOW }
+                seedCachedBudget(mainRepository, AppPreferencesStore(main), withPendingWrite = true)
+                seedCachedBudget(vaultRepository, AppPreferencesStore(vault), withPendingWrite = false)
+                var savedCredential: String? = storedSession()
+                val credentialStore =
+                    object : DeviceCredentialStore {
+                        override fun read(): String? = savedCredential
+
+                        override fun write(value: String) {
+                            savedCredential = value
+                        }
+
+                        override fun clear() {
+                            savedCredential = null
+                        }
+                    }
+                val session =
+                    TandemMobileSession(
+                        apiClient = TandemApiClient(),
+                        database = main,
+                        nowEpochMillis = { NOW },
+                        credentialStore = credentialStore,
+                        revokeCurrentDeviceForSignOut = {},
+                    )
+                session.restoreStoredSession()
+                session.bindEncryptedBudgetDatabase("encrypted-budget", vault)
+
+                assertFalse(session.signOutAndClearLocalData(), "an unsent edit in the main store must block sign-out")
+                assertTrue(session.signOutError.orEmpty().contains("pending changes"))
+
+                main.outboxDao().put(mainRepository.readPendingWrites(BUDGET_ID).single().copy(status = "committed"))
+                assertTrue(session.signOutAndClearLocalData())
+                assertNull(mainRepository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID))
+                assertNull(vaultRepository.findRecord(BUDGET_ID, "transaction", TRANSACTION_ID))
+                assertNull(session.boundEncryptedBudgetId)
+            } finally {
+                main.close()
+                vault.close()
             }
         }
 
