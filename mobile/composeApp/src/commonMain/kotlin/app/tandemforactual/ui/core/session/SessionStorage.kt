@@ -5,6 +5,7 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
+import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.budgetWrites
 import app.tandemforactual.data.store.importBudgetWrites
 import app.tandemforactual.data.store.readPendingWrites
@@ -12,6 +13,7 @@ import app.tandemforactual.data.store.removeBudget
 import app.tandemforactual.data.store.unsentWrites
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
 import app.tandemforactual.ui.core.state.UNSYNCED_TRANSACTION_WRITE_STATUSES
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -91,12 +93,13 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     val unsent = unsentChangeCount(budgetId)
     val replay = repository?.unsentWrites(budgetId).orEmpty()
     val encrypted = boundEncryptedBudgetId == budgetId
+    val password = scheduleActionEncryptionPasswords[budgetId]
     if (encrypted) unbindEncryptedBudgetDatabase()
     apiClient.retireBudget(budgetId)
     mainStorage?.repository?.removeBudget(budgetId)
     vault?.delete(budgetId)
     if (encrypted) {
-        writesToReplay[budgetId] = replay
+        if (!storeReplayInNewVault(budgetId, vault, password, replay)) writesToReplay[budgetId] = replay
     } else {
         mainStorage?.repository?.importBudgetWrites(replay)
     }
@@ -104,6 +107,34 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     loadLocalRecords(budgetId)
     loadBudgets()
     return unsent
+}
+
+/**
+ * Puts an encrypted budget's unsent edits straight into a new, empty vault, so they survive until it's opened and
+ * downloaded again instead of living only in memory. False when there's no vault or password to make one with.
+ */
+private suspend fun TandemMobileSession.storeReplayInNewVault(
+    budgetId: String,
+    vault: EncryptedBudgetVault?,
+    password: String?,
+    replay: List<OutboxOperationEntity>,
+): Boolean {
+    if (replay.isEmpty()) return true
+    if (vault == null || password.isNullOrBlank()) return false
+    val fresh = vault.create(budgetId, password)
+    try {
+        LocalBudgetRepository(fresh.database, nowEpochMillis).importBudgetWrites(replay)
+        fresh.commit()
+    } catch (error: CancellationException) {
+        fresh.discard()
+        throw error
+    } catch (_: Exception) {
+        fresh.discard()
+        return false
+    } finally {
+        runCatching { fresh.database.closeDatabase() }
+    }
+    return true
 }
 
 internal suspend fun TandemMobileSession.mainBudgetWrites(budgetId: String): List<OutboxOperationEntity> =
