@@ -37,6 +37,7 @@ import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.ReorderDragHandle
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowBadgeMark
@@ -48,7 +49,6 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.painterResource
 
 @Composable
 internal fun AccountSummaryCard(
@@ -98,7 +98,8 @@ internal fun AccountSummaryCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
         ) {
-            AccountSummaryIcon(account, bankIcon ?: merchantArtwork?.let { painterResource(it) }, bankBadge)
+            val artwork = rememberMerchantArtwork(merchantArtwork)
+            AccountSummaryIcon(account, bankIcon ?: artwork, bankBadge)
             AccountSummaryText(
                 account = account,
                 showBalance = stackBalance && !isReordering,
