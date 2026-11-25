@@ -85,7 +85,7 @@ private fun ReimbursementDialog(
     val scope = rememberCoroutineScope()
     var from by remember { mutableStateOf("") }
     var owed by remember { mutableStateOf(formatAmount(-amount, state.budgetDisplaySettings)) }
-    var claimBy by remember { mutableStateOf("") }
+    var claimBy by remember { mutableStateOf<String?>(null) }
     val date = state.transactionDate.takeIf { it.length == 10 && it[4] == '-' }
     val claimPlans =
         mobileSession.planning.retirementProfiles
@@ -100,17 +100,12 @@ private fun ReimbursementDialog(
                     FilterPills(claimPlans.map { it.displayName to it.displayName }, from, { name ->
                         from = name
                         val plan = claimPlans.first { it.displayName == name }
-                        claimBy = date?.let { Reimbursement.claimDeadline(plan.id, it) }.orEmpty()
+                        claimBy = date?.let { Reimbursement.claimDeadline(plan.id, it) }
                     })
                 }
                 TextFieldCard("Who pays you back", from, { from = it }, TextFieldOptions(placeholder = "e.g. Sam, work"))
                 TextFieldCard("Amount owed", owed, { owed = it }, TextFieldOptions(placeholder = "0.00"))
-                TextFieldCard(
-                    "Claim by (optional)",
-                    claimBy,
-                    { claimBy = it.filter { c -> c.isDigit() || c == '-' }.take(10) },
-                    TextFieldOptions(placeholder = "YYYY-MM-DD"),
-                )
+                DateField("Claim by", claimBy, "No deadline", { claimBy = it })
                 Text(
                     "It stays on this budget’s encrypted planning data, not in Actual.",
                     color = tandemPalette.muted,
@@ -128,7 +123,7 @@ private fun ReimbursementDialog(
                                 from.trim().ifBlank { null },
                                 state.transactionPayee.ifBlank { null },
                                 date,
-                                claimBy = claimBy.takeIf { it.length == 10 && it[4] == '-' && it[7] == '-' },
+                                claimBy = claimBy,
                             ),
                         )
                     }

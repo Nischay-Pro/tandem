@@ -15,6 +15,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.core.ui.DatePickerDialog
 import app.tandemforactual.ui.core.ui.ScheduleChoiceField
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
@@ -28,7 +29,6 @@ import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.schedules.ScheduleDatePickerDialog
 import app.tandemforactual.ui.feature.schedules.scheduleFieldErrorMessage
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
@@ -265,7 +265,7 @@ private fun ScheduleDateField(
 /** The date picker for the draft's start or end date. */
 @Composable
 internal fun ScheduleEditDatePicker(draft: ScheduleEditDraft) {
-    ScheduleDatePickerDialog(
+    DatePickerDialog(
         visible = draft.datePickerTarget != null,
         initialDate = if (draft.datePickerTarget == "end") draft.endDateDraft else draft.dateDraft,
         onDismiss = { draft.datePickerTarget = null },

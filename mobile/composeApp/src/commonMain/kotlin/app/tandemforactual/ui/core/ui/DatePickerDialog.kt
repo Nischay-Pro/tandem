@@ -1,6 +1,6 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-package app.tandemforactual.ui.feature.schedules
+package app.tandemforactual.ui.core.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,23 +36,28 @@ import app.tandemforactual.ui.core.format.platformFirstWeekday
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.platformWeekday
 import app.tandemforactual.ui.core.format.transactionIsoDate
+import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.design.buttons.SelectableTile
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
+import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.buttons.TandemNavigationChevronButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
+import app.tandemforactual.ui.design.templates.FieldFrame
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.Calendar
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 import kotlinx.coroutines.flow.first
 
 @Composable
-internal fun ScheduleDatePickerDialog(
+internal fun DatePickerDialog(
     visible: Boolean,
     initialDate: String,
     onDismiss: () -> Unit,
@@ -155,4 +161,37 @@ private fun ScheduleDayGrid(
             repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
         }
     }
+}
+
+/** A tappable field showing [date], or [emptyLabel] when there's none, that opens [DatePickerDialog]. */
+@Composable
+internal fun DateField(
+    label: String,
+    date: String?,
+    emptyLabel: String,
+    onDateChange: (String?) -> Unit,
+) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    FieldFrame(label, onClickLabel = "Choose $label", onClick = { picking = true }) {
+        Text(
+            date?.let(::formatLiveDate) ?: emptyLabel,
+            Modifier.weight(1f),
+            color = if (date == null) tandemPalette.muted else tandemPalette.text,
+            fontSize = TandemTypography.action,
+        )
+        if (date != null) {
+            TandemIconButton(Lucide.X, "Clear $label", onClick = { onDateChange(null) })
+        } else {
+            Icon(Lucide.Calendar, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.muted)
+        }
+    }
+    DatePickerDialog(
+        visible = picking,
+        initialDate = date ?: platformTodayIsoDate(),
+        onDismiss = { picking = false },
+        onSelect = {
+            picking = false
+            onDateChange(it)
+        },
+    )
 }
