@@ -47,7 +47,8 @@ private suspend fun LocalBudgetRepository.enqueueWriteInTransaction(request: Loc
     if (request.supersedesConflictOperationId != null && resolvedConflict == null) {
         throw LocalOperationConflictException()
     }
-    if (blocker != null && blocker.operationId != mergeableQueued?.operationId && resolvedConflict == null) {
+    val blockerOnlyUploading = blocker?.status == LocalWriteStatus.QUEUED.name.lowercase() && blocker.serverOperationId != null
+    if (blocker != null && blocker.operationId != mergeableQueued?.operationId && resolvedConflict == null && !blockerOnlyUploading) {
         throw LocalOperationConflictException()
     }
 
@@ -129,9 +130,14 @@ suspend fun LocalBudgetRepository.recoverInterruptedScheduleActions(): Int =
         database.outboxDao().markInterruptedSendsUncertainForRecordTypes(listOf(SCHEDULE_ACTION_RECORD_TYPE), now())
     }
 
+/**
+ * Puts a sending write back in the queue. [appliedLocally] means the budget already holds it and only the upload is
+ * left, so later edits must not merge into it and it can no longer be discarded.
+ */
 suspend fun LocalBudgetRepository.returnWriteToQueue(
     operationId: String,
     errorCode: String,
+    appliedLocally: Boolean = false,
 ): OutboxOperationEntity =
     database.withWriteTransaction {
         requireIdentifier(errorCode, "errorCode")
@@ -143,6 +149,7 @@ suspend fun LocalBudgetRepository.returnWriteToQueue(
         val queued =
             operation.copy(
                 status = LocalWriteStatus.QUEUED.name.lowercase(),
+                serverOperationId = operation.serverOperationId ?: operation.operationId.takeIf { appliedLocally },
                 lastErrorCode = errorCode,
                 updatedAtEpochMs = now(),
             )
@@ -174,6 +181,9 @@ suspend fun LocalBudgetRepository.discardWrite(operationId: String): OutboxOpera
         val operation = outbox.find(operationId) ?: throw NoSuchElementException("Local write not found")
         if (operation.status !in setOf("queued", "uncertain", "conflict", "rejected")) {
             throw InvalidLocalWriteException("This write is not in a discardable state")
+        }
+        if (operation.status == "queued" && operation.serverOperationId != null) {
+            throw InvalidLocalWriteException("This write is already in the budget and only waiting to upload")
         }
         val discarded =
             operation.copy(
