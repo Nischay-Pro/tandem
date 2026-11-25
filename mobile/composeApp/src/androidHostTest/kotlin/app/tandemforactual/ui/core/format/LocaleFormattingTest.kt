@@ -450,4 +450,15 @@ class LocaleFormattingTest {
         assertTrue(older.startsWith(platformFormatDateAtEpochMilliseconds(now - 5 * 86_400_000L)))
         assertTrue(older.contains(" at "))
     }
+
+    @Test
+    fun convertsTypedAmountsToTheHundredthsActualStores() {
+        assertEquals(0, typedAmountDigits(0))
+        assertEquals(2, typedAmountDigits(3))
+        assertEquals(150_000L, storedHundredths(1_500, 0))
+        assertEquals(1_234L, storedHundredths(1_234, 2))
+        assertEquals(-12_340L, storedHundredths(-1_234, 1))
+        assertNull(storedHundredths(Long.MAX_VALUE / 10 + 1, 1))
+        assertNull(storedHundredths(Long.MIN_VALUE / 10 - 1, 1))
+    }
 }
