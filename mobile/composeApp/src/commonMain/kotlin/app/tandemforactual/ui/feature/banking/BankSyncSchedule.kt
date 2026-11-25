@@ -4,12 +4,13 @@ package app.tandemforactual.ui.feature.banking
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,8 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.feedback.AnimatedReveal
+import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -31,6 +34,8 @@ import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.TandemTypography
+import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Lucide
@@ -48,6 +53,9 @@ internal fun syncIntervalLabel(minutes: Int): String {
     val count = minutes / size
     return if (count == 1) "Every $unit" else "Every $count ${unit}s"
 }
+
+/** Whether [minutes] is an interval none of the presets offer, so the dialog opens on the custom choice. */
+internal fun isCustomSyncInterval(minutes: Int): Boolean = SYNC_INTERVAL_PRESETS.none { it.first == minutes }
 
 /** A custom interval in minutes, at least Actual's 15-minute floor; null when [count] isn't a whole number. */
 internal fun customSyncInterval(
@@ -94,7 +102,8 @@ private fun SyncIntervalDialog(
     onDismiss: () -> Unit,
     onPick: (Int) -> Unit,
 ) {
-    var custom by remember(visible) { mutableStateOf(SYNC_INTERVAL_PRESETS.none { it.first == current }) }
+    var custom by remember { mutableStateOf(isCustomSyncInterval(current)) }
+    LaunchedEffect(visible) { if (visible) custom = isCustomSyncInterval(current) }
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
@@ -104,7 +113,7 @@ private fun SyncIntervalDialog(
                 }
                 DividerLine()
                 IntervalRow("Custom interval", selected = custom) { custom = true }
-                if (custom) CustomInterval(current, onPick)
+                AnimatedReveal(custom) { CustomInterval(current, onPick) }
             }
         }
     }
@@ -128,25 +137,32 @@ private fun CustomInterval(
     onPick: (Int) -> Unit,
 ) {
     val start = if (current > 0) SYNC_INTERVAL_UNITS.first { current % it.first == 0 } else SYNC_INTERVAL_UNITS.first { it.first == 60 }
-    var unit by remember { mutableStateOf(start.first) }
-    var count by remember { mutableStateOf(if (current > 0) (current / start.first).toString() else "2") }
-    TextFieldCard(
-        "Every",
-        count,
-        { count = it.filter(Char::isDigit).take(4) },
-        TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
-    )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-        SYNC_INTERVAL_UNITS.reversed().forEach { (size, name) ->
-            TandemActionButton(
-                "${name}s",
-                if (unit == size) TandemActionButtonTone.PRIMARY else TandemActionButtonTone.NEUTRAL,
-                Modifier.weight(1f),
-            ) { unit = size }
-        }
-    }
+    var unit by remember(current) { mutableStateOf(start.first) }
+    var count by remember(current) { mutableStateOf(if (current > 0) (current / start.first).toString() else "2") }
     val minutes = customSyncInterval(count, unit)
-    TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = minutes != null) {
-        minutes?.let(onPick)
+    val raised = count.trim().toIntOrNull()?.let { it * unit < ActualBankSync.MIN_SYNC_INTERVAL_MINUTES } == true
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        TextFieldCard(
+            "Every",
+            count,
+            { count = it.filter(Char::isDigit).take(4) },
+            TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)),
+        )
+        FilterPills(SYNC_INTERVAL_UNITS.reversed().map { (size, name) -> size to "${name}s" }, unit, { unit = it })
+        if (raised) {
+            Text(
+                "Actual syncs at most every ${ActualBankSync.MIN_SYNC_INTERVAL_MINUTES} minutes.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+            )
+        }
+        TandemActionButton(
+            minutes?.let { "Save · ${syncIntervalLabel(it)}" } ?: "Save",
+            TandemActionButtonTone.PRIMARY,
+            Modifier.fillMaxWidth(),
+            enabled = minutes != null,
+        ) {
+            minutes?.let(onPick)
+        }
     }
 }

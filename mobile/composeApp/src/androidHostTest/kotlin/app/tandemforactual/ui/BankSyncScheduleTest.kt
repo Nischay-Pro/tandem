@@ -1,10 +1,13 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.ui.feature.banking.customSyncInterval
+import app.tandemforactual.ui.feature.banking.isCustomSyncInterval
 import app.tandemforactual.ui.feature.banking.syncIntervalLabel
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class BankSyncScheduleTest {
     @Test
@@ -25,5 +28,12 @@ class BankSyncScheduleTest {
         assertEquals(15, customSyncInterval("5", 1))
         assertNull(customSyncInterval("0", 60))
         assertNull(customSyncInterval("", 60))
+    }
+
+    @Test
+    fun opensOnCustomOnlyForIntervalsThePresetsDoNotOffer() {
+        assertFalse(isCustomSyncInterval(0))
+        assertFalse(isCustomSyncInterval(1_440))
+        assertTrue(isCustomSyncInterval(90))
     }
 }
