@@ -44,6 +44,27 @@ class ActualImportTest {
     private fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
 
     @Test
+    fun aStatementRowMatchesATransactionTandemCreatedAndKeepsItsId() {
+        val (db, writer) = fixture()
+        val account = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+        val tandemId = "tandem:${UUID.randomUUID()}"
+        ActualTransactions(writer).addTransactions(
+            account,
+            listOf(mapOf("date" to "2026-10-02", "amount" to -5_555L, "payee_name" to "Bakery", "imported_id" to tandemId)),
+            runTransfers = false,
+        )
+        val import = ActualImport(writer)
+        val row = ImportRow(date = "2026-10-03", amount = -5_555, payeeName = "BAKERY 123", importedId = "bank-bakery-1")
+
+        assertEquals(listOf(ImportOutcome.UPDATE), import.reconcile(account, listOf(row)).outcomes)
+        assertEquals(
+            listOf(tandemId),
+            db.query("SELECT imported_id FROM v_transactions WHERE amount = -5555 AND account = ?", account).map { it["imported_id"] },
+        )
+        assertEquals(listOf(ImportOutcome.UNCHANGED), import.reconcile(account, listOf(row)).outcomes)
+    }
+
+    @Test
     fun rulesThatSplitOrDeleteANewRowApplyLikeAddingIt() {
         val (db, writer) = fixture()
         val account = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String

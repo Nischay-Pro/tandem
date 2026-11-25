@@ -169,7 +169,7 @@ class ActualImport(
         val date = ActualDates.toInt(row.date)
         return db
             .query(
-                "SELECT * FROM v_transactions WHERE ${if (strictIdChecking) "(imported_id IS NULL OR ? IS NULL) AND " else ""}date >= ? AND date <= ? AND amount = ? AND account = ?",
+                "SELECT * FROM v_transactions WHERE ${if (strictIdChecking) "(imported_id IS NULL OR imported_id LIKE '$TANDEM_ID_PREFIX%' OR ? IS NULL) AND " else ""}date >= ? AND date <= ? AND amount = ? AND account = ?",
                 *(
                     (if (strictIdChecking) listOf<Any?>(importedId) else emptyList()) +
                         listOf(
@@ -184,7 +184,7 @@ class ActualImport(
                     kotlin.math.abs(
                         (it["date"] as Number).toLong().let(ActualDates::dayNumber) - ActualDates.dayNumber(date),
                     )
-                }.thenBy { if (it["imported_id"] != null) 1 else 0 },
+                }.thenBy { if (bankId(it["imported_id"]) != null) 1 else 0 },
             )
     }
 
@@ -197,7 +197,7 @@ class ActualImport(
     ): ImportOutcome {
         val updates =
             linkedMapOf(
-                "imported_id" to trans["imported_id"],
+                "imported_id" to (match["imported_id"]?.takeIf { bankId(it) == null } ?: trans["imported_id"]),
                 "payee" to (match["payee"] ?: trans["payee"]),
                 "category" to (match["category"] ?: trans["category"]),
                 "imported_payee" to trans["imported_payee"],
@@ -300,3 +300,8 @@ class ActualImport(
         }
     }
 }
+
+/** Transactions Tandem creates keep its own id in `imported_id`, which is never a bank's id and must not be replaced. */
+private const val TANDEM_ID_PREFIX = "tandem:"
+
+private fun bankId(importedId: Any?): String? = (importedId as String?)?.takeUnless { it.startsWith(TANDEM_ID_PREFIX) }
