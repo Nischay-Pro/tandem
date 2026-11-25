@@ -17,9 +17,14 @@ import app.tandemforactual.ui.core.state.BudgetAssignmentKind
 import app.tandemforactual.ui.core.state.presentBudgetAssignment
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.money.PrivacyAmountText
+import app.tandemforactual.ui.design.rows.DividerLine
+import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Sparkles
 
 /** This month's money left to budget, or how far it is overbudgeted, at the top of Home; tapping opens the budget. */
 @Composable
@@ -28,6 +33,7 @@ internal fun HomeToBudgetCard(
     settings: BudgetDisplaySettings?,
     privacyModeEnabled: Boolean,
     onOpenBudget: () -> Unit,
+    onAutoAssign: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
     val assignment = presentBudgetAssignment(toBudgetMinor)
@@ -54,6 +60,10 @@ internal fun HomeToBudgetCard(
                     fractionDigits = settings?.currencyFractionDigits ?: 2,
                 )
             }
+        }
+        if (assignment.kind == BudgetAssignmentKind.TO_BUDGET && onAutoAssign != null) {
+            DividerLine()
+            ListRow("Auto-assign", "Share out what’s left to budget", leading = RowLeading.Icon(Lucide.Sparkles), onClick = onAutoAssign)
         }
     }
 }

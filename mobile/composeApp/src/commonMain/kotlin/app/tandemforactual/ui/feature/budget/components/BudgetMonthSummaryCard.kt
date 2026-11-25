@@ -43,6 +43,7 @@ import app.tandemforactual.ui.feature.budget.stillToSpend
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.WalletCards
 
 /** Collapsible month summary: amount to assign, held money and what can still be spent. */
@@ -58,6 +59,7 @@ internal fun BudgetMonthSummaryCard(
     billsDueMinor: Long,
     sectionSpacing: Dp,
     onOpenHold: () -> Unit,
+    onAutoAssign: () -> Unit = {},
 ) {
     val palette = tandemPalette
     val displayedAssignmentMinor = assignmentPresentation.amountMinor
@@ -95,6 +97,15 @@ internal fun BudgetMonthSummaryCard(
             SurfaceCard(Modifier.padding(top = sectionSpacing)) {
                 Column {
                     BudgetAssignmentRow(state, assignmentPresentation, readyToAssignColor, isLiveBudget)
+                    if (isLiveBudget && assignmentPresentation.kind == BudgetAssignmentKind.TO_BUDGET && !state.readOnlyMode) {
+                        DividerLine()
+                        ListRow(
+                            "Auto-assign",
+                            "Share out what’s left to budget",
+                            leading = RowLeading.Icon(Lucide.Sparkles),
+                            onClick = onAutoAssign,
+                        )
+                    }
                     if (isLiveBudget) {
                         DividerLine()
                         BudgetHoldRow(state, heldForNextMonthMinor, heldPending, onOpenHold)

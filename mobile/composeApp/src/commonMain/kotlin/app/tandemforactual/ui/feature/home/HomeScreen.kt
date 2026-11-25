@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -30,6 +33,7 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.planHome
 import app.tandemforactual.ui.core.state.uncategorized
+import app.tandemforactual.ui.core.ui.AutoAssignSheet
 import app.tandemforactual.ui.core.ui.DebtOverviewCard
 import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
 import app.tandemforactual.ui.core.ui.PlanningEditors
@@ -96,6 +100,7 @@ internal fun HomeScreen(
         }
     val editors = rememberPlanningEditors(state, mobileSession, month)
     val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
+    var autoAssigning by remember { mutableStateOf(false) }
     val settings = mobileSession.budgetDisplaySettings
     val money: @Composable (Long) -> Unit = { amount ->
         PrivacyAmountText(formatCurrency(amount, settings), state.privacyModeEnabled, color = tandemPalette.muted)
@@ -109,7 +114,13 @@ internal fun HomeScreen(
     ) {
         month?.toBudgetMinor?.let { toBudget ->
             item(key = "home-to-budget") {
-                HomeToBudgetCard(toBudget, settings, state.privacyModeEnabled) { navigation.selectTab(AppRoute.BUDGET) }
+                HomeToBudgetCard(
+                    toBudget,
+                    settings,
+                    state.privacyModeEnabled,
+                    onOpenBudget = { navigation.selectTab(AppRoute.BUDGET) },
+                    onAutoAssign = { autoAssigning = true }.takeUnless { state.readOnlyMode },
+                )
             }
         }
         if (mobileSession.syncError != null && !mobileSession.isSyncing) {
@@ -134,6 +145,7 @@ internal fun HomeScreen(
             homeEntryItems(plan.more, "home-more-", card)
         }
     }
+    AutoAssignSheet(autoAssigning, state, mobileSession, month) { autoAssigning = false }
 }
 
 /** One lazy item per Home entry, keyed by its module. */

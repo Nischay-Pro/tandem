@@ -29,6 +29,7 @@ internal class BudgetScreenDialogs(
     var showCreateCategoryGroup by showCreateCategoryGroup
     var categoryGroupNameDraft by categoryGroupNameDraft
     var newCategoryGroupIsIncome by newCategoryGroupIsIncome
+    var showAutoAssign by mutableStateOf(false)
 
     fun openCreateCategoryGroup() {
         categoryGroupNameDraft = ""
