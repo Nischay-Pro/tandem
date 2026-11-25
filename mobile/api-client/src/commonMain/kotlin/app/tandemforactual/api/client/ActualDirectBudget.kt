@@ -20,6 +20,7 @@ import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
@@ -141,6 +142,7 @@ class ActualDirectBudget private constructor(
         val accounts = locked { ActualBankSync(writer, { today }).linkedAccounts() }
         var changed = 0
         var firstFailure: ActualServerException? = null
+        var ruleFailure: UnsupportedRuleException? = null
         for (account in accounts) {
             val download =
                 try {
@@ -152,12 +154,17 @@ class ActualDirectBudget private constructor(
                     continue
                 }
             locked {
-                val result = ActualBankSync(writer, { today }).apply(account, download)
-                changed += result.added.size + result.updated.size
+                try {
+                    val result = ActualBankSync(writer, { today }).apply(account, download)
+                    changed += result.added.size + result.updated.size
+                } catch (error: UnsupportedRuleException) {
+                    ruleFailure = ruleFailure ?: error
+                }
             }
         }
         sync()
         firstFailure?.let { throw it }
+        ruleFailure?.let { throw it }
         return changed
     }
 
