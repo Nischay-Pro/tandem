@@ -104,6 +104,9 @@ internal class AppState {
     var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
     var transactionSplit by mutableStateOf<TransactionSplitDraft?>(null)
+
+    /** The split the edit form opened with, or null when the transaction being edited wasn't split. */
+    var selectedTransactionSplit by mutableStateOf<TransactionSplitDraft?>(null)
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
     var selectedTransactionNotes by mutableStateOf("")
     var selectedTransactionIsLive by mutableStateOf(false)

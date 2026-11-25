@@ -6,6 +6,7 @@ internal data class SplitLine(
     val amountText: String = "",
     val categoryId: String = "",
     val categoryName: String = "",
+    val id: String? = null,
 )
 
 /**
@@ -56,6 +57,15 @@ internal data class TransactionSplitDraft(
             pickingLineKey = null,
         )
 
+    /** The lines to save over an existing split: Actual's id for each line kept, a signed amount and its category. */
+    fun editedLines(
+        parse: (String) -> Long?,
+        income: Boolean,
+    ): List<SplitEditLine> =
+        lines.zip(signedLines(parse, income)).map { (line, signed) ->
+            SplitEditLine(line.id, signed.first, signed.second)
+        }
+
     /** The lines as signed amounts and categories for saving; spending lines are negative like the transaction. */
     fun signedLines(
         parse: (String) -> Long?,
@@ -75,3 +85,10 @@ internal data class TransactionSplitDraft(
         ) = TransactionSplitDraft(listOf(SplitLine(1, totalText, categoryId, categoryName), SplitLine(2)))
     }
 }
+
+/** One line of an edited split as it is sent: the existing line it replaces, if any, its signed amount and category. */
+internal data class SplitEditLine(
+    val id: String?,
+    val amountMinor: Long,
+    val categoryId: String,
+)

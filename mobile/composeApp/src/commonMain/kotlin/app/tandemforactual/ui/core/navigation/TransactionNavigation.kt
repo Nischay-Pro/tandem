@@ -40,5 +40,7 @@ internal fun openTransaction(
     state.selectedTransactionRecordId = transaction.recordId.orEmpty()
     state.selectedTransactionIsLive = isLive
     state.selectedTransactionIsTransfer = transaction.isTransfer
+    state.transactionSplit = null
+    state.selectedTransactionSplit = null
     if (navigate) navigation.open(AppRoute.TRANSACTION_DETAIL)
 }

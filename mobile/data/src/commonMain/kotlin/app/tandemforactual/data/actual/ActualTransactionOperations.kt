@@ -184,6 +184,7 @@ class ActualTransactionOperations(
             transactions.batchUpdate(deleted = listOf(actualId))
             return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
         }
+        if ("subtransactions" in patchJson) return resplit(operationId, transactionId, patchJson, base, latest, actualId)
         val patch = parsePatch(patchJson)
         if (!sameStructure(base, latest)) return conflict("same-field-edit", structuredConflicts(base, latest))
         if (base.value("isChild") == true) {
@@ -309,26 +310,121 @@ class ActualTransactionOperations(
 
     /**
      * A split's lines, each with an amount and a category and optional notes, or null when the transaction isn't split.
-     * The lines must add up to the transaction, as Actual requires.
+     * The lines must add up to the transaction, as Actual requires. An edit may name the existing lines it keeps by
+     * [allowIds], and may pass no lines to turn the split back into one transaction.
      */
     private fun parseSplit(
         patch: JsonObject,
         amount: Long,
+        allowIds: Boolean = false,
     ): List<Map<String, Any?>>? {
         val lines = patch["subtransactions"] ?: return null
+        val keys = if (allowIds) setOf("id", "amount", "category", "notes") else setOf("amount", "category", "notes")
         val parsed =
             (lines as? JsonArray)?.map { line ->
                 val fields = line as? JsonObject ?: throw InvalidTransactionRequestException("subtransactions must be objects")
-                val unsupported = fields.keys - setOf("amount", "category", "notes")
-                if (unsupported.isNotEmpty() || "amount" !in fields) {
+                if (!keys.containsAll(fields.keys) || "amount" !in fields) {
                     throw InvalidTransactionRequestException("each subtransaction needs an amount and may have a category and notes")
                 }
                 parseFields(fields)
             } ?: throw InvalidTransactionRequestException("subtransactions must be a list")
+        if (allowIds && parsed.isEmpty()) return parsed
         if (parsed.size < 2) throw InvalidTransactionRequestException("a split needs at least two lines")
         return parsed.takeIf { lines -> lines.sumOf { it["amount"] as Long } == amount }
             ?: throw InvalidTransactionRequestException("split lines must add up to the transaction amount")
     }
+
+    /**
+     * Replaces a transaction's split lines in one go: lines naming an existing line's id update it, the rest are added,
+     * and lines left out are removed. No lines turns the split back into one transaction in the patch's category. The
+     * parent's amount, payee, category and notes may change alongside; a split changed elsewhere since is a conflict.
+     */
+    private fun resplit(
+        operationId: String,
+        transactionId: String,
+        patchJson: JsonObject,
+        base: JsonObject,
+        latest: JsonObject,
+        actualId: String,
+    ): OperationOutcome {
+        fun outcome(
+            status: OperationStatus,
+            errorCode: String? = null,
+        ) = OperationOutcome(
+            operationId,
+            transactionId,
+            status,
+            errorCode = errorCode,
+            conflictType = "same-field-edit".takeIf { status == OperationStatus.CONFLICT },
+            conflictingFields = listOf("subtransactions").takeIf { status == OperationStatus.CONFLICT }.orEmpty(),
+        )
+        val others = JsonObject(patchJson - "subtransactions")
+        if (!SPLIT_EDIT_FIELDS.containsAll(others.keys)) {
+            throw InvalidTransactionRequestException("a split edit may only change amount, payee, category and notes")
+        }
+        if (!sameStructure(base, latest) || splitLines(base) != splitLines(latest)) return outcome(OperationStatus.CONFLICT)
+        if (latest.value("isChild") == true || latest.value("transferId") != null) {
+            return outcome(OperationStatus.REJECTED, "split-not-editable")
+        }
+        val requested = if (others.isEmpty()) emptyMap() else parseFields(others)
+        val (applicable, conflicts) = mergeEditFields(requested - "category", base, latest)
+        if (conflicts.isNotEmpty()) return outcome(OperationStatus.CONFLICT)
+        val amount = applicable["amount"] as Long? ?: latest.value("amount") as Long
+        val lines = checkNotNull(parseSplit(patchJson, amount, allowIds = true))
+        (validateUpdate(applicable, latest) ?: splitIssue(lines))?.let { return outcome(OperationStatus.REJECTED, it) }
+        val existing = latest.children().toSet()
+        if (lines.any { it["id"] != null && it["id"] !in existing }) return outcome(OperationStatus.REJECTED, "split-line-not-found")
+        val parent = LinkedHashMap(applicable).apply { put("id", actualId) }
+        if (lines.isEmpty()) {
+            parent["is_parent"] = false
+            parent["category"] = requested["category"]
+            (parent["category"] as String?)?.let(::categoryIssue)?.let { return outcome(OperationStatus.REJECTED, it) }
+            transactions.batchUpdate(updated = listOf(parent), deleted = existing.toList())
+            return outcome(OperationStatus.COMMITTED)
+        }
+        parent["is_parent"] = true
+        parent["category"] = null
+        val payee = if ("payee" in applicable) applicable["payee"] else latest.value("payee")
+        val added = mutableListOf<Map<String, Any?>>()
+        val updated = mutableListOf<Map<String, Any?>>(parent)
+        lines.forEachIndexed { index, line ->
+            val fields =
+                mapOf(
+                    "amount" to line["amount"],
+                    "category" to line["category"],
+                    "notes" to line["notes"],
+                    "sort_order" to -index.toLong(),
+                )
+            val id = line["id"] as String?
+            if (id != null) {
+                updated += fields + ("id" to id)
+            } else {
+                added +=
+                    fields +
+                    mapOf(
+                        "id" to writer.uuid(),
+                        "payee" to payee,
+                        "account" to latest.value("account"),
+                        "date" to latest.value("date"),
+                        "cleared" to latest.value("cleared"),
+                        "is_child" to true,
+                        "parent_id" to actualId,
+                    )
+            }
+        }
+        transactions.batchUpdate(
+            added = added,
+            updated = updated,
+            deleted = (existing - lines.mapNotNull { it["id"] as String? }.toSet()).toList(),
+        )
+        return outcome(OperationStatus.COMMITTED)
+    }
+
+    private fun splitLines(transaction: JsonObject): List<List<Any?>> =
+        (transaction["subtransactions"] as? JsonArray).orEmpty().map { line ->
+            val fields = line as JsonObject
+            listOf("id", "amount", "category", "notes").map { fields.value(it) }
+        }
 
     private fun splitIssue(lines: List<Map<String, Any?>>): String? =
         lines.firstNotNullOfOrNull {
@@ -441,6 +537,7 @@ class ActualTransactionOperations(
 }
 
 private val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled")
+private val SPLIT_EDIT_FIELDS = setOf("amount", "payee", "category", "notes")
 private val STRUCTURE = listOf("transferId", "isParent", "isChild", "parentId")
 private val TANDEM_ID = Regex("^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
 private val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}$")
