@@ -61,6 +61,17 @@ class ActualWriter(
         }
     }
 
+    /** The moment to stamp with, moved on a millisecond once its counter is full so a large batch can't overflow it. */
+    private fun nextMillis(): Long {
+        var pinned = moment ?: return now()
+        val last = clock.clock.timestamp
+        if (last.millis >= pinned && last.counter >= ActualTimestamp.MAX_COUNTER) {
+            pinned = last.millis + 1
+            moment = pinned
+        }
+        return pinned
+    }
+
     private fun send(
         table: String,
         id: String,
@@ -69,7 +80,7 @@ class ActualWriter(
         if (fields.isEmpty()) return
         val messages =
             fields.map { (column, value) ->
-                CrdtMessage(clock.clock.send(moment ?: now()), table, id, column, CrdtValue.of(value))
+                CrdtMessage(clock.clock.send(nextMillis()), table, id, column, CrdtValue.of(value))
             }
         store.apply(messages, clock, deferUnknownSchema = false)
     }
