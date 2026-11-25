@@ -55,4 +55,14 @@ class ReviewQueueTest {
         assertEquals(listOf("c"), queue.pending)
         assertTrue(queue.skipped.isEmpty())
     }
+
+    @Test
+    fun restoresAnUndoneTransactionToTheFront() {
+        val queue = ReviewQueue(listOf("a", "b", "c")).categorize("food").skip()
+        val restored = queue.restore("a")
+        assertEquals(listOf("a", "c"), restored.pending)
+        assertEquals(listOf("b"), restored.skipped)
+        assertEquals(listOf("b"), restored.history.map { it.transactionId })
+        assertEquals(listOf("b", "c"), queue.restore("b").pending)
+    }
 }

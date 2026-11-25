@@ -11,13 +11,12 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.HomeModule
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import com.composables.icons.lucide.Landmark
-import com.composables.icons.lucide.Lucide
 import org.jetbrains.compose.resources.stringResource
 
 /** The categories with the most spending this month. */
@@ -94,7 +93,16 @@ internal fun MonthSummaryCard(
     }
 }
 
-/** On-budget accounts and their total, or the net worth total alone. */
+/** The accounts the card lists and the total under them: every on-budget account, or for net worth just the total. */
+internal fun homeAccountRows(
+    module: HomeModule,
+    open: List<LiveAccountSummary>,
+): Pair<List<LiveAccountSummary>, Long> {
+    val shown = if (module == HomeModule.NET_WORTH) emptyList() else open.filterNot { it.offBudget }
+    return shown to (if (module == HomeModule.NET_WORTH) open else shown).sumOf { it.balanceMinor ?: 0 }
+}
+
+/** Every open on-budget account and their total, or the net worth total alone. */
 @Composable
 internal fun AccountsSummaryCard(
     module: HomeModule,
@@ -103,22 +111,14 @@ internal fun AccountsSummaryCard(
     open: List<LiveAccountSummary>,
     money: @Composable (Long) -> Unit,
 ) {
-    val shown =
-        when (module) {
-            HomeModule.NET_WORTH -> emptyList()
-            else -> open.filterNot { it.offBudget }.take(4)
-        }
-    val total = (if (module == HomeModule.NET_WORTH) open else shown).sumOf { it.balanceMinor ?: 0 }
+    val (shown, total) = homeAccountRows(module, open)
     SectionCard(stringResource(module.title()), stringResource(module.detail()), "Accounts", onClick = {
         navigation.selectTab(AppRoute.ACCOUNTS)
     }) {
         shown.forEach { account ->
             ListRow(
                 account.name,
-                leading =
-                    RowLeading.Icon(
-                        Lucide.Landmark,
-                    ),
+                leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
                 trailingContent = { money(account.balanceMinor ?: 0) },
                 onClick = {
                     state.selectedAccountId = account.id

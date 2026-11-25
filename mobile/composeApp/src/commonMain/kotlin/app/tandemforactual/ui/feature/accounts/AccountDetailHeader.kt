@@ -26,6 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.ui.AccountIconTile
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.Badge
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -59,7 +61,7 @@ internal fun AccountDetailHeader(
     description: String,
     balance: String,
     converted: String?,
-    showEdit: Boolean,
+    account: LiveAccountSummary?,
     editEnabled: Boolean,
     onEdit: () -> Unit,
 ) {
@@ -68,10 +70,11 @@ internal fun AccountDetailHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
+        AccountIconTile(accountName, account?.type)
         Box(Modifier.weight(1f)) {
             if (description.isNotBlank()) Badge(description, tandemPalette.muted)
         }
-        if (showEdit) {
+        if (account != null) {
             TandemIconButton(
                 Lucide.Pencil,
                 "Edit $accountName",

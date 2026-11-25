@@ -91,7 +91,7 @@ internal fun AccountDetailScreen(
         if (accountName == null) {
             Heading("Account details", "This account isn’t saved on this device.")
         } else {
-            AccountDetailHeader(accountName, description, balance, converted, liveAccount != null, !state.readOnlyMode) {
+            AccountDetailHeader(accountName, description, balance, converted, liveAccount, !state.readOnlyMode) {
                 navigation.open(AppRoute.ACCOUNT_OPTIONS)
             }
             AccountQuickActions(
