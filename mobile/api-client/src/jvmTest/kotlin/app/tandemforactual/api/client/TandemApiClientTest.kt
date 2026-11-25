@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.UnsupportedRuleException
+import app.tandemforactual.data.actual.createRule
 import app.tandemforactual.data.regions.eu.bank.enablebanking.EnableBanking
 import app.tandemforactual.data.regions.eu.bank.gocardless.GoCardless
 import app.tandemforactual.data.regions.global.bank.BankInstitution
@@ -12,12 +13,14 @@ import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -136,6 +139,48 @@ class TandemApiClientTest {
                         it.body["name"] == JsonPrimitive("Wallet")
                 }
             assertEquals(listOf(wallet), accounts.map { it.id })
+        }
+
+    @Test
+    fun aRuleBankSyncCantRunOnlyStopsTheAccountItMatches(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = client(server, TempBudgetFiles())
+            client.signInWithPassword(url, "test", "Phone")
+            val budget = client.budget("group")
+            budget.sync()
+            val checking =
+                budget
+                    .snapshot("2026-11-21")
+                    .records
+                    .first { it.type == "account" && it.body["name"] == JsonPrimitive("Checking") }
+                    .id
+            val savings = client.createBudgetAccount("group", "Savings", false, null, null)
+            client.edit("group") {
+                it.linkBankAccount(checking, "simpleFin", "SF-1", "org", "Credit Union")
+                it.linkBankAccount(savings, "simpleFin", "SF-2", "org", "Credit Union")
+                it.createRule(
+                    Json
+                        .parseToJsonElement(
+                            """{"conditionsOp":"and","conditions":[{"field":"account","op":"is","value":"$checking"}],""" +
+                                """"actions":[{"op":"set","field":"notes","value":"","options":{"template":"{{payee_name}}"}}]}""",
+                        ).jsonObject,
+                )
+            }
+            server.bankDownload =
+                """{"status":"ok","data":{"transactions":{"all":[{"transactionId":"sf-1","booked":true,""" +
+                """"date":"2026-11-19","payeeName":"Gym","transactionAmount":{"amount":"-45.50"}}]},"startingBalance":100000}}"""
+
+            assertFails { client.runBudgetBankSync("group", null) }
+
+            assertEquals(
+                setOf("sf-1"),
+                client.previewBudgetAccountStatementImport("group", savings, listOf("sf-1"), null).existingImportedIds,
+            )
+            assertEquals(
+                emptySet(),
+                client.previewBudgetAccountStatementImport("group", checking, listOf("sf-1"), null).existingImportedIds,
+            )
         }
 
     @Test
