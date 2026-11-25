@@ -74,6 +74,7 @@ internal class ShellNavigator(
             state.newTransactionInitialDate = state.transactionDate
             state.transactionType = "Spending"
             state.transactionNotes = ""
+            state.transactionSplit = null
             state.selectedTransactionRecordId = ""
             state.selectedTransactionAccountId = ""
             state.selectedTransactionPayeeId = ""

@@ -27,7 +27,9 @@ internal data class TransactionItem(
     val matched: Boolean? = null,
     val isTransfer: Boolean = false,
     val isSplitParent: Boolean = false,
+    val isPendingSplit: Boolean = false,
 )
 
 /** Transactions still waiting for a category: not transfers, and not split parents whose lines carry the categories. */
-internal fun List<TransactionItem>.uncategorized() = filter { it.categoryId == null && !it.isTransfer && !it.isSplitParent }
+internal fun List<TransactionItem>.uncategorized() =
+    filter { it.categoryId == null && !it.isTransfer && !it.isSplitParent && !it.isPendingSplit }

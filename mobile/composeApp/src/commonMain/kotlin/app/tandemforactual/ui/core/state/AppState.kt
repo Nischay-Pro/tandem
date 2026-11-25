@@ -103,6 +103,7 @@ internal class AppState {
     var newTransactionInitialDate by mutableStateOf("")
     var transactionType by mutableStateOf("Spending")
     var transactionNotes by mutableStateOf("")
+    var transactionSplit by mutableStateOf<TransactionSplitDraft?>(null)
     var selectedTransactionAmountMinor by mutableStateOf<Long?>(null)
     var selectedTransactionNotes by mutableStateOf("")
     var selectedTransactionIsLive by mutableStateOf(false)

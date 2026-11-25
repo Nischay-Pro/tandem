@@ -62,7 +62,8 @@ class ActualTransactions(
                 final["account"] = accountId
                 final["cleared"] = ruled["cleared"] ?: true
                 @Suppress("UNCHECKED_CAST")
-                val subtransactions = (final.remove("subtransactions") as List<Map<String, Any?>>?) ?: given
+                val ruledSplit = final.remove("subtransactions") as List<Map<String, Any?>>?
+                val subtransactions = given?.takeIf { it.isNotEmpty() } ?: ruledSplit
                 if (!subtransactions.isNullOrEmpty()) added += makeSplit(final, subtransactions) else added += final
             }
             val used = added.map { it["payee"] }.toSet()

@@ -65,7 +65,12 @@ internal fun NewTransactionForm(
                 onDismissKeypad = dismissKeypad,
             )
             if (state.transactionType != "Transfer") TransactionReceiptScanButton(receiptScan, dismissKeypad)
-            TransactionFormDetailsCard(state, navigation, pickers, liveAccounts.isOffBudget(state.newTransactionAccountId), dismissKeypad)
+            val offBudget = liveAccounts.isOffBudget(state.newTransactionAccountId)
+            val splitting = state.transactionSplit != null && state.transactionType != "Transfer" && !offBudget
+            TransactionFormDetailsCard(state, navigation, pickers, offBudget, dismissKeypad, showCategory = !splitting)
+            if (state.transactionType != "Transfer" && !offBudget) {
+                TransactionSplitCard(state, navigation, amountMinorUnits, dismissKeypad)
+            }
             TransactionNotesField(state) { focused ->
                 notesFocused = focused
                 if (focused) amountEntry.keypadVisible = false
@@ -136,10 +141,16 @@ private fun newTransactionTargetIsValid(
                 ?.recordBody()
                 ?.stringValue("transfer_acct")
         }
-    return if (state.transactionType == "Transfer") {
-        isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
-    } else {
-        offBudget || state.transactionCategory.isNotBlank()
+    val split = state.transactionSplit
+    return when {
+        state.transactionType == "Transfer" -> isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
+        offBudget -> true
+        split != null ->
+            split.isReady(
+                transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount)),
+                state::parseAmountMinorUnits,
+            )
+        else -> state.transactionCategory.isNotBlank()
     }
 }
 
