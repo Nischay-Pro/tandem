@@ -209,8 +209,67 @@ class ActualTransactionOperations(
             applicable,
             latest,
         )?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
-        transactions.batchUpdate(updated = listOf(applicable + ("id" to actualId)))
+        val lines = if (latest.value("isParent") == true) lineUpdates(actualId, applicable, latest) else emptyList()
+        transactions.batchUpdate(updated = listOf(applicable + ("id" to actualId)) + lines)
         return OperationOutcome(operationId, transactionId, OperationStatus.COMMITTED)
+    }
+
+    /** The new and changed rows for a resplit's [lines], with what each kept line takes from its parent. */
+    private fun splitLineWrites(
+        lines: List<Map<String, Any?>>,
+        parent: Map<String, Any?>,
+        applicable: Map<String, Any?>,
+        latest: JsonObject,
+        actualId: String,
+    ): Pair<List<Map<String, Any?>>, List<Map<String, Any?>>> {
+        val payee = if ("payee" in applicable) applicable["payee"] else latest.value("payee")
+        val following = lineUpdates(actualId, applicable, latest).associateBy { it["id"] }
+        val added = mutableListOf<Map<String, Any?>>()
+        val updated = mutableListOf<Map<String, Any?>>(parent)
+        lines.forEachIndexed { index, line ->
+            val fields =
+                mapOf(
+                    "amount" to line["amount"],
+                    "category" to line["category"],
+                    "notes" to line["notes"],
+                    "sort_order" to -index.toLong(),
+                )
+            val id = line["id"] as String?
+            if (id != null) {
+                updated += fields + following[id].orEmpty() + ("id" to id)
+            } else {
+                added +=
+                    fields +
+                    mapOf(
+                        "id" to writer.uuid(),
+                        "payee" to payee,
+                        "account" to latest.value("account"),
+                        "date" to latest.value("date"),
+                        "cleared" to latest.value("cleared"),
+                        "is_child" to true,
+                        "parent_id" to actualId,
+                    )
+            }
+        }
+        return added to updated
+    }
+
+    /**
+     * What a split's lines take from a change to their parent, as Actual does: its account, date and cleared and
+     * reconciled flags, and its payee on lines that shared the old one.
+     */
+    private fun lineUpdates(
+        parentId: String,
+        changes: Map<String, Any?>,
+        latest: JsonObject,
+    ): List<Map<String, Any?>> {
+        val inherited = changes.filterKeys { it in LINE_FIELDS }
+        if (inherited.isEmpty() && "payee" !in changes) return emptyList()
+        val oldPayee = latest.value("payee")
+        return db.query("SELECT id, payee FROM v_transactions WHERE parent_id = ?", parentId).map { line ->
+            val payee = if ("payee" in changes && line["payee"] == oldPayee) mapOf("payee" to changes["payee"]) else emptyMap()
+            inherited + payee + ("id" to line["id"])
+        }
     }
 
     /** The patch fields that still apply on top of [latest], and the fields edited on both sides. */
@@ -384,34 +443,7 @@ class ActualTransactionOperations(
         }
         parent["is_parent"] = true
         parent["category"] = null
-        val payee = if ("payee" in applicable) applicable["payee"] else latest.value("payee")
-        val added = mutableListOf<Map<String, Any?>>()
-        val updated = mutableListOf<Map<String, Any?>>(parent)
-        lines.forEachIndexed { index, line ->
-            val fields =
-                mapOf(
-                    "amount" to line["amount"],
-                    "category" to line["category"],
-                    "notes" to line["notes"],
-                    "sort_order" to -index.toLong(),
-                )
-            val id = line["id"] as String?
-            if (id != null) {
-                updated += fields + ("id" to id)
-            } else {
-                added +=
-                    fields +
-                    mapOf(
-                        "id" to writer.uuid(),
-                        "payee" to payee,
-                        "account" to latest.value("account"),
-                        "date" to latest.value("date"),
-                        "cleared" to latest.value("cleared"),
-                        "is_child" to true,
-                        "parent_id" to actualId,
-                    )
-            }
-        }
+        val (added, updated) = splitLineWrites(lines, parent, applicable, latest, actualId)
         transactions.batchUpdate(
             added = added,
             updated = updated,
@@ -538,6 +570,7 @@ class ActualTransactionOperations(
 
 private val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled")
 private val SPLIT_EDIT_FIELDS = setOf("amount", "payee", "category", "notes")
+private val LINE_FIELDS = setOf("account", "date", "cleared", "reconciled")
 private val STRUCTURE = listOf("transferId", "isParent", "isChild", "parentId")
 private val TANDEM_ID = Regex("^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
 private val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}$")
