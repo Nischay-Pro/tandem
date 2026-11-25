@@ -99,6 +99,7 @@ class MainActivity : FragmentActivity() {
 
     private val crashReports by lazy { AndroidCrashReports(this) }
     private val windowHinge = MutableStateFlow<WindowHinge?>(null)
+    private val signInBrowser = AndroidSignInBrowser(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen: SplashScreen = installSplashScreen()
@@ -162,9 +163,7 @@ class MainActivity : FragmentActivity() {
                     onOpenNotificationSettings = { openNotificationSettings() },
                     notificationPermissionEnabled = notificationPermissionEnabled,
                     onToggleNotificationPermission = { updateNotificationPermission(it) },
-                    onStartupComplete = {
-                        appStartupComplete = true
-                    },
+                    onStartupComplete = { appStartupComplete = true },
                     appResumeEvents = appResumeEvents,
                     appInForeground = appInForeground,
                     networkRestoredEvents = networkRestoredEvents,
@@ -176,6 +175,7 @@ class MainActivity : FragmentActivity() {
                     windowHinge = windowHinge,
                     screenshotScript = screenshotScript(),
                     postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
+                    openSignInPage = signInBrowser::open,
                 )
             }
         }
