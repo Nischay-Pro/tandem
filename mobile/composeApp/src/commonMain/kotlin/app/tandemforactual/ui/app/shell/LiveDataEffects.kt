@@ -4,6 +4,7 @@ package app.tandemforactual.ui.app.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.session.budget.accountClosedOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountNameOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
@@ -22,6 +23,7 @@ import app.tandemforactual.ui.core.state.buildLiveTransactionItems
 import app.tandemforactual.ui.core.state.liveAccountSummaries
 import app.tandemforactual.ui.core.state.liveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.liveScheduleSummaries
+import app.tandemforactual.ui.core.state.liveUncategorizedItems
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -82,6 +84,7 @@ internal fun LiveDataEffects(ctx: ShellContext) {
                 )
             }
     }
+    UncategorizedEffect(ctx, accountRecords)
     val accountNameOverrides = mobileSession.budgetQueue.accountNameOverridesFor(state.selectedBudgetId)
     val accountClosedOverrides = mobileSession.budgetQueue.accountClosedOverridesFor(state.selectedBudgetId)
     LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides) {
@@ -164,6 +167,26 @@ internal fun LiveBudgetMonthEffect(ctx: ShellContext) {
                     categoryCarryoverOverrides,
                     pendingBudgetMutations,
                 )
+            }
+    }
+}
+
+/** Builds every transaction waiting for a category, for Home's count, its review inbox and the review screen. */
+@Composable
+private fun UncategorizedEffect(
+    ctx: ShellContext,
+    accountRecords: List<BudgetRecordEntity>,
+) {
+    val mobileSession = ctx.mobileSession
+    val shell = ctx.shell
+    val records = mobileSession.uncategorizedTransactionRecords
+    val payeeRecords = mobileSession.payeeRecords
+    val categoryRecords = mobileSession.categoryRecords
+    val displaySettings = mobileSession.budgetDisplaySettings
+    LaunchedEffect(records, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher) {
+        shell.liveUncategorized =
+            withContext(Dispatchers.Default) {
+                liveUncategorizedItems(records, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher)
             }
     }
 }

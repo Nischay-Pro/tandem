@@ -74,6 +74,7 @@ internal class AppShellState(
     var liveSchedules by mutableStateOf(emptyList<LiveScheduleSummary>())
     var liveTransactions by mutableStateOf(emptyList<TransactionItem>())
     var liveActivityTransactions by mutableStateOf(emptyList<TransactionItem>())
+    var liveUncategorized by mutableStateOf(emptyList<TransactionItem>())
     var liveBudgetMonth by mutableStateOf<LiveBudgetMonthSummary?>(null)
 
     val appLockState = AppLockState(nowEpochMillis)

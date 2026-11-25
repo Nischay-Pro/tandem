@@ -233,6 +233,18 @@ interface BudgetRecordDao {
     @Query(
         """
     SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = 'transaction'
+      AND categoryId IS NULL AND isParent = 0 AND (transfer IS NULL OR transfer = 0)
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    fun observeUncategorizedTransactions(budgetId: String): Flow<List<BudgetRecordEntity>>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
     WHERE budgetId = :budgetId AND recordType = 'transaction' AND accountId = :accountId
       AND localDeleted = 0
       AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))

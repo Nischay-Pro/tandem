@@ -69,10 +69,11 @@ internal fun homeData(
     month: LiveBudgetMonthSummary?,
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
+    uncategorized: List<TransactionItem> = transactions.uncategorized(),
 ): HomeData {
     val open = accounts.filterNot { it.closed }
     return HomeData(
-        uncategorizedCount = transactions.uncategorized().size,
+        uncategorizedCount = uncategorized.size,
         hasSchedules = schedules.isNotEmpty(),
         hasBudget = month != null,
         hasAccounts = open.isNotEmpty(),
@@ -90,15 +91,10 @@ internal fun HomeScreen(
     month: LiveBudgetMonthSummary?,
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
+    uncategorized: List<TransactionItem> = emptyList(),
     onSyncNow: () -> Unit = {},
 ) {
-    val data =
-        remember(accounts, month, schedules, transactions, mobileSession.planning.savingsGoals) {
-            homeData(accounts, month, schedules, transactions).copy(
-                savingsGoalCount = mobileSession.planning.savingsGoals.size,
-                sharedBillCount = mobileSession.planning.sharedBills.size,
-            )
-        }
+    val data = rememberHomeData(mobileSession, accounts, month, schedules, transactions, uncategorized)
     val editors = rememberPlanningEditors(state, mobileSession, month)
     val experience = state.experience ?: ExperienceSettings()
     val plan = pinReviewInbox(planHome(experience, state.interfaceMode, data))
@@ -109,7 +105,20 @@ internal fun HomeScreen(
         PrivacyAmountText(formatCurrency(amount, settings), state.privacyModeEnabled, color = tandemPalette.muted)
     }
     val card: @Composable (HomeEntry) -> Unit = { entry ->
-        HomeEntryCard(entry, state, mobileSession, editors, navigation, accounts, month, schedules, transactions, settings, money)
+        HomeEntryCard(
+            entry,
+            state,
+            mobileSession,
+            editors,
+            navigation,
+            accounts,
+            month,
+            schedules,
+            transactions,
+            uncategorized,
+            settings,
+            money,
+        )
     }
     PageLazyColumn(
         isRefreshing = mobileSession.isSyncing,
@@ -127,7 +136,7 @@ internal fun HomeScreen(
             }
         }
         if (showReview) {
-            item(key = "home-review") { ReviewInboxCard(HomeModule.REVIEW_INBOX, state, navigation, transactions, money) }
+            item(key = "home-review") { ReviewInboxCard(HomeModule.REVIEW_INBOX, state, navigation, uncategorized, money) }
         }
         if (mobileSession.syncError != null && !mobileSession.isSyncing) {
             item(key = "home-sync") {
@@ -161,6 +170,22 @@ internal fun pinReviewInbox(plan: HomePlan): HomePlan =
         plan.more.filterNot { it.module == HomeModule.REVIEW_INBOX },
     )
 
+@Composable
+private fun rememberHomeData(
+    mobileSession: TandemMobileSession,
+    accounts: List<LiveAccountSummary>,
+    month: LiveBudgetMonthSummary?,
+    schedules: List<LiveScheduleSummary>,
+    transactions: List<TransactionItem>,
+    uncategorized: List<TransactionItem>,
+): HomeData =
+    remember(accounts, month, schedules, transactions, uncategorized, mobileSession.planning.savingsGoals) {
+        homeData(accounts, month, schedules, transactions, uncategorized).copy(
+            savingsGoalCount = mobileSession.planning.savingsGoals.size,
+            sharedBillCount = mobileSession.planning.sharedBills.size,
+        )
+    }
+
 /** One lazy item per Home entry, keyed by its module. */
 private fun LazyListScope.homeEntryItems(
     entries: List<HomeEntry>,
@@ -189,6 +214,7 @@ private fun HomeEntryCard(
     month: LiveBudgetMonthSummary?,
     schedules: List<LiveScheduleSummary>,
     transactions: List<TransactionItem>,
+    uncategorized: List<TransactionItem>,
     settings: BudgetDisplaySettings?,
     money: @Composable (Long) -> Unit,
 ) {
@@ -200,7 +226,7 @@ private fun HomeEntryCard(
     val open = accounts.filterNot { it.closed }
     when (module) {
         HomeModule.UPCOMING_BILLS -> LiveUpcomingBillsCard(state, navigation, schedules)
-        HomeModule.REVIEW_INBOX -> ReviewInboxCard(module, state, navigation, transactions, money)
+        HomeModule.REVIEW_INBOX -> ReviewInboxCard(module, state, navigation, uncategorized, money)
         HomeModule.CATEGORY_PROGRESS -> CategoryProgressCard(module, state, navigation, month, settings, money)
         HomeModule.MONTH_SUMMARY -> MonthSummaryCard(module, navigation, month, money)
         HomeModule.BUDGET_SUMMARY ->
@@ -270,10 +296,9 @@ private fun ReviewInboxCard(
     module: HomeModule,
     state: AppState,
     navigation: AppNavigation,
-    transactions: List<TransactionItem>,
+    items: List<TransactionItem>,
     money: @Composable (Long) -> Unit,
 ) {
-    val items = transactions.uncategorized()
     SectionCard(
         stringResource(module.title()),
         "${items.size} to review",

@@ -10,6 +10,26 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.compose.resources.DrawableResource
 
+/** Every transaction waiting for a category, leaving out off-budget accounts, which never carry one. */
+internal fun liveUncategorizedItems(
+    records: List<BudgetRecordEntity>,
+    accountRecords: List<BudgetRecordEntity>,
+    payeeRecords: List<BudgetRecordEntity>,
+    categoryRecords: List<BudgetRecordEntity>,
+    displaySettings: BudgetDisplaySettings?,
+    merchantIconMatcher: MerchantIconMatcherPack?,
+): List<TransactionItem> {
+    val offBudget = accountRecords.filter { it.recordBody().isOffBudgetAccount() }.map { it.recordId }.toSet()
+    return buildLiveTransactionItems(
+        records.filter { it.accountId !in offBudget },
+        accountRecords,
+        payeeRecords,
+        categoryRecords,
+        displaySettings,
+        merchantIconMatcher,
+    ).uncategorized()
+}
+
 internal fun buildLiveTransactionItems(
     records: List<BudgetRecordEntity>,
     accountRecords: List<BudgetRecordEntity>,

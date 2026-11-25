@@ -58,6 +58,9 @@ fun LocalBudgetRepository.observeRecentRecords(
     limit: Int,
 ): Flow<List<BudgetRecordEntity>> = database.budgetRecordDao().observeRecentVisible(budgetId, recordType, limit).stabilized()
 
+fun LocalBudgetRepository.observeUncategorizedTransactions(budgetId: String): Flow<List<BudgetRecordEntity>> =
+    database.budgetRecordDao().observeUncategorizedTransactions(budgetId).stabilized()
+
 fun LocalBudgetRepository.observeRecentTransactionsForAccount(
     budgetId: String,
     accountId: String,

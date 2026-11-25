@@ -7,10 +7,12 @@ import app.tandemforactual.data.store.findRecentRecords
 import app.tandemforactual.data.store.findRecordIds
 import app.tandemforactual.data.store.findRecords
 import app.tandemforactual.data.store.hasCachedSnapshot
+import app.tandemforactual.data.store.observeUncategorizedTransactions
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.data.store.readPendingWrites
 import app.tandemforactual.data.store.readSyncState
 import app.tandemforactual.ui.core.session.budget.payeeRecordsWithPendingCreates
+import kotlinx.coroutines.flow.first
 
 internal suspend fun TandemMobileSession.loadCachedBudgetRecords(budgetId: String) {
     val localRepository = repository ?: return
@@ -24,6 +26,7 @@ internal suspend fun TandemMobileSession.loadCachedBudgetRecords(budgetId: Strin
     budgetDisplaySettings = localRepository.readBudgetDisplaySettings(budgetId)
     localSyncState = localRepository.readSyncState(budgetId)
     transactionRecords = localRepository.findRecentRecords(budgetId, "transaction", limit = 50)
+    uncategorizedTransactionRecords = localRepository.observeUncategorizedTransactions(budgetId).first()
     cachedTransactionCount =
         localRepository.countVisibleRecords(budgetId, "transaction").coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     accountRecords = localRepository.findRecords(budgetId, "account")
@@ -50,6 +53,7 @@ internal fun TandemMobileSession.clearCachedBudgetRecords() {
     budgetDisplaySettingsBudgetId = null
     localSyncState = null
     transactionRecords = emptyList()
+    uncategorizedTransactionRecords = emptyList()
     activity.reset()
     activitySearchRecords = emptyList()
     activitySearchRecordsBudgetId = ""

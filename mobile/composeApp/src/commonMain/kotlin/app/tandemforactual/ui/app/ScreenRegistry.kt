@@ -66,6 +66,7 @@ internal class ScreenContext(
     val merchantIconCatalogLoadError: String?,
     val liveTransactions: List<TransactionItem>,
     val liveActivityTransactions: List<TransactionItem>,
+    val liveUncategorized: List<TransactionItem>,
     val onActivitySelectionTotalChanged: (Long?) -> Unit,
     val activitySortCache: ActivityTransactionSortCache,
     val liveAccounts: List<LiveAccountSummary>,

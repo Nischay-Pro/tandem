@@ -296,6 +296,9 @@ internal class TandemMobileSession(
     var transactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
         internal set
 
+    var uncategorizedTransactionRecords by mutableStateOf<List<BudgetRecordEntity>>(emptyList())
+        internal set
+
     var activitySearchRecords by mutableStateOf<List<SearchableBudgetTransaction>>(emptyList())
         internal set
 

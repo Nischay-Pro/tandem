@@ -11,7 +11,7 @@ internal val reviewScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
         AppRoute.REVIEW_TRANSACTIONS to
             @Composable { ctx ->
                 with(ctx) {
-                    TransactionReviewScreen(state, navigation, mobileSession, liveTransactions, liveBudgetMonth)
+                    TransactionReviewScreen(state, navigation, mobileSession, liveUncategorized, liveBudgetMonth)
                 }
             },
     )

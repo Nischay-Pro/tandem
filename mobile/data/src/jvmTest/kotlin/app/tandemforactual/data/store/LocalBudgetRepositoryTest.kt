@@ -3244,6 +3244,38 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun uncategorizedObservationCoversEveryTransactionButTransfersAndSplitParents() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val waiting = (1..60).map { transaction(recordId = "txn-$it", categoryId = null, date = "2026-0${1 + it % 9}-01") }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    waiting +
+                        listOf(
+                            transaction(recordId = "categorized"),
+                            transaction(
+                                recordId = "transfer",
+                                categoryId = null,
+                                bodyJson = "{\"id\":\"transfer\",\"transfer_id\":\"other\"}",
+                            ),
+                            transaction(recordId = "parent", categoryId = null, bodyJson = "{\"id\":\"parent\",\"is_parent\":true}"),
+                        ),
+                )
+
+                val observed = repository.observeUncategorizedTransactions(BUDGET).first()
+
+                assertEquals(waiting.map { it.recordId }.toSet(), observed.map { it.recordId }.toSet())
+                assertEquals(observed.sortedByDescending { it.recordDate }.map { it.recordDate }, observed.map { it.recordDate })
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun localRecordsSupportLiveObservationAndIndexedFilters() =
         runBlocking {
             val database = newDatabase()

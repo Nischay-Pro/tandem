@@ -55,13 +55,12 @@ internal fun TransactionReviewScreen(
     transactions: List<TransactionItem>,
     month: LiveBudgetMonthSummary?,
 ) {
-    val waiting = transactions.uncategorized().filter { it.recordId != null }
-    val byId = waiting.associateBy { it.recordId!! } + transactions.filter { it.recordId != null }.associateBy { it.recordId!! }
+    val waiting = remember(transactions) { transactions.uncategorized().filter { it.recordId != null } }
+    val seen = remember { HashMap<String, TransactionItem>() }
+    val byId: Map<String, TransactionItem> = remember(waiting) { seen.apply { waiting.forEach { put(it.recordId!!, it) } } }
     var queue by remember { mutableStateOf(ReviewQueue(waiting.mapNotNull { it.recordId })) }
-    LaunchedEffect(waiting.map { it.recordId }) {
-        val still = waiting.mapNotNull { it.recordId }.toSet()
-        val decided = queue.history.map { it.transactionId }.toSet()
-        queue = queue.keepOnly(still + decided)
+    LaunchedEffect(waiting) {
+        queue = queue.refresh(waiting.mapNotNull { it.recordId })
     }
     var picking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

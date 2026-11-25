@@ -39,6 +39,7 @@ internal val homeScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
                         liveBudgetMonth,
                         liveSchedules,
                         liveActivityTransactions,
+                        liveUncategorized,
                         onSyncNow,
                     )
                 }
