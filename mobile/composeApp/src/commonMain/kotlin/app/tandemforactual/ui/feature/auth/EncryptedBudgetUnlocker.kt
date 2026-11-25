@@ -153,11 +153,18 @@ internal class EncryptedBudgetUnlocker(
         fromBiometrics: Boolean,
     ) {
         when {
-            fromBiometrics || authenticator == null -> unlockWith(candidate)
+            fromBiometrics || authenticator == null -> {
+                state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, fromBiometrics, kept = null)
+                unlockWith(candidate)
+            }
             form.rememberWithBiometrics && canUseBiometrics ->
-                authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { unlockWith(candidate) }
+                authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { stored ->
+                    state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, false, kept = stored.takeIf { it })
+                    unlockWith(candidate)
+                }
             else -> {
                 authenticator.deleteSecret(secretId)
+                state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, false, kept = false)
                 unlockWith(candidate)
             }
         }
@@ -175,3 +182,13 @@ internal class EncryptedBudgetUnlocker(
         }
     }
 }
+
+/**
+ * The Biometric unlock setting after an encrypted budget unlocks: on when biometrics unlocked it or its password was
+ * just kept behind biometrics, off when the person chose not to keep it, otherwise unchanged.
+ */
+internal fun biometricUnlockAfterUnlock(
+    current: Boolean,
+    fromBiometrics: Boolean,
+    kept: Boolean?,
+): Boolean = fromBiometrics || (kept ?: current)
