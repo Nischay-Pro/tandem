@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import app.tandemforactual.ui.core.state.isBudgetSectionCollapsed
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.presentBudgetAssignment
 import app.tandemforactual.ui.core.state.toggleBudgetSection
+import app.tandemforactual.ui.core.ui.AutoAssignSheet
 import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
 import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -137,6 +139,7 @@ internal fun BudgetScreen(
                 mobileSession.feedback.clearBudgetActionMessage()
                 hold.open(readyToAssignMinor, holdFigures.heldForNextMonthMinor)
             },
+            onAutoAssign = { dialogs.showAutoAssign = true },
         )
         BudgetScreenDock(state, navigation, reorder, isLiveBudget, Modifier.align(Alignment.BottomEnd)) {
             mobileSession.feedback.clearBudgetActionMessage()
@@ -144,6 +147,7 @@ internal fun BudgetScreen(
         }
     }
     BudgetScreenSheets(dialogs, hold, state, mobileSession, groups, displayGroups, holdFigures, isLiveBudget, isTrackingBudget, scope)
+    AutoAssignSheet(dialogs.showAutoAssign, state, mobileSession, liveBudgetMonth) { dialogs.showAutoAssign = false }
 }
 
 private class BudgetListMonth(
@@ -213,6 +217,7 @@ private fun BudgetList(
     onCopyLastMonth: () -> Unit,
     onPlanTemplates: () -> Unit,
     onOpenHold: () -> Unit,
+    onAutoAssign: () -> Unit,
 ) {
     val state = context.state
     val mobileSession = context.mobileSession
@@ -256,7 +261,7 @@ private fun BudgetList(
         } else if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
             item(key = "budget-month-loading") { BudgetMonthLoadingCard(state.selectedMonth) }
         } else {
-            budgetMonthItems(context, month, pinnedCategories, sectionSpacing, onOpenHold)
+            budgetMonthItems(context, month, pinnedCategories, sectionSpacing, onOpenHold, onAutoAssign)
         }
         budgetActivityItems(context, liveTransactions, liveSchedules, recentTransactions, sectionSpacing)
     }
@@ -268,6 +273,7 @@ private fun LazyListScope.budgetMonthItems(
     pinnedCategories: List<Pair<LiveCategoryGroupSummary, LiveCategorySummary>>,
     sectionSpacing: Dp,
     onOpenHold: () -> Unit,
+    onAutoAssign: () -> Unit,
 ) {
     val state = context.state
     if (!context.isTrackingBudget) {
@@ -284,6 +290,7 @@ private fun LazyListScope.budgetMonthItems(
                 billsDueMinor = context.billsDueMinor,
                 sectionSpacing = sectionSpacing,
                 onOpenHold = onOpenHold,
+                onAutoAssign = onAutoAssign,
             )
         }
     }
