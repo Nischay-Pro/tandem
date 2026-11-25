@@ -247,9 +247,22 @@ class ActualDirectBudget private constructor(
             synchronize()
             runSchedules(today)
             val result = writer.atOneMoment { block(ActualBudgetEdits(writer, { today })) }
-            synchronize()
+            uploadWhenPossible()
             result
         }
+
+    /**
+     * Uploads an edit already saved to this device's copy. If that fails it stays in the local log and goes up with
+     * the next sync, so the edit still counts as made and isn't repeated by a retry.
+     */
+    private suspend fun uploadWhenPossible() {
+        try {
+            synchronize()
+        } catch (error: kotlin.coroutines.cancellation.CancellationException) {
+            throw error
+        } catch (_: Exception) {
+        }
+    }
 
     suspend fun submit(
         operationId: String,
