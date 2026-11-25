@@ -26,6 +26,24 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 class TandemApiClientTest {
+    @Test
+    fun todayIsTheDevicesLocalDateNotUtc() {
+        val original = java.util.TimeZone.getDefault()
+        try {
+            for (zone in listOf("Pacific/Kiritimati", "Pacific/Pago_Pago")) {
+                java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+                assertEquals(
+                    java.time.LocalDate
+                        .now(java.time.ZoneId.of(zone))
+                        .toString(),
+                    TandemApiClient().today(),
+                )
+            }
+        } finally {
+            java.util.TimeZone.setDefault(original)
+        }
+    }
+
     private val url = "https://budget.example"
 
     private fun client(
