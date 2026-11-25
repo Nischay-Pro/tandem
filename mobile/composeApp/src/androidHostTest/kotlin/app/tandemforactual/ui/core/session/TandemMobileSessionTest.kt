@@ -1622,6 +1622,23 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun aBudgetIsNeverSyncedIntoAnotherBudgetsEncryptedStore() =
+        runBlocking {
+            val main = newDatabase()
+            val vault = newDatabase()
+            try {
+                val session = TandemMobileSession(apiClient = TandemApiClient(), database = main, nowEpochMillis = { 0L })
+                session.bindEncryptedBudgetDatabase("encrypted-budget", vault)
+
+                assertNull(session.synchronize("plain-budget", null, true, null, false, false))
+                assertEquals("Open this budget again before syncing it.", session.syncError)
+            } finally {
+                main.close()
+                vault.close()
+            }
+        }
+
+    @Test
     fun readOnlyModeBlocksEveryTransactionWriteEntryPoint() =
         runBlocking {
             val session =
