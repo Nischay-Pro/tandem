@@ -34,6 +34,7 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
@@ -123,6 +124,7 @@ private fun TransactionRowContent(
                 when {
                     selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
                     activityStyle -> activityTransactionLeading(transaction)
+                    transaction.isTransfer -> RowLeading.Account(transaction.payee, fallback = Lucide.ArrowLeftRight)
                     else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
                 },
             options =
@@ -178,6 +180,7 @@ internal fun activityTransactionSubtitle(
 }
 
 internal fun activityTransactionLeading(transaction: TransactionItem): RowLeading {
+    if (transaction.isTransfer) return RowLeading.Account(transaction.payee, fallback = Lucide.ArrowLeftRight)
     val merchantIcon = transaction.merchantIcon
     if (merchantIcon != null) {
         return RowLeading.Merchant(merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
