@@ -178,88 +178,29 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
             @Composable { ctx ->
                 with(ctx) {
                     val isLiveBudget = state.selectedBudgetId.isNotBlank()
-                    val visibleMonthGroups =
-                        liveBudgetMonth
-                            ?.groups
-                            ?.filter { it.isIncome == (state.transactionType == "Income") }
-                            .orEmpty()
-                    val allLiveCategoryItems =
-                        if (!isLiveBudget) {
-                            emptyList()
-                        } else {
-                            val cachedCategories =
-                                mobileSession.categoryRecords
-                                    .mapNotNull { record ->
-                                        val body = record.recordBody()
-                                        if (body?.booleanValue("hidden") == true || body?.booleanValue("deleted") == true) {
-                                            null
-                                        } else {
-                                            record.recordName()?.let { SelectorItem(record.recordId, it) }
-                                        }
-                                    }
-                            val visibleCategories =
-                                visibleMonthGroups.flatMap { group ->
-                                    group.categories.map { category -> SelectorItem(category.id, category.name) }
-                                }
-                            (cachedCategories + visibleCategories).distinctBy(SelectorItem::id)
+                    val income = state.transactionType == "Income"
+                    val picker =
+                        remember(
+                            isLiveBudget,
+                            income,
+                            liveBudgetMonth,
+                            mobileSession.categoryRecords,
+                            mobileSession.categoryGroupRecords,
+                            liveTransactions,
+                        ) {
+                            categoryPickerModel(
+                                isLiveBudget,
+                                income,
+                                liveBudgetMonth,
+                                mobileSession.categoryRecords,
+                                mobileSession.categoryGroupRecords,
+                                liveTransactions,
+                            )
                         }
-                    val allCategoryItemsById = allLiveCategoryItems.associateBy(SelectorItem::id)
-                    val visibleCategoryIds = visibleMonthGroups.flatMap { it.categories }.mapTo(mutableSetOf()) { it.id }
-                    val visibleCategoryItems =
-                        if (liveBudgetMonth == null) allLiveCategoryItems else allLiveCategoryItems.filter { it.id in visibleCategoryIds }
-                    val values =
-                        if (!isLiveBudget) {
-                            listOf("Groceries", "Utilities", "Dining", "Rent", "Transport", "Personal")
-                                .map { SelectorItem(it, it) }
-                        } else {
-                            listOf(SelectorItem("", "Uncategorized")) + visibleCategoryItems
-                        }
-                    val recentCategoryItems =
-                        if (!isLiveBudget) {
-                            emptyList()
-                        } else {
-                            liveTransactions
-                                .mapNotNull { transaction -> transaction.categoryId?.let(allCategoryItemsById::get) }
-                                .distinctBy(SelectorItem::id)
-                                .take(5)
-                        }
-                    val categorySelectorGroups =
-                        if (!isLiveBudget) {
-                            emptyList()
-                        } else {
-                            buildList {
-                                if (recentCategoryItems.isNotEmpty()) add(SelectorGroup("Recent", recentCategoryItems))
-                                visibleMonthGroups.forEach { group ->
-                                    val groupItems =
-                                        group.categories
-                                            .mapNotNull { category ->
-                                                allCategoryItemsById[category.id] ?: SelectorItem(category.id, category.name)
-                                            }.sortedBy { it.label.lowercase() }
-                                    if (groupItems.isNotEmpty()) add(SelectorGroup(group.name, groupItems))
-                                }
-                                val groupedIds = flatMap { it.items }.mapTo(mutableSetOf()) { it.id }
-                                val ungrouped = visibleCategoryItems.filterNot { it.id in groupedIds }.sortedBy { it.label.lowercase() }
-                                if (ungrouped.isNotEmpty()) add(SelectorGroup("Other", ungrouped))
-                            }
-                        }
-                    val categoryGroups =
-                        if (!isLiveBudget) {
-                            emptyList()
-                        } else {
-                            val visibleGroups = visibleMonthGroups.map { SelectorItem(it.id, it.name) }
-                            if (visibleGroups.isNotEmpty()) {
-                                visibleGroups
-                            } else {
-                                mobileSession.categoryGroupRecords.mapNotNull { record ->
-                                    val body = record.recordBody() ?: return@mapNotNull null
-                                    val isIncomeGroup = body.booleanValue("is_income") ?: false
-                                    if (isIncomeGroup != (state.transactionType == "Income") || body.booleanValue("hidden") == true) {
-                                        return@mapNotNull null
-                                    }
-                                    record.recordName()?.let { SelectorItem(record.recordId, it) }
-                                }
-                            }
-                        }
+                    val visibleMonthGroups = picker.visibleMonthGroups
+                    val values = picker.values
+                    val categorySelectorGroups = picker.groups
+                    val categoryGroups = picker.categoryGroups
                     var createGroupId by rememberSaveable(state.selectedBudgetId, state.transactionType) { mutableStateOf("") }
                     var createGroupMenuExpanded by rememberSaveable(state.selectedBudgetId, state.transactionType) { mutableStateOf(false) }
                     LaunchedEffect(categoryGroups) {
