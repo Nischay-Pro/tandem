@@ -89,6 +89,7 @@ private fun EditTransactionDetails(
     onDismissKeypad: () -> Unit,
 ) {
     val splittable = state.transactionType != "Transfer" && !offBudget
+    if (splittable && state.transactionSplit == null) TransactionToolsRow { TransactionSplitButton(state, onDismissKeypad) }
     TransactionFormDetailsCard(
         state,
         navigation,

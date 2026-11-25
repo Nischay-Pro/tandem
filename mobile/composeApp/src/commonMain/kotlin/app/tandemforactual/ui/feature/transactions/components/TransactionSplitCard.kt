@@ -34,6 +34,8 @@ import app.tandemforactual.ui.core.state.SplitLine
 import app.tandemforactual.ui.core.state.TransactionSplitDraft
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
+import app.tandemforactual.ui.design.buttons.TandemActionButton
+import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
@@ -49,6 +51,19 @@ import com.composables.icons.lucide.Split
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.X
 
+/** Starts splitting the transaction, with the form's category and amount on the first line. */
+@Composable
+internal fun TransactionSplitButton(
+    state: AppState,
+    onDismissKeypad: () -> Unit,
+) {
+    TandemActionButton("Split transaction", TandemActionButtonTone.NEUTRAL, icon = Lucide.Split) {
+        onDismissKeypad()
+        state.transactionSplit =
+            TransactionSplitDraft.start(state.transactionAmount, state.newTransactionCategoryId, state.transactionCategory)
+    }
+}
+
 /**
  * Splits the transaction across categories: a line per category with its share of the amount, and how much is still
  * unassigned. Saving waits until the lines add up to the total, as Actual requires.
@@ -60,22 +75,7 @@ internal fun TransactionSplitCard(
     totalMinor: Long,
     onDismissKeypad: () -> Unit,
 ) {
-    val split = state.transactionSplit
-    if (split == null) {
-        SectionCard(title = "") {
-            ListRow(
-                "Split into categories",
-                "Share this amount across more than one category",
-                leading = RowLeading.Icon(Lucide.Split),
-                onClick = {
-                    onDismissKeypad()
-                    state.transactionSplit =
-                        TransactionSplitDraft.start(state.transactionAmount, state.newTransactionCategoryId, state.transactionCategory)
-                },
-            )
-        }
-        return
-    }
+    val split = state.transactionSplit ?: return
     val parse = state::parseAmountMinorUnits
     val remaining = split.remaining(totalMinor, parse)
     SectionCard(
