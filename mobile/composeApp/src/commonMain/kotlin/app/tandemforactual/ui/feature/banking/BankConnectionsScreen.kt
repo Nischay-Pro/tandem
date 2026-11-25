@@ -41,6 +41,7 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -76,6 +77,13 @@ internal fun BankConnectionsScreen(
         LinkedAccountsSection(state, mobileSession, linked, onManage = { ui.managing = it }, onSync = actions::syncLinkedAccounts)
         BankSyncScheduleCard(mobileSession.banking.syncIntervalMinutes, enabled = !state.readOnlyMode) { minutes ->
             scope.launch { mobileSession.banking.setSyncInterval(state.selectedBudgetId, minutes, password) }
+        }
+        SectionCard("Bank icons") {
+            ToggleRow(
+                "Download bank icons",
+                "Fetches each linked bank’s icon from its own website. Only the bank’s web address is sent.",
+                state.bankIconsEnabled,
+            ) { state.bankIconsEnabled = it }
         }
         ui.relinkFor?.let { target ->
             InlineMessage(

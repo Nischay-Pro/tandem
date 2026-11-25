@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui.app
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
@@ -15,10 +16,15 @@ import app.tandemforactual.ui.core.platform.IosSyncEventSource
 import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
 import app.tandemforactual.ui.core.platform.shareTextOnIos
+import app.tandemforactual.ui.core.session.LocalBankIcons
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.bankIcons
 import kotlin.native.Platform
 import kotlin.time.Clock
+import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
 import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
 
@@ -52,34 +58,42 @@ private fun createTandemViewController(
                 database.close()
             }
         }
-        TandemApp(
-            actualBudgetFiles =
-                remember {
-                    app.tandemforactual.data.database
-                        .IosActualBudgetFiles()
-                },
-            planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
-            deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
-            database = database,
-            deviceCredentialStore = remember { IosDeviceCredentialStore() },
-            deviceAuthenticator = remember { IosDeviceAuthenticator() },
-            encryptedBudgetVault = remember { IosEncryptedBudgetVault() },
-            crashReports = remember { IosCrashReports().also(IosCrashReports::install) },
-            onShareText = ::shareTextOnIos,
-            nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
-            allowInsecurePrivateNetwork = true,
-            onBackgroundSyncSettingsChanged =
-                onBackgroundSyncSettingsChanged?.let { changed ->
-                    { enabled, network, budgetId -> changed(enabled, network == SyncNetwork.WIFI, budgetId) }
-                },
-            onSystemAppearanceChanged = onSystemAppearanceChanged,
-            onRequestNotificationPermission = onRequestNotificationPermission,
-            onOpenNotificationSettings = onOpenNotificationSettings,
-            appResumeEvents = syncEvents.appResumeEvents,
-            networkRestoredEvents = syncEvents.networkRestoredEvents,
-            screenshotScript = remember { iosScreenshotScript() },
-            postLocalAlert = ::postIosLocalAlert,
-        )
+        val bankIcons =
+            remember {
+                NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
+                    .firstOrNull()
+                    ?.let { bankIcons("$it/bank-icons") { Clock.System.now().toEpochMilliseconds() } }
+            }
+        CompositionLocalProvider(LocalBankIcons provides bankIcons) {
+            TandemApp(
+                actualBudgetFiles =
+                    remember {
+                        app.tandemforactual.data.database
+                            .IosActualBudgetFiles()
+                    },
+                planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
+                deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
+                database = database,
+                deviceCredentialStore = remember { IosDeviceCredentialStore() },
+                deviceAuthenticator = remember { IosDeviceAuthenticator() },
+                encryptedBudgetVault = remember { IosEncryptedBudgetVault() },
+                crashReports = remember { IosCrashReports().also(IosCrashReports::install) },
+                onShareText = ::shareTextOnIos,
+                nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
+                allowInsecurePrivateNetwork = true,
+                onBackgroundSyncSettingsChanged =
+                    onBackgroundSyncSettingsChanged?.let { changed ->
+                        { enabled, network, budgetId -> changed(enabled, network == SyncNetwork.WIFI, budgetId) }
+                    },
+                onSystemAppearanceChanged = onSystemAppearanceChanged,
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onOpenNotificationSettings = onOpenNotificationSettings,
+                appResumeEvents = syncEvents.appResumeEvents,
+                networkRestoredEvents = syncEvents.networkRestoredEvents,
+                screenshotScript = remember { iosScreenshotScript() },
+                postLocalAlert = ::postIosLocalAlert,
+            )
+        }
     }
 }
 

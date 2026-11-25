@@ -196,4 +196,23 @@ class BankIconFetcherTest {
         assertNull(bankIconFormat(byteArrayOf(0xC3.toByte(), 0x28)))
         assertNull(bankIconFormat(byteArrayOf(0, 0, 1)))
     }
+
+    @Test
+    fun skipsFormatsTheCallerCannotShow(): Unit =
+        runBlocking {
+            val svg = "<svg/>".encodeToByteArray()
+            val routes: Map<String, MockRequestHandleScope.(HttpRequestData) -> HttpResponseData> =
+                mapOf(
+                    "https://bank.com/favicon.ico" to bytes(svg),
+                    "https://bank.com/" to bytes("<link rel=icon href=/i.png>".encodeToByteArray()),
+                    "https://bank.com/i.png" to bytes(png),
+                )
+            val rasterOnly =
+                BankIconFetcher(
+                    HttpClient(MockEngine { request -> routes.getValue(request.url.toString())(this, request) }),
+                    BankIconFormat.entries.toSet() - BankIconFormat.SVG,
+                )
+            assertEquals(BankIconFormat.PNG, rasterOnly.fetch("bank.com")!!.format)
+            assertEquals(BankIconFormat.SVG, Site(routes).fetcher.fetch("bank.com")!!.format)
+        }
 }

@@ -260,15 +260,13 @@ private fun LazyListScope.accountGroupItems(
         val movableAccountIds = group.accounts.map(AccountListItemUi::id)
         group.accounts.forEach { account ->
             item(key = "account:${account.id}") {
+                val link = mobileSession.banking.bankLinks.firstOrNull { it.id == account.id }
                 AccountListCard(
                     account = account,
                     movableAccountIds = movableAccountIds,
                     reorder = reorder,
-                    bankBadge =
-                        bankLinkBadge(
-                            mobileSession.banking.bankLinks.firstOrNull { it.id == account.id },
-                            mobileSession.nowEpochMillis(),
-                        ),
+                    bankBadge = bankLinkBadge(link, mobileSession.nowEpochMillis()),
+                    bankId = link?.bankId,
                     state = state,
                     navigation = navigation,
                     merchantIconMatcher = merchantIconMatcher,

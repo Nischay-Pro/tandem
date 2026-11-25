@@ -41,8 +41,10 @@ import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
+import app.tandemforactual.ui.core.session.LocalBankIcons
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.bankIcons
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -136,7 +138,9 @@ class MainActivity : FragmentActivity() {
                         AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE),
                     )
                 }
-            CompositionLocalProvider(LocalBackupSecrets provides backupSecrets) {
+            val bankIcons =
+                remember { bankIcons(applicationContext.filesDir.resolve("bank-icons").path) { System.currentTimeMillis() } }
+            CompositionLocalProvider(LocalBackupSecrets provides backupSecrets, LocalBankIcons provides bankIcons) {
                 TandemApp(
                     actualBudgetFiles =
                         remember {

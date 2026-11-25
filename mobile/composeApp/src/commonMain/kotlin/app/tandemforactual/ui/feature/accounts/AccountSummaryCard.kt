@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -53,6 +54,7 @@ import org.jetbrains.compose.resources.painterResource
 internal fun AccountSummaryCard(
     account: AccountListItemUi,
     merchantArtwork: DrawableResource?,
+    bankIcon: Painter? = null,
     privacyModeEnabled: Boolean = false,
     fractionDigits: Int = 2,
     modifier: Modifier = Modifier,
@@ -96,7 +98,7 @@ internal fun AccountSummaryCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
         ) {
-            AccountSummaryIcon(account, merchantArtwork, bankBadge)
+            AccountSummaryIcon(account, bankIcon ?: merchantArtwork?.let { painterResource(it) }, bankBadge)
             AccountSummaryText(
                 account = account,
                 showBalance = stackBalance && !isReordering,
@@ -139,7 +141,7 @@ private fun accountBalanceColor(account: AccountListItemUi): Color {
 @Composable
 private fun AccountSummaryIcon(
     account: AccountListItemUi,
-    merchantArtwork: DrawableResource?,
+    artwork: Painter?,
     bankBadge: RowBadge?,
 ) {
     val palette = tandemPalette
@@ -151,9 +153,9 @@ private fun AccountSummaryIcon(
                 .background(if (account.closed) palette.surface else palette.raised),
             contentAlignment = Alignment.Center,
         ) {
-            if (merchantArtwork != null) {
+            if (artwork != null) {
                 Image(
-                    painterResource(merchantArtwork),
+                    artwork,
                     contentDescription = null,
                     modifier =
                         Modifier

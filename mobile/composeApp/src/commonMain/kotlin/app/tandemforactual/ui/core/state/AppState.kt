@@ -116,6 +116,9 @@ internal class AppState {
     /** The sort the accounts are in right now, or null after they were arranged by hand. */
     var accountsActiveSort by mutableStateOf<AccountSort?>(null)
     var privacyModeEnabled by mutableStateOf(false)
+
+    /** Whether linked banks' icons are downloaded from their own websites. */
+    var bankIconsEnabled by mutableStateOf(true)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)
@@ -248,6 +251,7 @@ internal class AppState {
             "homeLayout" to homeLayout,
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
+            "bankIconsEnabled" to bankIconsEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
             "menuPins" to menuPins,
@@ -307,6 +311,7 @@ internal class AppState {
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
+        bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         menuPins = saved["menuPins"] ?: menuPins
