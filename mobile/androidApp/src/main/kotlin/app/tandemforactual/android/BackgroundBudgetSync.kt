@@ -28,6 +28,7 @@ import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.overspendingAlert
 import app.tandemforactual.data.store.readBudgetDisplaySettings
+import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.SyncNetwork
@@ -193,6 +194,10 @@ class BackgroundBudgetSyncWorker(
             largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let {
                 BudgetSystemNotifications.post(applicationContext, it)
             }
+        }
+        val uncategorized = uncategorizedAlert(repository, store, budgetId, today, policy, format)
+        if (uncategorized != null && policy.allows(AlertKind.UNCATEGORIZED, minute)) {
+            BudgetSystemNotifications.post(applicationContext, uncategorized)
         }
     }
 

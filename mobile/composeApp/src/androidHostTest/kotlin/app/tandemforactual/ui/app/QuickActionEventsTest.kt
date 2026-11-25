@@ -52,6 +52,8 @@ class QuickActionEventsTest {
         assertEquals(QuickAction.BUDGET_CHECKUP, QuickActionEvents.destinationRequested.value)
         assertEquals(QuickAction.BUDGET_CHECKUP, QuickActionEvents.consumeDestination())
         assertNull(QuickActionEvents.consumeDestination())
+        assertTrue(QuickActionEvents.openLink("app.tandemforactual://open/review-transactions"))
+        assertEquals(QuickAction.REVIEW_TRANSACTIONS, QuickActionEvents.consumeDestination())
         assertFalse(QuickActionEvents.addTransactionRequested.value)
     }
 

@@ -11,6 +11,7 @@ enum class QuickAction(
     SCAN_RECEIPT("scan-receipt"),
     BUDGET_CHECKUP("budget-checkup"),
     ACCOUNTS("accounts"),
+    REVIEW_TRANSACTIONS("review-transactions"),
     ;
 
     val link: String get() = "$QUICK_ACTION_SCHEME://$QUICK_ACTION_HOST/$slug"
@@ -77,7 +78,7 @@ object QuickActionEvents {
                 receiptScan = true
                 mutableAddTransaction.value = true
             }
-            QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS -> mutableDestination.value = action
+            QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> mutableDestination.value = action
         }
     }
 
