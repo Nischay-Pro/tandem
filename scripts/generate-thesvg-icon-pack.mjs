@@ -21,6 +21,7 @@ const repositoryDirectory = resolve(
 const requiredPackages = [
   "@thesvg/icons/target",
   "@rei/cedar-icons/package.json",
+  "@jsquash/webp/encode.js",
   "@resvg/resvg-js",
 ];
 const missingPackages = requiredPackages.filter((specifier) => {
@@ -39,6 +40,13 @@ if (missingPackages.length > 0) {
   );
 }
 const { Resvg } = await import("@resvg/resvg-js");
+const { default: encodeWebp, init: initWebpEncoder } =
+  await import("@jsquash/webp/encode.js");
+await initWebpEncoder(
+  await globalThis.WebAssembly.compile(
+    await readFile(require.resolve("@jsquash/webp/codec/enc/webp_enc.wasm")),
+  ),
+);
 const outputArgument = process.argv.indexOf("--output");
 const outputDirectory = resolve(
   outputArgument === -1
@@ -237,6 +245,19 @@ function clipTandemMarkToSquircle(svg) {
   return `${svg.slice(0, openTagEnd)}<defs><clipPath id="app-mark-mask"><path d="${tandemSquirclePath}"/></clipPath></defs><g clip-path="url(#app-mark-mask)">${svg.slice(openTagEnd, closeTagStart)}</g>${svg.slice(closeTagStart)}`;
 }
 
+// resvg renders premultiplied RGBA, while WebP stores straight alpha.
+function unpremultiply(pixels) {
+  const data = new Uint8ClampedArray(pixels);
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3];
+    if (alpha === 0 || alpha === 255) continue;
+    for (let channel = 0; channel < 3; channel += 1) {
+      data[index + channel] = Math.round((data[index + channel] * 255) / alpha);
+    }
+  }
+  return data;
+}
+
 for (const [source, resource] of [
   ["tandem-mark.svg", "tandem_mark.png"],
   ["tandem-mark-light.svg", "tandem_mark_light.png"],
@@ -256,12 +277,20 @@ for (const [source, resource] of [
 
 for (const icon of icons) {
   try {
-    const rendered = new Resvg(icon.svg, {
+    const image = new Resvg(icon.svg, {
       fitTo: { mode: "width", value: imageSize },
-    })
-      .render()
-      .asPng();
-    const outputPath = join(drawableDirectory, `${icon.resourceName}.png`);
+    }).render();
+    const rendered = new Uint8Array(
+      await encodeWebp(
+        {
+          data: unpremultiply(image.pixels),
+          width: image.width,
+          height: image.height,
+        },
+        { lossless: 1 },
+      ),
+    );
+    const outputPath = join(drawableDirectory, `${icon.resourceName}.webp`);
     await writeFile(outputPath, rendered);
     outputBytes += rendered.byteLength;
     const record = { ...icon };
@@ -367,7 +396,7 @@ log(
       skippedWithoutData,
       skippedUnlicensed,
       renderFailures: failures,
-      generatedPngBytes: outputBytes,
+      generatedImageBytes: outputBytes,
       generatedResourceBytes: await directorySize(outputDirectory),
       licenseFamilies,
       uniqueOpenSourceLicenses: licenseSummary.filter(
