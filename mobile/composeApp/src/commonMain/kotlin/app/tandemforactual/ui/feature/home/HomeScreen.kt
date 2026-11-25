@@ -107,6 +107,11 @@ internal fun HomeScreen(
         isRefreshing = mobileSession.isSyncing,
         onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
     ) {
+        month?.toBudgetMinor?.let { toBudget ->
+            item(key = "home-to-budget") {
+                HomeToBudgetCard(toBudget, settings, state.privacyModeEnabled) { navigation.selectTab(AppRoute.BUDGET) }
+            }
+        }
         if (mobileSession.syncError != null && !mobileSession.isSyncing) {
             item(key = "home-sync") {
                 SyncNoticeCard(Lucide.CircleAlert, tandemPalette.warning, "Needs attention", mobileSession.syncError.orEmpty(), {

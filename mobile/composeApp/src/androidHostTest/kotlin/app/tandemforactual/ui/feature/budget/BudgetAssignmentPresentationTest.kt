@@ -1,8 +1,11 @@
 package app.tandemforactual.ui.feature.budget
 
+import app.tandemforactual.ui.core.state.BudgetAssignmentKind
+import app.tandemforactual.ui.core.state.BudgetAssignmentPresentation
 import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.categoryCountLabel
 import app.tandemforactual.ui.core.state.mainCloudStatusLabel
+import app.tandemforactual.ui.core.state.presentBudgetAssignment
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

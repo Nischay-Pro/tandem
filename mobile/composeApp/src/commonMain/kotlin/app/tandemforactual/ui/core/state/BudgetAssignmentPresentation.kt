@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.budget
+package app.tandemforactual.ui.core.state
 
 internal enum class BudgetAssignmentKind {
     TO_BUDGET,
