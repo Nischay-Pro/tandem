@@ -3,6 +3,7 @@ package app.tandemforactual.ui
 import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.feature.accounts.activeAccountSort
+import app.tandemforactual.ui.feature.accounts.actualAccountOrder
 import app.tandemforactual.ui.feature.accounts.sortAccountsForBudget
 import app.tandemforactual.ui.feature.accounts.sortAccountsWithinGroups
 import kotlin.test.Test
@@ -56,5 +57,18 @@ class AccountSortTest {
         val saved = sortAccountsForBudget(budget, AccountSort.NAME_ASCENDING)
         assertEquals(listOf("Alpha savings", "Amex", "Zeta checking", "Brokerage", "Old card"), saved.map { it.name })
         assertEquals(AccountSort.NAME_ASCENDING, activeAccountSort(sortAccountsWithinGroups(saved, AccountSort.NAME_ASCENDING)))
+    }
+
+    @Test
+    fun sortsFromActualsOwnOrderNotTheGroupedList() {
+        val budget =
+            listOf(
+                account("Visa", 0, "credit").copy(sortOrder = 1.0),
+                account("Checking", 0, "checking").copy(sortOrder = 2.0),
+                account("Amex", 0, "credit").copy(sortOrder = 3.0),
+                account("Brokerage", 0, "investment").copy(sortOrder = 2.0),
+                account("New", 0, "savings"),
+            )
+        assertEquals(listOf("Visa", "Brokerage", "Checking", "Amex", "New"), actualAccountOrder(budget))
     }
 }

@@ -142,6 +142,10 @@ internal fun sortAccountsWithinGroups(
             .then(sort.comparator()),
     )
 
+/** The accounts in the order Actual keeps them, by `sort_order` then name, which a sort is applied on top of. */
+internal fun actualAccountOrder(accounts: List<LiveAccountSummary>): List<String> =
+    accounts.sortedWith(compareBy({ it.sortOrder ?: Double.MAX_VALUE }, { it.name })).map { it.id }
+
 /**
  * The order to save for [sort]: sorted within Actual's own sections, on budget, off budget and closed, so Actual's
  * sidebar reads sorted too. Tandem's type groups follow the saved order, so they stay sorted as well.

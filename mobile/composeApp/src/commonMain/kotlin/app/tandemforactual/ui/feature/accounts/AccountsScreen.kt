@@ -351,7 +351,8 @@ internal class AccountReorder(
         ordered: List<LiveAccountSummary>,
     ) {
         val next = sortAccountsForBudget(ordered, sort).map { it.id }
-        if (next.isEmpty() || next == ordered.map { it.id }) return
+        val current = actualAccountOrder(ordered)
+        if (next.isEmpty() || next == current) return
         scope.launch {
             mobileSession.budgetQueue.clearBudgetReorderMessage(state.selectedBudgetId, "accounts")
             mobileSession.budgetEdits.moveBudgetAccount(
@@ -360,7 +361,7 @@ internal class AccountReorder(
                 next.getOrNull(1),
                 state.encryptedPassword.takeIf(String::isNotBlank),
                 next,
-                baseOrder = serverOrder,
+                baseOrder = current,
             )
         }
     }
