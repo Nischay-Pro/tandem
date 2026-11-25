@@ -55,7 +55,8 @@ internal class EditTransactionBaseline(
             state.newTransactionAccountId != state.selectedTransactionAccountId ||
             state.newTransactionPayeeId != state.selectedTransactionPayeeId ||
             state.newTransactionCategoryId != state.selectedTransactionCategoryId ||
-            state.transactionDate != state.selectedTransactionDate
+            state.transactionDate != state.selectedTransactionDate ||
+            state.transactionSplit != state.selectedTransactionSplit
     }
 
     fun markSaved(state: AppState) {
@@ -65,6 +66,50 @@ internal class EditTransactionBaseline(
         savedFeedback = true
     }
 }
+
+/** Shows the saved tick briefly after a save. */
+@Composable
+private fun SavedFeedbackTimer(baseline: EditTransactionBaseline) {
+    LaunchedEffect(baseline.savedFeedback) {
+        if (baseline.savedFeedback) {
+            delay(900)
+            baseline.savedFeedback = false
+        }
+    }
+}
+
+/** The payee, category or split, account and date of the transaction being edited. */
+@Composable
+private fun EditTransactionDetails(
+    state: AppState,
+    navigation: AppNavigation,
+    pickers: TransactionFormPickerState,
+    offBudget: Boolean,
+    amountMinorUnits: Long,
+    onDismissKeypad: () -> Unit,
+) {
+    val splittable = state.transactionType != "Transfer" && !offBudget
+    TransactionFormDetailsCard(
+        state,
+        navigation,
+        pickers,
+        offBudget,
+        onDismissKeypad,
+        showCategory =
+            !splittable || state.transactionSplit == null,
+    )
+    if (splittable) TransactionSplitCard(state, navigation, amountMinorUnits, onDismissKeypad)
+}
+
+/** A positive amount, and a split, if there is one, that adds up to it. */
+private fun editAmountIsValid(
+    state: AppState,
+    parsedAmount: Long?,
+    amountMinorUnits: Long,
+): Boolean =
+    parsedAmount != null &&
+        parsedAmount > 0 &&
+        state.transactionSplit?.isReady(amountMinorUnits, state::parseAmountMinorUnits) != false
 
 /** The form for editing the selected transaction, with the amount keypad, delete and save. */
 @Composable
@@ -90,12 +135,7 @@ internal fun EditTransactionForm(
         onSaveTransaction(confirmedFutureDate) { saved -> if (saved) baseline.markSaved(state) }
     }
     val hasChanges = baseline.hasChanges(state, parsedAmount)
-    LaunchedEffect(baseline.savedFeedback) {
-        if (baseline.savedFeedback) {
-            delay(900)
-            baseline.savedFeedback = false
-        }
-    }
+    SavedFeedbackTimer(baseline)
     Column(Modifier.fillMaxSize().imePadding()) {
         TransactionFormPage(amountEntry.keypadVisible || notesFocused, dismissKeypad) {
             TransactionAmountHeader(
@@ -108,7 +148,14 @@ internal fun EditTransactionForm(
                 onShowKeypad = { amountEntry.keypadVisible = true },
                 onDismissKeypad = dismissKeypad,
             )
-            TransactionFormDetailsCard(state, navigation, pickers, liveAccounts.isOffBudget(state.newTransactionAccountId), dismissKeypad)
+            EditTransactionDetails(
+                state,
+                navigation,
+                pickers,
+                liveAccounts.isOffBudget(state.newTransactionAccountId),
+                amountMinorUnits,
+                dismissKeypad,
+            )
             TransactionNotesField(state) { focused ->
                 notesFocused = focused
                 if (focused) amountEntry.keypadVisible = false
@@ -119,7 +166,7 @@ internal fun EditTransactionForm(
             deleteEnabled = !mobileSession.isSavingTransaction,
             saveVisible = hasChanges || baseline.savedFeedback,
             compactSave = compactSave || baseline.savedFeedback,
-            saveEnabled = hasChanges && !mobileSession.isSavingTransaction && parsedAmount != null && parsedAmount > 0,
+            saveEnabled = hasChanges && !mobileSession.isSavingTransaction && editAmountIsValid(state, parsedAmount, amountMinorUnits),
             saved = baseline.savedFeedback,
             onDelete = {
                 dismissKeypad()

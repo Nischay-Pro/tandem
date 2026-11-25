@@ -28,14 +28,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.displayTransactionDate
+import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.LoadedSplit
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.categoryIconFor
+import app.tandemforactual.ui.core.state.findSplit
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.loadSplitForEdit
+import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.ui.ReimbursementCard
 import app.tandemforactual.ui.core.ui.TransactionSyncNotice
 import app.tandemforactual.ui.core.ui.transactionSyncOperations
@@ -100,8 +105,14 @@ internal fun TransactionDetailScreen(
             syncOperation?.let { TransactionSyncNotice(it, state, navigation) }
         }
         TransactionDetailFields(state)
+        val split = rememberTransactionSplit(state, mobileSession)
+        split?.let { TransactionSplitParts(state, it) }
         ReimbursementCard(state, mobileSession, navigation)
-        PrimaryButton("Edit transaction", enabled = !state.readOnlyMode) {
+        PrimaryButton(if (split != null) "Edit split" else "Edit transaction", enabled = !state.readOnlyMode) {
+            split?.let {
+                val payee = mobileSession.payeeRecords.firstOrNull { record -> record.recordId == it.parent.payeeId }?.recordName()
+                loadSplitForEdit(state, it, payee.orEmpty()) { minor -> formatAmount(minor, state.budgetDisplaySettings) }
+            }
             navigation.open(AppRoute.EDIT_TRANSACTION)
         }
         state.addAgainDraft()?.let { draft ->
@@ -206,5 +217,36 @@ private fun TransactionDetailFields(state: AppState) {
             leading = RowLeading.Icon(Lucide.NotepadText),
             trailing = state.transactionNotes.ifBlank { "No notes" },
         )
+    }
+}
+
+/** The whole split the shown transaction belongs to, if it belongs to one. */
+@Composable
+private fun rememberTransactionSplit(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): LoadedSplit? =
+    remember(state.selectedTransactionRecordId, mobileSession.transactionRecords, mobileSession.categoryRecords) {
+        val categories = mobileSession.categoryRecords.associate { it.recordId to it.recordName() }
+        findSplit(mobileSession.transactionRecords, state.selectedTransactionRecordId, { categories[it] }) {
+            formatAmount(it, state.budgetDisplaySettings)
+        }
+    }
+
+/** Each part of the split with its category and amount. */
+@Composable
+private fun TransactionSplitParts(
+    state: AppState,
+    split: LoadedSplit,
+) {
+    SectionCard("Split", "${split.lines.size} categories") {
+        split.lines.forEachIndexed { index, line ->
+            if (index > 0) DividerLine()
+            ListRow(
+                line.categoryName.ifBlank { "Uncategorized" },
+                trailing = line.amountText,
+                leading = RowLeading.Icon(state.categoryIconFor(line.categoryId, line.categoryName)),
+            )
+        }
     }
 }

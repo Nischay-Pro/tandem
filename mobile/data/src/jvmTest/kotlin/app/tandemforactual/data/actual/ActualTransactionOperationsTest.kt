@@ -253,6 +253,156 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun editsAWholeSplitAndTurnsItBackIntoOneTransaction() =
+        withBudget {
+            val other =
+                db
+                    .first(
+                        "SELECT id FROM categories WHERE tombstone = 0 AND hidden = 0 AND id != ? ORDER BY name",
+                        groceries,
+                    )?.get("id") as String
+
+            fun line(
+                amount: Long,
+                category: String?,
+                id: String? = null,
+            ) = buildJsonObject {
+                if (id != null) put("id", id)
+                put("amount", amount)
+                put("category", category)
+            }
+
+            fun lines(vararg lines: JsonObject) = JsonArray(lines.toList())
+
+            fun JsonObject.lineIds() = (this["subtransactions"] as JsonArray).map { ((it as JsonObject)["id"] as JsonPrimitive).content }
+
+            fun JsonObject.lineAmounts() =
+                (this["subtransactions"] as JsonArray).map {
+                    ((it as JsonObject)["amount"] as JsonPrimitive).content.toLong()
+                }
+            val id = id()
+            submit(id, "create", JsonObject(create + ("subtransactions" to lines(line(-1000, groceries), line(-234, other)))))
+            val base = checkNotNull(reader.transaction(id))
+            val (first, second) = base.lineIds()
+
+            val edit =
+                buildJsonObject {
+                    put("subtransactions", lines(line(-600, other, first), line(-500, groceries), line(-500, other)))
+                    put("amount", -1600)
+                    put("notes", "shared")
+                }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", edit, base).status)
+            val edited = checkNotNull(reader.transaction(id))
+            assertEquals(listOf(-600L, -500L, -500L), edited.lineAmounts())
+            assertEquals(first, edited.lineIds().first())
+            assertEquals(false, second in edited.lineIds())
+            assertEquals(JsonPrimitive(-1600), edited["amount"])
+            assertEquals(JsonPrimitive("shared"), edited["notes"])
+
+            assertEquals(OperationStatus.CONFLICT, submit(id, "update", buildJsonObject { put("subtransactions", lines()) }, base).status)
+            val stale = JsonObject(edited + ("notes" to JsonPrimitive("before")))
+            assertEquals(
+                OperationStatus.CONFLICT,
+                submit(
+                    id,
+                    "update",
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                        put("notes", "mine")
+                    },
+                    stale,
+                ).status,
+            )
+
+            fun reject(
+                patch: JsonObject,
+                target: String = id,
+                snapshot: JsonObject = edited,
+            ) = submit(target, "update", patch, snapshot).errorCode
+            val childId = edited.lineIds().first()
+            assertEquals(
+                "split-not-editable",
+                reject(
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                    },
+                    childId,
+                    checkNotNull(reader.transaction(childId)),
+                ),
+            )
+            assertEquals(
+                "split-line-not-found",
+                reject(buildJsonObject { put("subtransactions", lines(line(-800, groceries, "missing"), line(-800, other))) }),
+            )
+            assertEquals(
+                "category-not-found",
+                reject(buildJsonObject { put("subtransactions", lines(line(-800, "missing"), line(-800, other))) }),
+            )
+            assertEquals(
+                "category-not-found",
+                reject(
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                        put("category", "missing")
+                    },
+                ),
+            )
+            assertEquals(
+                "payee-not-found",
+                reject(
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                        put("payee", "missing")
+                    },
+                ),
+            )
+            assertFailsWith<InvalidTransactionRequestException> {
+                reject(
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                        put("date", "2026-11-22")
+                    },
+                )
+            }
+            assertFailsWith<InvalidTransactionRequestException> {
+                reject(buildJsonObject { put("subtransactions", lines(line(-800, groceries), line(-1, other))) })
+            }
+
+            assertEquals(
+                OperationStatus.COMMITTED,
+                submit(
+                    id,
+                    "update",
+                    buildJsonObject {
+                        put("subtransactions", lines())
+                        put("category", groceries)
+                    },
+                    edited,
+                ).status,
+            )
+            val single = checkNotNull(reader.transaction(id))
+            assertEquals(JsonPrimitive(false), single["isParent"])
+            assertEquals(JsonPrimitive(groceries), single["category"])
+            assertEquals(emptyList(), single.lineIds())
+
+            assertEquals(
+                OperationStatus.COMMITTED,
+                submit(
+                    id,
+                    "update",
+                    buildJsonObject { put("subtransactions", lines(line(-1000, groceries), line(-600, other))) },
+                    single,
+                ).status,
+            )
+            assertEquals(JsonPrimitive(true), reader.transaction(id)?.get("isParent"))
+
+            val transfer = id()
+            submit(transfer, "create", JsonObject(create + mapOf("payee" to JsonPrimitive(savingsPayee), "category" to JsonNull)))
+            val transferBase = checkNotNull(reader.transaction(transfer))
+            assertEquals("split-not-editable", reject(buildJsonObject { put("subtransactions", lines()) }, transfer, transferBase))
+        }
+
+    @Test
     fun offBudgetAccountsTakeTransactionsWithoutACategory() =
         withBudget {
             val brokerage = account("Brokerage")

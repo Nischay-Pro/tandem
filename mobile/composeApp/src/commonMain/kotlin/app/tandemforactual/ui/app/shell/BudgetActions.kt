@@ -4,8 +4,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.requestBudgetOrderFlush
+import app.tandemforactual.ui.core.session.transactions.SplitEdit
 import app.tandemforactual.ui.core.session.transactions.createTransaction
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
+import app.tandemforactual.ui.core.session.transactions.updateSplit
 import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -58,6 +60,7 @@ internal class BudgetActions(
     ) {
         val transactionId = state.selectedTransactionRecordId
         val originalAmount = state.selectedTransactionAmountMinor
+        if (state.transactionSplit != null || state.selectedTransactionSplit != null) return saveSplit(onComplete)
         if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
             coroutineScope.launch {
                 val saved =
@@ -84,6 +87,39 @@ internal class BudgetActions(
             }
         } else {
             onComplete(false)
+        }
+    }
+
+    /**
+     * Saves a split's lines with its amount, payee and notes in one edit, or turns it back into one transaction when the
+     * split was removed. A split's account and date are changed in Actual.
+     */
+    private fun saveSplit(onComplete: (Boolean) -> Unit) {
+        val originalAmount = state.selectedTransactionAmountMinor
+        val amount = state.parseAmountMinorUnits(state.transactionAmount)
+        if (state.readOnlyMode || originalAmount == null || amount == null || mobileSession.isSavingTransaction) return onComplete(false)
+        if (state.newTransactionAccountId != state.selectedTransactionAccountId || state.transactionDate != state.selectedTransactionDate) {
+            mobileSession.reportTransactionWriteMessage("Change a split transaction’s account or date in Actual.")
+            return onComplete(false)
+        }
+        val income = state.transactionType == "Income"
+        val edit =
+            SplitEdit(
+                parentId = state.selectedTransactionRecordId,
+                lines = state.transactionSplit?.editedLines(state::parseAmountMinorUnits, income).orEmpty(),
+                amountMinor = if (income) amount else -amount,
+                notes = state.transactionNotes,
+                payeeId = formPayeeId(),
+                unsplitCategoryId = state.newTransactionCategoryId.takeIf(String::isNotBlank),
+            )
+        coroutineScope.launch {
+            val saved = mobileSession.transactions.updateSplit(state.selectedBudgetId, edit)
+            if (saved) {
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                rememberSavedTransaction(originalAmount)
+                state.selectedTransactionSplit = state.transactionSplit
+            }
+            onComplete(saved)
         }
     }
 
