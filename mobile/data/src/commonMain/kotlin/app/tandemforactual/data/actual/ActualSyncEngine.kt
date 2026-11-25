@@ -63,12 +63,12 @@ class ActualSyncEngine(
                 runCatching {
                     MerkleTrie.fromJson(response.merkle)
                 }.getOrElse { throw ActualSyncException("invalid-merkle", cause = it) }
+            val localTimeChanged = clock.clock.timestamp.toString() != currentTime
             val incoming = response.messages.map(::decode)
             if (incoming.isNotEmpty()) {
                 receive(clock, incoming)
                 received += store.apply(incoming, clock, deferUnknownSchema = true)
             }
-            val localTimeChanged = clock.clock.timestamp.toString() != currentTime
             val diff = MerkleTrie.diff(serverMerkle, clock.merkle) ?: return ActualSyncResult(received, clock.clock.timestamp.toString())
             if ((count >= 10 && diff == prevDiff) || count >= 100) throw ActualSyncException("out-of-sync")
             since = ActualTimestamp(diff, 0, "0").toString()
