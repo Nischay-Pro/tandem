@@ -72,14 +72,18 @@ class ActualImport(
             }
         }
         val added = mutableListOf<Map<String, Any?>>()
+        val addedIds = mutableListOf<String>()
         val updated = mutableListOf<Map<String, Any?>>()
         val outcomes =
             steps.map { step ->
                 val match = step.match
                 val trans = step.trans
                 when {
+                    match == null && truthy(trans["tombstone"]) -> ImportOutcome.UNCHANGED
                     match == null -> {
-                        added += trans + mapOf("id" to writer.uuid(), "cleared" to (trans["cleared"] ?: defaultCleared))
+                        val rows = newRows(trans, defaultCleared)
+                        addedIds += rows.first()["id"] as String
+                        added += rows
                         ImportOutcome.ADD
                     }
                     truthy(match["reconciled"]) -> ImportOutcome.RECONCILED
@@ -88,13 +92,25 @@ class ActualImport(
             }
         val now = writer.nowMillis()
         val sorted = added.mapIndexed { index, t -> t + ("sort_order" to (t["sort_order"] ?: (now - index * 1024L))) }
-        if (preview) return ImportResult(sorted.map { it["id"] as String }, updated.map { it["id"] as String }, outcomes)
+        if (preview) return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
         writer.batch {
             val used = (sorted + updated).map { it["payee"] }.toSet()
             payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> transactions.insertPayee(name, id) }
             transactions.batchUpdate(added = sorted, updated = updated)
         }
-        return ImportResult(sorted.map { it["id"] as String }, updated.map { it["id"] as String }, outcomes)
+        return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
+    }
+
+    /** A new row, or a split parent and its children when a rule split it, as `addTransactions` writes them. */
+    private fun newRows(
+        trans: Map<String, Any?>,
+        defaultCleared: Boolean,
+    ): List<Map<String, Any?>> {
+        val row = trans - "subtransactions" + mapOf("id" to writer.uuid(), "cleared" to (trans["cleared"] ?: defaultCleared))
+
+        @Suppress("UNCHECKED_CAST")
+        val split = trans["subtransactions"] as List<Map<String, Any?>>?
+        return if (split.isNullOrEmpty()) listOf(row) else transactions.makeSplit(row, split)
     }
 
     private class Step(

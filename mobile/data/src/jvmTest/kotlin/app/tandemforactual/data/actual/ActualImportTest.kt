@@ -44,6 +44,43 @@ class ActualImportTest {
     private fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
 
     @Test
+    fun rulesThatSplitOrDeleteANewRowApplyLikeAddingIt() {
+        val (db, writer) = fixture()
+        val account = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+
+        fun rule(
+            amount: Long,
+            actions: String,
+        ) = db.execute(
+            "INSERT INTO rules (id, stage, conditions, actions, conditions_op, tombstone) VALUES (?, NULL, ?, ?, 'and', 0)",
+            UUID.randomUUID().toString(),
+            """[{"op":"is","field":"amount","value":$amount}]""",
+            actions,
+        )
+        rule(-9_000, """[{"op":"set-split-amount","value":-4000,"options":{"splitIndex":1,"method":"fixed-amount"}}]""")
+        rule(-7_000, """[{"op":"delete-transaction"}]""")
+
+        val result =
+            ActualImport(writer).reconcile(
+                account,
+                listOf(
+                    ImportRow(date = "2026-10-01", amount = -9_000, payeeName = "Split Shop", importedId = "bank-split-1"),
+                    ImportRow(date = "2026-10-01", amount = -7_000, payeeName = "Ignored Shop", importedId = "bank-delete-1"),
+                ),
+            )
+
+        assertEquals(listOf(ImportOutcome.ADD, ImportOutcome.UNCHANGED), result.outcomes)
+        val parent = db.first("SELECT id, is_parent FROM v_transactions WHERE imported_id = 'bank-split-1'")!!
+        assertEquals(listOf(parent["id"]), result.added)
+        assertEquals(1L, parent["is_parent"])
+        assertEquals(
+            listOf(-4_000L),
+            db.query("SELECT amount FROM v_transactions WHERE parent_id = ?", parent["id"]).map { (it["amount"] as Number).toLong() },
+        )
+        assertEquals(0L, db.first("SELECT COUNT(*) AS n FROM transactions WHERE financial_id = 'bank-delete-1'")!!["n"])
+    }
+
+    @Test
     fun importsLikeActual() {
         val cases = Json.parseToJsonElement(resource("import-cases.json").decodeToString()).jsonObject
         val rows =
