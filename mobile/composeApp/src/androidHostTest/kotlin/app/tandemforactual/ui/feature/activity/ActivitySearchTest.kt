@@ -23,6 +23,8 @@ import app.tandemforactual.ui.feature.onboarding.cleanServerAddress
 import app.tandemforactual.ui.feature.onboarding.serverAddressIsValid
 import app.tandemforactual.ui.feature.onboarding.serverAddressMayBeInsecure
 import app.tandemforactual.ui.feature.onboarding.signInHttpTransportWarning
+import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.Lucide
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -80,6 +82,10 @@ class ActivitySearchTest {
 
         assertEquals(RowLeading.Letter("C"), activityTransactionLeading(transaction))
         assertEquals(RowLeading.Letter("C"), activityTransactionLeading(transaction.copy(icon = "")))
+        assertEquals(
+            RowLeading.Account("Chase Checking", fallback = Lucide.ArrowLeftRight),
+            activityTransactionLeading(transaction.copy(payee = "Chase Checking", isTransfer = true)),
+        )
     }
 
     @Test

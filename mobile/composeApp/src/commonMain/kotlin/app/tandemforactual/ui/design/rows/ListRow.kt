@@ -122,7 +122,8 @@ private fun ListRowLeadingTile(
             is RowLeading.Account -> leading.name?.takeIf(String::isNotBlank)?.let { logos?.account?.invoke(it) }
             else -> null
         }
-    val resolvedPainter = merchantResource?.let { painterResource(it) }
+    val bankIcon = (leading as? RowLeading.Account)?.name?.takeIf(String::isNotBlank)?.let { logos?.bankIcon?.invoke(it) }
+    val resolvedPainter = bankIcon ?: merchantResource?.let { painterResource(it) }
     val resolvedVector =
         when (leading) {
             RowLeading.Automatic -> financeIcon(title) ?: Lucide.CircleDot

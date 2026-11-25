@@ -32,6 +32,7 @@ import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.LocalCrashReports
 import app.tandemforactual.ui.core.session.LocalShareText
+import app.tandemforactual.ui.core.session.rememberBankIcon
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
@@ -143,7 +144,17 @@ private fun ShellRouteContent(
     val env = ctx.env
     val visibleRoute = visibleEntry.route
     val matcher = ctx.shell.merchantIconMatcher
-    val logos = remember(matcher) { matcher?.let { RowLogos(it::iconFor, it::accountIconFor) } }
+    val bankLinks = ctx.mobileSession.banking.bankLinks
+    val bankIds = remember(bankLinks) { bankLinks.mapNotNull { link -> link.bankId?.let { link.name to it } }.toMap() }
+    val downloadBankIcons = ctx.state.bankIconsEnabled
+    val logos =
+        remember(matcher, bankIds, downloadBankIcons) {
+            RowLogos(
+                payee = { matcher?.iconFor(it) },
+                account = { matcher?.accountIconFor(it) },
+                bankIcon = { name -> rememberBankIcon(bankIds[name], downloadBankIcons) },
+            )
+        }
     CompositionLocalProvider(
         LocalRouteScrollState provides routeScrollState,
         LocalRouteLazyListState provides routeLazyListState,
