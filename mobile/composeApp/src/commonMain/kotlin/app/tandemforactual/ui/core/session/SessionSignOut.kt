@@ -54,7 +54,7 @@ internal suspend fun TandemMobileSession.signOutAndClearLocalData(): Boolean {
             signOutError = it
             return false
         }
-        cacheTablesCleared = repository == null
+        cacheTablesCleared = mainStorage == null
         val store = credentialStore
         val storedCredential =
             try {
@@ -86,8 +86,10 @@ internal suspend fun TandemMobileSession.signOutAndClearLocalData(): Boolean {
         }
 
         try {
+            budgetStorage?.repository?.clearAllLocalData()
+            unbindEncryptedBudgetDatabase()
             budgetQueue.budgetQueuePersistenceMutex.withLock {
-                repository?.clearAllLocalData()
+                mainStorage?.repository?.clearAllLocalData()
                 cacheTablesCleared = true
                 preferencesStore?.putValue(AppPreferencesStore.PENDING_BUDGET_REORDERS_KEY, "")
                 preferencesStore?.putValue(BUDGET_CACHE_OWNER_KEY, "")
@@ -128,7 +130,7 @@ private suspend fun TandemMobileSession.signOutBlocker(): String? {
     if (budgetQueue.budgetReorderQueue.moves.isNotEmpty()) {
         return "Sync or resolve pending changes before signing out."
     }
-    if (repository?.hasUnresolvedWrites() == true) {
+    if (listOfNotNull(mainStorage, budgetStorage).any { it.repository.hasUnresolvedWrites() }) {
         return "Sync or resolve pending changes before signing out."
     }
     return null
