@@ -75,6 +75,11 @@ internal suspend fun TandemMobileSession.removeBudgetFromDevice(
     return null
 }
 
+/** Edits to [budgetId] on this device that Actual doesn't have yet. */
+internal suspend fun TandemMobileSession.unsentChangeCount(budgetId: String): Int =
+    budgetQueue.pendingBudgetMutationCount(budgetId) +
+        repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
+
 /**
  * Recovers from a reset in Actual: the device's copy is kept as a backup, the budget is downloaded fresh, and edits it
  * could not send are queued again to replay against the new copy. Returns how many unsent edits there were.
@@ -83,9 +88,7 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     budgetId: String,
     vault: EncryptedBudgetVault?,
 ): Int {
-    val unsent =
-        budgetQueue.pendingBudgetMutationCount(budgetId) +
-            repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
+    val unsent = unsentChangeCount(budgetId)
     val replay = repository?.unsentWrites(budgetId).orEmpty()
     val encrypted = boundEncryptedBudgetId == budgetId
     if (encrypted) unbindEncryptedBudgetDatabase()

@@ -22,6 +22,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budgetSyncOverview
 import app.tandemforactual.ui.core.session.downloadBudgetAgain
 import app.tandemforactual.ui.core.session.retryFailedWork
+import app.tandemforactual.ui.core.session.unsentChangeCount
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -31,6 +32,7 @@ import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -68,17 +70,13 @@ internal fun SyncCenterScreen(
             (if (mobileSession.planning.syncStatus == PlanningSyncStatus.WAITING) 1 else 0)
     val conflictCount = work.transactionsNeedingReview.count { it.status == "conflict" }
     var retrying by remember { mutableStateOf(false) }
+    var confirmingDownload by remember { mutableStateOf(false) }
     val budgetOverview by rememberBudgetSyncOverview(state, mobileSession)
     SyncCenterLinkedAccountsEffect(state, mobileSession)
     PageLazyColumn {
         serverUpdateNoticeItems(mobileSession)
         item(key = "sync-center-overview") {
-            SyncCenterOverview(state, mobileSession, navigation, work, onSyncNow) {
-                scope.launch {
-                    mobileSession.downloadBudgetAgain(state.selectedBudgetId, vault)
-                    navigation.reset(AppRoute.SWITCH_BUDGET)
-                }
-            }
+            SyncCenterOverview(state, mobileSession, navigation, work, onSyncNow) { confirmingDownload = true }
         }
         if (attentionCount > 0) {
             item(key = "sync-center-review-section") {
@@ -109,6 +107,15 @@ internal fun SyncCenterScreen(
             }
         }
         syncCenterDetailItems(budgetOverview, mobileSession, navigation, state)
+    }
+    if (confirmingDownload) {
+        DownloadAgainDialog(mobileSession, state.selectedBudgetId, onDismiss = { confirmingDownload = false }) {
+            confirmingDownload = false
+            scope.launch {
+                mobileSession.downloadBudgetAgain(state.selectedBudgetId, vault)
+                navigation.reset(AppRoute.SWITCH_BUDGET)
+            }
+        }
     }
 }
 
@@ -203,4 +210,30 @@ private suspend fun retryFailedSyncWork(
     } finally {
         onFinished()
     }
+}
+
+/** Asks before replacing this device's copy of the budget, saying what happens to edits Actual doesn't have yet. */
+@Composable
+private fun DownloadAgainDialog(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val unsent by produceState<Int?>(null, budgetId) { value = mobileSession.unsentChangeCount(budgetId) }
+    val count = unsent ?: return
+    DestructiveConfirmationDialog(
+        title = "Download this budget again?",
+        message =
+            "Tandem will delete this device’s copy and download a fresh one from Actual." +
+                when (count) {
+                    0 -> " Everything here is already in Actual."
+                    1 -> " The 1 change Actual doesn’t have yet will be sent again after the download."
+                    else -> " The $count changes Actual doesn’t have yet will be sent again after the download."
+                },
+        confirmLabel = "Download again",
+        dismissLabel = "Keep this copy",
+        onDismissRequest = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
