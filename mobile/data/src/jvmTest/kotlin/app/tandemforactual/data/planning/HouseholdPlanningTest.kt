@@ -78,6 +78,16 @@ class HouseholdPlanningTest {
                 store.save(SavingsGoal("open", "Holiday", 100, "USD", shared = false))
                 sync.sync(cipher, 0)
                 assertTrue(transport.records.getValue("open").deleted)
+                val hidden = transport.records.getValue("open")
+                assertEquals(
+                    0,
+                    cipher
+                        .open(
+                            hidden.iv,
+                            hidden.ciphertext,
+                            PlanningCipher.identity("b", "open", hidden.schemaVersion, hidden.revision),
+                        ).size,
+                )
                 assertEquals(listOf(false, false), store.savingsGoals().first().map { it.shared })
                 assertTrue(dao.pending("b").isEmpty())
 
