@@ -12,6 +12,7 @@ internal fun selectTransactionType(
     val previousType = state.transactionType
     if (previousType != type) {
         if (type == "Transfer") {
+            state.transactionSplit = null
             state.transactionPayee = ""
             state.newTransactionPayeeId = ""
             state.transactionCategory = ""

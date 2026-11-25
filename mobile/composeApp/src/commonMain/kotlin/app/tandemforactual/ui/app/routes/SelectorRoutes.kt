@@ -27,6 +27,7 @@ import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.session.recentPayeeIds
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.SelectorGroup
 import app.tandemforactual.ui.core.state.SelectorItem
 import app.tandemforactual.ui.core.state.booleanValue
@@ -268,7 +269,13 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                     }
                     SelectorScreen(
                         values,
-                        if (state.selectedBudgetId.isBlank()) state.transactionCategory else state.newTransactionCategoryId,
+                        when {
+                            state.selectedBudgetId.isBlank() -> state.transactionCategory
+                            else ->
+                                state.transactionSplit
+                                    ?.let { split -> split.lines.firstOrNull { it.key == split.pickingLineKey }?.categoryId }
+                                    ?: state.newTransactionCategoryId
+                        },
                         live = isLiveBudget,
                         groups = categorySelectorGroups,
                         searchLabel = "Search categories",
@@ -347,8 +354,7 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                                                                     state.encryptedPassword.takeIf { it.isNotBlank() },
                                                                 )
                                                             if (categoryId != null) {
-                                                                state.transactionCategory = newName
-                                                                state.newTransactionCategoryId = categoryId
+                                                                chooseTransactionCategory(state, categoryId, newName)
                                                                 navigation.back()
                                                             }
                                                         }
@@ -362,10 +368,28 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                                 null
                             },
                     ) { item ->
-                        state.transactionCategory = if (item.label == "Uncategorized") "" else item.label
-                        state.newTransactionCategoryId = if (!isLiveBudget) "" else item.id
+                        chooseTransactionCategory(
+                            state,
+                            if (!isLiveBudget) "" else item.id,
+                            if (item.label == "Uncategorized") "" else item.label,
+                        )
                         navigation.back()
                     }
                 }
             },
     )
+
+/** Sets the form's category, or the split line the picker was opened for. */
+private fun chooseTransactionCategory(
+    state: AppState,
+    id: String,
+    name: String,
+) {
+    val split = state.transactionSplit
+    if (split?.pickingLineKey != null) {
+        state.transactionSplit = split.pickCategory(id, name)
+    } else {
+        state.transactionCategory = name
+        state.newTransactionCategoryId = id
+    }
+}

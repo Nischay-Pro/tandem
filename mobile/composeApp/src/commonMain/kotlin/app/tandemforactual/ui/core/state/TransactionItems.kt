@@ -5,6 +5,9 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.design.templates.financeIcon
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonObject
 import org.jetbrains.compose.resources.DrawableResource
 
 internal fun buildLiveTransactionItems(
@@ -23,7 +26,12 @@ internal fun buildLiveTransactionItems(
     return records.mapNotNull { record ->
         val amount = record.amountMinor ?: return@mapNotNull null
         val payeeName = record.payeeId?.let(payees::get)
-        val categoryName = record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
+        val pendingSplit = !record.isParent && record.categoryId == null && record.localJson.hasSplitLines()
+        val categoryName =
+            when {
+                pendingSplit -> "Split"
+                else -> record.categoryId?.let(categories::get) ?: record.categoryId ?: "Uncategorized"
+            }
         val displayedPayee = payeeName ?: record.payeeId ?: "No payee"
         TransactionItem(
             payee = displayedPayee,
@@ -47,6 +55,7 @@ internal fun buildLiveTransactionItems(
             matched = record.matched,
             isTransfer = record.transfer == true,
             isSplitParent = record.isParent,
+            isPendingSplit = pendingSplit,
         )
     }
 }
@@ -60,3 +69,10 @@ internal data class SelectorGroup(
     val title: String,
     val items: List<SelectorItem>,
 )
+
+/** Whether a transaction saved on this device but not yet sent is a split, so it reads "Split" until Actual has its lines. */
+internal fun String?.hasSplitLines(): Boolean =
+    this != null &&
+        runCatching {
+            (Json.parseToJsonElement(this).jsonObject["subtransactions"] as? JsonArray)?.isNotEmpty() == true
+        }.getOrDefault(false)

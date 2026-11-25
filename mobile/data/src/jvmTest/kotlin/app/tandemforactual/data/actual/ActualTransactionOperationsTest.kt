@@ -183,6 +183,76 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun createsASplitWhoseLinesAddUpToTheTransaction() =
+        withBudget {
+            val other =
+                db
+                    .first(
+                        "SELECT id FROM categories WHERE tombstone = 0 AND hidden = 0 AND id != ? ORDER BY name",
+                        groceries,
+                    )?.get("id") as String
+
+            fun line(
+                amount: Long,
+                category: String?,
+                notes: String? = null,
+            ) = buildJsonObject {
+                put("amount", amount)
+                put("category", category)
+                if (notes != null) put("notes", notes)
+            }
+
+            fun split(vararg lines: JsonObject) = JsonObject(create + ("subtransactions" to JsonArray(lines.toList())))
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", split(line(-1000, groceries, "food"), line(-234, other))).status)
+            val created = checkNotNull(reader.transaction(id))
+            assertEquals(JsonPrimitive(true), created["isParent"])
+            assertEquals(JsonNull, created["category"])
+            val children = created["subtransactions"] as JsonArray
+            assertEquals(listOf(-1000L, -234L), children.map { ((it as JsonObject)["amount"] as JsonPrimitive).content.toLong() })
+            assertEquals(JsonPrimitive("food"), (children[0] as JsonObject)["notes"])
+            assertEquals(JsonPrimitive(other), (children[1] as JsonObject)["category"])
+
+            assertFailsWith<InvalidTransactionRequestException> { submit(id(), "create", split(line(-1000, groceries), line(-1, other))) }
+            assertFailsWith<InvalidTransactionRequestException> { submit(id(), "create", split(line(-1234, groceries))) }
+            assertFailsWith<InvalidTransactionRequestException> {
+                submit(id(), "create", JsonObject(create + ("subtransactions" to JsonPrimitive("x"))))
+            }
+            assertFailsWith<InvalidTransactionRequestException> {
+                submit(id(), "create", JsonObject(create + ("subtransactions" to JsonArray(listOf(JsonPrimitive(1), JsonPrimitive(2))))))
+            }
+            assertFailsWith<InvalidTransactionRequestException> {
+                submit(id(), "create", split(buildJsonObject { put("category", groceries) }, line(-1234, other)))
+            }
+            assertFailsWith<InvalidTransactionRequestException> {
+                submit(
+                    id(),
+                    "create",
+                    split(
+                        buildJsonObject {
+                            put("amount", -1234)
+                            put("payee", "x")
+                        },
+                        line(0, other),
+                    ),
+                )
+            }
+            assertEquals(
+                "category-not-found",
+                submit(id(), "create", split(line(-1000, "missing"), line(-234, other))).errorCode,
+            )
+            val unsplit = id()
+            assertEquals(OperationStatus.COMMITTED, submit(unsplit, "create", split(line(-1000, null), line(-234, null))).status)
+
+            val brokerage = account("Brokerage")
+            val offBudget = id()
+            val onBrokerage =
+                JsonObject(split(line(-1000, groceries), line(-234, other)) + ("account" to JsonPrimitive(brokerage)))
+            assertEquals(OperationStatus.COMMITTED, submit(offBudget, "create", onBrokerage).status)
+            assertEquals(JsonPrimitive(false), reader.transaction(offBudget)?.get("isParent"))
+        }
+
+    @Test
     fun offBudgetAccountsTakeTransactionsWithoutACategory() =
         withBudget {
             val brokerage = account("Brokerage")

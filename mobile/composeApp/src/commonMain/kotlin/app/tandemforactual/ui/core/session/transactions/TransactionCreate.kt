@@ -45,6 +45,7 @@ internal suspend fun TransactionController.createTransaction(
     displaySettings: BudgetDisplaySettings? = null,
     isTransfer: Boolean = false,
     confirmedFutureDate: String? = null,
+    splitLines: List<Pair<Long, String>>? = null,
 ): Boolean {
     host.reportTransactionWriteMessage(null)
     if (host.refuseWriteInReadOnlyMode()) return false
@@ -60,14 +61,15 @@ internal suspend fun TransactionController.createTransaction(
         host.reportTransactionWriteMessage("Budget data isn’t available on this device. Reopen the budget and try again.")
         return false
     }
-    val account = newTransactionAccount(accountId) ?: return false
-    if (!validateNewTransactionPayee(accountId, payeeId, isTransfer)) return false
-    if (!validateNewTransactionCategory(budgetId, categoryId)) return false
+    val account = validNewTransactionTarget(budgetId, accountId, payeeId, categoryId, isTransfer, splitLines) ?: return false
     val transactionId = "tandem:${Uuid.random()}"
     val operationId = Uuid.random().toString()
     val requestedCategoryId = categoryId.takeUnless { isTransfer || account.recordBody().isOffBudgetAccount() }
-    val patch = newTransactionPatch(account, amount, date, payeeId, requestedCategoryId, notes)
-    val optimistic = newTransactionOptimistic(transactionId, account, amount, date, payeeId, categoryId, notes)
+    val split = splitLines?.takeUnless { isTransfer || account.recordBody().isOffBudgetAccount() }?.let(::splitLinesJson)
+    val patch =
+        newTransactionPatch(account, amount, date, payeeId, requestedCategoryId.takeIf { split == null }, notes).withSplit(split)
+    val optimistic =
+        newTransactionOptimistic(transactionId, account, amount, date, payeeId, categoryId.takeIf { split == null }, notes).withSplit(split)
     host.markSavingTransaction(true)
     try {
         localRepository.enqueueWrite(
@@ -79,7 +81,7 @@ internal suspend fun TransactionController.createTransaction(
                 amount,
                 date,
                 payeeId,
-                requestedCategoryId,
+                requestedCategoryId.takeIf { split == null },
                 patch,
                 optimistic,
             ),
@@ -108,6 +110,22 @@ internal suspend fun TransactionController.createTransaction(
     } finally {
         host.markSavingTransaction(false)
     }
+}
+
+/** The account to add to, once the payee, category and any split categories check out; null after reporting why not. */
+private fun TransactionController.validNewTransactionTarget(
+    budgetId: String,
+    accountId: String,
+    payeeId: String?,
+    categoryId: String?,
+    isTransfer: Boolean,
+    splitLines: List<Pair<Long, String>>?,
+): BudgetRecordEntity? {
+    val account = newTransactionAccount(accountId) ?: return null
+    if (!validateNewTransactionPayee(accountId, payeeId, isTransfer)) return null
+    if (!validateNewTransactionCategory(budgetId, categoryId)) return null
+    if (splitLines?.any { (_, lineCategory) -> !validateNewTransactionCategory(budgetId, lineCategory) } == true) return null
+    return account
 }
 
 private fun TransactionController.parseNewTransactionAmount(
@@ -298,3 +316,23 @@ private fun TransactionController.newTransactionWriteRequest(
                 budgetMonth = date.take(7),
             ),
     )
+
+/** A split's lines as the outbox sends them: each an amount and a category. */
+private fun splitLinesJson(lines: List<Pair<Long, String>>): JsonArray =
+    JsonArray(
+        lines.map { (amount, category) ->
+            buildJsonObject {
+                put("amount", amount)
+                put("category", category)
+            }
+        },
+    )
+
+private fun JsonObject.withSplit(split: JsonArray?): JsonObject =
+    if (split ==
+        null
+    ) {
+        this
+    } else {
+        JsonObject(this + ("subtransactions" to split))
+    }

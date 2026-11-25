@@ -118,7 +118,10 @@ class ActualTransactionOperations(
                 )
             }
         }
-        validateCreate(input)?.let { return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it) }
+        val split = parseSplit(patch, input["amount"] as Long)
+        (validateCreate(input) ?: split?.let(::splitIssue))?.let {
+            return OperationOutcome(operationId, transactionId, OperationStatus.REJECTED, errorCode = it)
+        }
         val transaction =
             linkedMapOf(
                 "date" to input["date"],
@@ -130,6 +133,10 @@ class ActualTransactionOperations(
         transaction["notes"] = input["notes"]
         transaction["cleared"] = input["cleared"]
         transaction["imported_id"] = transactionId
+        if (split != null && !offBudget) {
+            transaction["category"] = null
+            transaction["subtransactions"] = split
+        }
         val transfer =
             input["payee"]?.let { payee ->
                 db.first("SELECT transfer_acct FROM payees WHERE id = ?", payee)?.get("transfer_acct")
@@ -300,16 +307,44 @@ class ActualTransactionOperations(
     ): List<String> =
         listOf("account", "amount", "date", "payee", "category", "notes", "cleared").filter { !same(it, existing.value(it), input[it]) }
 
+    /**
+     * A split's lines, each with an amount and a category and optional notes, or null when the transaction isn't split.
+     * The lines must add up to the transaction, as Actual requires.
+     */
+    private fun parseSplit(
+        patch: JsonObject,
+        amount: Long,
+    ): List<Map<String, Any?>>? {
+        val lines = patch["subtransactions"] ?: return null
+        val parsed =
+            (lines as? JsonArray)?.map { line ->
+                val fields = line as? JsonObject ?: throw InvalidTransactionRequestException("subtransactions must be objects")
+                val unsupported = fields.keys - setOf("amount", "category", "notes")
+                if (unsupported.isNotEmpty() || "amount" !in fields) {
+                    throw InvalidTransactionRequestException("each subtransaction needs an amount and may have a category and notes")
+                }
+                parseFields(fields)
+            } ?: throw InvalidTransactionRequestException("subtransactions must be a list")
+        if (parsed.size < 2) throw InvalidTransactionRequestException("a split needs at least two lines")
+        return parsed.takeIf { lines -> lines.sumOf { it["amount"] as Long } == amount }
+            ?: throw InvalidTransactionRequestException("split lines must add up to the transaction amount")
+    }
+
+    private fun splitIssue(lines: List<Map<String, Any?>>): String? =
+        lines.firstNotNullOfOrNull {
+            (it["category"] as String?)?.let(::categoryIssue)
+        }
+
     private fun parseCreate(patch: JsonObject): Map<String, Any?> {
         val allowed = listOf("account", "amount", "date", "payee", "category", "notes", "cleared")
-        val unsupported = patch.keys - allowed.toSet()
+        val unsupported = patch.keys - allowed.toSet() - "subtransactions"
         if (unsupported.isNotEmpty()) {
             throw InvalidTransactionRequestException(
                 "transaction create input contains unsupported fields: ${unsupported.joinToString()}",
             )
         }
         allowed.forEach { if (it !in patch) throw InvalidTransactionRequestException("transaction create input is missing $it") }
-        return parseFields(patch)
+        return parseFields(JsonObject(patch - "subtransactions"))
     }
 
     private fun parsePatch(patch: JsonObject): Map<String, Any?> {

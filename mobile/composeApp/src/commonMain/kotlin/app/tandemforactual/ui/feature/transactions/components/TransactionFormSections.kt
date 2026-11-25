@@ -190,6 +190,7 @@ internal fun TransactionFormDetailsCard(
     pickers: TransactionFormPickerState,
     offBudget: Boolean,
     onDismissKeypad: () -> Unit,
+    showCategory: Boolean = true,
 ) {
     SectionCard(title = "") {
         if (state.transactionType == "Transfer") {
@@ -207,7 +208,7 @@ internal fun TransactionFormDetailsCard(
                 onDismissKeypad()
                 navigation.open(AppRoute.CHOOSE_PAYEE)
             }
-            if (!offBudget) {
+            if (!offBudget && showCategory) {
                 DividerLine()
                 TransactionPickerRow(state.transactionCategory, "Choose category", Lucide.Tags) {
                     onDismissKeypad()

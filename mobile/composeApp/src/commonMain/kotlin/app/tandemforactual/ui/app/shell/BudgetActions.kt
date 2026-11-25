@@ -139,6 +139,10 @@ internal class BudgetActions(
                         displaySettings = state.budgetDisplaySettings,
                         isTransfer = state.transactionType == "Transfer",
                         confirmedFutureDate = confirmedFutureDate,
+                        splitLines =
+                            state.transactionSplit
+                                ?.takeIf { state.transactionType != "Transfer" }
+                                ?.signedLines(state::parseAmountMinorUnits, income = state.transactionType == "Income"),
                     )
                 if (created) {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
