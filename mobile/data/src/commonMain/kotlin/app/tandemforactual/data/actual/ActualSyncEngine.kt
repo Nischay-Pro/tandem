@@ -35,6 +35,7 @@ class ActualSyncEngine(
     private val groupId: String,
     private val fileId: String,
     private val cipher: ActualMessageCipher? = null,
+    private val maxUploadBytes: Int = MAX_UPLOAD_BYTES,
     private val now: () -> Long,
 ) {
     suspend fun fullSync(
@@ -48,11 +49,11 @@ class ActualSyncEngine(
         var prevDiff: Long? = null
         while (true) {
             val currentTime = clock.clock.timestamp.toString()
-            val outgoing = if (receiveOnly) emptyList() else store.messagesSince(since)
+            val outgoing = if (receiveOnly) emptyList() else uploadAllButLast(store.messagesSince(since).map(::envelope), since)
             val response =
                 transport.sync(
                     SyncRequest(
-                        messages = outgoing.map(::envelope),
+                        messages = outgoing,
                         fileId = fileId,
                         groupId = groupId,
                         keyId = cipher?.keyId.orEmpty(),
@@ -89,6 +90,32 @@ class ActualSyncEngine(
         }
     }
 
+    /**
+     * Sends [envelopes] in requests of at most [maxUploadBytes], as Actual's own client does, so a large upload stays
+     * under the server's request limit. Returns the last chunk, which the sync loop sends with its usual request; the
+     * server repeats everything since [since] in that reply, so the replies to earlier chunks can be skipped.
+     */
+    private suspend fun uploadAllButLast(
+        envelopes: List<MessageEnvelope>,
+        since: String,
+    ): List<MessageEnvelope> {
+        val chunks = mutableListOf(mutableListOf<MessageEnvelope>())
+        var size = 0
+        for (envelope in envelopes) {
+            val bytes = envelope.content.size + envelope.timestamp.length + ENVELOPE_OVERHEAD_BYTES
+            if (size + bytes > maxUploadBytes && chunks.last().isNotEmpty()) {
+                chunks += mutableListOf<MessageEnvelope>()
+                size = 0
+            }
+            chunks.last() += envelope
+            size += bytes
+        }
+        for (chunk in chunks.dropLast(1)) {
+            transport.sync(SyncRequest(chunk, fileId, groupId, cipher?.keyId.orEmpty(), since))
+        }
+        return chunks.last()
+    }
+
     private fun envelope(message: CrdtMessage): MessageEnvelope {
         val binary = SyncProtocol.encode(ActualMessage(message.dataset, message.row, message.column, message.value.serialize()))
         val active = cipher ?: return MessageEnvelope(message.timestamp.toString(), false, binary)
@@ -112,3 +139,6 @@ class ActualSyncEngine(
         return CrdtMessage(timestamp, message.dataset, message.row, message.column, CrdtValue.deserialize(message.value))
     }
 }
+
+private const val MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+private const val ENVELOPE_OVERHEAD_BYTES = 16
