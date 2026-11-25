@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -23,6 +24,7 @@ private class FakeServer {
     var pageSize = 1
     var raceKey: WrappedPlanningKey? = null
     var alwaysConflict = false
+    val refused = mutableSetOf<String>()
 
     fun transport() =
         object : PlanningTransport {
@@ -61,6 +63,7 @@ private class FakeServer {
                 iv: ByteArray,
                 ciphertext: ByteArray,
             ): RemoteWrite {
+                if (recordId in refused) throw IllegalStateException("400 Bad Request")
                 val current = records[recordId]
                 if (alwaysConflict) return RemoteWrite.Conflict(current)
                 if (baseRevision != current?.revision || revision != (current?.revision ?: 0) + 1) return RemoteWrite.Conflict(current)
@@ -250,6 +253,61 @@ class PlanningSyncTest {
                 val stuck = sync.sync(PlanningCipher(winner), 10)
                 assertEquals(0, stuck.uploaded)
                 assertTrue(db.planningRecordDao().pending("b").isNotEmpty())
+            } finally {
+                db.closeDatabase()
+            }
+        }
+
+    @Test
+    fun aRecordTheServiceRefusesStaysQueuedWithoutStoppingTheRest(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer().apply { pageSize = 10 }
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val sync = PlanningSync(db.planningRecordDao(), "b", server.transport())
+                val store = PlanningStore(db.planningRecordDao(), "b", cipher) { 1L }
+                server.records["r"] = RemotePlanningRecord("r", SavingsGoal.TYPE, 1, 1, false, ByteArray(12), ByteArray(16), 1)
+                server.seq = 1
+                server.refused += "a"
+                store.save(SavingsGoal("a", "Refused", 1, "USD"))
+                store.save(SavingsGoal("b", "Fine", 2, "USD"))
+
+                val result = sync.sync(cipher, 0)
+                assertEquals(1, result.uploaded)
+                assertEquals(1, result.downloaded)
+                assertTrue("b" in server.records)
+                assertEquals(listOf("a"), db.planningRecordDao().pending("b").map { it.recordId })
+
+                server.refused.clear()
+                assertEquals(1, sync.sync(cipher, result.cursor, result.anchor).uploaded)
+                assertTrue(db.planningRecordDao().pending("b").isEmpty())
+            } finally {
+                db.closeDatabase()
+            }
+        }
+
+    @Test
+    fun cancellingASyncStopsTheUpload(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val transport =
+                    object : PlanningTransport by FakeServer().transport() {
+                        override suspend fun put(
+                            recordId: String,
+                            recordType: String,
+                            schemaVersion: Int,
+                            revision: Long,
+                            baseRevision: Long?,
+                            deleted: Boolean,
+                            iv: ByteArray,
+                            ciphertext: ByteArray,
+                        ): RemoteWrite = throw CancellationException("left the screen")
+                    }
+                PlanningStore(db.planningRecordDao(), "b", cipher) { 1L }.save(SavingsGoal("a", "A", 1, "USD"))
+                assertFailsWith<CancellationException> { PlanningSync(db.planningRecordDao(), "b", transport).sync(cipher, 0) }
             } finally {
                 db.closeDatabase()
             }
