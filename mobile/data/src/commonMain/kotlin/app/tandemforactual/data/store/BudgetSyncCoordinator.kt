@@ -359,7 +359,7 @@ class BudgetSyncCoordinator(
             }
         }
 
-        if (!sendQueuedWrites) return counts
+        if (!sendQueuedWrites || repository.hasPendingRecordCreate(budgetId)) return counts
 
         while (true) {
             val operation = repository.claimNextWrite(budgetId) ?: break

@@ -436,6 +436,33 @@ class BudgetSyncCoordinatorTest {
         }
 
     @Test
+    fun transactionWritesWaitForAPayeeOrAccountStillBeingCreated() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                val remote = FakeBudgetSyncRemote(snapshot(records = listOf(transaction())))
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize(BUDGET, sendQueuedWrites = false)
+                repository.enqueueWrite(updateRequest())
+                val create = LocalBudgetMutationOutboxItem("create-payee-1", BUDGET, "CREATE_PAYEE", "payee-new", "{}", 50L)
+                repository.replaceBudgetMutationQueue(listOf(create, create.copy(operationId = "other", budgetId = "budget-2")), "{}")
+                assertTrue(repository.hasPendingRecordCreate(BUDGET))
+
+                assertEquals(0, coordinator.synchronize(BUDGET).writesCommitted)
+                assertEquals(0, remote.submitCount)
+                assertEquals("queued", repository.readPendingWrites(BUDGET).single { it.recordType == "transaction" }.status)
+
+                repository.replaceBudgetMutationQueue(listOf(create.copy(operationId = "other", budgetId = "budget-2")), "{}")
+                assertFalse(repository.hasPendingRecordCreate(BUDGET))
+                remote.transactionHandler = { _, transactionId, _ -> remoteTransaction(transactionId, "revision-2", 1200L) }
+                assertEquals(1, coordinator.synchronize(BUDGET).writesCommitted)
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun writeSavedLocallyButNotUploadedStaysQueued() =
         runBlocking {
             val database = newDatabase()
