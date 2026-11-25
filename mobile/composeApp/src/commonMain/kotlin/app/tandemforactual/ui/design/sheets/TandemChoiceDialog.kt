@@ -4,10 +4,16 @@ package app.tandemforactual.ui.design.sheets
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.design.theme.TandemMotion
@@ -29,12 +35,19 @@ internal fun TandemChoiceDialog(
             onDismissRequest = onDismissRequest,
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            AnimatedVisibility(
-                visibleState = visibility,
-                enter = tandemFadeEnter(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
-                exit = tandemFadeExit(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+            // A window that wraps its content is resized by the system on every frame its content animates, which
+            // stalls the animation; filling the screen keeps the window still and centres the content instead.
+            Box(
+                Modifier.fillMaxSize().imePadding().clickable(remember { MutableInteractionSource() }, null, onClick = onDismissRequest),
+                contentAlignment = Alignment.Center,
             ) {
-                Box { content() }
+                AnimatedVisibility(
+                    visibleState = visibility,
+                    enter = tandemFadeEnter(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                    exit = tandemFadeExit(tandemReduceMotion, TandemMotion.REVEAL_MILLIS),
+                ) {
+                    Box(Modifier.clickable(remember { MutableInteractionSource() }, null) {}) { content() }
+                }
             }
         }
     }
