@@ -33,6 +33,15 @@ internal suspend fun TandemMobileSession.synchronizeSerialized(
 ): BudgetSyncSummary? {
     if (isSigningOut) return null
     if (encryptedStorageMissing(budgetId)) return null
+    val boundStorage = storage
+    if (boundStorage == null) {
+        presentSync(background, syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
+        return null
+    }
+    if (boundStorage.budgetId.let { it != null && it != budgetId }) {
+        presentSync(background, syncPresentation.failed("Open this budget again before syncing it."))
+        return null
+    }
 
     if (!encryptionPassword.isNullOrBlank()) scheduleActionEncryptionPasswords[budgetId] = encryptionPassword
     if (!isCurrentIdentityCacheOwner()) {
@@ -54,12 +63,8 @@ internal suspend fun TandemMobileSession.synchronizeSerialized(
         syncedTransactionCount = 0
         lastSyncSummary = null
     }
-    val coordinator = syncCoordinator
-    val localRepository = repository
-    if (coordinator == null || localRepository == null) {
-        presentSync(background, syncPresentation.failed("Tandem can’t save this budget on your device. Restart the app and try again."))
-        return null
-    }
+    val coordinator = boundStorage.coordinator
+    val localRepository = boundStorage.repository
 
     // Keep an earlier error visible while retrying; clear it only when the retry succeeds.
     presentSync(background, syncPresentation.begin())
