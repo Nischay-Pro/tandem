@@ -432,16 +432,18 @@ jobs:
           name: nightly-merchant-icon-pack-${{ needs.publish_api_image.outputs.source_sha }}
           path: mobile/composeApp/build/generated/thesvg-icon-pack/composeResources
 
-      - name: Give the Release framework link more memory
+      - name: Leave the Release framework link room for LLVM
         run: |
           {
-            echo "org.gradle.jvmargs=-XX:MaxRAMPercentage=70 -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8"
+            echo "org.gradle.jvmargs=-XX:MaxRAMPercentage=25 -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
             echo "kotlin.daemon.jvmargs=-XX:MaxRAMPercentage=15 -XX:MaxMetaspaceSize=1g"
+            echo "kotlin.native.disableCompilerDaemon=true"
+            echo "kotlin.native.jvmArgs=-XX:MaxRAMPercentage=35"
           } >> "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
 
       - name: Build the Release Kotlin framework
         working-directory: mobile
-        run: ./gradlew --console=plain --configuration-cache :composeApp:linkReleaseFrameworkIosArm64
+        run: /usr/bin/time -l ./gradlew --console=plain --configuration-cache :composeApp:linkReleaseFrameworkIosArm64
 
       - name: Build the unsigned iOS app
         env:
