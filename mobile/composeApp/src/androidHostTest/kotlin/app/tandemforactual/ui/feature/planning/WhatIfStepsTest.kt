@@ -8,18 +8,22 @@ class WhatIfStepsTest {
     fun scalesToTheHouseholdsOwnMonth() {
         assertEquals(
             listOf(-100_000L, -50_000L, -25_000L, 0L, 25_000L, 50_000L, 100_000L),
-            WhatIfSteps.steps(500_000, 300_000, "USD", 2),
+            WhatIfSteps.steps(500_000, 300_000, "USD"),
         )
         assertEquals(
             listOf(-2_000_000L, -1_000_000L, -500_000L, 0L, 500_000L, 1_000_000L, 2_000_000L),
-            WhatIfSteps.steps(8_000_000, 6_000_000, "INR", 2),
+            WhatIfSteps.steps(8_000_000, 6_000_000, "INR"),
         )
     }
 
     @Test
     fun fallsBackToATypicalMonthForTheCurrency() {
-        assertEquals(listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L), WhatIfSteps.steps(0, 0, "JPY", 0))
-        assertEquals(listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L), WhatIfSteps.steps(0, 0, null, 2))
+        assertEquals(
+            listOf(-5_000_000L, -2_500_000L, -1_000_000L, 0L, 1_000_000L, 2_500_000L, 5_000_000L),
+            WhatIfSteps.steps(0, 0, "JPY"),
+            "¥50,000 steps, in the hundredths Actual stores",
+        )
+        assertEquals(listOf(-50_000L, -25_000L, -10_000L, 0L, 10_000L, 25_000L, 50_000L), WhatIfSteps.steps(0, 0, null))
     }
 
     @Test

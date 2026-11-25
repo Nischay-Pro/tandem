@@ -14,16 +14,16 @@ class LocaleDecimalParsingTest {
         val threeDigitUs = displaySettings("KWD", "comma-dot", 3)
         val threeDigitGerman = displaySettings("KWD", "dot-comma", 3)
 
-        assertEquals(1_500L, platformParseDecimalMinorUnits("1,500", yen))
+        assertEquals(150_000L, platformParseDecimalMinorUnits("1,500", yen))
         assertNull(platformParseDecimalMinorUnits("1.50", yen))
 
         assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", usd))
         assertNull(platformParseDecimalMinorUnits("12,50", usd))
 
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12.345", threeDigitUs))
-        assertNull(platformParseDecimalMinorUnits("12,345", threeDigitUs))
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12,345", threeDigitGerman))
-        assertNull(platformParseDecimalMinorUnits("12.345", threeDigitGerman))
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12.34", threeDigitUs))
+        assertNull(platformParseDecimalMinorUnits("12.345", threeDigitUs), "a third decimal can't be stored")
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12,34", threeDigitGerman))
+        assertNull(platformParseDecimalMinorUnits("12,345", threeDigitGerman))
     }
 
     private fun displaySettings(

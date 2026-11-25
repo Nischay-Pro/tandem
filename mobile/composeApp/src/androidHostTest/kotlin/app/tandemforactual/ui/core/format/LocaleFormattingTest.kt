@@ -124,10 +124,12 @@ class LocaleFormattingTest {
             assertEquals("1,234.56", platformFormatDecimal(123_456, usd))
             assertEquals(123_456L, platformParseDecimalMinorUnits("1,234.56", usd))
 
+            // Actual stores yen in hundredths too, so ¥1,500 is 150,000 whatever the currency's own decimals.
             val jpy = displaySettings(currencyCode = "JPY", numberFormat = "comma-dot")
-            assertEquals("¥123,456", platformFormatCurrency(123_456, jpy))
-            assertEquals("123,456", platformFormatDecimal(123_456, jpy))
-            assertEquals(123_456L, platformParseDecimalMinorUnits("123,456", jpy))
+            assertEquals("¥1,500", platformFormatCurrency(150_000, jpy))
+            assertEquals("1,500", platformFormatDecimal(150_000, jpy))
+            assertEquals(150_000L, platformParseDecimalMinorUnits("1,500", jpy))
+            assertEquals(null, platformParseDecimalMinorUnits("1,500.5", jpy))
 
             val clp =
                 displaySettings(
@@ -147,9 +149,9 @@ class LocaleFormattingTest {
                     numberFormat = "comma-dot",
                     currencySymbolPosition = "after",
                 )
-            assertEquals("123,456﷼", platformFormatCurrency(123_456, irr))
-            assertEquals("123,456", platformFormatDecimal(123_456, irr))
-            assertEquals(123_456L, platformParseDecimalMinorUnits("123,456", irr))
+            assertEquals("123,456﷼", platformFormatCurrency(12_345_600, irr))
+            assertEquals("123,456", platformFormatDecimal(12_345_600, irr))
+            assertEquals(12_345_600L, platformParseDecimalMinorUnits("123,456", irr))
         }
     }
 
@@ -235,17 +237,18 @@ class LocaleFormattingTest {
     }
 
     @Test
-    fun threeDecimalAmountsRejectGroupingThatCouldBeAKeyboardDecimalMark() {
+    fun threeDecimalCurrenciesTakeTheHundredthsActualStores() {
         val us = displaySettings("USD", "comma-dot", currencyFractionDigits = 3)
         val germany = displaySettings("EUR", "dot-comma", "€", currencyFractionDigits = 3)
 
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12.345", us))
-        assertNull(platformParseDecimalMinorUnits("12,345", us))
-        assertEquals("12.345", platformFormatDecimal(12_345L, us))
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12.34", us))
+        assertNull(platformParseDecimalMinorUnits("12.345", us), "a third decimal can't be stored")
+        assertEquals("12.34", platformFormatDecimal(1_234L, us))
+        assertEquals("$12.340", platformFormatCurrency(1_234L, us))
 
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12,345", germany))
-        assertNull(platformParseDecimalMinorUnits("12.345", germany))
-        assertEquals("12,345", platformFormatDecimal(12_345L, germany))
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12,34", germany))
+        assertNull(platformParseDecimalMinorUnits("12,345", germany))
+        assertEquals("12,34", platformFormatDecimal(1_234L, germany))
     }
 
     @Test
@@ -293,7 +296,7 @@ class LocaleFormattingTest {
         val indian = displaySettings("INR", "comma-dot-in", "₹")
         assertEquals(123_456_789L, platformParseDecimalMinorUnits("1,234,567.89", indian))
         assertNull(platformParseDecimalMinorUnits("12,34.56", indian))
-        assertEquals(123_456L, platformParseDecimalMinorUnits("123,456", displaySettings("JPY", "comma-dot", "¥", 0)))
+        assertEquals(12_345_600L, platformParseDecimalMinorUnits("123,456", displaySettings("JPY", "comma-dot", "¥", 0)))
         assertNull(platformParseDecimalMinorUnits("123.45", displaySettings("JPY", "comma-dot", "¥", 0)))
     }
 
@@ -313,7 +316,7 @@ class LocaleFormattingTest {
                 val settings = displaySettings("USD", numberFormat, currencyFractionDigits = fractionDigits)
                 val groupedInteger = "1${groupingMark}234${groupingMark}567"
                 val malformedGrouping = "1234${groupingMark}567"
-                val expectedGroupedMinorUnits = "1234567${"0".repeat(fractionDigits)}".toLong()
+                val expectedGroupedMinorUnits = 123_456_700L
 
                 assertEquals(
                     expectedGroupedMinorUnits,
@@ -324,9 +327,10 @@ class LocaleFormattingTest {
                     platformParseDecimalMinorUnits(malformedGrouping, settings),
                     "$numberFormat/$fractionDigits malformed grouping",
                 )
+                val wholeAmount = if (fractionDigits == 0) 123_456_700L else 123_456_789L
                 assertEquals(
-                    123_456_789L,
-                    platformParseDecimalMinorUnits(platformFormatDecimal(123_456_789L, settings), settings),
+                    wholeAmount,
+                    platformParseDecimalMinorUnits(platformFormatDecimal(wholeAmount, settings), settings),
                     "$numberFormat/$fractionDigits formatted round trip",
                 )
 
@@ -336,15 +340,10 @@ class LocaleFormattingTest {
                         "$numberFormat rejects decimal mark for whole currency",
                     )
                 } else {
-                    val fractionalDigits = "123".take(fractionDigits)
+                    val fractionalDigits = "123".take(minOf(fractionDigits, 2))
                     val validAmount = "12${decimalMark}$fractionalDigits"
-                    val expectedMinorUnits = "12$fractionalDigits".toLong()
-                    val groupingMarkAsDecimal =
-                        if (fractionDigits == 3 && groupingMark in setOf('.', ',')) {
-                            "12${groupingMark}$fractionalDigits"
-                        } else {
-                            "12${groupingMark}${fractionalDigits.take(2)}"
-                        }
+                    val expectedMinorUnits = "12${fractionalDigits.padEnd(2, '0')}".toLong()
+                    val groupingMarkAsDecimal = "12${groupingMark}${fractionalDigits.take(2)}"
                     assertEquals(
                         expectedMinorUnits,
                         platformParseDecimalMinorUnits(validAmount, settings),
@@ -381,7 +380,8 @@ class LocaleFormattingTest {
             listOf(0, 2, 3).forEach { fractionDigits ->
                 val settings = displaySettings("USD", numberFormat, currencyFractionDigits = fractionDigits)
                 repeat(64) { sample ->
-                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L)
+                    val step = if (fractionDigits == 0) 100L else 1L
+                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L) / step * step
                     val formatted = platformFormatDecimal(amountMinor, settings)
 
                     assertEquals(
@@ -400,7 +400,7 @@ class LocaleFormattingTest {
             val usd = platformFormatReportCurrency(123_456, "USD", 2)
             assertTrue(usd.contains("1.234,56"), usd)
 
-            val jpy = platformFormatReportCurrency(123_456, "JPY", 0)
+            val jpy = platformFormatReportCurrency(12_345_600, "JPY", 0)
             assertTrue(jpy.contains("123.456"), jpy)
             assertFalse(jpy.contains(","), jpy)
         }
@@ -449,5 +449,16 @@ class LocaleFormattingTest {
         val older = formatMomentAtEpochMilliseconds(now - 5 * 86_400_000L, now)
         assertTrue(older.startsWith(platformFormatDateAtEpochMilliseconds(now - 5 * 86_400_000L)))
         assertTrue(older.contains(" at "))
+    }
+
+    @Test
+    fun convertsTypedAmountsToTheHundredthsActualStores() {
+        assertEquals(0, typedAmountDigits(0))
+        assertEquals(2, typedAmountDigits(3))
+        assertEquals(150_000L, storedHundredths(1_500, 0))
+        assertEquals(1_234L, storedHundredths(1_234, 2))
+        assertEquals(-12_340L, storedHundredths(-1_234, 1))
+        assertNull(storedHundredths(Long.MAX_VALUE / 10 + 1, 1))
+        assertNull(storedHundredths(Long.MIN_VALUE / 10 - 1, 1))
     }
 }
