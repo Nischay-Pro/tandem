@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
+import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -49,7 +50,6 @@ import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.WalletCards
-import org.jetbrains.compose.resources.painterResource
 
 @Composable
 internal fun ListRow(
@@ -123,7 +123,8 @@ private fun ListRowLeadingTile(
             else -> null
         }
     val bankIcon = (leading as? RowLeading.Account)?.name?.takeIf(String::isNotBlank)?.let { logos?.bankIcon?.invoke(it) }
-    val resolvedPainter = bankIcon ?: merchantResource?.let { painterResource(it) }
+    val artwork = rememberMerchantArtwork(merchantResource)
+    val resolvedPainter = bankIcon ?: artwork
     val resolvedVector =
         when (leading) {
             RowLeading.Automatic -> financeIcon(title) ?: Lucide.CircleDot
