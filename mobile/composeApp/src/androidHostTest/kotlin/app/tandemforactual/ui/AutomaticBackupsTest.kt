@@ -2,6 +2,8 @@ package app.tandemforactual.ui
 
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.AutomaticBackups
+import app.tandemforactual.ui.core.session.BackupSecrets
+import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
@@ -61,5 +63,39 @@ class AutomaticBackupsTest {
         restored.restorePersistentSettings(state.persistentSettings() + (AutomaticBackupSettings.LAST_RUN to "42"))
         assertEquals(chosen, restored.automaticBackup)
         assertEquals(42L, restored.automaticBackupLastRun)
+    }
+
+    private class FlakyStore(
+        var value: String? = null,
+        var broken: Boolean = false,
+    ) : DeviceCredentialStore {
+        override fun read(): String? = if (broken) error("keystore unavailable") else value
+
+        override fun write(value: String) {
+            if (broken) error("keystore unavailable")
+            this.value = value
+        }
+
+        override fun clear() {
+            if (broken) error("keystore unavailable")
+            value = null
+        }
+    }
+
+    @Test
+    fun treatsAnUnreadablePassphraseAsSetAndReportsFailedSaves() {
+        val store = FlakyStore()
+        val secrets = BackupSecrets(store, FlakyStore())
+        assertFalse(secrets.hasPassphrase())
+        assertTrue(secrets.setPassphrase("secret"))
+        assertTrue(secrets.hasPassphrase())
+        store.broken = true
+        assertTrue(secrets.hasPassphrase())
+        assertFalse(secrets.setPassphrase(null))
+        assertFalse(secrets.setPassphrase("other"))
+        store.broken = false
+        assertEquals("secret", store.value)
+        assertTrue(secrets.setPassphrase(null))
+        assertFalse(secrets.hasPassphrase())
     }
 }

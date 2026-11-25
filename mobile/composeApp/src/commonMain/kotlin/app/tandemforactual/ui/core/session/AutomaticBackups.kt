@@ -14,7 +14,14 @@ import kotlinx.serialization.json.put
 class BackupSecrets(
     val passphrase: DeviceCredentialStore,
     val webDavPassword: DeviceCredentialStore,
-)
+) {
+    /** Whether backups are sealed; a stored passphrase that can't be read still counts, so the card never says Off. */
+    fun hasPassphrase(): Boolean = runCatching { passphrase.read() != null }.getOrDefault(true)
+
+    /** Saves the passphrase, or removes it when null; false when the device couldn't. */
+    fun setPassphrase(value: String?): Boolean =
+        runCatching { if (value == null) passphrase.clear() else passphrase.write(value) }.isSuccess
+}
 
 /** The platform's [BackupSecrets]; without them backups stay plain and WebDAV can't be set up. */
 val LocalBackupSecrets = staticCompositionLocalOf<BackupSecrets?> { null }
