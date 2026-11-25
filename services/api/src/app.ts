@@ -4,6 +4,9 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 
+// Planning record ids carry their kind, such as "currency:USD", "fx:USD:EUR" or "device:<id>".
+const RECORD_ID = "^[A-Za-z0-9:._-]{1,100}$";
+
 export const API_VERSION = 1;
 const MAX_CIPHERTEXT = 65_536;
 
@@ -317,7 +320,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
           properties: {
             after: { type: "integer", minimum: 0 },
             limit: { type: "integer", minimum: 1, maximum: 500 },
-            anchor: { type: "string", pattern: "^[A-Za-z0-9-]{1,100}$" },
+            anchor: { type: "string", pattern: RECORD_ID },
           },
         },
         response: {
@@ -367,7 +370,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
           type: "object",
           properties: {
             ...budgetParams.properties,
-            recordId: { type: "string", pattern: "^[A-Za-z0-9-]{1,100}$" },
+            recordId: { type: "string", pattern: RECORD_ID },
           },
           required: ["budgetId", "recordId"],
         },
