@@ -49,6 +49,7 @@ fun TandemApp(
     planningKeyStore: DeviceCredentialStore? = null,
     postLocalAlert: ((LocalAlert) -> Unit)? = null,
     backgroundBudgetKeyStore: DeviceCredentialStore? = null,
+    openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
 ) {
     AppShell(
         ShellEnvironment(
@@ -78,6 +79,7 @@ fun TandemApp(
             planningKeyStore,
             postLocalAlert,
             backgroundBudgetKeyStore,
+            openSignInPage,
         ),
     )
 }

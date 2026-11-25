@@ -93,6 +93,7 @@ private fun createTandemViewController(
                 networkRestoredEvents = syncEvents.networkRestoredEvents,
                 screenshotScript = remember { iosScreenshotScript() },
                 postLocalAlert = ::postIosLocalAlert,
+                openSignInPage = ::openSignInPageOnIos,
             )
         }
     }

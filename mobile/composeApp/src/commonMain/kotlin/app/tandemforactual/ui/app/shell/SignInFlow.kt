@@ -54,7 +54,8 @@ internal class SignInActions(
                 val redirectUrl = mobileSession.startActualOpenIdSignIn(state.serverUrl, env.deviceName)
                 if (redirectUrl != null) {
                     try {
-                        uriHandler.openUri(redirectUrl)
+                        env.openSignInPage?.invoke(redirectUrl) { mobileSession.cancelActualOpenIdSignIn() }
+                            ?: uriHandler.openUri(redirectUrl)
                     } catch (_: Exception) {
                         mobileSession.cancelActualOpenIdSignIn()
                         mobileSession.reportSignInError("Couldn’t open the sign-in page. Try again.")

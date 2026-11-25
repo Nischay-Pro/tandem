@@ -97,6 +97,7 @@ dependencies {
   implementation(libs.windowManager)
   implementation(libs.coreSplashScreen)
   implementation(libs.biometric)
+  implementation(libs.browser)
   implementation(libs.fragment)
   implementation(libs.sqlcipher)
   implementation(libs.profileInstaller)

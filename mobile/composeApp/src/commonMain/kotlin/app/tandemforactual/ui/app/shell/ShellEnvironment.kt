@@ -42,4 +42,6 @@ internal class ShellEnvironment(
     val planningKeyStore: DeviceCredentialStore?,
     val postLocalAlert: ((LocalAlert) -> Unit)?,
     val backgroundBudgetKeyStore: DeviceCredentialStore? = null,
+    /** Opens an OpenID provider's page in the platform's sign-in browser, which hands the callback only to Tandem. */
+    val openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
 )
