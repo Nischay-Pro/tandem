@@ -253,6 +253,80 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun aSplitsLinesFollowTheirParentsAccountDatePayeeAndClearedState() =
+        withBudget {
+            val payees =
+                db
+                    .query(
+                        "SELECT id FROM payees WHERE tombstone = 0 AND transfer_acct IS NULL ORDER BY id",
+                    ).map { it["id"] as String }
+            val (shop, market, own) = payees
+
+            fun line(amount: Long) =
+                buildJsonObject {
+                    put("amount", amount)
+                    put("category", groceries)
+                }
+
+            fun lines(id: String) =
+                db
+                    .query(
+                        "SELECT account, date, cleared, payee FROM v_transactions WHERE parent_id = ? ORDER BY sort_order DESC",
+                        db.first("SELECT id FROM v_transactions WHERE imported_id = ?", id)?.get("id") ?: id,
+                    ).map { listOf(it["account"], (it["date"] as Number).toLong(), it["cleared"], it["payee"]) }
+
+            val id = id()
+            val split =
+                JsonObject(
+                    create + ("payee" to JsonPrimitive(shop)) + ("subtransactions" to JsonArray(listOf(line(-1000), line(-234)))),
+                )
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", split).status)
+            val second =
+                (
+                    (
+                        reader.transaction(
+                            id,
+                        )!!["subtransactions"] as JsonArray
+                    )[1] as JsonObject
+                )["id"]!!.let { (it as JsonPrimitive).content }
+            val ownPayee = buildJsonObject { put("payee", own) }
+            assertEquals(OperationStatus.COMMITTED, submit(second, "update", ownPayee, reader.transaction(second)).status)
+
+            val moved =
+                buildJsonObject {
+                    put("account", savings)
+                    put("date", "2026-11-23")
+                    put("cleared", true)
+                    put("payee", market)
+                }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", moved, reader.transaction(id)).status)
+            assertEquals(
+                listOf(listOf(savings, 20261123L, 1L, market), listOf(savings, 20261123L, 1L, own)),
+                lines(id),
+            )
+
+            val before = checkNotNull(reader.transaction(id))
+            val kept = (before["subtransactions"] as JsonArray).map { (it as JsonObject)["id"]!! }
+            val resplit =
+                buildJsonObject {
+                    put("payee", shop)
+                    put(
+                        "subtransactions",
+                        JsonArray(
+                            listOf(
+                                JsonObject(line(-1100) + ("id" to kept[0])),
+                                JsonObject(
+                                    line(-134) + ("id" to kept[1]),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            assertEquals(OperationStatus.COMMITTED, submit(id, "update", resplit, before).status)
+            assertEquals(listOf(listOf(savings, 20261123L, 1L, shop), listOf(savings, 20261123L, 1L, own)), lines(id))
+        }
+
+    @Test
     fun editsAWholeSplitAndTurnsItBackIntoOneTransaction() =
         withBudget {
             val other =
