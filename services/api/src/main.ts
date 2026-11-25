@@ -10,8 +10,13 @@ export type SignalRegistrar = (
 ) => void;
 
 /** Starts the extension service and closes it cleanly on SIGINT or SIGTERM. */
-export const createPool = (url: string) =>
-  new pg.Pool({ connectionString: url });
+export const createPool = (url: string) => {
+  const pool = new pg.Pool({ connectionString: url });
+  pool.on("error", (error) =>
+    process.stderr.write(`Idle database connection failed: ${error.message}\n`),
+  );
+  return pool;
+};
 
 export async function run(
   environment: Environment,

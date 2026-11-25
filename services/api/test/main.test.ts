@@ -30,6 +30,14 @@ describe("startup", () => {
     expect(pool.options.connectionString).toBe(
       "postgresql://user@127.0.0.1:1/db",
     );
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    pool.emit("error", new Error("connection reset"));
+    expect(stderr).toHaveBeenCalledWith(
+      "Idle database connection failed: connection reset\n",
+    );
+    stderr.mockRestore();
     await pool.end();
   });
 });
