@@ -18,6 +18,8 @@ import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.BudgetAssignmentKind
+import app.tandemforactual.ui.core.state.BudgetAssignmentPresentation
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.categoryCountLabel
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
@@ -37,8 +39,6 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.design.theme.tandemRevealEnter
 import app.tandemforactual.ui.design.theme.tandemRevealExit
-import app.tandemforactual.ui.feature.budget.BudgetAssignmentKind
-import app.tandemforactual.ui.feature.budget.BudgetAssignmentPresentation
 import app.tandemforactual.ui.feature.budget.stillToSpend
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Gauge

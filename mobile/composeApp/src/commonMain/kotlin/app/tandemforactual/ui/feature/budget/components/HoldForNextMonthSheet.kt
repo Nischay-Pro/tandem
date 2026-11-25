@@ -25,6 +25,7 @@ import app.tandemforactual.ui.core.session.budget.holdBudgetForNextMonth
 import app.tandemforactual.ui.core.session.budget.resetBudgetHold
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.BudgetAssignmentPresentation
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.buttons.TandemActionButton
@@ -44,7 +45,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.budget.BudgetAssignmentPresentation
 import app.tandemforactual.ui.feature.budget.holdAmountAllowed
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Check
