@@ -1622,6 +1622,25 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun budgetEditsNotSentStayQueuedToRetry() =
+        runBlocking {
+            val session = TandemMobileSession(apiClient = TandemApiClient(), database = null, nowEpochMillis = { 0L })
+            var ran = false
+
+            assertFalse(session.feedback.performBudgetAction("budget-1", null, "Couldn’t save.") { ran = true })
+            assertTrue(session.feedback.budgetActionShouldRetry, "signed out")
+
+            session.setReadOnlyMode(true)
+            assertFalse(session.feedback.performBudgetAction("budget-1", null, "Couldn’t save.") { ran = true })
+            assertTrue(session.feedback.budgetActionShouldRetry, "read-only")
+            session.setReadOnlyMode(false)
+
+            assertFalse(session.feedback.performBudgetAction("", null, "Couldn’t save.") { ran = true })
+            assertTrue(session.feedback.budgetActionShouldRetry, "no budget open")
+            assertFalse(ran)
+        }
+
+    @Test
     fun readOnlyModeBlocksEveryTransactionWriteEntryPoint() =
         runBlocking {
             val session =
