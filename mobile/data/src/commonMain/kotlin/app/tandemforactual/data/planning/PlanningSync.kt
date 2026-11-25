@@ -205,11 +205,9 @@ class PlanningSync(
         var attempts = 0
         while (attempts++ < 2) {
             val revision = (base ?: 0) + 1
-            val (iv, sealed) =
-                cipher.seal(
-                    plaintext,
-                    PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
-                )
+            val identity = PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision)
+            val (iv, sealed) = cipher.seal(plaintext, identity)
+            val (sentIv, sent) = if (private) cipher.seal(ByteArray(0), identity) else iv to sealed
             val result =
                 transport.put(
                     record.recordId,
@@ -218,16 +216,8 @@ class PlanningSync(
                     revision,
                     base,
                     record.deleted || private,
-                    iv,
-                    if (private) {
-                        cipher
-                            .seal(
-                                ByteArray(0),
-                                PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
-                            ).second
-                    } else {
-                        sealed
-                    },
+                    sentIv,
+                    sent,
                 )
             if (result is RemoteWrite.Stored) {
                 dao.upsert(
