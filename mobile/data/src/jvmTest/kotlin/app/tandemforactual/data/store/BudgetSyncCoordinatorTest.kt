@@ -457,6 +457,26 @@ class BudgetSyncCoordinatorTest {
                 assertEquals("queued", pending.status)
                 assertEquals("invalid_credentials", pending.lastErrorCode)
                 assertEquals(0, remote.operationPolls)
+                assertEquals(WRITE_OPERATION, pending.serverOperationId)
+                assertFailsWith<InvalidLocalWriteException> { repository.discardWrite(WRITE_OPERATION) }
+
+                val next =
+                    repository.enqueueWrite(
+                        updateRequest(
+                            operationId = "write-2",
+                            idempotencyKey = "write-key-2",
+                            patch = "{\"amount\":1500}",
+                            optimistic = "{\"id\":\"$TXN\",\"amount\":1500}",
+                        ),
+                    )
+                assertFalse(next.replacedUnsent)
+                assertEquals(listOf(WRITE_OPERATION, "write-2"), repository.readPendingWrites(BUDGET).map { it.operationId })
+
+                remote.submitError = null
+                remote.submittedOperations.clear()
+                remote.transactionHandler = { _, transactionId, _ -> remoteTransaction(transactionId, "revision-2", 1500L) }
+                assertEquals(2, coordinator.synchronize(BUDGET).writesCommitted)
+                assertEquals(listOf(WRITE_OPERATION, "write-2"), remote.submittedOperations.map { it.operationId })
             } finally {
                 database.close()
             }

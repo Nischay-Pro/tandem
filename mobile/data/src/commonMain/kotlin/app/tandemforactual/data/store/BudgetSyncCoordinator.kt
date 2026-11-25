@@ -383,7 +383,7 @@ class BudgetSyncCoordinator(
                 }
                 val remoteError = error as? BudgetSyncRemoteException
                 if (remoteError?.isRetryableBeforeSubmission == true) {
-                    repository.returnWriteToQueue(operation.operationId, remoteError.errorCode.safeCode())
+                    repository.returnWriteToQueue(operation.operationId, remoteError.errorCode.safeCode(), remoteError.awaitingUpload)
                     throw error
                 }
                 if (remoteError?.isDefinitiveClientError == true) {
