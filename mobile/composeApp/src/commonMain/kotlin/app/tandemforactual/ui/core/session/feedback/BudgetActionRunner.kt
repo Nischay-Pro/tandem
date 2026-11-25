@@ -119,9 +119,9 @@ internal class BudgetActionRunner(
     ): Boolean {
         budgetActionMessage = null
         budgetActionWasAppliedButRefreshFailed = false
-        budgetActionShouldRetry = false
         lastBudgetActionHttpStatus = null
         lastBudgetActionErrorCode = null
+        budgetActionShouldRetry = true
         if (host.refuseWriteInReadOnlyMode()) {
             host.transactionWriteMessage?.let { setBudgetActionMessage(it, ownerRoute = messageOwner) }
             return false
@@ -139,6 +139,7 @@ internal class BudgetActionRunner(
         }
         if (isPerformingBudgetAction) return false
         isPerformingBudgetAction = true
+        budgetActionShouldRetry = false
         var actionApplied = false
         try {
             host.apiClient.withExclusiveSession {
