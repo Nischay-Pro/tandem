@@ -3,8 +3,7 @@
 package app.tandemforactual.ui.feature.transactions.components
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,22 +11,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.HeaderMenuAction
 import app.tandemforactual.ui.app.TandemHeaderMenu
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.design.buttons.TandemActionButton
-import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
+import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.FeedbackMessageOwner
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.theme.TandemMotion
+import app.tandemforactual.ui.design.theme.TandemShapes
+import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.transactions.receipt.ReceiptScanner
 import app.tandemforactual.ui.feature.transactions.receipt.fillNewTransaction
 import app.tandemforactual.ui.feature.transactions.receipt.parseReceiptText
@@ -104,13 +101,17 @@ internal fun TransactionReceiptScanButton(
     scan: TransactionReceiptScanState,
     onBeforeScan: () -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        TandemActionButton(
-            if (scan.scanningReceipt) "Reading receipt…" else "Scan receipt",
-            TandemActionButtonTone.NEUTRAL,
-            Modifier.widthIn(min = 168.dp),
-            icon = Lucide.Scan,
-            loading = scan.scanningReceipt,
+    val palette = tandemPalette
+    Box {
+        TandemIconButton(
+            Lucide.Scan,
+            contentDescription = if (scan.scanningReceipt) "Reading receipt" else "Scan receipt",
+            sizeDp = 48,
+            enabled = !scan.scanningReceipt,
+            tint = if (scan.scanningReceipt) palette.muted else palette.text,
+            containerColor = palette.surface,
+            borderColor = palette.border,
+            shape = RoundedCornerShape(TandemShapes.medium),
         ) {
             onBeforeScan()
             scan.start()
@@ -126,6 +127,11 @@ internal fun TransactionReceiptScanButton(
             }
         }
     }
+}
+
+/** What the last receipt scan found, or why it couldn't read the receipt. */
+@Composable
+internal fun TransactionReceiptScanMessage(scan: TransactionReceiptScanState) {
     AnimatedReveal(visible = scan.receiptMessage != null) {
         scan.receiptMessage?.let { (text, kind) ->
             InlineMessage(text, kind, owner = FeedbackMessageOwner.Action("transaction.receipt"))

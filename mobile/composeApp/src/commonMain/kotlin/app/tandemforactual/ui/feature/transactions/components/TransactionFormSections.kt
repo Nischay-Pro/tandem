@@ -5,6 +5,7 @@ package app.tandemforactual.ui.feature.transactions.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -280,3 +281,14 @@ internal fun TransactionFormDatePicker(
 }
 
 internal fun List<LiveAccountSummary>.isOffBudget(accountId: String?): Boolean = firstOrNull { it.id == accountId }?.offBudget == true
+
+/** The transaction's tools side by side under the amount: split, and on a new transaction, receipt scanning. */
+@Composable
+internal fun TransactionToolsRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
