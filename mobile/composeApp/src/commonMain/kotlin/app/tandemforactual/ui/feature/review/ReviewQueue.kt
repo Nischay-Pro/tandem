@@ -49,6 +49,14 @@ internal data class ReviewQueue(
         return restored to last
     }
 
+    /** Puts [transactionId] back at the front after its category is undone, wherever the queue has got to since. */
+    fun restore(transactionId: String): ReviewQueue =
+        copy(
+            pending = listOf(transactionId) + pending.filterNot { it == transactionId },
+            skipped = skipped.filterNot { it == transactionId },
+            history = history.filterNot { it.transactionId == transactionId },
+        )
+
     fun revisitSkipped(): ReviewQueue = copy(pending = pending + skipped, skipped = emptyList())
 
     /** Drops transactions that left the review elsewhere, such as being categorized on another device. */

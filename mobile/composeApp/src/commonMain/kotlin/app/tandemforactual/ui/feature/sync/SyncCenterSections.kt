@@ -9,6 +9,7 @@ import app.tandemforactual.ui.core.format.formatMomentAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.core.ui.bankLinkBadge
 import app.tandemforactual.ui.core.ui.planningSyncDetail
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -26,7 +27,6 @@ import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Puzzle
 import com.composables.icons.lucide.RotateCcw
-import com.composables.icons.lucide.WalletCards
 
 /** Every budget on this device and where its sync stands, so a quiet second budget doesn't fall behind unnoticed. */
 @Composable
@@ -106,7 +106,7 @@ internal fun SyncCenterBankLinks(
                         ?: link.lastSyncMillis?.let { "Synced ${formatMomentAtEpochMilliseconds(it, now)}" }
                         ?: "Not synced yet",
                 ).joinToString(" · "),
-                leading = RowLeading.Icon(Lucide.WalletCards),
+                leading = RowLeading.Account(link.name, fallback = accountTypeIcon(link.name)),
                 options = ListRowOptions(dense = true, badge = bankLinkBadge(link, now)),
                 onClick = onManage,
             )

@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 
 /**
  * New uncategorized transactions as a stack of cards: swipe right or tap the main button to categorize (or take the
- * suggested category), swipe left to skip, and undo the last step. Skipped ones can be revisited at the end.
+ * suggested category) or swipe left to skip; each categorization can be undone from the undo notice. Skipped ones can be revisited at the end.
  */
 @Composable
 internal fun TransactionReviewScreen(
@@ -72,18 +72,21 @@ internal fun TransactionReviewScreen(
 
     fun categorize(categoryId: String) {
         val item = current ?: return
+        val id = item.recordId ?: return
         queue = queue.categorize(categoryId)
         scope.launch { mobileSession.setReviewCategory(state, item, categoryId) }
+        val name = categoryName(categoryId)
+        mobileSession.transactions.showUndoNotice(
+            listOfNotNull(item.payee, name).joinToString(" → ").let { "Categorized $it" },
+            state.selectedBudgetId,
+        ) {
+            queue = queue.restore(id)
+            mobileSession.setReviewCategory(state, item, null)
+        }
     }
 
-    fun undo() {
-        val (previous, step) = queue.undo() ?: return
-        queue = previous
-        val item = byId[step.transactionId] ?: return
-        if (step is ReviewStep.Categorized) scope.launch { mobileSession.setReviewCategory(state, item, null) }
-    }
     Column(Modifier.fillMaxSize().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-        ReviewHeader(queue.pending.size, canUndo = queue.history.isNotEmpty(), onUndo = ::undo)
+        ReviewHeader(queue.pending.size)
         if (current == null) {
             AllCaughtUp(queue.skipped.size, onRevisit = { queue = queue.revisitSkipped() }, onDone = { navigation.back() })
             return@Column
@@ -124,11 +127,7 @@ private fun rememberSuggestion(
 }
 
 @Composable
-private fun ReviewHeader(
-    remaining: Int,
-    canUndo: Boolean,
-    onUndo: () -> Unit,
-) {
+private fun ReviewHeader(remaining: Int) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             if (remaining == 0) "All done" else "$remaining to go",
@@ -137,7 +136,6 @@ private fun ReviewHeader(
             fontSize = TandemTypography.sectionTitle,
             fontWeight = FontWeight.SemiBold,
         )
-        if (canUndo) SecondaryButton("Undo", onClick = onUndo)
     }
 }
 

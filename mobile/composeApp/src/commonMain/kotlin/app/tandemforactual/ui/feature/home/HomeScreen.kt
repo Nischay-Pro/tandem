@@ -40,6 +40,7 @@ import app.tandemforactual.ui.core.ui.LiveUpcomingBillsCard
 import app.tandemforactual.ui.core.ui.PlanningEditors
 import app.tandemforactual.ui.core.ui.SavingsGoalsCard
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
+import app.tandemforactual.ui.core.ui.activityTransactionLeading
 import app.tandemforactual.ui.core.ui.rememberPlanningEditors
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -59,7 +60,6 @@ import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_more
 import app.tandemforactual.ui.generated.resources.home_set_up
 import com.composables.icons.lucide.CircleAlert
-import com.composables.icons.lucide.Inbox
 import com.composables.icons.lucide.Lucide
 import org.jetbrains.compose.resources.stringResource
 
@@ -284,11 +284,8 @@ private fun ReviewInboxCard(
             if (index > 0) DividerLine()
             ListRow(
                 item.payee,
-                item.dateLabel,
-                leading =
-                    RowLeading.Icon(
-                        Lucide.Inbox,
-                    ),
+                listOf(item.dateLabel, item.account).filter(String::isNotBlank).joinToString(" · "),
+                leading = activityTransactionLeading(item),
                 trailingContent = { money(item.amountMinorUnits) },
                 onClick = {
                     openTransaction(state, navigation, item, isLive = true)

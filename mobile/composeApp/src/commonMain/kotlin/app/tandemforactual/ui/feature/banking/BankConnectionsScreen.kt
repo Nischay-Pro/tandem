@@ -26,6 +26,7 @@ import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.core.ui.bankLinkBadge
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
@@ -50,7 +51,6 @@ import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Unlink
-import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.launch
 
 /** Links budget accounts to the bank providers set up on the Actual server, grouped by where each provider works. */
@@ -151,7 +151,7 @@ private fun LinkedAccountsSection(
                         }
                     },
                 ).distinct().joinToString(" · "),
-                leading = RowLeading.Icon(Lucide.WalletCards),
+                leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name)),
                 options = ListRowOptions(badge = bankLinkBadge(account, now)),
                 onClick = { onManage(account) },
             )
