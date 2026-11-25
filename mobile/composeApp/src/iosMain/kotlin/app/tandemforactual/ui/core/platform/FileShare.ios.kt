@@ -15,6 +15,7 @@ import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
+import platform.UIKit.popoverPresentationController
 
 @Composable
 internal actual fun rememberFileSharer(): (name: String, mimeType: String, contents: String) -> Unit =
