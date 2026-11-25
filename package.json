@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@jsquash/webp": "1.4.0",
     "@rei/cedar-icons": "2.6.1",
     "@resvg/resvg-js": "2.6.2",
     "@thesvg/icons": "4.0.13",
