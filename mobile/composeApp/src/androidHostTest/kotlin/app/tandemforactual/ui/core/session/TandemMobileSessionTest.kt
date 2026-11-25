@@ -410,6 +410,59 @@ class TandemMobileSessionTest {
         }
 
     @Test
+    fun downloadingAnEncryptedBudgetAgainKeepsItsUnsentEditsInTheNewVault() =
+        runBlocking {
+            val main = newDatabase()
+            val oldVault = newDatabase()
+            val newVault = newDatabase()
+            try {
+                val vaultRepository = LocalBudgetRepository(oldVault) { 1_000L }
+                seedCachedBudget(vaultRepository, AppPreferencesStore(oldVault), withPendingWrite = true)
+                var committed: Set<String>? = null
+                var deleted = 0
+                val vault =
+                    object : EncryptedBudgetVault {
+                        override fun hasStore(budgetId: String) = true
+
+                        override suspend fun open(
+                            budgetId: String,
+                            password: String,
+                        ): TandemDatabase? = null
+
+                        override suspend fun create(
+                            budgetId: String,
+                            password: String,
+                        ) = object : PendingEncryptedBudget {
+                            override val database = newVault
+
+                            override suspend fun commit() {
+                                committed = LocalBudgetRepository(newVault) { 2_000L }.budgetWrites(budgetId).map { it.operationId }.toSet()
+                            }
+
+                            override suspend fun discard() = Unit
+                        }
+
+                        override fun delete(budgetId: String) {
+                            deleted += 1
+                        }
+
+                        override fun deleteAll() = Unit
+                    }
+                val session = TandemMobileSession(TandemApiClient(), main, { 2_000L })
+                session.bindEncryptedBudgetDatabase("budget-1", oldVault)
+                session.scheduleActionEncryptionPasswords["budget-1"] = "secret"
+
+                assertEquals(1, session.downloadBudgetAgain("budget-1", vault))
+                assertEquals(1, deleted)
+                assertEquals(setOf("edit-1"), committed)
+                assertTrue(session.writesToReplay.isEmpty())
+            } finally {
+                main.close()
+                oldVault.close()
+            }
+        }
+
+    @Test
     fun deletedTransactionsCanBeUndoneUntilTheyAreSent() =
         runBlocking {
             val database = newDatabase()
