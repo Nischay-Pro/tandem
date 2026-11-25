@@ -4,7 +4,9 @@ import app.tandemforactual.ui.core.state.AccountSort
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.feature.accounts.activeAccountSort
 import app.tandemforactual.ui.feature.accounts.actualAccountOrder
+import app.tandemforactual.ui.feature.accounts.orderAccountsForList
 import app.tandemforactual.ui.feature.accounts.sortAccountsForBudget
+import app.tandemforactual.ui.feature.accounts.sortAccountsForList
 import app.tandemforactual.ui.feature.accounts.sortAccountsWithinGroups
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -70,5 +72,21 @@ class AccountSortTest {
                 account("New", 0, "savings"),
             )
         assertEquals(listOf("Visa", "Brokerage", "Checking", "Amex", "New"), actualAccountOrder(budget))
+    }
+
+    @Test
+    fun listsEachActualSectionTogetherSoASavedSortReadsSorted() {
+        val saved =
+            listOf(
+                account("Amex Cash", 0, "other").copy(sortOrder = 1.0),
+                account("Brokerage", 0, "other").copy(sortOrder = 2.0, offBudget = true),
+                account("Amex Plus", 0, "other").copy(sortOrder = 3.0),
+                account("Honda loan", 0, "other").copy(sortOrder = 4.0, offBudget = true),
+                account("Amex Rewards", 0, "other").copy(sortOrder = 5.0),
+            )
+        val listed = sortAccountsForList(saved)
+        assertEquals(listOf("Amex Cash", "Amex Plus", "Amex Rewards", "Brokerage", "Honda loan"), listed.map { it.name })
+        assertEquals(AccountSort.NAME_ASCENDING, activeAccountSort(listed))
+        assertEquals(listed.map { it.name }, orderAccountsForList(saved, saved.map { it.id }).map { it.name })
     }
 }

@@ -99,6 +99,7 @@ internal fun sortAccountsForList(accounts: List<LiveAccountSummary>): List<LiveA
         compareBy(
             { accountGroupOrder(liveAccountGroupLabel(it)) },
             { liveAccountGroupLabel(it).lowercase() },
+            ::actualSection,
             { it.sortOrder ?: Double.MAX_VALUE },
             { it.name.lowercase() },
         ),
@@ -113,6 +114,7 @@ internal fun orderAccountsForList(
         compareBy(
             { accountGroupOrder(liveAccountGroupLabel(it)) },
             { liveAccountGroupLabel(it).lowercase() },
+            ::actualSection,
             { positions[it.id] ?: Int.MAX_VALUE },
             { it.name.lowercase() },
         ),
@@ -138,9 +140,23 @@ internal fun sortAccountsWithinGroups(
     sort: AccountSort,
 ): List<LiveAccountSummary> =
     accounts.sortedWith(
-        compareBy<LiveAccountSummary>({ accountGroupOrder(liveAccountGroupLabel(it)) }, { liveAccountGroupLabel(it).lowercase() })
-            .then(sort.comparator()),
+        compareBy<LiveAccountSummary>(
+            { accountGroupOrder(liveAccountGroupLabel(it)) },
+            { liveAccountGroupLabel(it).lowercase() },
+            ::actualSection,
+        ).then(sort.comparator()),
     )
+
+/**
+ * Actual's sidebar section: on budget, off budget, then closed. Actual numbers accounts across all sections, so lists
+ * split by section first or on- and off-budget accounts interleave.
+ */
+private fun actualSection(account: LiveAccountSummary): Int =
+    when {
+        account.closed -> 2
+        account.offBudget -> 1
+        else -> 0
+    }
 
 /** The accounts in the order Actual keeps them, by `sort_order` then name, which a sort is applied on top of. */
 internal fun actualAccountOrder(accounts: List<LiveAccountSummary>): List<String> =
@@ -155,13 +171,7 @@ internal fun sortAccountsForBudget(
     sort: AccountSort,
 ): List<LiveAccountSummary> =
     accounts.sortedWith(
-        compareBy<LiveAccountSummary> {
-            when {
-                it.closed -> 2
-                it.offBudget -> 1
-                else -> 0
-            }
-        }.then(sort.comparator()),
+        compareBy(::actualSection).then(sort.comparator()),
     )
 
 private fun AccountSort.comparator(): Comparator<LiveAccountSummary> =
