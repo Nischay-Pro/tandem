@@ -23,6 +23,18 @@ suspend fun LocalBudgetRepository.readBudgetMutationQueue(): LocalBudgetMutation
     )
 }
 
+/**
+ * Whether a payee, category or account this budget's transactions may use is still waiting to be created. Their
+ * writes must wait for it, or Actual rejects them for pointing at a record it doesn't have yet.
+ */
+suspend fun LocalBudgetRepository.hasPendingRecordCreate(budgetId: String): Boolean =
+    database.outboxDao().findByRecordType(BUDGET_MUTATION_RECORD_TYPE).any {
+        it.budgetId == budgetId && it.action in RECORD_CREATE_ACTIONS && it.status in UNSENT_STATUSES
+    }
+
+private val RECORD_CREATE_ACTIONS = setOf("CREATE_CATEGORY", "CREATE_PAYEE", "CREATE_ACCOUNT")
+private val UNSENT_STATUSES = setOf("queued", "sending", "uncertain", "conflict")
+
 suspend fun LocalBudgetRepository.replaceBudgetMutationQueue(
     items: List<LocalBudgetMutationOutboxItem>,
     metadataJson: String,
