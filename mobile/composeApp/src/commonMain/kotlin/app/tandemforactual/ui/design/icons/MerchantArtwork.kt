@@ -15,26 +15,31 @@ import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.compose.resources.getDrawableResourceBytes
 import org.jetbrains.compose.resources.rememberResourceEnvironment
 
-/** Keeps the [limit] most recently used values, dropping the least recently used beyond that. */
+/** Keeps the [limit] most recently used values, dropping the least recently used beyond that. Used from one thread. */
 internal class RecentCache<K, V>(
     private val limit: Int,
 ) {
-    private val values = LinkedHashMap<K, V>(limit, 0.75f, true)
+    private val values = LinkedHashMap<K, V>()
 
-    fun get(key: K): V? = synchronized(this) { values[key] }
+    fun get(key: K): V? {
+        val value = values.remove(key) ?: return null
+        values[key] = value
+        return value
+    }
 
     fun put(
         key: K,
         value: V,
-    ) = synchronized(this) {
+    ) {
+        values.remove(key)
         values[key] = value
         if (values.size > limit) values.remove(values.keys.first())
     }
 
-    val size: Int get() = synchronized(this) { values.size }
+    val size: Int get() = values.size
 }
 
-/** The most recently drawn merchant and bank logos, so scrolling back doesn't decode them again. */
+/** The most recently drawn merchant and bank logos, so scrolling back doesn't decode them again. Main thread only. */
 internal val MerchantArtworkCache = RecentCache<DrawableResource, ImageBitmap>(256)
 
 /**
@@ -48,12 +53,12 @@ internal fun rememberMerchantArtwork(resource: DrawableResource?): Painter? {
     val environment = rememberResourceEnvironment()
     val bitmap by produceState(resource?.let(MerchantArtworkCache::get), resource, environment) {
         if (resource == null || value != null) return@produceState
-        value =
+        val decoded =
             withContext(Dispatchers.Default) {
-                runCatching { getDrawableResourceBytes(environment, resource).decodeToImageBitmap() }
-                    .getOrNull()
-                    ?.also { MerchantArtworkCache.put(resource, it) }
+                runCatching { getDrawableResourceBytes(environment, resource).decodeToImageBitmap() }.getOrNull()
             }
+        decoded?.let { MerchantArtworkCache.put(resource, it) }
+        value = decoded
     }
     return bitmap?.let { remember(it) { BitmapPainter(it) } }
 }
