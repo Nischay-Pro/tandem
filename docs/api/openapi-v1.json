@@ -396,7 +396,10 @@
             "required": false
           },
           {
-            "schema": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,100}$" },
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9:._-]{1,100}$"
+            },
             "in": "query",
             "name": "anchor",
             "required": false
@@ -571,7 +574,10 @@
             "required": true
           },
           {
-            "schema": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,100}$" },
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9:._-]{1,100}$"
+            },
             "in": "path",
             "name": "recordId",
             "required": true

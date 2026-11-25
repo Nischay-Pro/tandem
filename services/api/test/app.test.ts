@@ -234,6 +234,32 @@ describe("extension sync", () => {
     expect(access.calls[0]).toBe(`token:${budget}`);
   });
 
+  it("accepts the planning record ids the app creates", async () => {
+    const server = await app(new InMemoryExtensionStore(), allow());
+    const put = (id: string) =>
+      server.inject({
+        method: "PUT",
+        url: `/extension/v1/budgets/${budget}/records/${id}`,
+        payload: record,
+        headers: auth,
+      });
+    for (const id of [
+      "currency:USD",
+      "fx:USD:EUR",
+      "device:3f1c-a9",
+      "goal.1_a",
+    ]) {
+      expect((await put(id)).statusCode).toBe(200);
+    }
+    expect((await put(encodeURIComponent("bad id"))).statusCode).toBe(400);
+    expect((await put("x".repeat(101))).statusCode).toBeGreaterThanOrEqual(400);
+    const changes = await server.inject({
+      url: `/extension/v1/budgets/${budget}/changes?after=2&anchor=${encodeURIComponent("fx:USD:EUR")}`,
+      headers: auth,
+    });
+    expect(changes.json().restored).toBe(false);
+  });
+
   it("shares one wrapped planning key per budget", async () => {
     const server = await app();
     const url = `/extension/v1/budgets/${budget}/key`;
