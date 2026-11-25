@@ -45,6 +45,7 @@ internal fun ShellScreen(
             merchantIconCatalogLoadError = shell.merchantIconCatalogLoadError,
             liveTransactions = shell.liveTransactions,
             liveActivityTransactions = shell.liveActivityTransactions,
+            liveUncategorized = shell.liveUncategorized,
             onActivitySelectionTotalChanged = { ctx.budgetScoped.activitySelectionTotalMinor = it },
             activitySortCache = shell.activitySortCache,
             liveAccounts = shell.liveAccounts,

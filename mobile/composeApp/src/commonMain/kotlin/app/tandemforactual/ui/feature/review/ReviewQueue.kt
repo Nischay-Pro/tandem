@@ -54,4 +54,12 @@ internal data class ReviewQueue(
     /** Drops transactions that left the review elsewhere, such as being categorized on another device. */
     fun keepOnly(stillUncategorized: Set<String>): ReviewQueue =
         copy(pending = pending.filter { it in stillUncategorized }, skipped = skipped.filter { it in stillUncategorized })
+
+    /** Follows the latest uncategorized list: drops ones decided elsewhere and queues ones that arrived since. */
+    fun refresh(uncategorized: List<String>): ReviewQueue {
+        val decided = history.filterIsInstance<ReviewStep.Categorized>().map { it.transactionId }.toSet()
+        val kept = keepOnly(uncategorized.toSet() + decided)
+        val known = kept.pending.toSet() + kept.skipped + decided
+        return kept.copy(pending = kept.pending + uncategorized.filterNot { it in known })
+    }
 }

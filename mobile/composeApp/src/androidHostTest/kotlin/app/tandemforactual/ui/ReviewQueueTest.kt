@@ -41,4 +41,18 @@ class ReviewQueueTest {
         val queue = ReviewQueue(listOf("a", "b"), skipped = listOf("c"))
         assertEquals(ReviewQueue(listOf("b"), skipped = emptyList()), queue.keepOnly(setOf("b")))
     }
+
+    @Test
+    fun refreshQueuesNewArrivalsWithoutRequeueingDecidedOnes() {
+        var queue = ReviewQueue(emptyList())
+        queue = queue.refresh(listOf("a", "b"))
+        assertEquals(listOf("a", "b"), queue.pending)
+        queue = queue.categorize("food").skip()
+        queue = queue.refresh(listOf("a", "b", "c"))
+        assertEquals(listOf("c"), queue.pending)
+        assertEquals(listOf("b"), queue.skipped)
+        queue = queue.refresh(listOf("c"))
+        assertEquals(listOf("c"), queue.pending)
+        assertTrue(queue.skipped.isEmpty())
+    }
 }

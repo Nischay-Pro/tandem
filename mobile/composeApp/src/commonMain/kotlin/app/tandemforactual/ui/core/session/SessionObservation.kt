@@ -15,6 +15,7 @@ import app.tandemforactual.data.store.observeRecordIds
 import app.tandemforactual.data.store.observeRecords
 import app.tandemforactual.data.store.observeSearchableTransactions
 import app.tandemforactual.data.store.observeSyncState
+import app.tandemforactual.data.store.observeUncategorizedTransactions
 import app.tandemforactual.data.store.observeVisibleRecordCount
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.data.store.recentPayeeIds
@@ -63,6 +64,9 @@ internal suspend fun TandemMobileSession.observeLocalRecords(budgetId: String) {
     coroutineScope {
         launch {
             localRepository.observeRecentRecords(budgetId, "transaction", 50).collect { transactionRecords = it }
+        }
+        launch {
+            localRepository.observeUncategorizedTransactions(budgetId).collect { uncategorizedTransactionRecords = it }
         }
         launch {
             localRepository.observeVisibleRecordCount(budgetId, "transaction").collect {

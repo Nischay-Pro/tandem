@@ -221,6 +221,7 @@ private suspend fun TandemMobileSession.clearSignedOutState() {
     budgetDisplaySettings = null
     budgetDisplaySettingsBudgetId = null
     transactionRecords = emptyList()
+    uncategorizedTransactionRecords = emptyList()
     activity.reset()
     activitySearchRecords = emptyList()
     activitySearchRecordsBudgetId = ""
