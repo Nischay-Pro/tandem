@@ -44,6 +44,29 @@ class ActualImportTest {
     private fun JsonObject.text(name: String) = (this[name] as? JsonPrimitive)?.contentOrNull
 
     @Test
+    fun updatingDatesMovesTheMatchedTransactionAndKeepsSyncing() {
+        val (db, writer) = fixture()
+        val account = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+        val import = ActualImport(writer)
+
+        fun row(date: String) = ImportRow(date = date, amount = -4_321, payeeName = "Corner Shop", importedId = "bank-date-1")
+
+        fun storedDate() =
+            db.first("SELECT date FROM v_transactions WHERE imported_id = 'bank-date-1'")!!["date"].let {
+                ActualMonths.dateString((it as Number).toLong())
+            }
+
+        import.reconcile(account, listOf(row("2026-10-01")))
+        val moved = import.reconcile(account, listOf(row("2026-10-03")), updateDates = true)
+        assertEquals(listOf(ImportOutcome.UPDATE), moved.outcomes)
+        assertEquals("2026-10-03", storedDate())
+
+        assertEquals(listOf(ImportOutcome.UNCHANGED), import.reconcile(account, listOf(row("2026-10-03")), updateDates = true).outcomes)
+        assertEquals(listOf(ImportOutcome.UNCHANGED), import.reconcile(account, listOf(row("2026-10-05"))).outcomes)
+        assertEquals("2026-10-03", storedDate())
+    }
+
+    @Test
     fun importsLikeActual() {
         val cases = Json.parseToJsonElement(resource("import-cases.json").decodeToString()).jsonObject
         val rows =
