@@ -89,12 +89,7 @@ internal fun WhatIfScreen(
         WhatIfControls(
             state = state,
             steps =
-                WhatIfSteps.steps(
-                    income,
-                    spending,
-                    state.budgetDisplaySettings?.currencyCode,
-                    state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
-                ),
+                WhatIfSteps.steps(income, spending, state.budgetDisplaySettings?.currencyCode),
             incomeChange = incomeChange,
             spendingChange = spendingChange,
             toDebt = toDebt,

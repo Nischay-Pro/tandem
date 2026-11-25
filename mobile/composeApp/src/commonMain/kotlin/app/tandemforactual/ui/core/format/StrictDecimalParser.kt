@@ -170,3 +170,22 @@ private fun digitsOnly(value: String): String? {
     }
     return result.toString()
 }
+
+/** Actual stores every amount in hundredths whatever the currency; a currency only changes how many decimals show. */
+internal const val STORED_AMOUNT_DIGITS = 2
+
+/** How many decimals a typed amount may have: the currency's own, up to the hundredths Actual can store. */
+internal fun typedAmountDigits(currencyDigits: Int): Int = currencyDigits.coerceIn(0, STORED_AMOUNT_DIGITS)
+
+/** A typed amount read with [typedDigits] decimals, in the hundredths Actual stores; null when it would overflow. */
+internal fun storedHundredths(
+    typed: Long,
+    typedDigits: Int,
+): Long? {
+    var value = typed
+    repeat(STORED_AMOUNT_DIGITS - typedDigits) {
+        if (value > Long.MAX_VALUE / 10 || value < Long.MIN_VALUE / 10) return null
+        value *= 10
+    }
+    return value
+}

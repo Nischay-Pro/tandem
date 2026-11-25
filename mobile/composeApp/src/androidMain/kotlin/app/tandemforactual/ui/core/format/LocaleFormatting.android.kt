@@ -55,7 +55,7 @@ internal actual fun platformFormatCurrency(
                 if (currency != null) this.currency = currency
                 minimumFractionDigits = fractionDigits
                 maximumFractionDigits = fractionDigits
-            }.format(BigDecimal.valueOf(minorUnits).movePointLeft(fractionDigits))
+            }.format(BigDecimal.valueOf(minorUnits).movePointLeft(STORED_AMOUNT_DIGITS))
     }
 
     val fractionDigits = displaySettings.currencyFractionDigits
@@ -85,13 +85,14 @@ internal actual fun platformFormatReportCurrency(
             if (currency != null) this.currency = currency
             minimumFractionDigits = digits
             maximumFractionDigits = digits
-        }.format(BigDecimal.valueOf(minorUnits).movePointLeft(digits))
+        }.format(BigDecimal.valueOf(minorUnits).movePointLeft(STORED_AMOUNT_DIGITS))
 }
 
 internal actual fun platformFormatDecimal(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,
-): String = formatBudgetNumber(minorUnits, displaySettings, displaySettings.currencyFractionDigits(), hideFraction = false)
+): String =
+    formatBudgetNumber(minorUnits, displaySettings, typedAmountDigits(displaySettings.currencyFractionDigits()), hideFraction = false)
 
 internal actual fun platformParseDecimalMinorUnits(
     value: String,
@@ -100,16 +101,17 @@ internal actual fun platformParseDecimalMinorUnits(
     val locale = numberLocale(displaySettings)
     val symbols = DecimalFormatSymbols.getInstance(locale)
     val secondaryGroupingSize = if (displaySettings?.numberFormat == "comma-dot-in") 2 else 3
+    val digits = typedAmountDigits(displaySettings.currencyFractionDigits())
     return parseStrictMinorUnits(
         value = value,
-        fractionDigits = displaySettings.currencyFractionDigits(),
+        fractionDigits = digits,
         separators =
             DecimalSeparators(
                 decimal = symbols.decimalSeparator,
                 grouping = symbols.groupingSeparator,
                 secondaryGroupingSize = secondaryGroupingSize,
             ),
-    )
+    )?.let { storedHundredths(it, digits) }
 }
 
 private fun formatBudgetNumber(
@@ -127,7 +129,7 @@ private fun formatBudgetNumber(
 ): String {
     val visibleDigits = if (hideFraction) 0 else fractionDigits
     return budgetNumberFormat(displaySettings, visibleDigits)
-        .format(minorUnits.movePointLeft(fractionDigits))
+        .format(minorUnits.movePointLeft(STORED_AMOUNT_DIGITS))
 }
 
 private fun budgetNumberFormat(
