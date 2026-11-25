@@ -483,6 +483,35 @@ class ActualEngineEdgeCaseTest {
     }
 
     @Test
+    fun aServerThatNeverAgreesStopsTheSyncEvenWhileSendingNewMessages() {
+        val now = 1_000_000_000L
+        val store = crdtDb()
+        try {
+            val clock = store.loadClock()
+            var rounds = 0
+            val error =
+                assertFailsWith<ActualSyncException> {
+                    runBlocking {
+                        ActualSyncEngine(store, { _: SyncRequest ->
+                            check(++rounds < 200) { "sync never gave up" }
+                            val message =
+                                MessageEnvelope(
+                                    ActualTimestamp(now + rounds, 0, "0000000000000002").toString(),
+                                    false,
+                                    SyncProtocol.encode(ActualMessage("payees", "p$rounds", "name", "S:x")),
+                                )
+                            SyncResponse(listOf(message), """{"hash":5,"0":{"hash":5}}""")
+                        }, "g", "f") { now }.fullSync(clock, "x")
+                    }
+                }
+            assertEquals("out-of-sync", error.reason)
+            assertTrue(rounds <= 101)
+        } finally {
+            store.db.close()
+        }
+    }
+
+    @Test
     fun syncReportsActualErrorReasons() {
         val now = 1_000_000_000L
         val store = crdtDb()

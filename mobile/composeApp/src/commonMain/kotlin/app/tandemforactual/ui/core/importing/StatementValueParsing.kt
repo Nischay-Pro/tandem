@@ -1,5 +1,8 @@
 package app.tandemforactual.ui.core.importing
 
+import app.tandemforactual.ui.core.format.STORED_AMOUNT_DIGITS
+import app.tandemforactual.ui.core.format.storedHundredths
+
 internal fun normalizeColumn(value: String): String = value.lowercase().filter(Char::isLetterOrDigit)
 
 internal fun List<String>.cell(index: Int?): String = index?.let { getOrNull(it)?.trim() }.orEmpty()
@@ -87,8 +90,24 @@ internal fun parseMoney(
     val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
     val fraction = normalizedFraction.toLongOrNull() ?: 0L
     if (whole > (Long.MAX_VALUE - fraction) / scale) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val minorUnits = (whole * scale) + fraction
-    return if (negative) -minorUnits else minorUnits
+    val hundredths = toStoredHundredths((whole * scale) + fraction, currencyFractionDigits)
+    return if (negative) -hundredths else hundredths
+}
+
+/**
+ * A statement amount in the currency's own minor units, as the hundredths Actual stores. A third decimal, which Actual
+ * can't keep, rounds to the nearest hundredth.
+ */
+private fun toStoredHundredths(
+    minorUnits: Long,
+    currencyFractionDigits: Int,
+): Long {
+    if (currencyFractionDigits <= STORED_AMOUNT_DIGITS) {
+        return storedHundredths(minorUnits, currencyFractionDigits)
+            ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
+    }
+    val extra = decimalScale(currencyFractionDigits - STORED_AMOUNT_DIGITS)
+    return (minorUnits + extra / 2) / extra
 }
 
 private fun decimalScale(fractionDigits: Int): Long {

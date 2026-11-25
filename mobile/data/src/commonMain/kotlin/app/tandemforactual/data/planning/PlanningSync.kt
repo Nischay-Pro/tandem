@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -164,61 +165,79 @@ class PlanningSync(
         return PlanningSyncResult(0, downloaded, after, anchor)
     }
 
+    /**
+     * Uploads each pending record on its own, so one the service refuses stays queued for next time instead of stopping
+     * the rest, and the download that follows still runs.
+     */
     private suspend fun uploadPending(cipher: PlanningCipher): Int {
         var uploaded = 0
         for (record in dao.pending(budgetId)) {
-            val plaintext =
-                cipher.open(
-                    record.iv,
-                    record.ciphertext,
-                    PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, record.revision),
-                )
-            var base = record.syncedRevision.takeIf { it > 0 }
-            val private =
-                !record.deleted &&
-                    runCatching { isPrivate(Json.parseToJsonElement(plaintext.decodeToString()).jsonObject) }.getOrDefault(false)
-            if (private && base == null) {
-                dao.upsert(record.copy(pendingUpload = false))
+            try {
+                if (uploadRecord(cipher, record)) uploaded++
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
                 continue
-            }
-            var attempts = 0
-            while (attempts++ < 2) {
-                val revision = (base ?: 0) + 1
-                val (iv, sealed) =
-                    cipher.seal(
-                        plaintext,
-                        PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
-                    )
-                val result =
-                    transport.put(
-                        record.recordId,
-                        record.recordType,
-                        record.schemaVersion,
-                        revision,
-                        base,
-                        record.deleted || private,
-                        iv,
-                        if (private) {
-                            cipher
-                                .seal(
-                                    ByteArray(0),
-                                    PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
-                                ).second
-                        } else {
-                            sealed
-                        },
-                    )
-                if (result is RemoteWrite.Stored) {
-                    dao.upsert(
-                        record.copy(revision = revision, syncedRevision = revision, iv = iv, ciphertext = sealed, pendingUpload = false),
-                    )
-                    uploaded++
-                    break
-                }
-                base = (result as RemoteWrite.Conflict).current?.revision
             }
         }
         return uploaded
+    }
+
+    /** Uploads one pending record, true once the service has stored it. */
+    private suspend fun uploadRecord(
+        cipher: PlanningCipher,
+        record: PlanningRecordEntity,
+    ): Boolean {
+        val plaintext =
+            cipher.open(
+                record.iv,
+                record.ciphertext,
+                PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, record.revision),
+            )
+        var base = record.syncedRevision.takeIf { it > 0 }
+        val private =
+            !record.deleted &&
+                runCatching { isPrivate(Json.parseToJsonElement(plaintext.decodeToString()).jsonObject) }.getOrDefault(false)
+        if (private && base == null) {
+            dao.upsert(record.copy(pendingUpload = false))
+            return false
+        }
+        var attempts = 0
+        while (attempts++ < 2) {
+            val revision = (base ?: 0) + 1
+            val (iv, sealed) =
+                cipher.seal(
+                    plaintext,
+                    PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
+                )
+            val result =
+                transport.put(
+                    record.recordId,
+                    record.recordType,
+                    record.schemaVersion,
+                    revision,
+                    base,
+                    record.deleted || private,
+                    iv,
+                    if (private) {
+                        cipher
+                            .seal(
+                                ByteArray(0),
+                                PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision),
+                            ).second
+                    } else {
+                        sealed
+                    },
+                )
+            if (result is RemoteWrite.Stored) {
+                dao.upsert(
+                    record.copy(revision = revision, syncedRevision = revision, iv = iv, ciphertext = sealed, pendingUpload = false),
+                )
+                return true
+            }
+            base = (result as RemoteWrite.Conflict).current?.revision
+        }
+        return false
     }
 
     private suspend fun downloadChanges(

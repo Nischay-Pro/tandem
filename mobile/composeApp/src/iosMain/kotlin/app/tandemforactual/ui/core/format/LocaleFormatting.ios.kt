@@ -82,21 +82,22 @@ internal actual fun platformFormatReportCurrency(
             maximumFractionDigits = digits.toULong()
         }
     }) { formatter ->
-        formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(digits.toDouble()))) ?: ""
+        formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(STORED_AMOUNT_DIGITS.toDouble()))) ?: ""
     }
 }
 
 internal actual fun platformFormatDecimal(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings?,
-): String = formatBudgetNumber(minorUnits, displaySettings, displaySettings.currencyFractionDigits(), hideFraction = false)
+): String =
+    formatBudgetNumber(minorUnits, displaySettings, typedAmountDigits(displaySettings.currencyFractionDigits()), hideFraction = false)
 
 internal actual fun platformParseDecimalMinorUnits(
     value: String,
     displaySettings: BudgetDisplaySettings?,
 ): Long? {
     val locale = numberLocale(displaySettings)
-    val fractionDigits = displaySettings.currencyFractionDigits()
+    val fractionDigits = typedAmountDigits(displaySettings.currencyFractionDigits())
     val symbols =
         NSNumberFormatter().apply {
             this.locale = locale
@@ -115,7 +116,7 @@ internal actual fun platformParseDecimalMinorUnits(
                 grouping = groupingSeparator,
                 secondaryGroupingSize = secondaryGroupingSize,
             ),
-    )
+    )?.let { storedHundredths(it, fractionDigits) }
 }
 
 private fun formatBudgetNumber(
@@ -133,7 +134,7 @@ private fun formatBudgetNumber(
 ): String {
     val visibleDigits = if (hideFraction) 0 else fractionDigits
     val locale = numberLocale(displaySettings)
-    val amount = minorUnits / 10.0.pow(fractionDigits.toDouble())
+    val amount = minorUnits / 10.0.pow(STORED_AMOUNT_DIGITS.toDouble())
     return withNumberFormatter("decimal:$locale:$visibleDigits", {
         NSNumberFormatter().apply {
             this.locale = locale

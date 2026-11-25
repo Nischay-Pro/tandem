@@ -212,7 +212,7 @@ class ActualImport(
                         match["raw_synced_data"] ?: trans["raw_synced_data"],
                     )
                 }
-                if (updateDates) put("date", ActualDates.toInt(trans["date"] as String))
+                if (updateDates) put("date", trans["date"] as String)
             }
         val existing =
             mapOf(
@@ -223,7 +223,7 @@ class ActualImport(
                 "notes" to match["notes"],
                 "cleared" to truthy(match["cleared"]),
                 "raw_synced_data" to match["raw_synced_data"],
-                "date" to (match["date"] as Number?)?.toLong(),
+                "date" to (match["date"] as Number?)?.let { ActualDates.fromInt(it.toLong()) },
             )
         return if (updates.any { (key, value) -> existing[key] != value }) {
             updated += updates + ("id" to match["id"])

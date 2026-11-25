@@ -114,14 +114,14 @@ class IosLocaleFormattingTest {
         val threeDigitUs = settings("comma-dot", fractionDigits = 3)
         val threeDigitGerman = settings("dot-comma", fractionDigits = 3)
 
-        assertEquals(1_500L, platformParseDecimalMinorUnits("1,500", yen))
+        assertEquals(150_000L, platformParseDecimalMinorUnits("1,500", yen))
         assertNull(platformParseDecimalMinorUnits("1.50", yen))
         assertEquals(1_250L, platformParseDecimalMinorUnits("12.50", usd))
         assertNull(platformParseDecimalMinorUnits("12,50", usd))
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12.345", threeDigitUs))
-        assertNull(platformParseDecimalMinorUnits("12,345", threeDigitUs))
-        assertEquals(12_345L, platformParseDecimalMinorUnits("12,345", threeDigitGerman))
-        assertNull(platformParseDecimalMinorUnits("12.345", threeDigitGerman))
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12.34", threeDigitUs))
+        assertNull(platformParseDecimalMinorUnits("12.345", threeDigitUs), "a third decimal can't be stored")
+        assertEquals(1_234L, platformParseDecimalMinorUnits("12,34", threeDigitGerman))
+        assertNull(platformParseDecimalMinorUnits("12,345", threeDigitGerman))
     }
 
     @Test
@@ -140,7 +140,7 @@ class IosLocaleFormattingTest {
                 val displaySettings = settings(numberFormat, fractionDigits)
                 val groupedInteger = "1${groupingMark}234${groupingMark}567"
                 val malformedGrouping = "1234${groupingMark}567"
-                val expectedGroupedMinorUnits = "1234567${"0".repeat(fractionDigits)}".toLong()
+                val expectedGroupedMinorUnits = 123_456_700L
 
                 assertEquals(
                     expectedGroupedMinorUnits,
@@ -151,9 +151,10 @@ class IosLocaleFormattingTest {
                     platformParseDecimalMinorUnits(malformedGrouping, displaySettings),
                     "$numberFormat/$fractionDigits malformed grouping",
                 )
+                val wholeAmount = if (fractionDigits == 0) 123_456_700L else 123_456_789L
                 assertEquals(
-                    123_456_789L,
-                    platformParseDecimalMinorUnits(platformFormatDecimal(123_456_789L, displaySettings), displaySettings),
+                    wholeAmount,
+                    platformParseDecimalMinorUnits(platformFormatDecimal(wholeAmount, displaySettings), displaySettings),
                     "$numberFormat/$fractionDigits formatted round trip",
                 )
 
@@ -163,15 +164,10 @@ class IosLocaleFormattingTest {
                         "$numberFormat rejects decimal mark for whole currency",
                     )
                 } else {
-                    val fractionalDigits = "123".take(fractionDigits)
+                    val fractionalDigits = "123".take(minOf(fractionDigits, 2))
                     val validAmount = "12${decimalMark}$fractionalDigits"
-                    val expectedMinorUnits = "12$fractionalDigits".toLong()
-                    val groupingMarkAsDecimal =
-                        if (fractionDigits == 3 && groupingMark in setOf('.', ',')) {
-                            "12${groupingMark}$fractionalDigits"
-                        } else {
-                            "12${groupingMark}${fractionalDigits.take(2)}"
-                        }
+                    val expectedMinorUnits = "12${fractionalDigits.padEnd(2, '0')}".toLong()
+                    val groupingMarkAsDecimal = "12${groupingMark}${fractionalDigits.take(2)}"
                     assertEquals(
                         expectedMinorUnits,
                         platformParseDecimalMinorUnits(validAmount, displaySettings),
@@ -211,7 +207,8 @@ class IosLocaleFormattingTest {
             listOf(0, 2, 3).forEach { fractionDigits ->
                 val displaySettings = settings(numberFormat, fractionDigits)
                 repeat(64) { sample ->
-                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L)
+                    val step = if (fractionDigits == 0) 100L else 1L
+                    val amountMinor = random.nextLong(0L, 1_000_000_000_000L) / step * step
                     val formatted = platformFormatDecimal(amountMinor, displaySettings)
 
                     assertEquals(

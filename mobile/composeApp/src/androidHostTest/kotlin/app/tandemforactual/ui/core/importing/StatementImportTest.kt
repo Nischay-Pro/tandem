@@ -51,7 +51,7 @@ class StatementImportTest {
                         numberFormat = "comma-dot",
                     ),
                     displaySettings("JPY", "¥", 0),
-                    listOf(1_500L),
+                    listOf(150_000L),
                 ),
                 Triple(
                     parseStatementImport(
@@ -71,7 +71,7 @@ class StatementImportTest {
                         numberFormat = "comma-dot",
                     ),
                     displaySettings("KWD", "KD", 3),
-                    listOf(12_345L),
+                    listOf(1_235L),
                 ),
             )
 
@@ -97,7 +97,7 @@ class StatementImportTest {
                 numberFormat = "comma-dot",
             )
 
-        assertEquals(listOf(1_500L, -2_500L), parsed.transactions.map { it.amountMinor })
+        assertEquals(listOf(150_000L, -250_000L), parsed.transactions.map { it.amountMinor })
         val yenSettings =
             BudgetDisplaySettings(
                 currencyCode = "JPY",
@@ -120,7 +120,7 @@ class StatementImportTest {
                 currencyFractionDigits = 0,
                 numberFormat = "comma-dot",
             )
-        assertEquals(1_234L, usFormatted.transactions.single().amountMinor)
+        assertEquals(123_400L, usFormatted.transactions.single().amountMinor)
 
         val europeanFormatted =
             parseStatementImport(
@@ -129,7 +129,7 @@ class StatementImportTest {
                 currencyFractionDigits = 0,
                 numberFormat = "dot-comma",
             )
-        assertEquals(1_234L, europeanFormatted.transactions.single().amountMinor)
+        assertEquals(123_400L, europeanFormatted.transactions.single().amountMinor)
 
         assertThrows(StatementImportParseException::class.java) {
             parseStatementImport(
@@ -160,7 +160,7 @@ class StatementImportTest {
                 currencyFractionDigits = 3,
                 numberFormat = "comma-dot",
             )
-        assertEquals(listOf(1_234L, -23_500L), csv.transactions.map { it.amountMinor })
+        assertEquals(listOf(123L, -2_350L), csv.transactions.map { it.amountMinor })
         val threeDecimalSettings =
             BudgetDisplaySettings(
                 currencyCode = "KWD",
@@ -171,7 +171,7 @@ class StatementImportTest {
                 currencySymbolPosition = "before",
                 currencySpaceBetweenAmountAndSymbol = false,
             )
-        assertEquals("KD1.234", formatCurrency(csv.transactions.first().amountMinor, threeDecimalSettings))
+        assertEquals("KD1.230", formatCurrency(csv.transactions.first().amountMinor, threeDecimalSettings))
 
         assertThrows(StatementImportParseException::class.java) {
             parseStatementImport(
@@ -189,7 +189,7 @@ class StatementImportTest {
                 currencyFractionDigits = 3,
                 numberFormat = "dot-comma",
             )
-        assertEquals(listOf(1_234L, -2_500L), european.transactions.map { it.amountMinor })
+        assertEquals(listOf(123L, -250L), european.transactions.map { it.amountMinor })
 
         val qif =
             parseStatementImport(
@@ -198,7 +198,7 @@ class StatementImportTest {
                 currencyFractionDigits = 3,
                 numberFormat = "comma-dot",
             )
-        assertEquals(-12_345L, qif.transactions.single().amountMinor)
+        assertEquals(-1_235L, qif.transactions.single().amountMinor)
 
         val ofx =
             parseStatementImport(
@@ -207,7 +207,7 @@ class StatementImportTest {
                 currencyFractionDigits = 3,
                 numberFormat = "comma-dot",
             )
-        assertEquals(6_789L, ofx.transactions.single().amountMinor)
+        assertEquals(679L, ofx.transactions.single().amountMinor)
     }
 
     @Test

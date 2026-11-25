@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.feature.planning
 
+import app.tandemforactual.ui.core.format.STORED_AMOUNT_DIGITS
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -43,9 +44,8 @@ internal object WhatIfSteps {
         monthlyIncomeMinor: Long,
         monthlySpendingMinor: Long,
         currencyCode: String?,
-        fractionDigits: Int,
     ): List<Long> {
-        val unit = 10.0.pow(fractionDigits)
+        val unit = 10.0.pow(STORED_AMOUNT_DIGITS)
         val baseMajor =
             maxOf(monthlyIncomeMinor, monthlySpendingMinor).takeIf { it > 0 }?.let { it / unit }
                 ?: typicalMonth[currencyCode?.uppercase()] ?: DEFAULT_TYPICAL_MONTH
