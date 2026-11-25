@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Sync
+import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
 
 plugins {
   alias(libs.plugins.kotlinMultiplatform)
@@ -73,16 +74,12 @@ kotlin {
       isIncludeAndroidResources = true
     }
   }
-  iosArm64 {
-    binaries.framework {
+  listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+    target.binaries.framework {
       baseName = "ComposeApp"
       isStatic = true
-    }
-  }
-  iosSimulatorArm64 {
-    binaries.framework {
-      baseName = "ComposeApp"
-      isStatic = true
+      // Whole-program devirtualization outgrew the macOS runners' memory: hours of garbage collection, then out of memory.
+      if (buildType == NativeBuildType.RELEASE) freeCompilerArgs += "-Xdisable-phases=DevirtualizationAnalysis"
     }
   }
 
