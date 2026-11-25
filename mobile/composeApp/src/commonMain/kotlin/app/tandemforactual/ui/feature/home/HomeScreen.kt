@@ -27,6 +27,7 @@ import app.tandemforactual.ui.core.state.ExperienceSettings
 import app.tandemforactual.ui.core.state.HomeData
 import app.tandemforactual.ui.core.state.HomeEntry
 import app.tandemforactual.ui.core.state.HomeModule
+import app.tandemforactual.ui.core.state.HomePlan
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
@@ -99,7 +100,9 @@ internal fun HomeScreen(
             )
         }
     val editors = rememberPlanningEditors(state, mobileSession, month)
-    val plan = planHome(state.experience ?: ExperienceSettings(), state.interfaceMode, data)
+    val experience = state.experience ?: ExperienceSettings()
+    val plan = pinReviewInbox(planHome(experience, state.interfaceMode, data))
+    val showReview = data.uncategorizedCount > 0 && HomeModule.REVIEW_INBOX !in experience.hiddenModules
     var autoAssigning by remember { mutableStateOf(false) }
     val settings = mobileSession.budgetDisplaySettings
     val money: @Composable (Long) -> Unit = { amount ->
@@ -122,6 +125,9 @@ internal fun HomeScreen(
                     onAutoAssign = { autoAssigning = true }.takeUnless { state.readOnlyMode },
                 )
             }
+        }
+        if (showReview) {
+            item(key = "home-review") { ReviewInboxCard(HomeModule.REVIEW_INBOX, state, navigation, transactions, money) }
         }
         if (mobileSession.syncError != null && !mobileSession.isSyncing) {
             item(key = "home-sync") {
@@ -147,6 +153,13 @@ internal fun HomeScreen(
     }
     AutoAssignSheet(autoAssigning, state, mobileSession, month) { autoAssigning = false }
 }
+
+/** The review inbox sits at the top of Home under the budget total, so it is left out of the arranged modules. */
+internal fun pinReviewInbox(plan: HomePlan): HomePlan =
+    HomePlan(
+        plan.prominent.filterNot { it.module == HomeModule.REVIEW_INBOX },
+        plan.more.filterNot { it.module == HomeModule.REVIEW_INBOX },
+    )
 
 /** One lazy item per Home entry, keyed by its module. */
 private fun LazyListScope.homeEntryItems(
