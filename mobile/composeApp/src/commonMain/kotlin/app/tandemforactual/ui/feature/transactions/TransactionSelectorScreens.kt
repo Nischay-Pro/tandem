@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.SelectorGroup
 import app.tandemforactual.ui.core.state.SelectorItem
+import app.tandemforactual.ui.core.ui.AccountIconTile
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -189,11 +191,19 @@ internal fun TransactionAccountPickerDialog(
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
                         items(filtered, key = { "account-choice-${it.id}" }) { item ->
-                            ChoiceRow(
-                                item.label,
-                                selected = if (live) selectedId == item.id else selectedName == item.label,
-                                onClick = { onSelect(item) },
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                            ) {
+                                if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.type)
+                                Box(Modifier.weight(1f)) {
+                                    ChoiceRow(
+                                        item.label,
+                                        selected = if (live) selectedId == item.id else selectedName == item.label,
+                                        onClick = { onSelect(item) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }

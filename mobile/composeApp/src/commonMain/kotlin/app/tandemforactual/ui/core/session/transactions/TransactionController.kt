@@ -10,6 +10,16 @@ import app.tandemforactual.ui.core.session.transactions.TransactionController
 internal class TransactionController(
     internal val host: SessionHost,
 ) {
+    /** Shows the shared undo notice for any action, so every undo in the app looks and behaves the same. */
+    fun showUndoNotice(
+        message: String,
+        budgetId: String,
+        undo: suspend () -> Unit,
+    ) {
+        undoNoticeCount += 1
+        undoNotice = UndoNotice(undoNoticeCount, message, budgetId, emptySet(), undo)
+    }
+
     fun dismissUndoNotice(id: Long) {
         if (undoNotice?.id == id) undoNotice = null
     }

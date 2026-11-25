@@ -113,8 +113,18 @@ private fun UndoNotice(ctx: ShellContext) {
                 InlineMessage(
                     notice.message,
                     InlineMessageKind.INFO,
-                    actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() },
-                    onAction = { ctx.coroutineScope.launch { mobileSession.transactions.undoTransactionDeletes(notice) } },
+                    actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() || notice.undo != null },
+                    onAction = {
+                        ctx.coroutineScope.launch {
+                            val undo = notice.undo
+                            if (undo == null) {
+                                mobileSession.transactions.undoTransactionDeletes(notice)
+                            } else {
+                                mobileSession.transactions.dismissUndoNotice(notice.id)
+                                undo()
+                            }
+                        }
+                    },
                     onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
                 )
             }

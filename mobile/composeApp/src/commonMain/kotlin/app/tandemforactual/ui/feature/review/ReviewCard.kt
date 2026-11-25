@@ -5,6 +5,7 @@ package app.tandemforactual.ui.feature.review
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.ui.AccountIconTile
+import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -50,7 +53,6 @@ import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Tags
-import com.composables.icons.lucide.WalletCards
 import com.composables.icons.lucide.X
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -135,7 +137,10 @@ private fun ReviewCardFace(
             .padding(TandemSpacing.large),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        Detail(Lucide.WalletCards, item.account)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            AccountIconTile(item.account)
+            Text(item.account, color = palette.muted, fontSize = TandemTypography.compactBody, maxLines = 1)
+        }
         Spacer(Modifier.weight(1f))
         Detail(Lucide.CalendarDays, item.dateLabel)
         Text(
@@ -144,7 +149,12 @@ private fun ReviewCardFace(
             fontSize = TandemTypography.heroTitle,
             fontWeight = FontWeight.Bold,
         )
-        Text(item.payee, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 2)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+            rememberMerchantArtwork(item.merchantIcon)?.let { logo ->
+                Image(logo, contentDescription = null, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(TandemShapes.small)))
+            }
+            Text(item.payee, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 2)
+        }
         if (item.notes.isNotBlank()) Text(item.notes, color = palette.muted, fontSize = TandemTypography.compactBody, maxLines = 2)
         Spacer(Modifier.weight(1f))
         footer()

@@ -19,6 +19,7 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -31,7 +32,6 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
-import com.composables.icons.lucide.WalletCards
 
 /** Picks the unlinked budget account a bank account should sync into. */
 @Composable
@@ -67,7 +67,7 @@ internal fun LinkBankAccountDialog(
                                 "Best match".takeIf { isBestMatch(candidates, candidate) },
                                 if (account.offBudget) "Off budget" else "On budget",
                             ).joinToString(" · "),
-                            leading = RowLeading.Icon(Lucide.WalletCards),
+                            leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
                             onClick = { onPick(account) },
                         )
                     }
