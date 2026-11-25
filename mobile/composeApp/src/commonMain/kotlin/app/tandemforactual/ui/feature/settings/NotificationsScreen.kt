@@ -144,6 +144,10 @@ private fun MoneyAlertsSection(
             state.overspendingAlerts = it
         }
         DividerLine()
+        ToggleRow("New transactions to categorize", "When new transactions come in without a category", state.uncategorizedAlerts) {
+            state.uncategorizedAlerts = it
+        }
+        DividerLine()
         ToggleRow(
             "Large transactions",
             "Spending of ${state.formatCurrency(state.largeTransactionMinor)} or more",

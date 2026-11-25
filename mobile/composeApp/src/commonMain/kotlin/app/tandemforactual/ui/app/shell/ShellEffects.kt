@@ -11,17 +11,20 @@ import androidx.compose.runtime.withFrameNanos
 import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.bankSyncFailureAlert
+import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.ui.app.QuickAction
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.isBackPreviewStale
 import app.tandemforactual.ui.app.navigationRoutes
 import app.tandemforactual.ui.core.format.parseSharedTransactionText
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.processQueuedBudgetReorders
 import app.tandemforactual.ui.core.session.scheduleOpenIdProofExpiry
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.loadMerchantIconCatalog
 import app.tandemforactual.ui.core.state.loadMerchantIconMatcherPack
@@ -59,6 +62,16 @@ internal fun SessionQueueEffects(
         val post = env.postLocalAlert ?: return@LaunchedEffect
         val alert = bankSyncFailureAlert(store, state.selectedBudgetId, links.filter { it.failure != null }.map { it.name })
         if (alert != null && state.notificationPolicy.allows(AlertKind.BANK_SYNC_FAILURE, platformMinuteOfDay())) post(alert)
+    }
+    LaunchedEffect(mobileSession.transactionRecords) {
+        val repository = mobileSession.repository ?: return@LaunchedEffect
+        val store = appPreferencesStore ?: return@LaunchedEffect
+        val post = env.postLocalAlert ?: return@LaunchedEffect
+        if (state.selectedBudgetId.isBlank() || mobileSession.transactionRecords.isEmpty()) return@LaunchedEffect
+        val policy = state.notificationPolicy
+        val alert =
+            uncategorizedAlert(repository, store, state.selectedBudgetId, platformTodayIsoDate(), policy) { state.formatCurrency(it) }
+        if (alert != null && policy.allows(AlertKind.UNCATEGORIZED, platformMinuteOfDay())) post(alert)
     }
 }
 
@@ -132,6 +145,7 @@ private fun QuickDestinationEffect(ctx: ShellContext) {
             when (QuickActionEvents.consumeDestination()) {
                 QuickAction.BUDGET_CHECKUP -> AppRoute.DATA_HEALTH
                 QuickAction.ACCOUNTS -> AppRoute.ACCOUNTS
+                QuickAction.REVIEW_TRANSACTIONS -> AppRoute.REVIEW_TRANSACTIONS
                 else -> null
             } ?: return@LaunchedEffect
         state.menuOpen = false

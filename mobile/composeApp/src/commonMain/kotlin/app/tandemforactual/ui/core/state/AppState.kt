@@ -176,6 +176,7 @@ internal class AppState {
     var conflictReviewAlerts by mutableStateOf(true)
     var rejectedEditAlerts by mutableStateOf(true)
     var overspendingAlerts by mutableStateOf(true)
+    var uncategorizedAlerts by mutableStateOf(true)
     var bankSyncAlerts by mutableStateOf(true)
     var upcomingBillAlerts by mutableStateOf(false)
     var largeTransactionAlerts by mutableStateOf(false)
@@ -299,6 +300,7 @@ internal class AppState {
                 "conflictReviewAlerts" to conflictReviewAlerts.toString(),
                 "rejectedEditAlerts" to rejectedEditAlerts.toString(),
                 "overspendingAlerts" to overspendingAlerts.toString(),
+                "uncategorizedAlerts" to uncategorizedAlerts.toString(),
                 "bankSyncAlerts" to bankSyncAlerts.toString(),
                 "upcomingBillAlerts" to upcomingBillAlerts.toString(),
                 "largeTransactionAlerts" to largeTransactionAlerts.toString(),
@@ -372,6 +374,7 @@ internal class AppState {
         rejectedEditAlerts =
             saved["rejectedEditAlerts"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: rejectedEditAlerts
         overspendingAlerts = saved["overspendingAlerts"]?.toBooleanStrictOrNull() ?: overspendingAlerts
+        uncategorizedAlerts = saved["uncategorizedAlerts"]?.toBooleanStrictOrNull() ?: uncategorizedAlerts
         bankSyncAlerts = saved["bankSyncAlerts"]?.toBooleanStrictOrNull() ?: bankSyncAlerts
         upcomingBillAlerts = saved["upcomingBillAlerts"]?.toBooleanStrictOrNull() ?: upcomingBillAlerts
         largeTransactionAlerts = saved["largeTransactionAlerts"]?.toBooleanStrictOrNull() ?: largeTransactionAlerts

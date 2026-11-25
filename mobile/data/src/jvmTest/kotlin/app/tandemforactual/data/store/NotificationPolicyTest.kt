@@ -95,6 +95,8 @@ class NotificationPolicyTest {
             json,
             "g",
             recordDate = text("date"),
+            accountId = text("account"),
+            categoryId = text("category"),
             payeeId = text("payee"),
             amountMinor = (body?.get("amount") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull(),
             displayMetadata = text("name")?.let { BudgetRecordDisplayMetadata(it, null) },
@@ -169,6 +171,48 @@ class NotificationPolicyTest {
                 largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy.copy(largeTransactionMinor = 50), format)
                     ?.message,
             )
+        }
+
+    @Test
+    fun announcesNewUncategorizedTransactionsOnceAfterAFirstLook() =
+        withRepository { repository, preferences ->
+            val policy = NotificationPolicy.read(emptyMap())
+            val format = { minor: Long -> "$$minor" }
+
+            suspend fun alert(hide: Boolean = false) =
+                uncategorizedAlert(repository, preferences, "budget", "2026-11-21", policy.copy(hideAmounts = hide), format)
+            val key = "internal:announced-uncategorized:budget"
+            repository.load(
+                listOf(
+                    record("account", "checking", """{"name":"Checking"}"""),
+                    record("account", "loan", """{"name":"Loan","offbudget":true}"""),
+                    record("payee", "shop", """{"name":"Costco"}"""),
+                    record("transaction", "fresh", """{"date":"2026-11-20","amount":-1200,"account":"checking","payee":"shop"}"""),
+                    record("transaction", "nopayee", """{"date":"2026-11-21","amount":-7,"account":"checking"}"""),
+                    record("transaction", "sorted", """{"date":"2026-11-20","amount":-1,"account":"checking","category":"food"}"""),
+                    record("transaction", "offbudget", """{"date":"2026-11-20","amount":-1,"account":"loan"}"""),
+                    record("transaction", "moved", """{"date":"2026-11-20","amount":-1,"account":"checking","transferId":"x"}"""),
+                    record("transaction", "split", """{"date":"2026-11-20","amount":-1,"account":"checking","isParent":true}"""),
+                    record("transaction", "old", """{"date":"2026-10-01","amount":-1,"account":"checking"}"""),
+                ),
+            )
+            assertNull(alert(), "the first look only notes what is already waiting")
+            assertEquals("nopayee,fresh", preferences.read()[key])
+            assertNull(alert(), "announced once")
+
+            preferences.putValue(key, "nopayee")
+            val single = alert()!!
+            assertEquals(AlertKind.UNCATEGORIZED, single.kind)
+            assertEquals("New transaction to categorize", single.title)
+            assertEquals("$1200 at Costco needs a category.", single.message)
+            preferences.putValue(key, "nopayee")
+            assertEquals("A transaction at Costco needs a category.", alert(hide = true)?.message)
+            preferences.putValue(key, "fresh")
+            assertEquals("$7 needs a category.", alert()?.message)
+            preferences.putValue(key, "")
+            val both = alert()!!
+            assertEquals("New transactions to categorize", both.title)
+            assertEquals("2 new transactions need a category.", both.message)
         }
 
     @Test

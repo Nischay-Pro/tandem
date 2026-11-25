@@ -8,8 +8,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.LocalAlert
+import app.tandemforactual.ui.app.QuickAction
 
 internal object BudgetSystemNotifications {
     private const val CHANNEL_ID = "tandem-budget-alerts"
@@ -86,7 +89,8 @@ internal object BudgetSystemNotifications {
         context: Context,
         alert: LocalAlert,
     ) {
-        show(context, LOCAL_ALERT_BASE_ID + alert.kind.ordinal, alert.title, alert.message)
+        val link = if (alert.kind == AlertKind.UNCATEGORIZED) QuickAction.REVIEW_TRANSACTIONS.link else null
+        show(context, LOCAL_ALERT_BASE_ID + alert.kind.ordinal, alert.title, alert.message, link)
     }
 
     private fun show(
@@ -94,6 +98,7 @@ internal object BudgetSystemNotifications {
         notificationId: Int,
         title: String,
         message: String,
+        link: String? = null,
     ) {
         val applicationContext = context.applicationContext
         val manager = applicationContext.getSystemService(NotificationManager::class.java) ?: return
@@ -111,6 +116,10 @@ internal object BudgetSystemNotifications {
                 notificationId,
                 Intent(applicationContext, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    if (link != null) {
+                        action = Intent.ACTION_VIEW
+                        data = Uri.parse(link)
+                    }
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )

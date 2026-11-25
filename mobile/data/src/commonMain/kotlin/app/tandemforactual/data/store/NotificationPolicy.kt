@@ -20,6 +20,7 @@ enum class AlertKind(
     BANK_SYNC_FAILURE("bankSyncAlerts", true),
     UPCOMING_BILLS("upcomingBillAlerts", false),
     LARGE_TRANSACTION("largeTransactionAlerts", false),
+    UNCATEGORIZED("uncategorizedAlerts", true),
 }
 
 /** A daily window, in minutes after midnight, when notifications stay silent. It may wrap past midnight. */
@@ -169,6 +170,47 @@ suspend fun largeTransactionAlert(
     return LocalAlert(AlertKind.LARGE_TRANSACTION, "Large transaction", message)
 }
 
+/**
+ * New transactions in on-budget accounts from the last couple of weeks that still need a category, announced once each.
+ * The first check only notes what is already waiting, so turning this on doesn't announce an old backlog.
+ */
+suspend fun uncategorizedAlert(
+    repository: LocalBudgetRepository,
+    preferences: AppPreferencesStore,
+    budgetId: String,
+    today: String,
+    policy: NotificationPolicy,
+    formatAmount: (Long) -> String,
+): LocalAlert? {
+    val offBudget =
+        repository
+            .findRecords(budgetId, "account")
+            .filter { account -> account.body()?.get("offbudget")?.let { (it as? JsonPrimitive)?.booleanOrNull } == true }
+            .map { it.recordId }
+            .toSet()
+    val waiting =
+        repository
+            .findRecords(budgetId, "transaction", fromDate = ActualDates.addDays(today, -UNCATEGORIZED_WINDOW_DAYS))
+            .filter { it.categoryId == null && !it.isParent && it.transfer != true && it.accountId !in offBudget && !it.localDeleted }
+    val key = "internal:announced-uncategorized:$budgetId"
+    val stored = preferences.read()[key]
+    preferences.putValue(key, waiting.joinToString(",") { it.recordId })
+    val announced = stored?.split(',')?.filter(String::isNotEmpty)?.toSet() ?: return null
+    val fresh = waiting.filterNot { it.recordId in announced }
+    if (fresh.isEmpty()) return null
+    if (fresh.size >
+        1
+    ) {
+        return LocalAlert(AlertKind.UNCATEGORIZED, "New transactions to categorize", "${fresh.size} new transactions need a category.")
+    }
+    val only = fresh.single()
+    val payee = only.payeeId?.let { repository.findRecord(budgetId, "payee", it)?.displayName }
+    val at = payee?.let { " at $it" }.orEmpty()
+    val message =
+        if (policy.hideAmounts) "A transaction$at needs a category." else "${formatAmount(-(only.amountMinor ?: 0))}$at needs a category."
+    return LocalAlert(AlertKind.UNCATEGORIZED, "New transaction to categorize", message)
+}
+
 /** Bank links whose last sync failed and that haven't been announced since they started failing. */
 suspend fun bankSyncFailureAlert(
     preferences: AppPreferencesStore,
@@ -196,6 +238,7 @@ suspend fun bankSyncFailureAlert(
 }
 
 private const val LARGE_TRANSACTION_WINDOW_DAYS = 3
+private const val UNCATEGORIZED_WINDOW_DAYS = 14
 
 private fun app.tandemforactual.data.database.BudgetRecordEntity.body(): JsonObject? =
     runCatching { Json.parseToJsonElement(localJson ?: remoteJson ?: "") as? JsonObject }.getOrNull()
