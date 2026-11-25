@@ -126,6 +126,24 @@ class ActualChangeHistoryTest {
     }
 
     @Test
+    fun aBatchLargerThanOneMillisecondsCounterStillSaves() {
+        val writer = writer()
+        writer.clock.clock.timestamp =
+            writer.clock.clock.timestamp
+                .copy(millis = now, counter = ActualTimestamp.MAX_COUNTER - 2)
+        val ids = writer.batch { (1..5).map { writer.insert("payees", mapOf("name" to "Shop $it")) } }
+        assertEquals(5, writer.db.query("SELECT id FROM payees WHERE name LIKE 'Shop %'").size)
+        assertEquals(now + 1, writer.clock.clock.timestamp.millis)
+        assertEquals(
+            ids.toSet(),
+            writer.db
+                .query("SELECT id FROM payees WHERE name LIKE 'Shop %'")
+                .map { it["id"] }
+                .toSet(),
+        )
+    }
+
+    @Test
     fun keepsAnEditTogetherWhenTheClockTicksDuringIt() {
         val ticking = writer()
         val ticks = ActualWriter(ticking.store, ticking.clock, { now++ }) { UUID.randomUUID().toString() }
