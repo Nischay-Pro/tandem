@@ -6,8 +6,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
+import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.unlockSecret
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
@@ -76,6 +78,7 @@ internal fun SecurityScreen(
 @Composable
 private fun BiometricUnlockToggle(state: AppState) {
     val authenticator = LocalDeviceAuthenticator.current
+    val vault = LocalEncryptedBudgetVault.current
     val biometricAvailable = remember(authenticator) { authenticator?.isAvailable() == true }
     ToggleRow(
         title = "Biometric unlock",
@@ -101,7 +104,11 @@ private fun BiometricUnlockToggle(state: AppState) {
                         }
                     }
                 state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
-                    authenticator.storeSecret(secretId, password, "Turn on biometric unlock") { stored ->
+                    authenticator.storeSecret(
+                        secretId,
+                        unlockSecret(vault, state.selectedBudgetId, password),
+                        "Turn on biometric unlock",
+                    ) { stored ->
                         if (stored) state.biometricLockEnabled = true
                     }
                 else ->

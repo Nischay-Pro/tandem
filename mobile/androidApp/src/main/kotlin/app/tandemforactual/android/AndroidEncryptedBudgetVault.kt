@@ -24,6 +24,7 @@ class AndroidEncryptedBudgetVault(
 ) : EncryptedBudgetVault {
     private val appContext = context.applicationContext
     private val entries by lazy { appContext.getSharedPreferences(VAULT_FILE, Context.MODE_PRIVATE) }
+    private val opened = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
 
     init {
         System.loadLibrary("sqlcipher")
@@ -34,13 +35,22 @@ class AndroidEncryptedBudgetVault(
     override suspend fun open(
         budgetId: String,
         password: String,
+    ): TandemDatabase? = open(budgetId, password, null)
+
+    override suspend fun open(
+        budgetId: String,
+        password: String,
+        vaultKey: ByteArray?,
     ): TandemDatabase? =
         withContext(Dispatchers.Default) {
             val entry = entries.getString(budgetId, null)?.let(VaultEntry::parse) ?: return@withContext null
-            val databaseKey = unwrap(entry, password) ?: return@withContext null
             if (!appContext.getDatabasePath(entry.fileName).exists()) return@withContext null
+            val databaseKey = vaultKey?.takeIf { keyOpens(entry.fileName, it) } ?: unwrap(entry, password) ?: return@withContext null
+            opened[budgetId] = databaseKey
             openDatabase(entry.fileName, databaseKey)
         }
+
+    override fun openedKey(budgetId: String): ByteArray? = opened[budgetId]?.copyOf()
 
     override suspend fun create(
         budgetId: String,
@@ -58,6 +68,7 @@ class AndroidEncryptedBudgetVault(
                     wrappedKey = cipher.doFinal(databaseKey),
                 )
             val database = openDatabase(entry.fileName, databaseKey)
+            opened[budgetId] = databaseKey
             object : PendingEncryptedBudget {
                 override val database: TandemDatabase = database
 
@@ -68,17 +79,20 @@ class AndroidEncryptedBudgetVault(
                 }
 
                 override suspend fun discard() {
+                    opened.remove(budgetId)
                     deleteDatabaseFiles(entry.fileName)
                 }
             }
         }
 
     override fun delete(budgetId: String) {
+        opened.remove(budgetId)
         entries.getString(budgetId, null)?.let(VaultEntry::parse)?.let { deleteDatabaseFiles(it.fileName) }
         entries.edit(commit = true) { remove(budgetId) }
     }
 
     override fun deleteAll() {
+        opened.clear()
         entries.all.values
             .mapNotNull { (it as? String)?.let(VaultEntry::parse) }
             .forEach { deleteDatabaseFiles(it.fileName) }
@@ -88,10 +102,28 @@ class AndroidEncryptedBudgetVault(
     private fun openDatabase(
         fileName: String,
         databaseKey: ByteArray,
-    ): TandemDatabase {
-        val rawKey = "x'${databaseKey.joinToString("") { "%02x".format(it) }}'".encodeToByteArray()
-        return openTandemDatabase(tandemDatabaseBuilder(appContext, fileName), SQLCipherDriver(rawKey, null, null))
-    }
+    ): TandemDatabase = openTandemDatabase(tandemDatabaseBuilder(appContext, fileName), SQLCipherDriver(rawKey(databaseKey), null, null))
+
+    /** Whether [databaseKey] still opens the vault's database, checked by reading its schema before anything is built on it. */
+    private fun keyOpens(
+        fileName: String,
+        databaseKey: ByteArray,
+    ): Boolean =
+        runCatching {
+            val connection = SQLCipherDriver(rawKey(databaseKey), null, null).open(appContext.getDatabasePath(fileName).path)
+            try {
+                val statement = connection.prepare("SELECT count(*) FROM sqlite_master")
+                try {
+                    statement.step()
+                } finally {
+                    statement.close()
+                }
+            } finally {
+                connection.close()
+            }
+        }.getOrDefault(false)
+
+    private fun rawKey(databaseKey: ByteArray) = "x'${databaseKey.joinToString("") { "%02x".format(it) }}'".encodeToByteArray()
 
     private fun unwrap(
         entry: VaultEntry,

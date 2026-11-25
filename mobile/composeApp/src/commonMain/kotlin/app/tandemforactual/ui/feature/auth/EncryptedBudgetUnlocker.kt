@@ -8,7 +8,9 @@ import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.EncryptedBudgetUnlockResult
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.UnlockSecret
 import app.tandemforactual.ui.core.session.unlockEncryptedBudget
+import app.tandemforactual.ui.core.session.unlockSecret
 import app.tandemforactual.ui.core.state.AppState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,15 +56,17 @@ internal class EncryptedBudgetUnlocker(
     fun submit(
         candidate: String,
         fromBiometrics: Boolean,
+        vaultKey: ByteArray? = null,
     ) {
         if (candidate.isBlank() || progress.checking || mobileSession.nowEpochMillis() < retryAtMillis) return
         progress.checking = true
         form.error = null
         scope.launch {
             if (vault != null) {
-                val result = mobileSession.unlockEncryptedBudget(vault, budgetId, candidate)
+                val result = mobileSession.unlockEncryptedBudget(vault, budgetId, candidate, vaultKey)
                 progress.checking = false
                 applyVaultResult(result, candidate, fromBiometrics)
+                if (result == EncryptedBudgetUnlockResult.UNLOCKED && fromBiometrics && vaultKey == null) keepVaultKey(candidate)
                 return@launch
             }
             unlockBySync(candidate, fromBiometrics)
@@ -80,10 +84,17 @@ internal class EncryptedBudgetUnlocker(
                         form.usePassword = true
                     }
                 } else {
-                    submit(secret, fromBiometrics = true)
+                    val saved = UnlockSecret.decode(secret)
+                    submit(saved.password, fromBiometrics = true, vaultKey = saved.vaultKey)
                 }
             }
         }
+    }
+
+    /** Saves the vault's key with a password kept before keys were saved, so later biometric unlocks open faster. */
+    private fun keepVaultKey(password: String) {
+        if (vault?.openedKey(budgetId) == null || !canUseBiometrics) return
+        authenticator?.storeSecret(secretId, unlockSecret(vault, budgetId, password), "Speed up unlocking ${state.selectedBudget}") {}
     }
 
     private fun applyVaultResult(
@@ -158,7 +169,11 @@ internal class EncryptedBudgetUnlocker(
                 unlockWith(candidate)
             }
             form.rememberWithBiometrics && canUseBiometrics ->
-                authenticator.storeSecret(secretId, candidate, "Use biometrics for ${state.selectedBudget}") { stored ->
+                authenticator.storeSecret(
+                    secretId,
+                    unlockSecret(vault, budgetId, candidate),
+                    "Use biometrics for ${state.selectedBudget}",
+                ) { stored ->
                     state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, false, kept = stored.takeIf { it })
                     unlockWith(candidate)
                 }

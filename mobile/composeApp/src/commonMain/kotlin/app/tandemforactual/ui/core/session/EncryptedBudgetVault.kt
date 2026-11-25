@@ -12,6 +12,16 @@ interface EncryptedBudgetVault {
         password: String,
     ): TandemDatabase?
 
+    /** Opens with [vaultKey] when it is given and still opens the vault, skipping the slow password derivation. */
+    suspend fun open(
+        budgetId: String,
+        password: String,
+        vaultKey: ByteArray?,
+    ): TandemDatabase? = open(budgetId, password)
+
+    /** The key this vault last opened [budgetId] with, kept only for saving behind biometrics. */
+    fun openedKey(budgetId: String): ByteArray? = null
+
     suspend fun create(
         budgetId: String,
         password: String,
@@ -42,8 +52,9 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
     vault: EncryptedBudgetVault,
     budgetId: String,
     password: String,
+    vaultKey: ByteArray? = null,
 ): EncryptedBudgetUnlockResult {
-    val existing = vault.open(budgetId, password)
+    val existing = vault.open(budgetId, password, vaultKey)
     if (existing != null) {
         bindEncryptedBudgetDatabase(budgetId, existing)
         removeBudgetFromMainStorage(budgetId)
