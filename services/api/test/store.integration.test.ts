@@ -96,6 +96,30 @@ describe.skipIf(!url)("Postgres extension store", () => {
     expect(await store.key(scope)).toEqual({ ...key, keyId: "k2" });
   });
 
+  it("lets only one of two simultaneous first writes win", async () => {
+    const first = `race-${Date.now()}`;
+    const results = await Promise.all([
+      store.write(scope, first, record),
+      store.write(scope, first, { ...record, ciphertext: "ZA==" }),
+    ]);
+    expect(results.map((it) => it.status).sort()).toEqual([
+      "conflict",
+      "stored",
+    ]);
+    const keyScope = `${scope}|race`;
+    const key = {
+      keyId: "a",
+      wrappedKey: "dw==",
+      wrapSalt: "cw==",
+      keyCheck: "Yw==",
+    };
+    const keys = await Promise.all([
+      store.putKey(keyScope, key, null),
+      store.putKey(keyScope, { ...key, keyId: "b" }, null),
+    ]);
+    expect(keys.filter(Boolean)).toHaveLength(1);
+  });
+
   it("rolls back a failed write", async () => {
     await expect(
       store.write(scope, "r9", { ...record, schemaVersion: Number.NaN }),

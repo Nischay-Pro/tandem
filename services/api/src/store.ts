@@ -231,6 +231,7 @@ export class PostgresExtensionStore implements ExtensionStore {
 
   async write(scope: string, recordId: string, write: RecordWrite) {
     return this.transaction(async (client) => {
+      await lockScope(client, `records|${scope}`);
       const existing = await client.query<RecordRow>(
         "SELECT * FROM planning_records WHERE scope = $1 AND record_id = $2 FOR UPDATE",
         [scope, recordId],
@@ -289,6 +290,7 @@ export class PostgresExtensionStore implements ExtensionStore {
 
   async putKey(scope: string, key: WrappedKey, expectedKeyId: string | null) {
     return this.transaction(async (client) => {
+      await lockScope(client, `keys|${scope}`);
       const existing = await client.query<{ key_id: string }>(
         "SELECT key_id FROM planning_keys WHERE scope = $1 FOR UPDATE",
         [scope],
@@ -325,3 +327,10 @@ export class PostgresExtensionStore implements ExtensionStore {
     }
   }
 }
+
+/**
+ * Serialises writes to one scope until the transaction ends. Row locks can't cover a record or key that doesn't
+ * exist yet, and holding this while the sequence is drawn and committed keeps each scope's change feed in commit order.
+ */
+const lockScope = (client: PoolClient, key: string) =>
+  client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [key]);
