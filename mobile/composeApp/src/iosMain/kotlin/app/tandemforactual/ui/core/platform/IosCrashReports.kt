@@ -17,8 +17,6 @@ import platform.Foundation.create
 import platform.Foundation.stringWithContentsOfFile
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.writeToFile
-import platform.UIKit.UIActivityViewController
-import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
 
 /** Keeps the last few Kotlin crash reports in Application Support. */
@@ -71,9 +69,4 @@ class IosCrashReports : CrashReports {
     }
 }
 
-internal fun shareTextOnIos(text: String) {
-    val controller = UIActivityViewController(listOf(text), null)
-    UIApplication.sharedApplication.keyWindow
-        ?.rootViewController
-        ?.presentViewController(controller, true, null)
-}
+internal fun shareTextOnIos(text: String) = presentShareSheet(listOf(text))
