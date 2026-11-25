@@ -30,7 +30,12 @@ class ActualChangeHistoryTest {
     fun readsEditsAsChangeSetsAndUndoesThem() {
         val writer = writer()
         val history = ActualChangeHistory(writer)
-        val payee = writer.batch { writer.insert("payees", mapOf("name" to "Cafe")) }
+        val payee =
+            writer.batch {
+                writer.insert("payees", mapOf("name" to "Cafe")).also {
+                    writer.insert("payee_mapping", mapOf("id" to it, "targetId" to it))
+                }
+            }
         val account = writer.db.first("SELECT id FROM accounts WHERE tombstone = 0")!!["id"] as String
         now += 1_000
         val transaction =
@@ -53,10 +58,11 @@ class ActualChangeHistoryTest {
         )
         assertFalse(edit.rows[0].created)
         assertEquals("Corner Cafe", edit.rows[0].current["name"])
-        assertTrue(RowChange("notes", "n", listOf(FieldChange("note", null, CrdtValue.Text("x"), "t"))).created)
+        assertFalse(RowChange("notes", "n", listOf(FieldChange("note", null, CrdtValue.Text("x"), "t"))).created)
+        assertFalse(RowChange("payees", "p", listOf(FieldChange("name", null, CrdtValue.Text("x"), "t"))).created)
         assertFalse(RowChange("transactions", "t", listOf(FieldChange("amount", null, CrdtValue.Number(1.0), "t"))).created)
-        assertTrue(recent[2].rows.single().created)
-        assertFalse(recent[2].rows.single().deleted)
+        assertTrue(recent[2].rows.first { it.dataset == "payees" }.created)
+        assertFalse(recent[2].rows.first { it.dataset == "payees" }.deleted)
 
         assertEquals(UndoResult(3, 0), history.undo(edit))
         assertEquals("Cafe", writer.value("payees", payee, "name"))
@@ -77,6 +83,46 @@ class ActualChangeHistoryTest {
         )
         assertEquals(UndoResult(0, 1), history.undo(recent[2]))
         assertEquals(1, history.recent(limit = 1).size)
+    }
+
+    @Test
+    fun undoingEditsToRowsFromTheDownloadedBudgetRevertsThemInsteadOfDeleting() {
+        val writer = writer()
+        val history = ActualChangeHistory(writer)
+        val payee = writer.db.first("SELECT id FROM payees WHERE tombstone = 0 AND name IS NOT NULL")!!["id"] as String
+        val transaction = writer.db.first("SELECT id, acct FROM transactions WHERE tombstone = 0")!!
+        val otherAccount = "another-account"
+        val category = writer.db.first("SELECT id FROM categories WHERE tombstone = 0")!!["id"] as String
+
+        now += 1_000
+        writer.batch {
+            writer.update("payees", payee, mapOf("name" to "Renamed"))
+            writer.update("transactions", transaction["id"] as String, mapOf("acct" to otherAccount))
+        }
+        val moved = history.recent().first()
+        assertTrue(moved.rows.none { it.created })
+        assertEquals(UndoResult(0, 2), history.undo(moved))
+        assertEquals(0L, writer.value("payees", payee, "tombstone"))
+        assertEquals(0L, writer.value("transactions", transaction["id"] as String, "tombstone"))
+
+        now += 1_000
+        writer.insert("zero_budgets", mapOf("id" to "202611-$category", "month" to 202611L, "category" to category, "amount" to 5_000L))
+        assertEquals(UndoResult(1, 2), history.undo(history.recent().first()))
+        assertEquals(0L, writer.value("zero_budgets", "202611-$category", "amount"))
+
+        now += 1_000
+        writer.delete("payees", payee)
+        assertEquals(UndoResult(1, 0), history.undo(history.recent().first()))
+        assertEquals(0L, writer.value("payees", payee, "tombstone"))
+
+        writer.db.execute(
+            "INSERT INTO messages_crdt (timestamp, dataset, row, column, value) VALUES (?, 'payees', ?, 'favorite', 'X:unreadable')",
+            "1970-01-01T00:00:00.000Z-0000-0000000000000001",
+            payee,
+        )
+        now += 1_000
+        writer.update("payees", payee, mapOf("favorite" to 1L))
+        assertEquals(UndoResult(0, 1), history.undo(history.recent().first()))
     }
 
     @Test

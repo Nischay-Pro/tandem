@@ -14,9 +14,18 @@ data class RowChange(
     val fields: List<FieldChange>,
     /** The row as it is now, for naming it in the history. */
     val current: Map<String, String?> = emptyMap(),
+    /** The other tables the same edit wrote this row id in, such as a new payee's mapping. */
+    val alongside: Set<String> = emptySet(),
 ) {
-    /** A snapshot download has no earlier log, so a row counts as created only when it sets the column Actual writes on insert. */
-    val created get() = fields.all { it.before == null } && fields.any { it.column == CREATION_COLUMNS[dataset] ?: it.column }
+    /**
+     * A snapshot download has no earlier log, so a row counts as created only when the edit wrote every column Actual
+     * writes on insert, and the mapping row an insert adds. A rename or move of an older row writes fewer, so undo
+     * reverts it instead of deleting the row.
+     */
+    val created get() =
+        fields.all { it.before == null } &&
+            INSERT_COLUMNS[dataset]?.all { column -> fields.any { it.column == column } } == true &&
+            INSERT_MAPPINGS[dataset]?.let { it in alongside } != false
     val deleted get() = fields.any { it.column == "tombstone" && it.after == CrdtValue.Number(1.0) }
 }
 
@@ -59,6 +68,7 @@ class ActualChangeHistory(
         val complete = if (rows.size < scan) groups else groups.dropLast(1)
         return complete.take(limit).map { group ->
             val ordered = group.sortedBy { it.timestamp }
+            val tablesByRow = ordered.groupBy({ it.row }, { it.dataset })
             ChangeSet(
                 id = ordered.first().timestamp.toString(),
                 millis = ordered.first().timestamp.millis,
@@ -72,6 +82,7 @@ class ActualChangeHistory(
                                 key.second,
                                 cells.map { FieldChange(it.column, valueBefore(it), it.value, it.timestamp.toString()) },
                                 currentRow(key.first, key.second),
+                                tablesByRow.getValue(key.second).toSet() - key.first,
                             )
                         },
             )
@@ -84,6 +95,7 @@ class ActualChangeHistory(
         var skipped = 0
         writer.batch {
             for (row in set.rows) {
+                if (row.dataset in MAPPING_TABLES) continue
                 if (row.created) {
                     if (latest(row.dataset, row.row, "tombstone")?.second == CrdtValue.Number(1.0)) {
                         skipped++
@@ -95,12 +107,12 @@ class ActualChangeHistory(
                 }
                 val fields = LinkedHashMap<String, Any?>()
                 for (field in row.fields) {
-                    val before = field.before
                     val current = latest(row.dataset, row.row, field.column)
-                    if (before == null || before is CrdtValue.Unknown || current?.first != field.timestamp) {
+                    val before = earlierValue(row.dataset, field)
+                    if (before == null || current?.first != field.timestamp) {
                         skipped++
                     } else {
-                        fields[field.column] = before.raw()
+                        fields[field.column] = before.value
                         reverted++
                     }
                 }
@@ -109,6 +121,29 @@ class ActualChangeHistory(
         }
         return UndoResult(reverted, skipped)
     }
+
+    /**
+     * The value to restore [field] to, or null when it can't be told. A cell with no earlier log entry goes back to
+     * what it is before anything is written: not deleted, and no budget amount or note.
+     */
+    private fun earlierValue(
+        dataset: String,
+        field: FieldChange,
+    ): Restore? =
+        when (val before = field.before) {
+            null ->
+                when {
+                    field.column == "tombstone" -> Restore(0L)
+                    dataset in BLANK_TABLES && field.column in BLANK_VALUES -> Restore(BLANK_VALUES.getValue(field.column))
+                    else -> null
+                }
+            is CrdtValue.Unknown -> null
+            else -> Restore(before.raw())
+        }
+
+    private class Restore(
+        val value: Any?,
+    )
 
     private fun latest(
         dataset: String,
@@ -153,13 +188,22 @@ class ActualChangeHistory(
     }
 }
 
-private val CREATION_COLUMNS =
+private val INSERT_COLUMNS =
     mapOf(
-        "transactions" to "acct",
-        "payees" to "name",
-        "categories" to "cat_group",
-        "category_groups" to "is_income",
-        "accounts" to "offbudget",
-        "rules" to "conditions",
-        "schedules" to "rule",
+        "transactions" to listOf("acct", "date", "amount"),
+        "payees" to listOf("name"),
+        "categories" to listOf("name", "cat_group"),
+        "category_groups" to listOf("name", "is_income"),
+        "accounts" to listOf("name", "offbudget"),
+        "rules" to listOf("conditions", "actions"),
+        "schedules" to listOf("rule"),
     )
+
+private val INSERT_MAPPINGS = mapOf("payees" to "payee_mapping", "categories" to "category_mapping")
+
+private val MAPPING_TABLES = setOf("payee_mapping", "category_mapping")
+
+/** Tables without a tombstone column, whose cells go back to these values when nothing was set before. */
+private val BLANK_TABLES = setOf("zero_budgets", "reflect_budgets", "zero_budget_months", "notes")
+
+private val BLANK_VALUES = mapOf("amount" to 0L, "carryover" to 0L, "goal" to null, "long_goal" to null, "buffered" to 0L, "note" to null)
