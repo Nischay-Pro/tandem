@@ -6,8 +6,10 @@ import app.tandemforactual.data.store.observeCategoryMonthAggregates
 import app.tandemforactual.data.store.observeMonthlyIncomeAndSpending
 import app.tandemforactual.data.store.observeRecords
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 internal class ReportsViewModels(
@@ -31,6 +33,7 @@ internal class SpendingByCategoryReportViewModel(
         repository
             .observeCategoryMonthAggregates(budgetId, window.startDate, window.throughDate)
             .map { categorySpendingPoints(it, categoryNames) }
+            .flowOn(Dispatchers.Default)
 }
 
 internal class SpendingOverTimeReportViewModel(
@@ -43,6 +46,7 @@ internal class SpendingOverTimeReportViewModel(
         repository
             .observeMonthlyIncomeAndSpending(budgetId, window.startDate, window.throughDate)
             .map { monthlyMoneyPoints(it, window) }
+            .flowOn(Dispatchers.Default)
 }
 
 internal class IncomeAndSpendingReportViewModel(
@@ -55,6 +59,7 @@ internal class IncomeAndSpendingReportViewModel(
         repository
             .observeMonthlyIncomeAndSpending(budgetId, window.startDate, window.throughDate)
             .map { monthlyMoneyPoints(it, window) }
+            .flowOn(Dispatchers.Default)
 }
 
 internal class BudgetedAndSpentReportViewModel(
@@ -70,7 +75,7 @@ internal class BudgetedAndSpentReportViewModel(
             repository.observeCategoryMonthAggregates(budgetId, window.startDate, window.throughDate),
         ) { monthRecords, categoryMonthAmounts ->
             budgetedSpentPoints(monthRecords, categoryMonthAmounts, window, categoryNames)
-        }
+        }.flowOn(Dispatchers.Default)
 }
 
 internal class NetWorthReportViewModel(
@@ -85,4 +90,5 @@ internal class NetWorthReportViewModel(
         repository
             .observeAccountDailyActivity(budgetId, todayIsoDate)
             .map { netWorthPoints(it, accounts, monthIds, todayIsoDate) }
+            .flowOn(Dispatchers.Default)
 }
