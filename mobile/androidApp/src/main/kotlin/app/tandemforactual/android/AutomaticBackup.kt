@@ -92,7 +92,7 @@ class AutomaticBackupWorker(
     ): ByteArray {
         val vault = password?.let { AndroidEncryptedBudgetVault(applicationContext).open(budgetId, it) }
         try {
-            val passphrase = runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE).read() }.getOrNull()
+            val passphrase = AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE).read()
             val keys = AndroidDeviceCredentialStore(applicationContext, "planning_keys")
             return AutomaticBackups.build(client, vault ?: database, keys, budgetId, password, budgetName, passphrase) {
                 System.currentTimeMillis()

@@ -46,9 +46,8 @@ internal fun AutomaticBackupCard(state: AppState) {
     val update = { change: (AutomaticBackupSettings) -> AutomaticBackupSettings -> state.automaticBackup = change(state.automaticBackup) }
     val pickFolder = rememberBackupFolderPicker { folder, label -> update { it.copy(folder = folder, folderLabel = label) } }
     val secrets = LocalBackupSecrets.current
-    val passphrases = secrets?.passphrase
     var settingWebDav by remember { mutableStateOf(false) }
-    var hasPassphrase by remember(passphrases) { mutableStateOf(runCatching { passphrases?.read() }.getOrNull() != null) }
+    var hasPassphrase by remember(secrets) { mutableStateOf(secrets?.hasPassphrase() == true) }
     var settingPassphrase by remember { mutableStateOf(false) }
     SectionCard("Automatic backups", automaticBackupStatus(state)) {
         if (pickFolder == null) {
@@ -85,14 +84,13 @@ internal fun AutomaticBackupCard(state: AppState) {
             "Encrypt backups",
             if (hasPassphrase) "With your passphrase. Tap to change or remove it." else "Off. Anyone with the files can open them.",
             leading = RowLeading.Icon(Lucide.KeyRound),
-            onClick = if (passphrases != null) ({ settingPassphrase = true }) else null,
+            onClick = if (secrets != null) ({ settingPassphrase = true }) else null,
         )
     }
     WebDavSetup(settingWebDav, settings, secrets, onClose = { settingWebDav = false }, update = update)
     AutomaticBackupPassphraseDialog(settingPassphrase, hasPassphrase, onDismiss = { settingPassphrase = false }) { passphrase ->
         settingPassphrase = false
-        runCatching { if (passphrase == null) passphrases?.clear() else passphrases?.write(passphrase) }
-        hasPassphrase = passphrase != null
+        if (secrets?.setPassphrase(passphrase) == true) hasPassphrase = passphrase != null
     }
 }
 
