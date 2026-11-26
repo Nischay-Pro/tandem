@@ -490,4 +490,27 @@ class ActualBudgetEditsTest {
         tracking.db.execute("DELETE FROM transactions")
         tracking.edits.setBudgetAmount(trackingGroceries, month, 8)
     }
+
+    @Test
+    fun theLastIncomeGroupCannotBeDeleted() {
+        val f = fixture()
+        val income = f.id("category_groups", "Income")
+        f.rejects("A budget needs at least one income category group") { manageCategoryGroup(income, "delete", null, null) }
+        assertEquals(0L, f.one("SELECT tombstone FROM category_groups WHERE id = ?", income)!!["tombstone"])
+
+        val extra = f.edits.createCategoryGroup("Side income", true)
+        f.edits.manageCategoryGroup(income, "delete", null, null)
+        assertEquals(1L, f.one("SELECT tombstone FROM category_groups WHERE id = ?", income)!!["tombstone"])
+        f.rejects("A budget needs at least one income category group") { manageCategoryGroup(extra, "delete", null, null) }
+    }
+
+    @Test
+    fun budgetsWithoutAnIncomeGroupStillOpen() {
+        for (name in listOf("parity-envelope", "parity-tracking")) {
+            val f = fixture(name)
+            f.db.execute("UPDATE category_groups SET tombstone = 1 WHERE is_income = 1")
+            f.db.execute("UPDATE categories SET tombstone = 1 WHERE is_income = 1")
+            assertEquals(0L, f.month(month).value("totalIncome"))
+        }
+    }
 }

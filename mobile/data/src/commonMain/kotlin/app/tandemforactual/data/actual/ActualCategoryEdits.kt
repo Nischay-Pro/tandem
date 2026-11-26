@@ -74,7 +74,7 @@ fun ActualBudgetEdits.manageCategoryGroup(
     targetId: String?,
 ) = writer.batch {
     val all = groups()
-    all.firstOrNull { it["id"] == groupId } ?: fail("Category group does not exist in this budget")
+    val group = all.firstOrNull { it["id"] == groupId } ?: fail("Category group does not exist in this budget")
     when (action) {
         "rename" -> {
             val clean = name?.trim().orEmpty()
@@ -89,6 +89,9 @@ fun ActualBudgetEdits.manageCategoryGroup(
         }
         "hide", "show" -> writer.update("category_groups", groupId, mapOf("hidden" to (if (action == "hide") 1L else 0L)))
         "delete" -> {
+            if (truthy(group["is_income"]) && all.none { it["id"] != groupId && truthy(it["is_income"]) }) {
+                fail("A budget needs at least one income category group")
+            }
             val cats = categories()
             val inGroup = cats.filter { it["cat_group"] == groupId }
             if (targetId != null) {

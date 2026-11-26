@@ -166,11 +166,11 @@ internal class ActualBudgetMonths(
                 cells["group-leftover-${group.id}"] = group.categories.sumOf { number(cells["leftover-${it.id}"]) }
             }
         }
-        val incomeGroup = groups.first { it.isIncome }
+        val incomeGroup = groups.firstOrNull { it.isIncome }
         val expenseGroups = groups.filter { !it.isIncome }
         cells["buffered"] = if (buffered.containsKey(month)) buffered[month] else 0L
         cells["from-last-month"] = number(prev["to-budget"]) + number(prev["buffered-selected"])
-        cells["total-income"] = cells["group-sum-amount-${incomeGroup.id}"]
+        cells["total-income"] = incomeGroup?.let { cells["group-sum-amount-${it.id}"] } ?: 0L
         cells["available-funds"] = number(cells["total-income"]) + number(cells["from-last-month"])
         cells["last-month-overspent"] =
             categories.filter { !it.isIncome }.sumOf { cat ->
@@ -210,11 +210,11 @@ internal class ActualBudgetMonths(
             cells["group-budget-${group.id}"] = visible.sumOf { number(cells["budget-${it.id}"]) }
             cells["group-leftover-${group.id}"] = visible.sumOf { number(cells["leftover-${it.id}"]) }
         }
-        val incomeGroup = groups.first { it.isIncome }
+        val incomeGroup = groups.firstOrNull { it.isIncome }
         val expenseGroups = groups.filter { !it.isIncome && !it.hidden }
         cells["total-budgeted"] = expenseGroups.sumOf { number(cells["group-budget-${it.id}"]) }
         cells["total-spent"] = expenseGroups.sumOf { number(cells["group-sum-amount-${it.id}"]) }
-        cells["total-income"] = cells["group-sum-amount-${incomeGroup.id}"]
+        cells["total-income"] = incomeGroup?.let { cells["group-sum-amount-${it.id}"] } ?: 0L
         cells["total-leftover"] = expenseGroups.sumOf { number(cells["group-leftover-${it.id}"]) }
         return cells
     }
