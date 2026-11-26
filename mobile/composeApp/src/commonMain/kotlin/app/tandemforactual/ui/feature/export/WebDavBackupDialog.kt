@@ -38,7 +38,7 @@ internal fun WebDavBackupDialog(
     url: String?,
     user: String?,
     onDismiss: () -> Unit,
-    onSave: (url: String, user: String, password: String) -> Unit,
+    onSave: (url: String, user: String, password: String) -> Boolean,
     onRemove: (() -> Unit)?,
 ) {
     var address by remember(visible) { mutableStateOf(url.orEmpty()) }
@@ -76,7 +76,9 @@ internal fun WebDavBackupDialog(
                                 error.message
                             }
                         checking = false
-                        if (problem == null) onSave(address.trim(), name.trim(), password)
+                        if (problem == null && !onSave(address.trim(), name.trim(), password)) {
+                            problem = "Couldn’t save the password on this device. Try again."
+                        }
                     }
                 }
                 if (onRemove != null) {

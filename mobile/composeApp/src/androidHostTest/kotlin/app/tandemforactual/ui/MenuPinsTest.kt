@@ -1,16 +1,19 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.ui.app.AppMenuItem
+import app.tandemforactual.ui.app.appMenuItems
 import app.tandemforactual.ui.app.decodeMenuPins
 import app.tandemforactual.ui.app.defaultMenuPins
 import app.tandemforactual.ui.app.menuSections
 import app.tandemforactual.ui.app.searchMenu
 import app.tandemforactual.ui.app.toggleMenuPin
+import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.MENU_PINS_UNSET
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class MenuPinsTest {
     private fun item(
@@ -51,5 +54,29 @@ class MenuPinsTest {
         assertEquals(listOf("Change history"), searchMenu(items, "undo").map { it.label })
         assertEquals(emptyList(), searchMenu(items, "   ").map { it.label })
         assertEquals(emptyList(), searchMenu(items, "retirement").map { it.label })
+    }
+
+    @Test
+    fun exportAndBackupIsNoLongerAMenuFeature() {
+        val opened = mutableListOf<AppRoute>()
+        val menu =
+            appMenuItems(
+                advanced = true,
+                ruleCount = 0,
+                scheduleCount = 0,
+                payeeCount = 0,
+                conflictCount = 0,
+                reimbursementsOwedMinor = 0,
+                formatMoney = { it.toString() },
+                readOnly = false,
+                open = { opened += it },
+                onAddTransaction = {},
+                onScanReceipt = {},
+                onManageBanks = {},
+                onFeedback = {},
+            )
+        menu.forEach { it.onClick() }
+        assertFalse(menu.any { it.label == "Export & backup" })
+        assertFalse(AppRoute.EXPORT in opened)
     }
 }

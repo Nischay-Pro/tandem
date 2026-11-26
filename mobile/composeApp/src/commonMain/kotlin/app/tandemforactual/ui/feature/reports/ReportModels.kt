@@ -9,6 +9,7 @@ import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.format.formatReportPercentage
 import app.tandemforactual.ui.core.format.formatShortMonth
 import app.tandemforactual.ui.core.format.parseReportMonth
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
@@ -50,6 +51,15 @@ internal fun categoryChartPoints(categories: List<CategorySpendingPoint>): List<
     }
 }
 
+internal fun categoryCardRows(
+    categories: List<CategorySpendingPoint>,
+    limit: Int = 5,
+): List<CategorySpendingPoint> {
+    if (categories.size <= limit + 1) return categories
+    val otherAmount = categories.drop(limit).sumOf { it.spendingMinor.coerceAtLeast(0L) }
+    return categories.take(limit) + CategorySpendingPoint(OTHER_CATEGORY_CHART_ID, "Other", otherAmount)
+}
+
 internal data class MonthlyMoneyPoint(
     val monthId: String,
     val month: String,
@@ -57,6 +67,23 @@ internal data class MonthlyMoneyPoint(
     val spendingMinor: Long,
 ) {
     val netMinor: Long get() = incomeMinor - spendingMinor
+}
+
+internal data class MonthlySpendingAverage(
+    val averageMinor: Long,
+    val monthCount: Int,
+    val isCurrentMonthSoFar: Boolean,
+)
+
+internal fun monthlySpendingAverage(
+    points: List<MonthlyMoneyPoint>,
+    currentMonthId: String = platformTodayIsoDate().take(7),
+): MonthlySpendingAverage? {
+    val withData = points.dropWhile { it.incomeMinor == 0L && it.spendingMinor == 0L }
+    val complete = withData.filter { it.monthId < currentMonthId }
+    val counted = complete.ifEmpty { withData.filter { it.monthId == currentMonthId } }
+    if (counted.isEmpty()) return null
+    return MonthlySpendingAverage(counted.sumOf(MonthlyMoneyPoint::spendingMinor) / counted.size, counted.size, complete.isEmpty())
 }
 
 internal data class BudgetedSpentPoint(
@@ -229,6 +256,7 @@ internal fun budgetedSpentPoints(
 ): List<BudgetedSpentPoint> {
     val selectedMonthIds = window.monthIds.toSet()
     val budgeted = mutableMapOf<String, Long>()
+    val excluded = mutableSetOf<String>()
     val resolvedNames = categoryNames.toMutableMap()
     budgetMonthRecords
         .asSequence()
@@ -236,19 +264,23 @@ internal fun budgetedSpentPoints(
         .mapNotNull { record -> record.recordBody()?.get("categoryGroups") as? JsonArray }
         .flatMap { it.asSequence() }
         .mapNotNull { it as? JsonObject }
-        .filterNot { it.booleanValue("hidden") == true }
-        .flatMap { it["categories"] as? JsonArray ?: JsonArray(emptyList()) }
-        .mapNotNull { it as? JsonObject }
-        .filterNot { it.booleanValue("hidden") == true || it.booleanValue("deleted") == true }
-        .forEach { category ->
-            val categoryId = category.stringValue("id") ?: return@forEach
-            val assigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0L
-            budgeted[categoryId] = (budgeted[categoryId] ?: 0L) + assigned
-            category.stringValue("name")?.let { resolvedNames[categoryId] = it }
+        .forEach { group ->
+            val groupExcluded = group.booleanValue("hidden") == true || group.isIncomeGroup()
+            (group["categories"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.forEach { category ->
+                val categoryId = category.stringValue("id") ?: return@forEach
+                if (groupExcluded || category.booleanValue("hidden") == true || category.booleanValue("deleted") == true) {
+                    excluded += categoryId
+                    return@forEach
+                }
+                val assigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0L
+                budgeted[categoryId] = (budgeted[categoryId] ?: 0L) + assigned
+                category.stringValue("name")?.let { resolvedNames[categoryId] = it }
+            }
         }
+    excluded.removeAll(budgeted.keys)
     val spent =
         spendingByCategoryMonth
-            .filter { window.allDates || it.monthId in selectedMonthIds }
+            .filter { (window.allDates || it.monthId in selectedMonthIds) && it.categoryId !in excluded }
             .groupBy(CategoryMonthAggregate::categoryId)
             .mapValues { (_, values) -> values.sumOf(CategoryMonthAggregate::spendingMinor).coerceAtLeast(0L) }
     return (budgeted.keys + spent.keys)
@@ -261,6 +293,8 @@ internal fun budgetedSpentPoints(
             )
         }.sortedWith(compareByDescending<BudgetedSpentPoint> { it.spentMinor }.thenBy { it.category.lowercase() })
 }
+
+private fun JsonObject.isIncomeGroup(): Boolean = booleanValue("is_income") ?: booleanValue("isIncome") ?: false
 
 internal fun netWorthPoints(
     accountDays: List<AccountDayAggregate>,

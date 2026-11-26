@@ -50,8 +50,9 @@ internal fun BackupStatusCard(
             subtitle =
                 when {
                     budgetEncrypted -> "Your budget password opens the budget and its planning data."
-                    planningSync == PlanningSyncStatus.NEEDS_RECOVERY_KEY -> "Enter the recovery key from another device in Household."
-                    else -> "Other devices need the recovery key shown in Household."
+                    planningSync == PlanningSyncStatus.NEEDS_RECOVERY_KEY ->
+                        "Enter the recovery key from another device in Settings › Privacy."
+                    else -> "Other devices need the recovery key shown in Settings › Privacy."
                 },
         )
         DividerLine()
