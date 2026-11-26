@@ -134,13 +134,13 @@ internal fun ReportLegend(
     val items =
         when (kind) {
             ReportKind.SPENDING_BY_CATEGORY -> emptyList()
-            ReportKind.SPENDING_OVER_TIME -> {
-                val average = data.monthly.map(MonthlyMoneyPoint::spendingMinor).averageLong()
-                listOf(
+            ReportKind.SPENDING_OVER_TIME ->
+                listOfNotNull(
                     "Spending" to tandemPalette.negative,
-                    "Average ${formatReportCurrency(average, data.displaySettings)}" to tandemPalette.syncing,
+                    monthlySpendingAverage(data.monthly)?.let { average ->
+                        "Average ${formatReportCurrency(average.averageMinor, data.displaySettings)}" to tandemPalette.syncing
+                    },
                 )
-            }
             ReportKind.INCOME_AND_SPENDING -> listOf("Income" to tandemPalette.positive, "Spending" to tandemPalette.negative)
             ReportKind.BUDGETED_AND_SPENT -> listOf("Budgeted" to tandemPalette.positive, "Spent" to tandemPalette.negative)
             ReportKind.NET_WORTH -> listOf("Net worth" to tandemPalette.accent)

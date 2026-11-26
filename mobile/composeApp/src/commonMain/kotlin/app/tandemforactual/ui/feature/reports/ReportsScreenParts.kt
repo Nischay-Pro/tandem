@@ -47,7 +47,7 @@ internal fun reportSummary(
                 ::formatInteger,
             )
         ReportKind.SPENDING_OVER_TIME ->
-            spendingOverTimeSummary(monthly.sumOf(MonthlyMoneyPoint::spendingMinor), monthly.size, format, ::formatInteger)
+            spendingOverTimeSummary(monthlySpendingAverage(monthly), format, ::formatInteger)
         ReportKind.INCOME_AND_SPENDING -> incomeSpendingSummary(monthly.sumOf(MonthlyMoneyPoint::netMinor))
         ReportKind.BUDGETED_AND_SPENT ->
             budgetedSpentSummary(
