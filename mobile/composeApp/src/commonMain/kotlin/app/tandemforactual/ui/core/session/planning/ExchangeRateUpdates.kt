@@ -24,7 +24,8 @@ internal fun FetchExchangeRatesWhenOn(
     val foreign =
         mobileSession.planning.accountCurrencies.values
             .filter { it != budgetCurrency }
-            .toSortedSet()
+            .distinct()
+            .sorted()
             .joinToString(",")
     val source = LocalExchangeRateSource.current
     LaunchedEffect(fetching.enabled, fetching.server, budgetId, budgetCurrency, foreign, mobileSession.lastSyncSummary) {
