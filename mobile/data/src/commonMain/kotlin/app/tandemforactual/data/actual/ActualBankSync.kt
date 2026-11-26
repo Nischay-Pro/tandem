@@ -194,6 +194,7 @@ class ActualBankSync(
                                 ),
                         ).first()
                 val result = options(rows)
+                writer.update("accounts", account.id, mapOf("last_sync" to writer.nowMillis().toString()))
                 result.copy(added = listOf(startingId) + result.added)
             }
         }
