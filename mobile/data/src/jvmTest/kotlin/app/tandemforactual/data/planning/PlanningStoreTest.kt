@@ -204,6 +204,34 @@ class PlanningStoreTest {
         }
 
     @Test
+    fun backupRecordsIncludeCurrenciesRatesAndResidencePeriods(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val store = PlanningStore(db.planningRecordDao(), "budget-1", PlanningCipher(PlanningCipher.newKey())) { 1_000L }
+                val period = JurisdictionPeriod("period-1", PeriodKind.RESIDENCE, Region.CA, "2024-01")
+                store.save(AccountCurrency("acct-1", "EUR"))
+                store.save(ExchangeRate("EUR", "USD", "1.08", "2026-11-01"))
+                store.put("rate-from-an-older-version", ExchangeRate.TYPE, ExchangeRate("GBP", "USD", "1.27", "2026-10-01").toJson())
+                store.save(period)
+
+                val records = store.backupRecords()
+
+                assertEquals(
+                    listOf(AccountCurrency.TYPE, ExchangeRate.TYPE, ExchangeRate.TYPE, JurisdictionPeriod.TYPE),
+                    records.map { it.second },
+                )
+                assertEquals(
+                    setOf("fx:EUR:USD", "rate-from-an-older-version"),
+                    records.filter { it.second == ExchangeRate.TYPE }.map { it.first }.toSet(),
+                )
+                assertEquals(period.toJson(), records.last().third)
+            } finally {
+                db.closeDatabase()
+            }
+        }
+
+    @Test
     fun cipherBindsTheRecordIdentity() {
         val cipher = PlanningCipher(ByteArray(32) { it.toByte() })
         val (iv, sealed) = cipher.seal("secret".encodeToByteArray(), "a")

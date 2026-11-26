@@ -6,6 +6,7 @@ import app.tandemforactual.api.client.budgetBackup
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningStore
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -134,17 +135,31 @@ object AutomaticBackups {
             key?.let {
                 planningBackupJson(
                     PlanningStore(planningDatabase.planningRecordDao(), budgetId, { PlanningCipher(it) }, now).backupRecords(),
+                    PlanningBackupSource(budgetId, budgetName, platformTodayIsoDate()),
                 )
             }
         return client.budgetBackup(budgetId, encryptionPassword, budgetName, planning, passphrase)
     }
 }
 
+/** The budget a planning backup was made from, and the day it was made. */
+internal data class PlanningBackupSource(
+    val budgetId: String,
+    val budgetName: String,
+    val createdOn: String,
+)
+
 /** The planning backup format, shared by manual planning backups and whole-budget backups. */
-internal fun planningBackupJson(records: List<Triple<String, String, kotlinx.serialization.json.JsonObject>>): String =
+internal fun planningBackupJson(
+    records: List<Triple<String, String, kotlinx.serialization.json.JsonObject>>,
+    source: PlanningBackupSource,
+): String =
     buildJsonObject {
         put("format", PLANNING_BACKUP_FORMAT)
         put("version", 1)
+        put("budgetId", source.budgetId)
+        put("budgetName", source.budgetName)
+        put("createdOn", source.createdOn)
         put(
             "records",
             JsonArray(

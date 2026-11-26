@@ -9,8 +9,10 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.platform.rememberStatementFilePicker
+import app.tandemforactual.ui.core.session.PlanningBackupSource
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.updateBackupLog
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,8 @@ internal class BackupFlow(
     var purpose by mutableStateOf<PassphrasePurpose?>(null)
         private set
     var error by mutableStateOf<String?>(null)
+        private set
+    var pendingRestore by mutableStateOf<BackupContents.Records?>(null)
         private set
     private var picked: String? = null
     internal var pick: () -> Unit = {}
@@ -65,10 +69,8 @@ internal class BackupFlow(
     fun submit(passphrase: String) {
         val current = purpose ?: return
         if (current == PassphrasePurpose.BACK_UP) {
-            val today = platformTodayIsoDate()
-            share("tandem-planning-$today.json", "application/json", sealedPlanningBackup(session, passphrase))
-            state.updateBackupLog { it.copy(backedUpOn = today) }
             dismiss()
+            backUp(passphrase)
             return
         }
         when (val read = readBackupFile(picked.orEmpty(), passphrase)) {
@@ -80,24 +82,71 @@ internal class BackupFlow(
         }
     }
 
+    private fun backUp(passphrase: String) {
+        val today = platformTodayIsoDate()
+        val source = PlanningBackupSource(state.selectedBudgetId, state.selectedBudget, today)
+        scope.launch {
+            val sealed = sealedPlanningBackup(session, source, passphrase)
+            if (sealed == null) {
+                report("Couldn’t back up. Open the budget and try again." to InlineMessageKind.ERROR)
+                return@launch
+            }
+            share("tandem-planning-$today.json", "application/json", sealed)
+            state.updateBackupLog { it.copy(sharedOn = today) }
+        }
+    }
+
+    fun cancelRestore() {
+        pendingRestore = null
+    }
+
+    fun confirmRestore() {
+        val backup = pendingRestore ?: return
+        pendingRestore = null
+        scope.launch {
+            val count = session.planning.restore(state.selectedBudgetId, backup.records)
+            report(
+                if (count == 0) {
+                    "Nothing was restored. Open the budget and try again." to InlineMessageKind.ERROR
+                } else {
+                    "Restored ${formatInteger(count)} planning records." to InlineMessageKind.SUCCESS
+                },
+            )
+        }
+    }
+
     private fun finish(
         next: PassphrasePurpose,
         read: BackupContents,
     ) {
-        val records = (read as? BackupContents.Records)?.records
-        if (records == null) {
+        val backup = read as? BackupContents.Records
+        if (backup == null) {
             report("That file isn’t a Tandem planning backup." to InlineMessageKind.ERROR)
             return
         }
         state.updateBackupLog { it.copy(checkedOn = platformTodayIsoDate()) }
         if (next == PassphrasePurpose.CHECK) {
-            report("This backup opens and holds ${formatInteger(records.size)} planning records." to InlineMessageKind.SUCCESS)
+            report("This backup opens and holds ${formatInteger(backup.records.size)} planning records." to InlineMessageKind.SUCCESS)
             return
         }
-        scope.launch {
-            val count = session.planning.restore(state.selectedBudgetId, records)
-            report("Restored ${formatInteger(count)} planning records." to InlineMessageKind.SUCCESS)
+        if (backup.records.isEmpty()) {
+            report("This backup has no planning records to restore." to InlineMessageKind.ERROR)
+            return
         }
+        pendingRestore = backup
+    }
+
+    /** What restoring [backup] into the open budget will do, for the confirmation before it starts. */
+    fun restoreMessage(backup: BackupContents.Records): String {
+        val made = backup.createdOn?.let { " made on ${formatLiveDate(it)}" }.orEmpty()
+        val otherBudget =
+            backup.budgetId
+                ?.takeIf { it != state.selectedBudgetId }
+                ?.let { " It was made from ${backup.budgetName?.let { name -> "“$name”" } ?: "a different budget"}, not this one." }
+                .orEmpty()
+        val count = formatInteger(backup.records.size)
+        return "Restore $count planning records from the backup$made into “${state.selectedBudget}”?$otherBudget " +
+            "This replaces the matching planning data on every device that shares this budget."
     }
 }
 

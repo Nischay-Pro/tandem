@@ -27,6 +27,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -38,7 +39,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Share2
 import kotlinx.coroutines.launch
 
-private enum class ExportRange(
+internal enum class ExportRange(
     val label: String,
 ) {
     MONTH("This month"),
@@ -61,7 +62,6 @@ internal fun ExportScreen(
     var exporting by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
     val today = platformTodayIsoDate()
-    val year = today.take(4).toInt()
     val backup = rememberBackupFlow(state, mobileSession, share) { message = it }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         message?.let { (text, kind) -> InlineMessage(text, kind, onDismiss = { message = null }) }
@@ -81,7 +81,7 @@ internal fun ExportScreen(
                     icon = Lucide.FileDown,
                     loading = exporting,
                 ) {
-                    val (from, to) = exportRangeDates(range, state.selectedMonthId, year)
+                    val (from, to) = exportRangeDates(range, today)
                     exporting = true
                     scope.launch {
                         val csv =
@@ -95,8 +95,7 @@ internal fun ExportScreen(
                         if (csv == null) {
                             message = "Couldn’t export. Open the budget and try again." to InlineMessageKind.ERROR
                         } else {
-                            val name = exportFileStem(state.selectedBudget)
-                            share("$name-${range.name.lowercase().replace('_', '-')}.csv", "text/csv", csv)
+                            share(exportFileName(state.selectedBudget, range, today), "text/csv", csv)
                         }
                     }
                 }
@@ -106,6 +105,16 @@ internal fun ExportScreen(
         PlanningBackupSection(onBackup = backup::startBackup, onRestore = backup::startRestore, onCheck = backup::startCheck)
     }
     BackupPassphraseDialog(backup.purpose, backup.error, backup::dismiss, backup::submit)
+    backup.pendingRestore?.let { pending ->
+        DestructiveConfirmationDialog(
+            title = "Restore planning data?",
+            message = backup.restoreMessage(pending),
+            confirmLabel = "Restore",
+            dismissLabel = "Cancel",
+            onDismissRequest = backup::cancelRestore,
+            onConfirm = backup::confirmRestore,
+        )
+    }
 }
 
 /** Back up or restore the planning data Actual doesn't hold. */
@@ -141,19 +150,35 @@ private fun PlanningBackupSection(
     }
 }
 
-private fun exportRangeDates(
+/** The first and last day [range] covers, counted from [today] rather than the month open in Budget. */
+internal fun exportRangeDates(
     range: ExportRange,
-    selectedMonthId: String,
-    year: Int,
-): Pair<String, String> =
-    when (range) {
-        ExportRange.MONTH ->
-            "$selectedMonthId-01" to
-                ActualDates.addDays("$selectedMonthId-01", 40).take(7).let { ActualDates.addDays("$it-01", -1) }
+    today: String,
+): Pair<String, String> {
+    val month = today.take(7)
+    val year = today.take(4).toInt()
+    return when (range) {
+        ExportRange.MONTH -> "$month-01" to ActualDates.addDays("$month-01", 40).take(7).let { ActualDates.addDays("$it-01", -1) }
         ExportRange.YEAR -> "$year-01-01" to "$year-12-31"
         ExportRange.LAST_YEAR -> "${year - 1}-01-01" to "${year - 1}-12-31"
         ExportRange.ALL -> "1900-01-01" to "2999-12-31"
     }
+}
+
+internal fun exportFileName(
+    budgetName: String,
+    range: ExportRange,
+    today: String,
+): String {
+    val period =
+        when (range) {
+            ExportRange.MONTH -> today.take(7)
+            ExportRange.YEAR -> today.take(4)
+            ExportRange.LAST_YEAR -> (today.take(4).toInt() - 1).toString()
+            ExportRange.ALL -> "all"
+        }
+    return "${exportFileStem(budgetName)}-$period.csv"
+}
 
 private fun exportFileStem(budgetName: String): String =
     budgetName

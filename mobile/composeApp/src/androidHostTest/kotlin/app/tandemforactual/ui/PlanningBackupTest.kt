@@ -19,7 +19,7 @@ class PlanningBackupTest {
             """{"format":"tandem-planning-backup","version":1,"records":[""" +
                 """{"id":"g1","type":"planning.savings_goal","body":{"name":"Trip"}},""" +
                 """{"id":"x","type":"budget.transaction","body":{}}]}"""
-        val records = readPlanningBackup(backup)!!
+        val records = readPlanningBackup(backup)!!.records
         assertEquals(listOf("g1"), records.map { it.first })
         assertEquals("planning.savings_goal", records.single().second)
         assertNull(readPlanningBackup("""{"format":"other"}"""))

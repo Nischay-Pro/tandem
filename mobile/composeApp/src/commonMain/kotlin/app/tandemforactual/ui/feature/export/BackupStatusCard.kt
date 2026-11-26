@@ -40,7 +40,7 @@ internal fun BackupStatusCard(
             subtitle =
                 listOfNotNull(
                     if (planningSync == PlanningSyncStatus.SYNCED) "Synced through your Actual server." else null,
-                    log.backedUpOn?.let { "Backed up ${formatLiveDate(it)}." } ?: "Not backed up from this device.",
+                    log.sharedOn?.let { "Last shared a backup on ${formatLiveDate(it)}." } ?: "No backup shared from this device yet.",
                 ).joinToString(" "),
         )
         DividerLine()

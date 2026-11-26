@@ -6,9 +6,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
-/** When this device last backed up a budget's planning data, and last confirmed a backup opens. ISO dates. */
+/** When this device last shared a budget's planning backup, and last confirmed a backup opens. ISO dates. */
 internal data class BackupLog(
-    val backedUpOn: String? = null,
+    val sharedOn: String? = null,
     val checkedOn: String? = null,
 )
 
@@ -23,7 +23,10 @@ internal fun decodeBackupLogs(json: String): Map<String, BackupLog> =
     runCatching {
         Json.parseToJsonElement(json).jsonObject.mapValues { (_, value) ->
             val entry = value.jsonObject
-            BackupLog((entry["backedUpOn"] as? JsonPrimitive)?.contentOrNull, (entry["checkedOn"] as? JsonPrimitive)?.contentOrNull)
+            BackupLog(
+                ((entry["sharedOn"] ?: entry["backedUpOn"]) as? JsonPrimitive)?.contentOrNull,
+                (entry["checkedOn"] as? JsonPrimitive)?.contentOrNull,
+            )
         }
     }.getOrDefault(emptyMap())
 
@@ -32,7 +35,7 @@ internal fun encodeBackupLogs(logs: Map<String, BackupLog>): String =
         logs.mapValues { (_, log) ->
             JsonObject(
                 listOfNotNull(
-                    log.backedUpOn?.let { "backedUpOn" to JsonPrimitive(it) },
+                    log.sharedOn?.let { "sharedOn" to JsonPrimitive(it) },
                     log.checkedOn?.let { "checkedOn" to JsonPrimitive(it) },
                 ).toMap(),
             )
