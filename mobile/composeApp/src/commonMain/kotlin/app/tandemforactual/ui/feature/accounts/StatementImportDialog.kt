@@ -265,16 +265,30 @@ private fun StatementImportResult(
             leading = RowLeading.Icon(Lucide.Receipt),
         )
     }
+    val newRows = importPreview?.takeIf { it.serverChecked }?.newRowCount(result.transactions.size)
     TandemActionButton(
-        if (busy) "Importing…" else "Import ${statementCount(result.transactions.size, "transaction")}",
+        statementImportButtonLabel(result.transactions.size, newRows, busy),
         TandemActionButtonTone.PRIMARY,
         modifier = Modifier.fillMaxWidth(),
         icon = Lucide.Check,
-        enabled = !busy && !state.readOnlyMode && importPreview?.serverChecked == true && !importPreviewLoading,
+        enabled = !busy && !state.readOnlyMode && newRows != null && newRows > 0 && !importPreviewLoading,
         loading = busy,
         onClick = onImport,
     )
 }
+
+/** The import button's label, counting only rows Actual doesn't have yet once [newRows] is known. */
+internal fun statementImportButtonLabel(
+    totalRows: Int,
+    newRows: Int?,
+    busy: Boolean,
+): String =
+    when {
+        busy -> "Importing…"
+        newRows == null -> "Import ${statementCount(totalRows, "transaction")}"
+        newRows == 0 -> "No new transactions"
+        else -> "Import ${statementCount(newRows, "new transaction")}"
+    }
 
 @Composable
 private fun StatementCsvColumnMappingEditor(

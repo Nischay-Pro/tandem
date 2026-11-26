@@ -40,6 +40,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -94,7 +95,16 @@ internal fun BankConnectionsScreen(
             onLink = actions::pickProviderAccount,
         )
     }
-    ManageBankLinkDialog(ui.managing, onDismiss = { ui.managing = null }, onRelink = actions::relink, onUnlink = actions::unlink)
+    ManageBankLinkDialog(ui.managing, onDismiss = { ui.managing = null }, onRelink = actions::relink, onUnlink = actions::confirmUnlink)
+    ui.unlinking?.let { account ->
+        DestructiveConfirmationDialog(
+            title = "Unlink ${account.name}?",
+            message = "It stops syncing with the bank. Transactions already imported stay. You can link it again later.",
+            confirmLabel = "Unlink",
+            dismissLabel = "Cancel",
+            onDismissRequest = { ui.unlinking = null },
+        ) { actions.unlink(account) }
+    }
     BankBrowserLinkSheet(
         ui.browserProvider,
         mobileSession,

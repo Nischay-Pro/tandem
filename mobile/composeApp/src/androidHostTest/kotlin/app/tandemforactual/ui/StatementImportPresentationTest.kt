@@ -141,7 +141,7 @@ class StatementImportPresentationTest {
         composeTestRule.onNodeWithText("New in Actual").assertExists()
         composeTestRule.onAllNodesWithText("Already in Actual").assertCountEquals(2)
         composeTestRule.onAllNodesWithText("1").assertCountEquals(2)
-        composeTestRule.onNodeWithText("Import 2 transactions").assertIsEnabled()
+        composeTestRule.onNodeWithText("Import 1 new transaction").assertIsEnabled()
     }
 
     @Test
@@ -199,7 +199,7 @@ class StatementImportPresentationTest {
         composeTestRule.onNodeWithText("2026-11-04 · Corner Market").assertExists()
         composeTestRule.onNodeWithText("-$18.50").assertExists()
         composeTestRule.onNodeWithText("New in Actual").assertExists()
-        composeTestRule.onNodeWithText("Import 2 transactions").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Import 1 new transaction").performScrollTo().performClick()
 
         assertEquals(parsed.toStatementImportItems(), itemsPassedToImport)
     }

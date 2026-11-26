@@ -83,7 +83,26 @@ internal fun AccountDetailHeader(
             )
         }
     }
-    AmountHero("Available balance", balance, listOfNotNull(converted, accountName, description).joinToString(" · "))
+    AmountHero(
+        accountBalanceLabel(account?.type, account?.balanceMinor),
+        balance,
+        listOfNotNull(converted, accountName, description).joinToString(" · "),
+    )
+}
+
+private val DEBT_ACCOUNT_TYPES = setOf("credit", "credit-card", "credit card", "loan", "mortgage", "debt")
+
+/** The balance hero's label: debts show what is owed, and only money you hold is called available. */
+internal fun accountBalanceLabel(
+    type: String?,
+    balanceMinor: Long?,
+): String {
+    val debt = type?.trim()?.lowercase()?.let { it in DEBT_ACCOUNT_TYPES } == true
+    return when {
+        debt && (balanceMinor == null || balanceMinor <= 0) -> "Balance owed"
+        debt || (balanceMinor != null && balanceMinor < 0) -> "Balance"
+        else -> "Available balance"
+    }
 }
 
 /** Add, reconcile and import shortcuts for the account. */

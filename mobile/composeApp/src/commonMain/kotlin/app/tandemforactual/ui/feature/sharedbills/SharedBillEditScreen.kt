@@ -30,6 +30,7 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -90,6 +91,7 @@ internal fun SharedBillEditScreen(
             }
         }
     val scope = rememberCoroutineScope()
+    var confirmingDelete by remember { mutableStateOf(false) }
     val amountOptions =
         TextFieldOptions(
             placeholder = "0",
@@ -115,14 +117,40 @@ internal fun SharedBillEditScreen(
             }
         }
         if (existing != null) {
-            TandemActionButton("Delete bill", TandemActionButtonTone.DESTRUCTIVE, Modifier.fillMaxWidth(), icon = Lucide.Trash2) {
-                scope.launch {
-                    mobileSession.planning.deleteSharedBill(state.selectedBudgetId, existing.id)
-                    navigation.backToList()
-                }
+            TandemActionButton(
+                "Delete bill",
+                TandemActionButtonTone.DESTRUCTIVE,
+                Modifier.fillMaxWidth(),
+                enabled = !state.readOnlyMode,
+                icon = Lucide.Trash2,
+            ) { confirmingDelete = true }
+        }
+    }
+    if (existing != null && confirmingDelete) {
+        DeleteSharedBillDialog(existing, onDismiss = { confirmingDelete = false }) {
+            confirmingDelete = false
+            scope.launch {
+                mobileSession.planning.deleteSharedBill(state.selectedBudgetId, existing.id)
+                navigation.backToList()
             }
         }
     }
+}
+
+@Composable
+private fun DeleteSharedBillDialog(
+    bill: SharedBill,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    DestructiveConfirmationDialog(
+        title = "Delete ${bill.name}?",
+        message = "The bill and its people are removed from Tandem. Payments stay in your accounts.",
+        confirmLabel = "Delete",
+        dismissLabel = "Cancel",
+        onDismissRequest = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 @Composable

@@ -55,10 +55,6 @@ internal fun HouseholdScreen(
     val thisNode by produceState<String?>(null, state.selectedBudgetId) {
         value = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)?.deviceNode
     }
-    LaunchedEffect(thisNode) {
-        val node = thisNode ?: return@LaunchedEffect
-        if (node !in mobileSession.planning.deviceNames) mobileSession.planning.nameDevice(state.selectedBudgetId, node, deviceName)
-    }
     var renaming by remember { mutableStateOf(false) }
     val openId =
         mobileSession.actualLoginMethods
@@ -165,9 +161,10 @@ private fun DevicesSection(
 ) {
     SectionCard("Devices", "Names show in change history. They come from each device and aren’t verified by Actual.") {
         val node = thisNode
+        val named = node != null && node in names
         ListRow(
             node?.let { names[it] } ?: deviceName,
-            "This device · Tap to rename",
+            if (named) "This device · Tap to rename" else "This device · Not named yet · Tap to name it",
             leading = RowLeading.Icon(Lucide.Smartphone),
             onClick = onRename.takeIf { node != null },
         )
