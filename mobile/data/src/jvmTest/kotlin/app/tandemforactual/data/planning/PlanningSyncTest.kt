@@ -402,4 +402,64 @@ class PlanningSyncTest {
                 tabletDb.closeDatabase()
             }
         }
+
+    @Test
+    fun rotatingFailsWhenAnotherDeviceAlreadyReplacedTheKey(): Unit =
+        runBlocking {
+            val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer()
+                val oldSecret = ByteArray(32) { 4 }
+                val phoneSync = PlanningSync(phoneDb.planningRecordDao(), "b", server.transport())
+                val tabletSync = PlanningSync(tabletDb.planningRecordDao(), "b", server.transport())
+                val oldKey = phoneSync.agreeOnKey(PlanningCipher.newKey(), oldSecret)
+                assertContentEquals(oldKey, tabletSync.agreeOnKey(PlanningCipher.newKey(), oldSecret))
+
+                val tabletKey = PlanningCipher.newKey()
+                val tabletSecret = ByteArray(32) { 5 }
+                assertTrue(tabletSync.rotate(oldKey, tabletKey, tabletSecret))
+                assertFalse(phoneSync.rotate(oldKey, PlanningCipher.newKey(), ByteArray(32) { 6 }))
+                assertContentEquals(tabletKey, PlanningKeys.unwrap(checkNotNull(server.key), tabletSecret, "b"))
+            } finally {
+                phoneDb.closeDatabase()
+                tabletDb.closeDatabase()
+            }
+        }
+
+    @Test
+    fun rotatingKeepsNewerEditsFromOtherDevices(): Unit =
+        runBlocking {
+            val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer().apply { pageSize = 10 }
+                val oldSecret = ByteArray(32) { 4 }
+                val phoneSync = PlanningSync(phoneDb.planningRecordDao(), "b", server.transport())
+                val tabletSync = PlanningSync(tabletDb.planningRecordDao(), "b", server.transport())
+                val oldKey = phoneSync.agreeOnKey(PlanningCipher.newKey(), oldSecret)
+                val oldCipher = PlanningCipher(oldKey)
+                PlanningStore(phoneDb.planningRecordDao(), "b", oldCipher) { 1L }.save(SavingsGoal("g", "Holiday", 1_000, "USD"))
+                phoneSync.sync(oldCipher, 0)
+                tabletSync.agreeOnKey(PlanningCipher.newKey(), oldSecret)
+                tabletSync.sync(oldCipher, 0)
+                PlanningStore(tabletDb.planningRecordDao(), "b", oldCipher) { 2L }.save(SavingsGoal("g", "Holiday", 2_000, "USD"))
+                tabletSync.sync(oldCipher, 0)
+
+                val newKey = PlanningCipher.newKey()
+                val newSecret = ByteArray(32) { 5 }
+                assertTrue(phoneSync.rotate(oldKey, newKey, newSecret))
+                phoneSync.sync(PlanningCipher(newKey), 0)
+                val phone = PlanningStore(phoneDb.planningRecordDao(), "b", PlanningCipher(newKey)) { 3L }
+                assertEquals(listOf(2_000L), phone.savingsGoals().first().map { it.targetMinor })
+
+                val shared = tabletSync.agreeOnKey(PlanningCipher.newKey(), newSecret)
+                tabletSync.sync(PlanningCipher(shared), 0)
+                val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", PlanningCipher(shared)) { 4L }
+                assertEquals(listOf(2_000L), tablet.savingsGoals().first().map { it.targetMinor })
+            } finally {
+                phoneDb.closeDatabase()
+                tabletDb.closeDatabase()
+            }
+        }
 }
