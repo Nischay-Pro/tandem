@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.navigation.openGeneralActivitySearch
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -45,6 +46,7 @@ import app.tandemforactual.ui.core.ui.transactionSyncOperations
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.SkeletonRows
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.templates.tandemListItemModifier
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -86,6 +88,7 @@ internal fun ActivityScreen(
     LaunchedEffect(mobileSession.activity.activityTransactionPageGeneration) {
         selection.selectionMode = false
         selection.selectedTransactionIds = emptySet()
+        selection.askingToDelete = false
         selection.confirmBulkDelete = false
     }
     val transactions = liveTransactions.filterNot(TransactionItem::isSplitParent)
@@ -142,13 +145,26 @@ internal fun ActivityScreen(
     ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection)
 }
 
-/** Deletes the selected transactions once the delete is confirmed. */
+/** Asks before deleting the selected transactions, then deletes them once confirmed. */
 @Composable
 internal fun ActivityBulkDeleteEffect(
     mobileSession: TandemMobileSession,
     budgetId: String,
     selection: ActivitySelectionState,
 ) {
+    if (selection.askingToDelete) {
+        val count = selection.selectedTransactionIds.size
+        DestructiveConfirmationDialog(
+            title = if (count == 1) "Delete 1 transaction?" else "Delete ${formatInteger(count)} transactions?",
+            message = "They’ll be removed from Actual. You can undo until the budget syncs.",
+            confirmLabel = "Delete",
+            dismissLabel = "Keep them",
+            onDismissRequest = { selection.askingToDelete = false },
+        ) {
+            selection.askingToDelete = false
+            selection.confirmBulkDelete = true
+        }
+    }
     LaunchedEffect(selection.confirmBulkDelete) {
         if (selection.confirmBulkDelete) {
             selection.isDeletingSelection = true
@@ -347,7 +363,7 @@ private fun BoxScope.ActivitySelectionBar(
                     }
                 }
             },
-            onDelete = { selection.confirmBulkDelete = true },
+            onDelete = { selection.askingToDelete = true },
             modifier =
                 Modifier
                     .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),

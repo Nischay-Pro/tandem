@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 internal class ActivitySelectionState {
     var selectionMode by mutableStateOf(false)
     var selectedTransactionIds by mutableStateOf<Set<String>>(emptySet())
+    var askingToDelete by mutableStateOf(false)
     var confirmBulkDelete by mutableStateOf(false)
     var isDeletingSelection by mutableStateOf(false)
     var isSelectingAll by mutableStateOf(false)

@@ -300,7 +300,7 @@ private fun BoxScope.ActivitySearchSelectionBar(
                 selection.selectedTransactionIds = if (allSelected) emptySet() else visibleTransactionIds
                 if (allSelected) selection.selectionMode = false
             },
-            onDelete = { selection.confirmBulkDelete = true },
+            onDelete = { selection.askingToDelete = true },
             modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
         )
     }
