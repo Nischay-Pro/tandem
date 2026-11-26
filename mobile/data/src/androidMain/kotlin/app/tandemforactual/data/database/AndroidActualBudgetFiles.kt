@@ -7,6 +7,10 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.tandemforactual.data.actual.ActualDatabase
 import java.io.File
 
+private val lock = Any()
+
+private val sidecarSuffixes = listOf("", "-wal", "-shm", "-journal")
+
 /**
  * Keeps each Actual budget in `noBackupFilesDir`, written atomically so an interrupted download leaves no partial file.
  * With a [sealedDriver], which opens SQLCipher databases under a raw key (an empty key opens plaintext), encrypted
@@ -216,7 +220,5 @@ class AndroidActualBudgetFiles(
 
     private companion object {
         const val STAGING = ".staging"
-        val lock = Any()
-        val sidecarSuffixes = listOf("", "-wal", "-shm", "-journal")
     }
 }
