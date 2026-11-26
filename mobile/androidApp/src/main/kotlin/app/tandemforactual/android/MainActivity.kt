@@ -39,6 +39,7 @@ import app.tandemforactual.ui.app.WindowHinge
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
@@ -96,6 +97,7 @@ class MainActivity : FragmentActivity() {
     private val crashReports by lazy { AndroidCrashReports(this) }
     private val windowHinge = MutableStateFlow<WindowHinge?>(null)
     private val signInBrowser = AndroidSignInBrowser(this)
+    private val lanAccess = AndroidLanAccess(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen: SplashScreen = installSplashScreen()
@@ -136,7 +138,11 @@ class MainActivity : FragmentActivity() {
                 }
             val bankIcons =
                 remember { bankIcons(applicationContext.filesDir.resolve("bank-icons").path) { System.currentTimeMillis() } }
-            CompositionLocalProvider(LocalBackupSecrets provides backupSecrets, LocalBankIcons provides bankIcons) {
+            CompositionLocalProvider(
+                LocalBackupSecrets provides backupSecrets,
+                LocalBankIcons provides bankIcons,
+                LocalLanAccess provides lanAccess,
+            ) {
                 TandemApp(
                     actualBudgetFiles =
                         remember {
