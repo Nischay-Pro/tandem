@@ -75,7 +75,7 @@ internal fun sortActivitySearchIndices(
     records: List<ActivitySearchRecord>,
     order: ActivitySortOrder,
 ): List<Int> =
-    indices.sortedWith { firstIndex, secondIndex ->
+    indices.filter { it in records.indices }.sortedWith { firstIndex, secondIndex ->
         val first = records[firstIndex]
         val second = records[secondIndex]
         val primary =
