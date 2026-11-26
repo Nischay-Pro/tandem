@@ -39,6 +39,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -47,6 +48,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.budget.BudgetTemplate
+import app.tandemforactual.ui.feature.budget.budgetTemplateReplacedCount
 import app.tandemforactual.ui.feature.budget.decodeBudgetTemplates
 import app.tandemforactual.ui.feature.budget.encodeBudgetTemplates
 import com.composables.icons.lucide.CalendarDays
@@ -54,7 +56,6 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.X
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /** Sheet for saving this month's plan as a template and applying saved templates. */
@@ -67,7 +68,6 @@ internal fun BudgetTemplatesSheet(
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val currentBudgetTemplates =
         remember(state.budgetTemplatesJson, state.selectedBudgetId) {
             decodeBudgetTemplates(state.budgetTemplatesJson).filter { it.budgetId == state.selectedBudgetId }
@@ -76,7 +76,20 @@ internal fun BudgetTemplatesSheet(
         remember(groups) {
             groups.flatMap { group -> group.categories }.map { it.id to it.assignedMinor }
         }
-    val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
+    var confirmingTemplate by remember(state.selectedBudgetId, state.selectedMonthId) { mutableStateOf<BudgetTemplate?>(null) }
+    val applyTemplate: (BudgetTemplate) -> Unit = { template ->
+        scope.launch {
+            val applied =
+                mobileSession.budgetEdits.applyBudgetTemplate(
+                    state.selectedBudgetId,
+                    state.selectedMonthId,
+                    template.assignments,
+                    state.encryptedPassword.takeIf { it.isNotBlank() },
+                )
+            confirmingTemplate = null
+            if (applied) onDismiss()
+        }
+    }
     TandemTaskSheet(
         visible = visible,
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
@@ -92,31 +105,7 @@ internal fun BudgetTemplatesSheet(
                 verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
             ) {
                 BudgetTemplatesHeader(mobileSession, onDismiss)
-                TextFieldCard(
-                    "Template name",
-                    budgetTemplateNameDraft,
-                    { budgetTemplateNameDraft = it.take(60) },
-                    TextFieldOptions(placeholder = "Summer plan"),
-                )
-                TandemActionButton(
-                    "Save ${state.selectedMonth} plan",
-                    TandemActionButtonTone.PRIMARY,
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Lucide.Check,
-                    enabled =
-                        budgetTemplateNameDraft.isNotBlank() &&
-                            canSaveCurrentTemplate &&
-                            !mobileSession.isPerformingBudgetAction,
-                ) {
-                    val saved =
-                        decodeBudgetTemplates(state.budgetTemplatesJson)
-                            .filterNot { it.budgetId == state.selectedBudgetId && it.name.equals(budgetTemplateNameDraft.trim(), true) }
-                    state.budgetTemplatesJson =
-                        encodeBudgetTemplates(
-                            saved + BudgetTemplate(state.selectedBudgetId, budgetTemplateNameDraft.trim(), currentTemplateAssignments),
-                        )
-                    budgetTemplateNameDraft = ""
-                }
+                SaveTemplateSection(state, mobileSession, currentTemplateAssignments)
                 if (currentTemplateAssignments.size > 500) {
                     InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
                 }
@@ -125,12 +114,50 @@ internal fun BudgetTemplatesSheet(
                     Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                 } else {
                     currentBudgetTemplates.forEach { template ->
-                        BudgetTemplateCard(template, state, mobileSession, scope, onDismiss)
+                        BudgetTemplateCard(template, state, mobileSession) {
+                            if (budgetTemplateReplacedCount(template.assignments, currentTemplateAssignments) > 0) {
+                                confirmingTemplate = template
+                            } else {
+                                applyTemplate(template)
+                            }
+                        }
                     }
                 }
             }
         }
     }
+    confirmingTemplate?.takeIf { visible }?.let { template ->
+        ReplaceAmountsDialog(
+            template,
+            budgetTemplateReplacedCount(template.assignments, currentTemplateAssignments),
+            state,
+            mobileSession,
+            onDismiss = { confirmingTemplate = null },
+            onConfirm = { applyTemplate(template) },
+        )
+    }
+}
+
+@Composable
+private fun ReplaceAmountsDialog(
+    template: BudgetTemplate,
+    replacedCount: Int,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    DestructiveConfirmationDialog(
+        title = "Replace ${state.selectedMonth} amounts?",
+        message =
+            "${categoryCountLabel(replacedCount)} already ${if (replacedCount == 1) "has an amount" else "have amounts"} " +
+                "this month. Applying “${template.name}” replaces them.",
+        confirmLabel = if (mobileSession.isPerformingBudgetAction) "Applying…" else "Replace amounts",
+        dismissLabel = "Keep amounts",
+        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+        onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
+        onConfirm = onConfirm,
+    )
 }
 
 @Composable
@@ -163,8 +190,7 @@ private fun BudgetTemplateCard(
     template: BudgetTemplate,
     state: AppState,
     mobileSession: TandemMobileSession,
-    scope: CoroutineScope,
-    onApplied: () -> Unit,
+    onApply: () -> Unit,
 ) {
     SurfaceCard {
         Column(Modifier.fillMaxWidth().padding(TandemSpacing.small)) {
@@ -181,18 +207,7 @@ private fun BudgetTemplateCard(
                     icon = Lucide.Check,
                     enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                     loading = mobileSession.isPerformingBudgetAction,
-                ) {
-                    scope.launch {
-                        val applied =
-                            mobileSession.budgetEdits.applyBudgetTemplate(
-                                state.selectedBudgetId,
-                                state.selectedMonthId,
-                                template.assignments,
-                                state.encryptedPassword.takeIf { it.isNotBlank() },
-                            )
-                        if (applied) onApplied()
-                    }
-                }
+                ) { onApply() }
                 TandemIconButton(
                     Lucide.Trash2,
                     "Delete ${template.name}",
@@ -209,5 +224,40 @@ private fun BudgetTemplateCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SaveTemplateSection(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    currentTemplateAssignments: List<Pair<String, Long>>,
+) {
+    var budgetTemplateNameDraft by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
+    val canSaveCurrentTemplate = currentTemplateAssignments.isNotEmpty() && currentTemplateAssignments.size <= 500
+    TextFieldCard(
+        "Template name",
+        budgetTemplateNameDraft,
+        { budgetTemplateNameDraft = it.take(60) },
+        TextFieldOptions(placeholder = "Summer plan"),
+    )
+    TandemActionButton(
+        "Save ${state.selectedMonth} plan",
+        TandemActionButtonTone.PRIMARY,
+        modifier = Modifier.fillMaxWidth(),
+        icon = Lucide.Check,
+        enabled =
+            budgetTemplateNameDraft.isNotBlank() &&
+                canSaveCurrentTemplate &&
+                !mobileSession.isPerformingBudgetAction,
+    ) {
+        val saved =
+            decodeBudgetTemplates(state.budgetTemplatesJson)
+                .filterNot { it.budgetId == state.selectedBudgetId && it.name.equals(budgetTemplateNameDraft.trim(), true) }
+        state.budgetTemplatesJson =
+            encodeBudgetTemplates(
+                saved + BudgetTemplate(state.selectedBudgetId, budgetTemplateNameDraft.trim(), currentTemplateAssignments),
+            )
+        budgetTemplateNameDraft = ""
     }
 }

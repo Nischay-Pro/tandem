@@ -274,7 +274,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Couldn’t refresh the new category group."
             BudgetReorderKind.CREATE_PAYEE -> "Couldn’t add this payee."
             BudgetReorderKind.SET_CATEGORY_AMOUNT -> "Couldn’t update the assigned amount."
-            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update carryover."
+            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update overspending rollover."
             BudgetReorderKind.COPY_BUDGET_MONTH -> "Couldn’t copy last month’s assignments."
             BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Couldn’t apply this template."
             BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Couldn’t hold this money for next month."

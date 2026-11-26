@@ -52,7 +52,7 @@ import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** "This month" card with the category's assigned amount, activity, rollover and icon. */
+/** "This month" card with the category's assigned amount, activity, overspending rollover and icon. */
 @Composable
 internal fun CategoryThisMonthSection(
     state: AppState,
@@ -117,15 +117,15 @@ internal fun CategoryThisMonthSection(
 }
 
 @Composable
-private fun RolloverRow(
+internal fun RolloverRow(
     state: AppState,
     mobileSession: TandemMobileSession,
     category: LiveCategorySummary,
     scope: CoroutineScope,
 ) {
     ToggleRow(
-        "Rollover",
-        "Unused money rolls forward",
+        "Roll overspending into next month",
+        "When this category goes over, the shortfall carries into next month’s balance instead of coming out of money to budget",
         checked = category.carryover,
         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
         leadingIcon = Lucide.RefreshCw,

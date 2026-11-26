@@ -143,7 +143,7 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
             host.feedback.performBudgetAction(
                 request.budgetId,
                 request.encryptionPassword,
-                "Couldn’t update carryover.",
+                "Couldn’t update overspending rollover.",
                 null,
             ) {
                 host.apiClient.setBudgetCategoryCarryover(

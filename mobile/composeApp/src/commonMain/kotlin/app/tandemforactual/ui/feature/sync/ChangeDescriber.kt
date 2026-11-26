@@ -102,7 +102,7 @@ internal class ChangeDescriber(
             "tombstone" -> "Deleted"
             "hidden" -> "Hidden"
             "name" -> "Name"
-            "carryover" -> "Rollover"
+            "carryover" -> "Overspending rollover"
             "goal" -> "Goal"
             "cat_group" -> "Group"
             "is_income" -> "Income"

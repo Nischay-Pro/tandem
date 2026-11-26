@@ -145,7 +145,7 @@ internal fun budgetMutationPendingSummary(
             if (before != null && after != null) {
                 "${if (before) "On" else "Off"} → ${if (after) "On" else "Off"}"
             } else {
-                if (after == true) "Carryover on" else "Carryover off"
+                if (after == true) "Overspending rollover on" else "Overspending rollover off"
             }
         }
         BudgetReorderKind.CATEGORY,

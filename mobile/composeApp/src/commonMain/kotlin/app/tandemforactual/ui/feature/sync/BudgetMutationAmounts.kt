@@ -153,7 +153,7 @@ internal fun budgetMutationTitle(
         "MOVE_ACCOUNT" -> "Reorder account · $itemName"
         "SET_ORDER" -> "Reorder · categories and accounts"
         "SET_CATEGORY_AMOUNT" -> "Assign money · $itemName"
-        "SET_CATEGORY_CARRYOVER" -> "Update carryover · $itemName"
+        "SET_CATEGORY_CARRYOVER" -> "Update overspending rollover · $itemName"
         "COPY_BUDGET_MONTH" -> "Copy assignments · $itemName"
         "APPLY_BUDGET_TEMPLATE" -> "Apply template · $itemName"
         "HOLD_BUDGET_NEXT_MONTH" -> "Hold money · $itemName"
