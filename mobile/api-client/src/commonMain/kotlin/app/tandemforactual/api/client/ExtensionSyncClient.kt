@@ -20,6 +20,7 @@ import io.ktor.http.encodeURLParameter
 import io.ktor.http.isSuccess
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -33,9 +34,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 
+/** Extension sync failed; [status] is the HTTP status, or null when the service couldn't be reached. */
 class ExtensionSyncException(
-    val status: Int,
-) : IllegalStateException("Extension sync answered HTTP $status")
+    val status: Int?,
+) : IllegalStateException(status?.let { "Extension sync answered HTTP $it" } ?: "Extension sync is unreachable")
 
 /** Talks to Tandem's optional extension sync for one budget, authorized by the Actual session token. */
 @OptIn(ExperimentalEncodingApi::class)
@@ -151,17 +153,30 @@ class ExtensionSyncClient(
     private fun JsonObject.text(name: String) = getValue(name).jsonPrimitive.content
 
     companion object {
-        /** Whether this server runs extension sync; budgets work the same either way. */
+        /**
+         * Whether this server runs extension sync; budgets work the same either way. Null when the server couldn't say
+         * right now (offline, timed out, overloaded), so the answer isn't remembered.
+         */
         suspend fun available(
             http: HttpClient,
             serverUrl: String,
-        ): Boolean =
-            runCatching {
+        ): Boolean? =
+            try {
                 val response = http.get("${serverUrl.trimEnd('/')}/extension/v1/capabilities")
-                response.status.isSuccess() &&
-                    Json.parseToJsonElement(response.bodyAsText()).jsonObject["features"]?.jsonArray.orEmpty().any {
-                        it.jsonPrimitive.content == "planning-records"
-                    }
-            }.getOrDefault(false)
+                when {
+                    response.status.isSuccess() ->
+                        runCatching {
+                            Json.parseToJsonElement(response.bodyAsText()).jsonObject["features"]?.jsonArray.orEmpty().any {
+                                it.jsonPrimitive.content == "planning-records"
+                            }
+                        }.getOrDefault(false)
+                    response.status.value == 408 || response.status.value == 429 || response.status.value >= 500 -> null
+                    else -> false
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
     }
 }

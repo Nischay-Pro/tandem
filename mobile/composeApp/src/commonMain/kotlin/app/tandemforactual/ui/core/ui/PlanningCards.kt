@@ -150,6 +150,15 @@ internal fun planningSyncDetail(status: PlanningSyncStatus): Pair<String, String
         PlanningSyncStatus.WAITING ->
             "Planning details saved on this device" to
                 "They’ll sync when Tandem’s extension service is reachable. Your budget syncs as usual."
+        PlanningSyncStatus.SIGN_IN_EXPIRED ->
+            "Planning details saved on this device" to
+                "Your Actual sign-in has expired. Sign in again and they’ll sync."
+        PlanningSyncStatus.NO_ACCESS ->
+            "Planning details saved on this device" to
+                "The extension service says your Actual sign-in can’t open this budget. They’ll sync once it can."
+        PlanningSyncStatus.BUSY ->
+            "Planning details saved on this device" to
+                "Tandem’s extension service is busy. They’ll sync on the next try."
         PlanningSyncStatus.NEEDS_RECOVERY_KEY ->
             "Enter your planning recovery key" to
                 "Another device already shares planning details for this budget. Enter its recovery key in Settings."

@@ -361,6 +361,8 @@ class ActualServerClient(
             status == 401 || status == 403 -> "unauthorized"
             status == 404 -> "not-found"
             status == 413 -> "file-too-large"
+            status == 429 -> "rate-limited"
+            status in 500..599 -> "server-unavailable"
             else -> "network-failure"
         }
 

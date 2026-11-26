@@ -128,6 +128,9 @@ internal fun SyncCenterServices(
                 PlanningSyncStatus.OFF -> "Not running on your server"
                 PlanningSyncStatus.SYNCED -> "Planning details synced"
                 PlanningSyncStatus.WAITING -> "Waiting for the extension service"
+                PlanningSyncStatus.SIGN_IN_EXPIRED -> "Sign in again to sync planning details"
+                PlanningSyncStatus.NO_ACCESS -> "Extension service can’t open this budget"
+                PlanningSyncStatus.BUSY -> "Extension service is busy"
                 PlanningSyncStatus.NEEDS_RECOVERY_KEY -> "Needs your recovery key"
             },
             when (status) {
@@ -141,13 +144,13 @@ internal fun SyncCenterServices(
                     badge =
                         when (status) {
                             PlanningSyncStatus.SYNCED -> RowBadge(null, palette.positive, "Synced")
-                            PlanningSyncStatus.WAITING, PlanningSyncStatus.NEEDS_RECOVERY_KEY ->
+                            PlanningSyncStatus.OFF -> null
+                            else ->
                                 RowBadge(
                                     null,
                                     palette.warning,
                                     "Needs attention",
                                 )
-                            PlanningSyncStatus.OFF -> null
                         },
                 ),
             onClick = onRecoveryKey.takeIf { status == PlanningSyncStatus.NEEDS_RECOVERY_KEY },
