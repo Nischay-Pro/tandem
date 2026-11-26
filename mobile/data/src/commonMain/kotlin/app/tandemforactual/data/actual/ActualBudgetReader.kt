@@ -224,17 +224,22 @@ class ActualBudgetReader(
             val text = value?.toString().orEmpty()
             return if (text.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + text.replace("\"", "\"\"") + "\"" else text
         }
+
+        fun text(value: Any?): String {
+            val text = value?.toString().orEmpty()
+            return if (text.firstOrNull()?.let { it in "=+-@\t\r" } == true) "'$text" else text
+        }
         val lines =
             rows.map { row ->
                 val amount = (row["amount"] as Number).toLong()
                 listOf(
                     ActualDates.fromInt((row["date"] as Number).toLong()),
-                    row["account"],
-                    row["payee"],
-                    row["category"],
+                    text(row["account"]),
+                    text(row["payee"]),
+                    text(row["category"]),
                     (if (amount < 0) "-" else "") + (kotlin.math.abs(amount) / 100) + "." +
                         (kotlin.math.abs(amount) % 100).toString().padStart(2, '0'),
-                    row["notes"],
+                    text(row["notes"]),
                     if ((row["reconciled"] as Number?)?.toLong() ==
                         1L
                     ) {

@@ -55,6 +55,26 @@ class ActualReaderOptionsTest {
     }
 
     @Test
+    fun exportNeutralisesFormulaTextButKeepsNegativeAmountsNumeric() {
+        val db = fixtureDb()
+        val row =
+            db.first(
+                "SELECT id, acct, description AS payee FROM transactions WHERE isParent = 0 AND tombstone = 0 AND description IS NOT NULL",
+            )!!
+        val id = row["id"] as String
+        db.execute("UPDATE transactions SET notes = '=HYPERLINK(\"http://x\")', amount = -1234 WHERE id = ?", id)
+        db.execute("UPDATE accounts SET name = '@SUM(A1)' WHERE id = ?", row["acct"])
+        db.execute("UPDATE payees SET name = '+1+1' WHERE id = ?", row["payee"])
+        db.execute("UPDATE transactions SET notes = '\tcmd' WHERE id != ? AND isParent = 0 AND tombstone = 0", id)
+        val csv = ActualBudgetReader(db).exportCsv("2000-01-01", "2099-12-31")
+        val line = csv.lines().single { "HYPERLINK" in it }
+        assertTrue("'@SUM(A1),'+1+1," in line, line)
+        assertTrue(",-12.34,\"'=HYPERLINK(\"\"http://x\"\")\"," in line, line)
+        assertTrue(csv.lines().none { it.split(",").any { cell -> cell.startsWith("=") || cell.startsWith("@") || cell.startsWith("\t") } })
+        db.close()
+    }
+
+    @Test
     fun emptyBudgetsStartFromTheCurrentMonth() {
         val db = fixtureDb()
         db.execute("DELETE FROM transactions")
