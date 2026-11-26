@@ -32,6 +32,8 @@ import com.composables.icons.lucide.Lucide
 internal fun AutomaticBackupPassphraseDialog(
     visible: Boolean,
     hasPassphrase: Boolean,
+    reason: String? = null,
+    canRemove: Boolean = hasPassphrase,
     onDismiss: () -> Unit,
     onSave: (String?) -> Unit,
 ) {
@@ -42,6 +44,7 @@ internal fun AutomaticBackupPassphraseDialog(
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 TandemModalHeader("Encrypt automatic backups", onClose = onDismiss, leadingIcon = Lucide.KeyRound)
+                reason?.let { BodyText(it) }
                 BodyText("Backups made from now on are sealed with this passphrase. Tandem can’t recover it, so store it somewhere safe.")
                 TextFieldCard("Passphrase", passphrase, { passphrase = it }, TextFieldOptions(isSecret = true))
                 TextFieldCard("Confirm passphrase", confirmation, { confirmation = it }, TextFieldOptions(isSecret = true))
@@ -53,7 +56,7 @@ internal fun AutomaticBackupPassphraseDialog(
                     },
                 )
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = ready) { onSave(passphrase) }
-                if (hasPassphrase) {
+                if (canRemove) {
                     TandemActionButton("Stop encrypting", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth()) { onSave(null) }
                 }
             }

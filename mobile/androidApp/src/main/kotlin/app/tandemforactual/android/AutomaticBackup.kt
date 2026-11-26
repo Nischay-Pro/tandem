@@ -95,8 +95,15 @@ class AutomaticBackupWorker(
             } else {
                 null
             }
+        val passphrase = AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE).read()
+        if (AutomaticBackups.needsPassphrase(budget.isEncrypted, passphrase != null)) {
+            return AutomaticBackupResult.skipped(BackupProblem.NEEDS_PASSPHRASE)
+        }
         progress.show(25)
-        val bytes = backup(database, client, budgetId, budget.name, password)
+        val bytes = backup(database, client, budgetId, budget.name, password, passphrase)
+        if (!AutomaticBackups.mayWrite(budget.isEncrypted, BudgetBackupFile.isSealed(bytes))) {
+            return AutomaticBackupResult.skipped(BackupProblem.NEEDS_PASSPHRASE)
+        }
         progress.show(70)
         return deliver(settings, budgetId, budget.name, bytes, progress).also { progress.show(100) }
     }
@@ -114,10 +121,10 @@ class AutomaticBackupWorker(
         budgetId: String,
         budgetName: String,
         password: String?,
+        passphrase: String?,
     ): ByteArray {
         val vault = password?.let { AndroidEncryptedBudgetVault(applicationContext).open(budgetId, it) }
         try {
-            val passphrase = AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE).read()
             val keys = AndroidDeviceCredentialStore(applicationContext, "planning_keys")
             return AutomaticBackups.build(client, vault ?: database, keys, budgetId, password, budgetName, passphrase) {
                 System.currentTimeMillis()

@@ -17,6 +17,8 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.platform.rememberBackupFolderPicker
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
+import app.tandemforactual.ui.core.session.AutomaticBackups
+import app.tandemforactual.ui.core.session.BackupProblem
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.SyncNetwork
@@ -55,10 +57,16 @@ internal fun AutomaticBackupCard(
     var settingWebDav by remember { mutableStateOf(false) }
     var hasPassphrase by remember(secrets) { mutableStateOf(secrets?.hasPassphrase() == true) }
     var settingPassphrase by remember { mutableStateOf(false) }
+    var turnOnAfterPassphrase by remember { mutableStateOf(false) }
+    val encrypted = state.selectedBudgetEncrypted
+    val turnOn = {
+        update { it.copy(enabled = true) }
+        if (settings.folder == null && settings.webDavUrl == null) pickFolder?.invoke()
+    }
     LaunchedEffect(preferences) {
         preferences?.let { store -> runCatching { store.read() }.onSuccess(state::restoreAutomaticBackupStatus) }
     }
-    SectionCard("Automatic backups", automaticBackupStatus(state)) {
+    SectionCard("Automatic backups", automaticBackupStatus(state, hasPassphrase)) {
         if (pickFolder == null) {
             Text(
                 "Automatic backups run on Android for now.",
@@ -69,8 +77,14 @@ internal fun AutomaticBackupCard(
             return@SectionCard
         }
         ToggleRow("Back up automatically", "The whole budget and its planning data", settings.enabled) { on ->
-            update { it.copy(enabled = on) }
-            if (on && settings.folder == null && settings.webDavUrl == null) pickFolder()
+            when {
+                !on -> update { it.copy(enabled = false) }
+                AutomaticBackups.needsPassphrase(encrypted, hasPassphrase) -> {
+                    turnOnAfterPassphrase = true
+                    settingPassphrase = true
+                }
+                else -> turnOn()
+            }
         }
         DividerLine()
         ListRow(
@@ -91,17 +105,52 @@ internal fun AutomaticBackupCard(
         DividerLine()
         ListRow(
             "Encrypt backups",
-            if (hasPassphrase) "With your passphrase. Tap to change or remove it." else "Off. Anyone with the files can open them.",
+            passphraseSummary(hasPassphrase, encrypted),
             leading = RowLeading.Icon(Lucide.KeyRound),
             onClick = if (secrets != null) ({ settingPassphrase = true }) else null,
         )
     }
     WebDavSetup(settingWebDav, settings, secrets, onClose = { settingWebDav = false }, update = update)
-    AutomaticBackupPassphraseDialog(settingPassphrase, hasPassphrase, onDismiss = { settingPassphrase = false }) { passphrase ->
+    PassphraseSetup(settingPassphrase, hasPassphrase, required = encrypted && settings.enabled, encrypted) { saved, passphrase ->
         settingPassphrase = false
-        if (secrets?.setPassphrase(passphrase) == true) hasPassphrase = passphrase != null
+        if (saved && secrets?.setPassphrase(passphrase) == true) {
+            hasPassphrase = passphrase != null
+            if (turnOnAfterPassphrase && passphrase != null) turnOn()
+        }
+        turnOnAfterPassphrase = false
     }
 }
+
+/** The passphrase dialog; while an encrypted budget is being backed up, its passphrase can be changed but not removed. */
+@Composable
+private fun PassphraseSetup(
+    visible: Boolean,
+    hasPassphrase: Boolean,
+    required: Boolean,
+    encrypted: Boolean,
+    onClose: (saved: Boolean, passphrase: String?) -> Unit,
+) {
+    AutomaticBackupPassphraseDialog(
+        visible,
+        hasPassphrase,
+        reason = if (required && hasPassphrase) KEEP_PASSPHRASE else ENCRYPTED_BUDGET.takeIf { encrypted },
+        canRemove = hasPassphrase && !required,
+        onDismiss = { onClose(false, null) },
+    ) { passphrase -> onClose(passphrase != null || !required, passphrase) }
+}
+
+private const val ENCRYPTED_BUDGET = "This budget is end-to-end encrypted, so its backups need a passphrase too."
+private const val KEEP_PASSPHRASE = "$ENCRYPTED_BUDGET To remove it, turn off automatic backups first."
+
+private fun passphraseSummary(
+    hasPassphrase: Boolean,
+    encrypted: Boolean,
+): String =
+    when {
+        hasPassphrase -> "With your passphrase. Tap to change or remove it."
+        encrypted -> "Needed before this end-to-end encrypted budget can be backed up."
+        else -> "Off. Anyone with the files can open them."
+    }
 
 /** How often backups run, on which networks, and how many are kept. */
 @Composable
@@ -154,9 +203,16 @@ private fun WebDavSetup(
 @Composable
 private fun Label(text: String) = Text(text, color = tandemPalette.muted, fontSize = TandemTypography.label)
 
-private fun automaticBackupStatus(state: AppState): String =
-    automaticBackupSummary(
-        state.automaticBackup,
-        state.automaticBackupLastRun?.let(::platformFormatDateAtEpochMilliseconds),
-        state.automaticBackupResult,
-    )
+private fun automaticBackupStatus(
+    state: AppState,
+    hasPassphrase: Boolean,
+): String =
+    if (state.automaticBackup.enabled && AutomaticBackups.needsPassphrase(state.selectedBudgetEncrypted, hasPassphrase)) {
+        "Paused: ${BackupProblem.NEEDS_PASSPHRASE.text}"
+    } else {
+        automaticBackupSummary(
+            state.automaticBackup,
+            state.automaticBackupLastRun?.let(::platformFormatDateAtEpochMilliseconds),
+            state.automaticBackupResult,
+        )
+    }

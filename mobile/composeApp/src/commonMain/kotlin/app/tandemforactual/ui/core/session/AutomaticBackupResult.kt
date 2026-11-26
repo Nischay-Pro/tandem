@@ -11,6 +11,7 @@ enum class BackupProblem(
     NO_BUDGET("open a budget to back it up"),
     BUDGET_GONE("the budget is no longer on the server"),
     NO_BACKGROUND_KEY("allow background sync for this encrypted budget"),
+    NEEDS_PASSPHRASE("set a backup passphrase for this encrypted budget"),
     BACKUP("Tandem couldn’t make the backup"),
     FOLDER("Tandem can’t reach the backup folder"),
     WEBDAV("the WebDAV upload failed"),

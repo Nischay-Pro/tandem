@@ -95,6 +95,18 @@ object AutomaticBackups {
             (settings.folder != null || settings.webDavUrl != null) &&
             (lastRun == null || now - lastRun >= settings.intervalHours * 3_600_000L)
 
+    /** Whether automatic backups of this budget can't run until a backup passphrase is set. */
+    fun needsPassphrase(
+        budgetEncrypted: Boolean,
+        hasPassphrase: Boolean,
+    ): Boolean = budgetEncrypted && !hasPassphrase
+
+    /** Whether a backup may be written: an end-to-end encrypted budget's backup only ever leaves the app sealed. */
+    fun mayWrite(
+        budgetEncrypted: Boolean,
+        sealed: Boolean,
+    ): Boolean = sealed || !budgetEncrypted
+
     const val PARTIAL_SUFFIX = ".partial"
     private const val SLUG_LENGTH = 40
 
