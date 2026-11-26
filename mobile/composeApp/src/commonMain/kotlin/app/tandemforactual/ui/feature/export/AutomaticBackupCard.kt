@@ -7,17 +7,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.platform.rememberBackupFolderPicker
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.automaticBackupSummary
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -41,7 +44,10 @@ internal val BACKUP_KEEP = listOf(3, 7, 14, 30)
  * chosen. Where the platform can't run them yet the card says so instead.
  */
 @Composable
-internal fun AutomaticBackupCard(state: AppState) {
+internal fun AutomaticBackupCard(
+    state: AppState,
+    preferences: AppPreferencesStore?,
+) {
     val settings = state.automaticBackup
     val update = { change: (AutomaticBackupSettings) -> AutomaticBackupSettings -> state.automaticBackup = change(state.automaticBackup) }
     val pickFolder = rememberBackupFolderPicker { folder, label -> update { it.copy(folder = folder, folderLabel = label) } }
@@ -49,6 +55,9 @@ internal fun AutomaticBackupCard(state: AppState) {
     var settingWebDav by remember { mutableStateOf(false) }
     var hasPassphrase by remember(secrets) { mutableStateOf(secrets?.hasPassphrase() == true) }
     var settingPassphrase by remember { mutableStateOf(false) }
+    LaunchedEffect(preferences) {
+        preferences?.let { store -> runCatching { store.read() }.onSuccess(state::restoreAutomaticBackupStatus) }
+    }
     SectionCard("Automatic backups", automaticBackupStatus(state)) {
         if (pickFolder == null) {
             Text(
@@ -124,9 +133,12 @@ private fun WebDavSetup(
         settings.webDavUser,
         onDismiss = onClose,
         onSave = { url, user, password ->
-            onClose()
-            runCatching { secrets?.webDavPassword?.write(password) }
-            update { it.copy(webDavUrl = url, webDavUser = user) }
+            val saved = secrets?.setWebDavPassword(password) == true
+            if (saved) {
+                onClose()
+                update { it.copy(webDavUrl = url, webDavUser = user) }
+            }
+            saved
         },
         onRemove =
             settings.webDavUrl?.let {
@@ -142,12 +154,9 @@ private fun WebDavSetup(
 @Composable
 private fun Label(text: String) = Text(text, color = tandemPalette.muted, fontSize = TandemTypography.label)
 
-private fun automaticBackupStatus(state: AppState): String {
-    val settings = state.automaticBackup
-    val last = state.automaticBackupLastRun?.let { "Last backup ${platformFormatDateAtEpochMilliseconds(it)}" }
-    return when {
-        !settings.enabled -> "Off"
-        settings.folder == null && settings.webDavUrl == null -> "Choose a folder or WebDAV to start"
-        else -> last ?: "Waiting for the first backup"
-    }
-}
+private fun automaticBackupStatus(state: AppState): String =
+    automaticBackupSummary(
+        state.automaticBackup,
+        state.automaticBackupLastRun?.let(::platformFormatDateAtEpochMilliseconds),
+        state.automaticBackupResult,
+    )
