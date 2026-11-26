@@ -9,6 +9,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class ActualPostingTest {
     private class Fixture(
@@ -264,5 +269,45 @@ class ActualPostingTest {
         assertTrue(account != null)
         f.db.execute("UPDATE accounts SET closed = 1 WHERE name = 'Checking'")
         f.schedules.runService(syncSuccess = true)
+    }
+
+    @Test
+    fun completedSchedulesNoLongerLinkTransactions() {
+        val f = fixture("rules-parity")
+        f.db.execute("UPDATE rules SET tombstone = 1")
+        val checking = f.id("accounts", "Checking")
+        val rule = f.rule("""[{"op":"is","field":"amount","value":-4242}]""", """[{"op":"link-schedule","value":"done"}]""")
+        f.db.execute("INSERT INTO schedules (id, name, rule, completed, tombstone) VALUES ('done', 'Done', ?, 0, 0)", rule)
+        val linked = { f.run("account" to checking, "date" to "2026-05-01", "amount" to -4242L)["schedule"] }
+        assertEquals("done", linked())
+        f.db.execute("UPDATE schedules SET completed = 1 WHERE id = 'done'")
+        assertNull(linked())
+    }
+
+    @Test
+    fun schedulesWithoutAnAccountStillAdvance() {
+        val f = fixture("parity-envelope")
+        val id = f.db.first("SELECT id FROM schedules WHERE tombstone = 0")!!["id"] as String
+        val ruleId = f.db.first("SELECT rule FROM schedules WHERE id = ?", id)!!["rule"] as String
+        val conditions = f.db.first("SELECT conditions FROM rules WHERE id = ?", ruleId)!!["conditions"] as String
+        val withoutAccount =
+            JsonArray(Json.parseToJsonElement(conditions).jsonArray.filter { it.jsonObject["field"]?.jsonPrimitive?.content != "acct" })
+        f.db.execute("UPDATE rules SET conditions = ? WHERE id = ?", withoutAccount.toString(), ruleId)
+        assertNull(f.db.first("SELECT _account FROM v_schedules WHERE id = ?", id)!!["_account"])
+        assertEquals("2026-12-02", f.schedules.nextDate(id))
+
+        f.db.execute("UPDATE schedules SET posts_transaction = 1 WHERE id = ?", id)
+        f.today = "2026-12-02"
+        f.schedules.runService(syncSuccess = true)
+        assertEquals(0L, f.db.first("SELECT count(*) AS n FROM v_transactions_internal_alive WHERE schedule = ?", id)!!["n"])
+
+        f.transactions.addTransactions(
+            f.id("accounts", "Checking"),
+            listOf(mapOf("date" to "2026-12-02", "amount" to -150000L, "schedule" to id)),
+            runTransfers = false,
+        )
+        f.today = "2026-12-05"
+        f.schedules.runService(syncSuccess = true)
+        assertEquals("2027-01-02", f.schedules.nextDate(id))
     }
 }

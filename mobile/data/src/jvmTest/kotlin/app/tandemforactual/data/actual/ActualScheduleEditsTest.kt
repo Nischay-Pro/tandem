@@ -317,4 +317,36 @@ class ActualScheduleEditsTest {
         assertEquals(1L, db.first("SELECT tombstone FROM schedules WHERE id = ?", id)!!["tombstone"])
         assertEquals(1L, db.first("SELECT tombstone FROM rules WHERE id = ?", ruleId)!!["tombstone"])
     }
+
+    @Test
+    fun editsKeepASkippedDateUnlessTheDateOrAccountChanges() {
+        val (db, schedules) = fixture()
+        val id = db.first("SELECT id FROM schedules WHERE tombstone = 0")!!["id"] as String
+        val checking = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+        val savings = db.first("SELECT id FROM accounts WHERE name = 'Savings'")!!["id"] as String
+        val weekly = recur { put("interval", 2) }
+        schedules.edit(
+            id,
+            buildJsonObject {
+                put("accountId", checking)
+                put("date", weekly)
+            },
+        )
+        assertEquals("2026-11-30", schedules.nextDate(id))
+        schedules.skip(id, "2026-11-30")
+        schedules.edit(
+            id,
+            buildJsonObject {
+                put("name", "Renamed")
+                put("accountId", checking)
+                put("date", weekly)
+            },
+        )
+        assertEquals("2026-12-14", schedules.nextDate(id))
+        schedules.edit(id, buildJsonObject { put("accountId", savings) })
+        assertEquals("2026-11-30", schedules.nextDate(id))
+        schedules.skip(id, "2026-11-30")
+        schedules.edit(id, date(recur { put("interval", 1) }))
+        assertEquals("2026-11-23", schedules.nextDate(id))
+    }
 }
