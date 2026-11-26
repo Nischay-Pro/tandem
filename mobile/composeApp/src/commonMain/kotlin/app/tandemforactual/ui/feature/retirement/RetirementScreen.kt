@@ -25,14 +25,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.JurisdictionTimeline
 import app.tandemforactual.data.planning.PeriodKind
+import app.tandemforactual.data.planning.RetirementContributions
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.RetirementRoom
+import app.tandemforactual.data.planning.YearMovements
 import app.tandemforactual.data.regions.Region
+import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
+import app.tandemforactual.data.regions.ca.retirement.tfsa.Tfsa
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
+import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
 import app.tandemforactual.data.regions.us.retirement.k401.K401
+import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -79,31 +87,36 @@ internal fun RetirementScreen(
         }
         return
     }
-    val currentYear = platformTodayIsoDate().take(4).toInt()
-    var inflows by remember(state.selectedBudgetId) { mutableStateOf<Map<String, Map<Int, Long>>>(emptyMap()) }
-    val accountIds = profiles.mapNotNull { it.accountId }
+    val today = platformTodayIsoDate()
+    val currentYear = today.take(4).toInt()
+    var movements by remember(state.selectedBudgetId) { mutableStateOf<Map<String, List<AccountMovement>>>(emptyMap()) }
+    val accountIds = profiles.mapNotNull { it.accountId }.distinct()
     LaunchedEffect(state.selectedBudgetId, accountIds) {
-        inflows =
-            mobileSession.insights.loadAccountInflows(
+        movements =
+            mobileSession.insights.loadAccountMovements(
                 state.selectedBudgetId,
                 accountIds,
                 state.encryptedPassword.takeIf { it.isNotBlank() },
             )
     }
-    val years = (inflows.values.flatMap { it.keys } + currentYear).filter { it <= currentYear }.distinct().sortedDescending()
+    val years =
+        (movements.values.flatMap { list -> list.map { it.date.take(4).toInt() } } + currentYear)
+            .filter { it <= currentYear }
+            .distinct()
+            .sortedDescending()
     var year by rememberSaveable { mutableStateOf(currentYear) }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         if (years.size > 1) FilterPills(years.map { it to it.toString() }, year, { year = it })
+        if (profiles.any { it.needsBirthYear }) BirthYearNotice { navigation.open(AppRoute.RETIREMENT_SETUP) }
         val order = mobileSession.planning.settings.regions
         val periods = mobileSession.planning.jurisdictionPeriods
-        val livingIn = JurisdictionTimeline.regionsIn(periods, PeriodKind.RESIDENCE, platformTodayIsoDate().take(7))
+        val livingIn = JurisdictionTimeline.regionsIn(periods, PeriodKind.RESIDENCE, today.take(7))
+        val context = PlanContext(profiles, liveAccounts, movements, year, today, navigation)
         profiles
             .groupBy { RetirementPlans.byId(it.planId)!!.region }
             .entries
             .sortedBy { (region, _) -> order.indexOf(region.name).let { if (it < 0) Int.MAX_VALUE else it } }
-            .forEach { (region, regionProfiles) ->
-                RegionPlans(region, regionProfiles, profiles, liveAccounts, inflows, year, livingIn, navigation)
-            }
+            .forEach { (region, regionProfiles) -> RegionPlans(region, regionProfiles, livingIn, context) }
         TandemActionButton("Change accounts", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), icon = Lucide.Settings2) {
             navigation.open(AppRoute.RETIREMENT_SETUP)
         }
@@ -115,11 +128,49 @@ internal fun RetirementScreen(
             navigation.open(AppRoute.RELOCATION)
         }
         Text(
-            "Limits are each year’s published figures unless you enter your own under Advanced. Contributions are deposits and transfers into the linked account.",
+            "Limits are each year’s published figures unless you enter your own under Advanced. Contributions are what you put into the linked account; dividends, interest, fees, employer deposits and moves between your own plans aren’t counted. Indian plans follow the April to March financial year.",
             color = palette.muted,
             fontSize = TandemTypography.label,
         )
     }
+}
+
+/** What every plan card on the page reads from. */
+private class PlanContext(
+    val profiles: List<RetirementProfile>,
+    val liveAccounts: List<LiveAccountSummary>,
+    val movements: Map<String, List<AccountMovement>>,
+    val year: Int,
+    val today: String,
+    val navigation: AppNavigation,
+) {
+    val planAccountIds = profiles.mapNotNull { it.accountId }.toSet()
+
+    /** The plan year to show: today's for the current calendar year, so an April-to-March plan shows its running year. */
+    fun yearFor(plan: RetirementPlan): Int = if (year == today.take(4).toInt()) plan.planYear(today) else year
+
+    /** Yearly totals across the accounts of [linked], counting an account shared by two plans once. */
+    fun totals(
+        plan: RetirementPlan,
+        linked: List<RetirementProfile>,
+    ): Map<Int, YearMovements> =
+        RetirementRoom.merge(
+            linked.mapNotNull { it.accountId }.distinct().map { id ->
+                RetirementContributions.byPlanYear(plan, movements[id].orEmpty(), planAccountIds - id)
+            },
+        )
+}
+
+/** Asks for a birth year once, for ages saved before Tandem kept birth years. */
+@Composable
+private fun BirthYearNotice(onOpen: () -> Unit) {
+    Text(
+        "Confirm the year you were born so catch-up limits stay right each year",
+        Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onOpen),
+        color = tandemPalette.warning,
+        fontSize = TandemTypography.compactBody,
+        fontWeight = FontWeight.Medium,
+    )
 }
 
 /** One country's heading and its plans; plans that share another's room are folded into that plan's card. */
@@ -127,12 +178,8 @@ internal fun RetirementScreen(
 private fun RegionPlans(
     region: Region,
     regionProfiles: List<RetirementProfile>,
-    profiles: List<RetirementProfile>,
-    liveAccounts: List<LiveAccountSummary>,
-    inflows: Map<String, Map<Int, Long>>,
-    year: Int,
     livingIn: List<Region>,
-    navigation: AppNavigation,
+    context: PlanContext,
 ) {
     val palette = tandemPalette
     Text(region.displayName.uppercase(), color = palette.muted, fontSize = TandemTypography.caption)
@@ -143,24 +190,29 @@ private fun RegionPlans(
             fontSize = TandemTypography.label,
         )
     }
+    val profiles = context.profiles
     val setUp = profiles.map { it.planId }.toSet()
     regionProfiles.filter { RetirementPlans.byId(it.planId)?.sharesRoomWith !in setUp }.forEach { profile ->
         val plan = RetirementPlans.byId(profile.planId)!!
         val sharing = profiles.filter { RetirementPlans.byId(it.planId)?.sharesRoomWith == plan.id }
-        val deposits = (listOf(profile) + sharing).sumOf { p -> p.accountId?.let { inflows[it]?.get(year) } ?: 0 }
-        val accountName = profile.accountId?.let { id -> liveAccounts.firstOrNull { it.id == id }?.name }
+        val accountName = profile.accountId?.let { id -> context.liveAccounts.firstOrNull { it.id == id }?.name }
         PlanCard(
             plan,
             profile,
             accountName,
-            year,
-            deposits,
-            onEditMatch = { navigation.open(AppRoute.RETIREMENT_MATCH) },
-            onEditRoom = { navigation.open(AppRoute.RRSP_ROOM) },
+            context.yearFor(plan),
+            context.totals(plan, listOf(profile) + sharing),
+            context,
             sharedWith = sharing.mapNotNull { RetirementPlans.byId(it.planId)?.displayName },
         )
     }
 }
+
+/** A plan year as people write it: the calendar year, or a financial year such as FY 2026–27. */
+internal fun planYearLabel(
+    plan: RetirementPlan,
+    year: Int,
+): String = if (plan.yearStartMonth == 1) year.toString() else "FY $year–${((year + 1) % 100).toString().padStart(2, '0')}"
 
 @Composable
 private fun PlanCard(
@@ -168,21 +220,17 @@ private fun PlanCard(
     profile: RetirementProfile,
     accountName: String?,
     year: Int,
-    depositsMinor: Long,
-    onEditMatch: () -> Unit,
-    onEditRoom: () -> Unit,
+    years: Map<Int, YearMovements>,
+    context: PlanContext,
     sharedWith: List<String>,
 ) {
     val palette = tandemPalette
     val lookup = plan.limitFor(year)
     val custom = year in profile.limitOverrides
-    val ownRoom = profile.rrspRoom(year).takeIf { !custom && plan == Rrsp && year == platformTodayIsoDate().take(4).toInt() }
-    val allowance = ownRoom ?: profile.allowance(plan, year)
-    val match = profile.match
-    val salary = profile.salaryMinor
-    val (yours, employer) =
-        if (plan == K401 && match != null && salary != null) K401.splitDeposits(depositsMinor, salary, match) else depositsMinor to 0L
-    val room = (allowance - yours).coerceAtLeast(0)
+    val result = RetirementRoom.forYear(plan, profile, year, years, plan.planYear(context.today))
+    val yours = result.yoursMinor
+    val employer = result.employerMinor
+    val label = planYearLabel(plan, year)
 
     fun money(minor: Long) = planMoney(minor, plan.currency)
     SectionCard(plan.displayName, accountName?.let { "Linked to $it" } ?: "No Actual account linked") {
@@ -192,15 +240,25 @@ private fun PlanCard(
         ) {
             Row {
                 Column(Modifier.weight(1f)) {
-                    Text("Room left in $year", color = palette.muted, fontSize = TandemTypography.label)
-                    Text(money(room), color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold)
+                    Text("Room left in $label", color = palette.muted, fontSize = TandemTypography.label)
+                    Text(
+                        money(result.roomMinor),
+                        color = palette.text,
+                        fontSize = TandemTypography.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
                 Column {
                     Text("Your limit", color = palette.muted, fontSize = TandemTypography.label)
-                    Text(money(allowance), color = palette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.Medium)
+                    Text(
+                        money(result.allowanceMinor),
+                        color = palette.text,
+                        fontSize = TandemTypography.body,
+                        fontWeight = FontWeight.Medium,
+                    )
                 }
             }
-            PlanProgressBar(yours.toFloat() / allowance.coerceAtLeast(1))
+            PlanProgressBar(yours.toFloat() / result.allowanceMinor.coerceAtLeast(1))
             Text(
                 when {
                     accountName == null -> "Link an Actual account to read contributions."
@@ -211,17 +269,22 @@ private fun PlanCard(
                 fontSize = TandemTypography.caption,
             )
             if (custom) {
-                Text("Using the limit you entered for $year.", color = palette.muted, fontSize = TandemTypography.caption)
+                Text("Using the limit you entered for $label.", color = palette.muted, fontSize = TandemTypography.caption)
             } else if (!lookup.published) {
                 Text(
-                    "$year limits aren’t published yet; showing ${lookup.limit.year}.",
+                    "$label limits aren’t published yet; showing ${planYearLabel(plan, lookup.limit.year)}.",
                     color = palette.warning,
                     fontSize = TandemTypography.caption,
                 )
             }
-            if (plan == K401) EmployerMatchStatus(year, profile, yours, ::money, onEditMatch)
-            PlanRoomNotes(plan == Rrsp, ownRoom != null, sharedWith, onEditRoom)
-            if (plan == K401 && employer > 0) VestingStatus(profile.match, year, employer, ::money)
+            if (plan == K401) EmployerMatchStatus(year, profile, yours, ::money) { context.navigation.open(AppRoute.RETIREMENT_MATCH) }
+            PlanRoomNotes(plan, result.carriesForward && !custom, sharedWith) {
+                context.navigation.open(AppRoute.RRSP_ROOM)
+            }
+            if (plan == K401) {
+                val asOf = if (year == context.today.take(4).toInt()) context.today else "$year-12-31"
+                VestingStatus(profile.match, asOf, RetirementRoom.employerThrough(plan, profile, years, year), ::money)
+            }
         }
     }
 }
@@ -259,7 +322,7 @@ private fun EmployerMatchStatus(
     val palette = tandemPalette
     val match = profile.match
     val salary = profile.salaryMinor
-    val result = if (match != null && salary != null) K401.match(year, profile.age, salary, yours, match) else null
+    val result = if (match != null && salary != null) K401.match(year, profile.ageIn(year), salary, yours, match) else null
     Text(
         when {
             result == null -> "Set up your employer match"
@@ -278,10 +341,10 @@ private fun EmployerMatchStatus(
     )
 }
 
-/** Which plans share this room, and for an RRSP, a link to work out your own room. */
+/** Which plans share this room, and for RRSP, TFSA and FHSA, a link to enter the room CRA shows. */
 @Composable
 private fun PlanRoomNotes(
-    isRrsp: Boolean,
+    plan: RetirementPlan,
     ownRoom: Boolean,
     sharedWith: List<String>,
     onEditRoom: () -> Unit,
@@ -294,33 +357,37 @@ private fun PlanRoomNotes(
             fontSize = TandemTypography.caption,
         )
     }
-    if (isRrsp) {
-        Text(
-            if (ownRoom) {
-                "Your own room, from your notice of assessment"
-            } else {
-                "Work out your own room from your notice of assessment"
-            },
-            Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditRoom),
-            color = palette.accent,
-            fontSize = TandemTypography.compactBody,
-            fontWeight = FontWeight.Medium,
-        )
-    }
+    val prompt =
+        when {
+            plan == Rrsp && ownRoom -> "Your own room, from your notice of assessment"
+            plan == Rrsp -> "Work out your own room from your notice of assessment"
+            plan == Tfsa && ownRoom -> "Includes room carried forward from CRA’s figure"
+            plan == Tfsa -> "Add your room from CRA to include unused room from earlier years"
+            plan == Fhsa && ownRoom -> "Includes up to \$8,000 carried forward, within the \$40,000 lifetime limit"
+            else -> null
+        } ?: return
+    Text(
+        prompt,
+        Modifier.clip(RoundedCornerShape(TandemShapes.control)).clickable(role = Role.Button, onClick = onEditRoom),
+        color = palette.accent,
+        fontSize = TandemTypography.compactBody,
+        fontWeight = FontWeight.Medium,
+    )
 }
 
-/** How much of the employer's money is yours yet, when the match vests over time. */
+/** How much of the employer's money, from every year so far, is yours yet when the match vests over time. */
 @Composable
 private fun VestingStatus(
-    match: app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch?,
-    year: Int,
+    match: EmployerMatch?,
+    asOf: String,
     employerMinor: Long,
     money: (Long) -> String,
 ) {
-    val vested = match?.vestedBasisPoints(year)?.takeIf { it < 10_000 } ?: return
-    val fully = match.fullyVestedYear
+    if (employerMinor <= 0) return
+    val vested = match?.vestedBasisPoints(asOf)?.takeIf { it < 10_000 } ?: return
+    val fully = match.fullyVestedMonth?.let { formatMonth(it.take(4).toInt(), it.substring(5, 7).toInt()) }
     Text(
-        "${money(employerMinor * vested / 10_000)} of the employer’s ${money(employerMinor)} is yours so far" +
+        "${money(employerMinor * vested / 10_000)} of the employer’s ${money(employerMinor)} so far is yours" +
             (fully?.let { "; all of it from $it" } ?: ""),
         color = tandemPalette.muted,
         fontSize = TandemTypography.caption,

@@ -12,9 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.ExtraMoneyGuide
 import app.tandemforactual.data.planning.GoalGap
+import app.tandemforactual.data.planning.RetirementContributions
 import app.tandemforactual.data.planning.RetirementProfile
+import app.tandemforactual.data.planning.RetirementRoom
+import app.tandemforactual.data.planning.YearMovements
 import app.tandemforactual.data.regions.us.retirement.k401.K401
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
@@ -120,28 +124,41 @@ private fun rememberMatchGain(
     extraMinor: Long,
 ): Long? {
     val profiles = session.planning.retirementProfiles.filter { it.planId == K401.id && it.match != null && it.salaryMinor != null }
-    var inflows by remember(state.selectedBudgetId) { mutableStateOf<Map<String, Map<Int, Long>>>(emptyMap()) }
+    var movements by remember(state.selectedBudgetId) { mutableStateOf<Map<String, List<AccountMovement>>>(emptyMap()) }
+    val planAccounts =
+        session.planning.retirementProfiles
+            .mapNotNull { it.accountId }
+            .toSet()
     val accountIds = profiles.mapNotNull { it.accountId }
     LaunchedEffect(state.selectedBudgetId, accountIds) {
-        inflows =
-            session.insights.loadAccountInflows(state.selectedBudgetId, accountIds, state.encryptedPassword.takeIf { it.isNotBlank() })
+        movements =
+            session.insights.loadAccountMovements(state.selectedBudgetId, accountIds, state.encryptedPassword.takeIf { it.isNotBlank() })
     }
     if (profiles.isEmpty()) return null
     val today = platformTodayIsoDate()
     val year = today.take(4).toInt()
     val monthsLeft = 13 - today.substring(5, 7).toInt()
-    return profiles.sumOf { profile -> matchGain(profile, year, inflows[profile.accountId]?.get(year) ?: 0, extraMinor * monthsLeft) }
+    return profiles.sumOf { profile ->
+        val years =
+            RetirementContributions.byPlanYear(
+                K401,
+                movements[profile.accountId].orEmpty(),
+                planAccounts - profile.accountId.orEmpty(),
+            )
+        matchGain(profile, year, years[year] ?: YearMovements(), extraMinor * monthsLeft)
+    }
 }
 
 private fun matchGain(
     profile: RetirementProfile,
     year: Int,
-    depositsMinor: Long,
+    totals: YearMovements,
     addedMinor: Long,
 ): Long {
     val match = profile.match!!
     val salary = profile.salaryMinor!!
-    val (yours, _) = K401.splitDeposits(depositsMinor, salary, match)
-    val now = K401.match(year, profile.age, salary, yours, match).employerMinor
-    return K401.match(year, profile.age, salary, yours + addedMinor, match).employerMinor - now
+    val (yours, _) = RetirementRoom.split(K401, profile, year, totals)
+    val age = profile.ageIn(year)
+    val now = K401.match(year, age, salary, yours, match).employerMinor
+    return K401.match(year, age, salary, yours + addedMinor, match).employerMinor - now
 }

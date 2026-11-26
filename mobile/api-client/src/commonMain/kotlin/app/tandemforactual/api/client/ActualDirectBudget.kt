@@ -24,6 +24,7 @@ import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import kotlinx.coroutines.CancellationException
@@ -213,7 +214,7 @@ class ActualDirectBudget private constructor(
         to: String,
     ): String = locked { reader.exportCsv(from, to) }
 
-    suspend fun inflowsByYear(accountId: String): Map<Int, Long> = locked { reader.inflowsByYear(accountId) }
+    suspend fun accountMovements(accountId: String): List<AccountMovement> = locked { reader.accountMovements(accountId) }
 
     suspend fun taggedPayments(
         tag: String,

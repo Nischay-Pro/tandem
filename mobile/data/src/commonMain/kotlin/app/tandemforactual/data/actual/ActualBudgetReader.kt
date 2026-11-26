@@ -1,5 +1,6 @@
 package app.tandemforactual.data.actual
 
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import kotlinx.serialization.json.Json
@@ -254,14 +255,23 @@ class ActualBudgetReader(
         return (listOf("Date,Account,Payee,Category,Amount,Notes,Status") + lines).joinToString("\n") + "\n"
     }
 
-    /** Money put into an account each calendar year: deposits and transfers in, without its starting balance. */
-    fun inflowsByYear(accountId: String): Map<Int, Long> =
+    /** Every transaction in an account except its starting balance, oldest first, with its payee and transfer account. */
+    fun accountMovements(accountId: String): List<AccountMovement> =
         db
             .query(
-                "SELECT date / 10000 AS year, sum(amount) AS total FROM v_transactions WHERE account = ? AND amount > 0 " +
-                    "AND is_parent = 0 AND starting_balance_flag = 0 GROUP BY date / 10000 ORDER BY year",
+                "SELECT t.date, t.amount, t.notes, p.name AS payee, p.transfer_acct AS other FROM v_transactions t " +
+                    "LEFT JOIN payees p ON p.id = t.payee WHERE t.account = ? AND t.is_parent = 0 AND t.starting_balance_flag = 0 " +
+                    "AND t.amount != 0 ORDER BY t.date",
                 accountId,
-            ).associate { (it["year"] as Number).toInt() to (it["total"] as Number).toLong() }
+            ).map { row ->
+                AccountMovement(
+                    ActualMonths.dateString((row["date"] as Number).toLong()),
+                    (row["amount"] as Number).toLong(),
+                    (row["payee"] as String?)?.takeIf { it.isNotEmpty() },
+                    (row["notes"] as String?)?.takeIf { it.isNotEmpty() },
+                    row["other"] as String?,
+                )
+            }
 
     /** Money-in transactions on or after [fromDate] whose notes carry `#`[tag], newest first. */
     fun taggedPayments(

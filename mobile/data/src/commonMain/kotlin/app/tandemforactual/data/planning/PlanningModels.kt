@@ -301,7 +301,8 @@ data class RetirementProfile(
     val planId: String,
     /** The Actual account this plan's money sits in; contributions are read from its deposits. */
     val accountId: String? = null,
-    val age: Int? = null,
+    /** Catch-ups go by the age reached during a plan year, so the birth year is all that's kept. */
+    val birthYear: Int? = null,
     val family: Boolean = false,
     val contributedMinor: Long = 0,
     val year: Int? = null,
@@ -312,12 +313,26 @@ data class RetirementProfile(
     val limitOverrides: Map<Int, Long> = emptyMap(),
     /** Last year's earned income, pension adjustment and unused room, for working out RRSP room. */
     val rrspInputs: RrspInputs? = null,
+    /** Room CRA showed for a year, which TFSA and FHSA room is carried forward from. */
+    val roomStart: RoomStart? = null,
+    /** An age saved by an older version, before birth years; [legacyAgeYear] is the year it was saved, when known. */
+    val legacyAge: Int? = null,
+    val legacyAgeYear: Int? = null,
 ) {
+    /** The age reached during [year], or null when not entered. */
+    fun ageIn(year: Int): Int? = birthYear?.let { year - it } ?: legacyAge?.let { age -> legacyAgeYear?.let { age + year - it } ?: age }
+
+    /** True when the age came from an older version and its birth year should be confirmed. */
+    val needsBirthYear: Boolean get() = birthYear == null && legacyAge != null
+
+    /** A best guess at the birth year for prefilling, from the age an older version saved. */
+    fun estimatedBirthYear(currentYear: Int): Int? = birthYear ?: legacyAge?.let { (legacyAgeYear ?: currentYear) - it }
+
     /** The year's limit: the one entered by hand, or the plan's published one with catch-ups. */
     fun allowance(
         plan: RetirementPlan,
         year: Int,
-    ): Long = limitOverrides[year] ?: plan.allowance(year, age, family)
+    ): Long = limitOverrides[year] ?: plan.allowance(year, ageIn(year), family)
 
     /** RRSP room worked out from [rrspInputs], or null when they aren't entered. */
     fun rrspRoom(year: Int): Long? =
@@ -326,7 +341,9 @@ data class RetirementProfile(
     fun toJson(): JsonObject =
         jsonOf(
             "accountId" to accountId.json(),
-            "age" to age.json(),
+            "birthYear" to birthYear.json(),
+            "age" to (if (birthYear == null) legacyAge else null).json(),
+            "ageYear" to (if (birthYear == null && legacyAge != null) legacyAgeYear else null).json(),
             "family" to JsonPrimitive(family),
             "contributedMinor" to JsonPrimitive(contributedMinor),
             "year" to year.json(),
@@ -337,43 +354,58 @@ data class RetirementProfile(
                 if (limitOverrides.isEmpty()) {
                     JsonNull
                 } else {
-                    JsonObject(
-                        limitOverrides.entries.associate { (y, v) ->
-                            y.toString() to
-                                JsonPrimitive(v)
-                        },
-                    )
+                    JsonObject(limitOverrides.entries.associate { (y, v) -> y.toString() to JsonPrimitive(v) })
                 },
             "rrsp" to (rrspInputs?.toJson() ?: JsonNull),
+            "roomStart" to
+                (roomStart?.let { jsonOf("year" to JsonPrimitive(it.year), "amountMinor" to JsonPrimitive(it.amountMinor)) } ?: JsonNull),
         )
 
     companion object {
         const val TYPE = "planning.retirement"
 
+        /** [savedYear] is the year the record was last written here, which dates an age saved before birth years. */
         fun fromJson(
             planId: String,
             body: JsonObject,
-        ) = RetirementProfile(
-            planId = planId,
-            accountId = body.text("accountId"),
-            age = body.int("age"),
-            family = body.text("family") == "true",
-            contributedMinor = body.long("contributedMinor") ?: 0,
-            year = body.int("year"),
-            salaryMinor = body.long("salaryMinor"),
-            contributionBasisPoints = body.int("contributionBasisPoints"),
-            match = (body["match"] as? JsonObject)?.let(::matchFrom),
-            limitOverrides =
-                (body["limitOverrides"] as? JsonObject)
-                    ?.entries
-                    ?.mapNotNull { (year, value) ->
-                        year.toIntOrNull()?.let { y -> (value as? JsonPrimitive)?.longOrNull?.let { y to it } }
-                    }?.toMap()
-                    .orEmpty(),
-            rrspInputs = (body["rrsp"] as? JsonObject)?.let(RrspInputs::fromJson),
-        )
+            savedYear: Int? = null,
+        ): RetirementProfile {
+            val birthYear = body.int("birthYear")
+            val legacyAge = body.int("age").takeIf { birthYear == null }
+            return RetirementProfile(
+                planId = planId,
+                accountId = body.text("accountId"),
+                birthYear = birthYear,
+                family = body.text("family") == "true",
+                contributedMinor = body.long("contributedMinor") ?: 0,
+                year = body.int("year"),
+                salaryMinor = body.long("salaryMinor"),
+                contributionBasisPoints = body.int("contributionBasisPoints"),
+                match = (body["match"] as? JsonObject)?.let(::matchFrom),
+                limitOverrides =
+                    (body["limitOverrides"] as? JsonObject)
+                        ?.entries
+                        ?.mapNotNull { (year, value) ->
+                            year.toIntOrNull()?.let { y -> (value as? JsonPrimitive)?.longOrNull?.let { y to it } }
+                        }?.toMap()
+                        .orEmpty(),
+                rrspInputs = (body["rrsp"] as? JsonObject)?.let(RrspInputs::fromJson),
+                roomStart =
+                    (body["roomStart"] as? JsonObject)?.let { start ->
+                        start.int("year")?.let { y -> start.long("amountMinor")?.let { RoomStart(y, it) } }
+                    },
+                legacyAge = legacyAge,
+                legacyAgeYear = (body.int("ageYear") ?: savedYear).takeIf { legacyAge != null },
+            )
+        }
     }
 }
+
+/** The contribution room CRA showed for [year], from My Account or a notice of assessment. */
+data class RoomStart(
+    val year: Int,
+    val amountMinor: Long,
+)
 
 /** The figures from last year's notice of assessment that set this year's RRSP room. */
 data class RrspInputs(
@@ -452,6 +484,7 @@ private fun matchJson(match: EmployerMatch): JsonObject =
                 JsonArray(match.vesting.steps.map { jsonOf("years" to JsonPrimitive(it.years), "share" to JsonPrimitive(it.basisPoints)) })
             },
         "joinedYear" to match.joinedYear.json(),
+        "joinedMonth" to match.joinedMonth.json(),
         "tiers" to
             JsonArray(
                 match.tiers.map { tier ->
@@ -479,6 +512,7 @@ private fun matchFrom(body: JsonObject): EmployerMatch =
             },
         ),
         body.int("joinedYear"),
+        body.int("joinedMonth")?.takeIf { it in 1..12 },
     )
 
 /** The body field that keeps a planning record on this device; [PlanningSync] never uploads such records. */

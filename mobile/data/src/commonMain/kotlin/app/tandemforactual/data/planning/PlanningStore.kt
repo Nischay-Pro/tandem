@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import app.tandemforactual.data.actual.civilFromDays
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -94,7 +95,11 @@ class PlanningStore(
     suspend fun save(terms: DebtTerms) = put(terms.id, DebtTerms.TYPE, terms.toJson())
 
     fun retirementProfiles(): Flow<List<RetirementProfile>> =
-        observe(RetirementProfile.TYPE).map { list -> list.map { (id, body) -> RetirementProfile.fromJson(id, body) } }
+        dao.observe(budgetId, RetirementProfile.TYPE).map { records ->
+            records.mapNotNull { record ->
+                runCatching { RetirementProfile.fromJson(record.recordId, open(record), savedYear(record.updatedAtEpochMs)) }.getOrNull()
+            }
+        }
 
     fun settings(): Flow<PlanningSettings> =
         observe(PlanningSettings.TYPE).map { list ->
@@ -175,6 +180,10 @@ class PlanningStore(
 
     companion object {
         const val SCHEMA_VERSION = 1
+
+        /** The year a record was written here; records stored from sync carry a sequence number instead, so give none. */
+        internal fun savedYear(updatedAtEpochMs: Long): Int? =
+            updatedAtEpochMs.takeIf { it > 1_500_000_000_000 }?.let { civilFromDays(it / 86_400_000).first.toInt() }
 
         /** Planning and profile records are what a planning backup holds; anything else on the device stays out. */
         fun isBackedUp(recordType: String): Boolean = recordType.startsWith("planning.") || recordType.startsWith("profile.")

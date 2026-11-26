@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.BudgetChangeHistory
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.api.client.budgetAccountInflows
+import app.tandemforactual.api.client.budgetAccountMovements
 import app.tandemforactual.api.client.budgetChangeHistory
 import app.tandemforactual.api.client.budgetDataHealth
 import app.tandemforactual.api.client.budgetTaggedPayments
@@ -16,6 +16,7 @@ import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.ui.core.session.insights.InsightsController
 import kotlinx.coroutines.CancellationException
@@ -41,13 +42,13 @@ internal class InsightsController(
             }
     }
 
-    suspend fun loadAccountInflows(
+    suspend fun loadAccountMovements(
         budgetId: String,
         accountIds: List<String>,
         encryptionPassword: String?,
-    ): Map<String, Map<Int, Long>> =
+    ): Map<String, List<AccountMovement>> =
         try {
-            apiClient.budgetAccountInflows(budgetId, accountIds, encryptionPassword)
+            apiClient.budgetAccountMovements(budgetId, accountIds, encryptionPassword)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

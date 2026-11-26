@@ -52,25 +52,31 @@ data class Vesting(
 
 /**
  * An employer's formula: tiers applied in order to your contributions, with an optional yearly cap on the match, how the
- * match vests, and the year you joined to count service from.
+ * match vests, and the month you joined to count service from.
  */
 data class EmployerMatch(
     val tiers: List<MatchTier>,
     val capMinor: Long? = null,
     val vesting: Vesting = Vesting.IMMEDIATE,
     val joinedYear: Int? = null,
+    /** 1 to 12; when unknown, service is counted from the end of [joinedYear] so it is never overstated. */
+    val joinedMonth: Int? = null,
 ) {
-    /** The share of employer money that's yours in [year], or null when the year you joined isn't known. */
-    fun vestedBasisPoints(year: Int): Int? =
-        if (vesting == Vesting.IMMEDIATE) 10_000 else joinedYear?.let { vesting.vestedBasisPoints((year - it).coerceAtLeast(0)) }
+    /** Full years of service on [asOf] (an ISO date or `yyyy-MM`), or null when the year you joined isn't known. */
+    fun serviceYears(asOf: String): Int? =
+        joinedYear?.let { joined ->
+            val months = (asOf.take(4).toInt() - joined) * 12 + asOf.substring(5, 7).toInt() - (joinedMonth ?: 12)
+            (months / 12).coerceAtLeast(0)
+        }
 
-    /** The year all employer money is yours, or null when it already is or the year you joined isn't known. */
-    val fullyVestedYear: Int? get() =
+    /** The share of employer money that's yours on [asOf], or null when the year you joined isn't known. */
+    fun vestedBasisPoints(asOf: String): Int? =
+        if (vesting == Vesting.IMMEDIATE) 10_000 else serviceYears(asOf)?.let(vesting::vestedBasisPoints)
+
+    /** The month (`yyyy-MM`) all employer money is yours, or null when it already is or the year you joined isn't known. */
+    val fullyVestedMonth: String? get() =
         joinedYear?.takeIf { vesting != Vesting.IMMEDIATE }?.let { joined ->
-            vesting.fullYears?.let {
-                joined +
-                    it
-            }
+            vesting.fullYears?.let { "${joined + it}-${(joinedMonth ?: 12).toString().padStart(2, '0')}" }
         }
 
     /** The employer's share for [employeeMinor] contributed in a year on [salaryMinor]. */
@@ -152,25 +158,56 @@ object K401 : RetirementPlan() {
             AnnualLimit(2027, 2_550_000, 850_000, combinedMinor = 7_500_000, superCatchUpMinor = 1_175_000),
         )
 
+    /** The 401(a)(17) limit on pay that a match can be worked out from, by year. */
+    val compensationLimits: List<AnnualLimit> =
+        listOf(
+            2015 to 26_500_000L,
+            2016 to 26_500_000L,
+            2017 to 27_000_000L,
+            2018 to 27_500_000L,
+            2019 to 28_000_000L,
+            2020 to 28_500_000L,
+            2021 to 29_000_000L,
+            2022 to 30_500_000L,
+            2023 to 33_000_000L,
+            2024 to 34_500_000L,
+            2025 to 35_000_000L,
+            2026 to 36_000_000L,
+            2027 to 37_500_000L,
+        ).map { (year, amount) -> AnnualLimit(year, amount) }
+
+    /** [salaryMinor] capped at the year's 401(a)(17) limit. */
+    fun matchablePay(
+        year: Int,
+        salaryMinor: Long,
+    ): Long {
+        val cap = compensationLimits.lastOrNull { it.year <= year } ?: compensationLimits.first()
+        return minOf(salaryMinor, cap.standardMinor)
+    }
+
     /**
-     * Splits a year's deposits into a 401(k) account into your part and the employer's, by finding the contribution whose
-     * match brings the total to [depositsMinor].
+     * Splits deposits made in [year] into your part and the employer's, by finding the contribution whose match brings the
+     * total to [depositsMinor]. Pay-based tiers are matched per paycheck, so up to [throughDate] only that share of the
+     * year's pay counts; dollar tiers and the cap stay yearly.
      */
     fun splitDeposits(
+        year: Int,
         depositsMinor: Long,
         salaryMinor: Long,
         match: EmployerMatch,
+        throughDate: String? = null,
     ): Pair<Long, Long> {
+        val pay = payThrough(year, matchablePay(year, salaryMinor), throughDate)
         var low = 0L
         var high = depositsMinor
         while (low < high) {
             val mid = (low + high + 1) / 2
-            if (mid + match.on(mid, salaryMinor) <= depositsMinor) low = mid else high = mid - 1
+            if (mid + match.on(mid, pay) <= depositsMinor) low = mid else high = mid - 1
         }
         return low to depositsMinor - low
     }
 
-    /** The match on [employeeMinor] contributed this year, capped at the year's limit, and how much more match is available. */
+    /** The match on [employeeMinor] contributed this year, capped at the year's limits, and how much more match is available. */
     fun match(
         year: Int,
         age: Int?,
@@ -178,9 +215,55 @@ object K401 : RetirementPlan() {
         employeeMinor: Long,
         match: EmployerMatch,
     ): MatchResult {
-        val employee = minOf(employeeMinor, allowance(year, age))
-        val employer = match.on(employee, salaryMinor)
-        val full = match.on(minOf(match.fullMatchAt(salaryMinor), allowance(year, age)), salaryMinor)
+        val pay = matchablePay(year, salaryMinor)
+        val allowance = allowance(year, age)
+        val employee = minOf(employeeMinor, allowance)
+        val employer = withinAdditionsLimit(year, employee, match.on(employee, pay))
+        val fullEmployee = minOf(match.fullMatchAt(pay), allowance)
+        val full = withinAdditionsLimit(year, fullEmployee, match.on(fullEmployee, pay))
         return MatchResult(employee, employer, (full - employer).coerceAtLeast(0), limitFor(year).published)
     }
+
+    /** Employer money capped so it and your own non-catch-up deferrals stay within the 415(c) annual additions limit. */
+    fun withinAdditionsLimit(
+        year: Int,
+        employeeMinor: Long,
+        employerMinor: Long,
+    ): Long {
+        val limit = limitFor(year).limit
+        val combined = limit.combinedMinor ?: return employerMinor
+        return minOf(employerMinor, (combined - minOf(employeeMinor, limit.standardMinor)).coerceAtLeast(0))
+    }
+
+    /**
+     * What you may still defer this year: the deferral room, also held under the 415(c) limit on everything that goes in,
+     * which catch-up contributions sit on top of.
+     */
+    fun roomLeft(
+        year: Int,
+        allowanceMinor: Long,
+        employeeMinor: Long,
+        employerMinor: Long,
+    ): Long {
+        val deferral = allowanceMinor - employeeMinor
+        val limit = limitFor(year).limit
+        val combined = limit.combinedMinor ?: return deferral.coerceAtLeast(0)
+        val catchUp = (allowanceMinor - limit.standardMinor).coerceAtLeast(0)
+        return minOf(deferral, combined + catchUp - employeeMinor - employerMinor).coerceAtLeast(0)
+    }
+
+    private fun payThrough(
+        year: Int,
+        payMinor: Long,
+        throughDate: String?,
+    ): Long {
+        if (throughDate == null || throughDate.take(4).toInt() != year) return payMinor
+        val month = throughDate.substring(5, 7).toInt()
+        val day = throughDate.substring(8, 10).toInt()
+        val leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+        val dayOfYear = MONTH_STARTS[month - 1] + day + if (leap && month > 2) 1 else 0
+        return payMinor * dayOfYear / if (leap) 366 else 365
+    }
+
+    private val MONTH_STARTS = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
 }
