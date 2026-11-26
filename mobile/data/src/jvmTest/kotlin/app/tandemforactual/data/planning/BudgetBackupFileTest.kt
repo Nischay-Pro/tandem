@@ -38,33 +38,13 @@ class BudgetBackupFileTest {
     }
 
     @Test
-    fun opensPlainBackupsAsActualImportsThem() {
-        val bytes = BudgetBackupFile.build(database, metadata, planning, passphrase = null)
-        assertFalse(BudgetBackupFile.isSealed(bytes))
-        assertEquals(BudgetBackupContents.Opened(database, planning, metadata), BudgetBackupFile.read(bytes, null))
-        val budgetOnly = BudgetBackupFile.build(database, metadata, null, null)
-        assertNull((BudgetBackupFile.read(budgetOnly, null) as BudgetBackupContents.Opened).planningJson)
-    }
-
-    @Test
-    fun sealsWithAPassphrase() {
-        val bytes = BudgetBackupFile.build(database, metadata, planning, "correct horse")
-        assertTrue(BudgetBackupFile.isSealed(bytes))
-        assertEquals(BudgetBackupContents.NeedsPassphrase, BudgetBackupFile.read(bytes, null))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(bytes, "wrong"))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(bytes.copyOf(20), "correct horse"))
-        assertEquals(BudgetBackupContents.Opened(database, planning, metadata), BudgetBackupFile.read(bytes, "correct horse"))
-    }
-
-    @Test
-    fun rejectsFilesThatAreNotBackups() {
-        assertEquals(BudgetBackupContents.NotABackup, BudgetBackupFile.read(Random(1).nextBytes(64), null))
-        assertEquals(BudgetBackupContents.NotABackup, BudgetBackupFile.read(ZipArchive.write(mapOf("a" to ByteArray(1))), null))
+    fun recognisesOnlyItsOwnSealedFiles() {
+        assertTrue(BudgetBackupFile.isSealed(BudgetBackupFile.build(database, metadata, planning, "correct horse")))
+        assertFalse(BudgetBackupFile.isSealed(BudgetBackupFile.build(database, metadata, planning, null)))
         assertFalse(BudgetBackupFile.isSealed("TNDMBK01".encodeToByteArray()))
-        val opened = BudgetBackupContents.Opened(database, planning, metadata)
-        assertFalse(opened.equals("x"))
-        assertFalse(opened == opened.copy(planningJson = null))
-        assertEquals(opened.hashCode(), opened.copy().hashCode())
+        assertNull(
+            BudgetBackupFile.unseal(BudgetBackupFile.build(database, metadata, planning, "correct horse").copyOf(20), "correct horse"),
+        )
     }
 
     @Test
@@ -75,13 +55,12 @@ class BudgetBackupFileTest {
     @Test
     fun rejectsIterationCountsOutsideWhatTandemWrites() {
         val zip = ZipArchive.write(mapOf("db.sqlite" to database, "metadata.json" to metadata.encodeToByteArray()))
-        val opened = BudgetBackupContents.Opened(database, null, metadata)
-        assertEquals(opened, BudgetBackupFile.read(sealedWith(zip, 210_000), "correct horse"))
-        assertEquals(opened, BudgetBackupFile.read(sealedWith(zip, 1_050_000), "correct horse"))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1), "correct horse"))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 209_999), "correct horse"))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1_050_001), "correct horse"))
-        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1, Int.MAX_VALUE), "correct horse"))
+        assertContentEquals(zip, BudgetBackupFile.unseal(sealedWith(zip, 210_000), "correct horse"))
+        assertContentEquals(zip, BudgetBackupFile.unseal(sealedWith(zip, 1_050_000), "correct horse"))
+        assertNull(BudgetBackupFile.unseal(sealedWith(zip, 1), "correct horse"))
+        assertNull(BudgetBackupFile.unseal(sealedWith(zip, 209_999), "correct horse"))
+        assertNull(BudgetBackupFile.unseal(sealedWith(zip, 1_050_001), "correct horse"))
+        assertNull(BudgetBackupFile.unseal(sealedWith(zip, 1, Int.MAX_VALUE), "correct horse"))
     }
 
     private fun sealedWith(

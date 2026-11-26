@@ -7,29 +7,6 @@ import dev.whyoleg.cryptography.algorithms.PBKDF2
 import dev.whyoleg.cryptography.algorithms.SHA512
 import dev.whyoleg.cryptography.random.CryptographyRandom
 
-/** What a budget backup holds once opened. */
-sealed interface BudgetBackupContents {
-    data class Opened(
-        val database: ByteArray,
-        val planningJson: String?,
-        val metadataJson: String?,
-    ) : BudgetBackupContents {
-        override fun equals(other: Any?): Boolean =
-            other is Opened &&
-                database.contentEquals(other.database) &&
-                planningJson == other.planningJson &&
-                metadataJson == other.metadataJson
-
-        override fun hashCode(): Int = database.contentHashCode()
-    }
-
-    data object NeedsPassphrase : BudgetBackupContents
-
-    data object WrongPassphrase : BudgetBackupContents
-
-    data object NotABackup : BudgetBackupContents
-}
-
 /**
  * A whole-budget backup: a zip holding Actual's `db.sqlite` and `metadata.json`, which Actual can import as is, plus
  * Tandem's planning records. Without a passphrase it stays a plain zip; with one the zip is sealed like a planning backup:
@@ -69,23 +46,8 @@ object BudgetBackupFile {
 
     fun isSealed(bytes: ByteArray): Boolean = bytes.size > MAGIC.size && bytes.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)
 
-    fun read(
-        bytes: ByteArray,
-        passphrase: String?,
-    ): BudgetBackupContents {
-        val zip =
-            if (isSealed(bytes)) {
-                if (passphrase.isNullOrEmpty()) return BudgetBackupContents.NeedsPassphrase
-                open(bytes, passphrase) ?: return BudgetBackupContents.WrongPassphrase
-            } else {
-                bytes
-            }
-        val entries = runCatching { ZipArchive.read(zip) }.getOrNull() ?: return BudgetBackupContents.NotABackup
-        val database = entries[DATABASE] ?: return BudgetBackupContents.NotABackup
-        return BudgetBackupContents.Opened(database, entries[PLANNING]?.decodeToString(), entries[METADATA]?.decodeToString())
-    }
-
-    private fun open(
+    /** The zip inside a sealed backup, or null when [passphrase] is wrong or the file is damaged. */
+    internal fun unseal(
         bytes: ByteArray,
         passphrase: String,
     ): ByteArray? =
