@@ -106,7 +106,99 @@ class ActualBankSyncTest {
         writer.insert("preferences", linkedMapOf("id" to "sync-import-transactions-$checking", "value" to "false"))
         assertEquals(0, sync.apply(account, json("""{"transactions":[]}""")).added.size)
         assertEquals(1234L, ActualBankSync.amountToInteger("12.34"))
-        assertEquals(0L, ActualBankSync.amountToInteger("n/a"))
+        assertEquals(-1234L, ActualBankSync.amountToInteger(" -12.34 "))
+        for (bad in listOf("n/a", "", "1,000.00", "Infinity", "1e400")) {
+            assertFailsWith<IllegalStateException>(bad) { ActualBankSync.amountToInteger(bad) }
+        }
+    }
+
+    private fun linkedChecking(
+        db: ActualDatabase,
+        writer: ActualWriter,
+    ): Pair<ActualBankSync, LinkedAccount> {
+        val checking = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+        writer.insert("banks", linkedMapOf("id" to "bank-row", "bank_id" to "sfin-bank", "name" to "Credit Union"))
+        writer.update("accounts", checking, mapOf("account_id" to "ACT-1", "account_sync_source" to "simpleFin", "bank" to "bank-row"))
+        val sync = ActualBankSync(writer) { "2026-11-21" }
+        return sync to sync.linkedAccounts().single()
+    }
+
+    @Test
+    fun deletedBankTransactionsStayDeletedWhenTheAccountSaysSo() {
+        val (db, writer) = fixture()
+        val (sync, account) = linkedChecking(db, writer)
+        val download =
+            json(
+                """{"transactions":[{"transactionId":"del-1","booked":true,"date":"2026-11-12","payeeName":"Kiosk","amount":"-7.31"}]}""",
+            )
+
+        fun alive() = db.query("SELECT id FROM v_transactions WHERE imported_id = 'del-1'").map { it["id"] as String }
+
+        fun deleteIt() = ActualTransactions(writer).batchUpdate(deleted = alive())
+
+        sync.apply(account, download)
+        deleteIt()
+        sync.apply(account, download)
+        assertEquals(1, alive().size, "deleted rows come back by default, like Actual")
+
+        deleteIt()
+        writer.insert("preferences", linkedMapOf("id" to "sync-reimport-deleted-${account.id}", "value" to "false"))
+        val result = sync.apply(account, download)
+        assertEquals(emptyList(), result.added)
+        assertEquals(emptyList(), alive())
+    }
+
+    @Test
+    fun aFuzzyMatchCannotClaimAChildOfAnExactlyMatchedSplit() {
+        val (db, writer) = fixture()
+        val (sync, account) = linkedChecking(db, writer)
+        ActualTransactions(writer).addTransactions(
+            account.id,
+            listOf(
+                mapOf(
+                    "date" to "2026-11-15",
+                    "amount" to -3_000L,
+                    "imported_id" to "split-bank",
+                    "subtransactions" to listOf(mapOf("amount" to -1_037L), mapOf("amount" to -1_963L)),
+                ),
+            ),
+            runTransfers = false,
+        )
+        val download =
+            json(
+                """{"transactions":[
+                  {"transactionId":"split-bank","booked":true,"date":"2026-11-15","payeeName":"Shop","amount":"-30.00"},
+                  {"transactionId":"other-1","booked":true,"date":"2026-11-16","payeeName":"Other","amount":"-10.37"}
+                ]}""",
+            )
+        val result = sync.apply(account, download)
+        assertEquals(1, result.added.size)
+        val added = db.first("SELECT * FROM v_transactions WHERE id = ?", result.added.single())!!
+        assertEquals(listOf("other-1", -1_037L, null), listOf(added["imported_id"], added["amount"], added["parent_id"]))
+        assertEquals(1L, db.first("SELECT COUNT(*) AS n FROM v_transactions WHERE imported_id = 'other-1'")!!["n"])
+    }
+
+    @Test
+    fun anUnreadableBankAmountFailsInsteadOfWritingZero() {
+        val (db, writer) = fixture()
+        val (sync, account) = linkedChecking(db, writer)
+        val before = db.first("SELECT COUNT(*) AS n FROM v_transactions WHERE account = ?", account.id)!!["n"]
+        for (row in listOf(
+            """{"transactionId":"bad-1","booked":true,"date":"2026-11-12","payeeName":"Kiosk","amount":"n/a"}""",
+            """{"transactionId":"bad-2","booked":true,"date":"2026-11-12","payeeName":"Kiosk","transactionAmount":{"amount":"??"}}""",
+            """{"transactionId":"bad-3","booked":true,"date":"2026-11-12","payeeName":"Kiosk"}""",
+        )) {
+            assertFailsWith<IllegalStateException>(row) { sync.apply(account, json("""{"transactions":[$row]}""")) }
+        }
+        assertEquals(before, db.first("SELECT COUNT(*) AS n FROM v_transactions WHERE account = ?", account.id)!!["n"])
+        val fresh = ActualBudgetEdits(writer, { "2026-11-21" }).createLinkedAccount("New", false, "goCardless", "GC-2", "gc", "GC")
+        assertFailsWith<IllegalStateException> {
+            sync.apply(
+                sync.linkedAccounts().first { it.id == fresh },
+                json("""{"transactions":[{"transactionId":"bad-4","booked":true,"date":"2026-11-12","payeeName":"K","amount":"x"}]}"""),
+            )
+        }
+        assertEquals(0L, db.first("SELECT COUNT(*) AS n FROM v_transactions WHERE account = ?", fresh)!!["n"])
     }
 
     @Test
