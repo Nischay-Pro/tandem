@@ -234,8 +234,9 @@ data class AccountCurrency(
 }
 
 /**
- * One exchange rate the person entered: one [from] is worth [rate] of [to], as of [asOf]. Each date is its own record;
- * [recordId] is set only for a record stored under an older id, such as the undated `fx:FROM:TO`.
+ * One exchange rate: one [from] is worth [rate] of [to], as of [asOf]. Each date is its own record; [recordId] is set
+ * only for a record stored under an older id, such as the undated `fx:FROM:TO`. [source] names the service a fetched
+ * rate came from and is null for a rate the person entered.
  */
 data class ExchangeRate(
     val from: String,
@@ -243,10 +244,13 @@ data class ExchangeRate(
     val rate: String,
     val asOf: String,
     val recordId: String? = null,
+    val source: String? = null,
 ) {
     val id: String get() = recordId ?: "fx:$from:$to:$asOf"
 
     val value: Double? get() = rate.toDoubleOrNull()?.takeIf { it > 0 && it.isFinite() }
+
+    val fetched: Boolean get() = source != null
 
     fun toJson(): JsonObject =
         jsonOf(
@@ -254,13 +258,20 @@ data class ExchangeRate(
             "to" to JsonPrimitive(to),
             "rate" to JsonPrimitive(rate),
             "asOf" to JsonPrimitive(asOf),
+            "source" to source.json(),
         )
 
     companion object {
         const val TYPE = "planning.exchange_rate"
 
         fun fromJson(body: JsonObject) =
-            ExchangeRate(body.text("from").orEmpty(), body.text("to").orEmpty(), body.text("rate").orEmpty(), body.text("asOf").orEmpty())
+            ExchangeRate(
+                body.text("from").orEmpty(),
+                body.text("to").orEmpty(),
+                body.text("rate").orEmpty(),
+                body.text("asOf").orEmpty(),
+                source = body.text("source"),
+            )
 
         fun fromJson(
             recordId: String,

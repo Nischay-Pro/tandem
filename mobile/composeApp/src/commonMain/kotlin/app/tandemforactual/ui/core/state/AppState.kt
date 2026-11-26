@@ -16,6 +16,7 @@ import app.tandemforactual.ui.core.search.ActivitySortOrder
 import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.planning.ExchangeRateFetching
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
 
@@ -124,6 +125,7 @@ internal class AppState {
 
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
+    var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)
@@ -286,7 +288,7 @@ internal class AppState {
             "syncOnOpen" to syncOnOpen.toString(),
             "appLanguage" to appLanguage,
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
-        ) + automaticBackup.toPreferences() +
+        ) + automaticBackup.toPreferences() + exchangeRateFetching.toPreferences() +
             mapOf(
                 "syncNetwork" to syncNetwork.name,
                 "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
@@ -325,6 +327,7 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        exchangeRateFetching = ExchangeRateFetching.from(saved)
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         menuPins = saved["menuPins"] ?: menuPins

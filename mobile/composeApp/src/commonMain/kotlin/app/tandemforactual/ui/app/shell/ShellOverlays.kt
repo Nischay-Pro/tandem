@@ -24,6 +24,7 @@ import app.tandemforactual.ui.app.UNDO_NOTICE_MILLIS
 import app.tandemforactual.ui.app.isLandscapeViewport
 import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.core.session.ForgetBankIconsWhenOff
+import app.tandemforactual.ui.core.session.planning.FetchExchangeRatesWhenOn
 import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.formatCurrency
@@ -49,6 +50,7 @@ internal fun ShellOverlays(
     val state = ctx.state
     val shell = ctx.shell
     ForgetBankIconsWhenOff(state.bankIconsEnabled)
+    FetchExchangeRatesWhenOn(state, ctx.mobileSession)
     UndoNotice(ctx)
     if (shell.showDiscardTransactionDialog) DiscardTransactionDialog(ctx)
     ShellMenu(chrome)

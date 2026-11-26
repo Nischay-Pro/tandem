@@ -40,7 +40,7 @@ fun rateHistory(
     val inverse =
         rates
             .filter { it.from == to && it.to == from && it.value != null }
-            .map { ExchangeRate(from, to, (1.0 / it.value!!).toString(), it.asOf) }
+            .map { ExchangeRate(from, to, (1.0 / it.value!!).toString(), it.asOf, source = it.source) }
     return (inverse.map { it to 0 } + direct.map { it to 1 })
         .sortedWith(compareBy({ it.first.asOf }, { it.second }))
         .map { it.first }
