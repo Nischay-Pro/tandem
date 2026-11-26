@@ -227,7 +227,7 @@ internal class AppState {
         newTransactionPayeeId = ""
         transactionCategory = ""
         newTransactionCategoryId = ""
-        transactionDate = formatLiveDate(platformTodayIsoDate())
+        transactionDate = platformTodayIsoDate()
         newTransactionInitialDate = ""
         transactionType = "Spending"
         transactionNotes = ""

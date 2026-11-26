@@ -6,7 +6,6 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatAmount
-import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.recordName
 
 /** What Tandem read from a receipt photo. */
@@ -177,7 +176,7 @@ internal suspend fun fillNewTransaction(
 ) {
     amountMinor?.let { state.transactionAmount = state.formatAmount(it) }
     if (isIncome) state.transactionType = "Income"
-    date?.let { state.transactionDate = formatLiveDate(it) }
+    date?.let { state.transactionDate = it }
     val payees = mobileSession.payeeRecords.mapNotNull { record -> record.recordName()?.let { record.recordId to it } }
     val payee = matchSharedPayee(payeeHint, payees)
     if (payee == null) {
