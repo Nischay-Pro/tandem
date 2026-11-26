@@ -8,15 +8,17 @@ class ZipFormatException(
 object ZipArchive {
     fun read(
         bytes: ByteArray,
-        maxEntryBytes: Long = 512L * 1024 * 1024,
+        maxTotalBytes: Long = 1L shl 30,
     ): Map<String, ByteArray> {
         val end = findEndOfCentralDirectory(bytes)
         val count = u16(bytes, end + 10)
         var offset = u32(bytes, end + 16).toInt()
+        var remaining = minOf(maxTotalBytes, Int.MAX_VALUE.toLong())
         val entries = LinkedHashMap<String, ByteArray>()
         repeat(count) {
             if (u32(bytes, offset) != 0x02014b50L) throw ZipFormatException("bad central directory")
             val method = u16(bytes, offset + 10)
+            val crc = u32(bytes, offset + 16)
             val compressedSize = u32(bytes, offset + 20)
             val size = u32(bytes, offset + 24)
             val nameLength = u16(bytes, offset + 28)
@@ -25,21 +27,32 @@ object ZipArchive {
             val localOffset = u32(bytes, offset + 42).toInt()
             val name = bytes.copyOfRange(offset + 46, offset + 46 + nameLength).decodeToString()
             offset += 46 + nameLength + extraLength + commentLength
-            if (size > maxEntryBytes) throw ZipFormatException("entry too large")
-            if (u32(bytes, localOffset) != 0x04034b50L) throw ZipFormatException("bad local header")
-            val dataStart = localOffset + 30 + u16(bytes, localOffset + 26) + u16(bytes, localOffset + 28)
-            if (compressedSize > bytes.size - dataStart) throw ZipFormatException("truncated entry")
-            val data = bytes.copyOfRange(dataStart, dataStart + compressedSize.toInt())
-            val content =
-                when (method) {
-                    0 -> data
-                    8 -> Inflater.inflate(data, size.toInt())
-                    else -> throw ZipFormatException("unsupported compression $method")
-                }
+            if (size > remaining) throw ZipFormatException("archive too large")
+            remaining -= size
+            val content = entryContent(bytes, localOffset, method, compressedSize, size.toInt())
             if (content.size.toLong() != size) throw ZipFormatException("size mismatch")
+            if (crc32(content) != crc) throw ZipFormatException("crc mismatch")
             if (!name.endsWith("/")) entries[name] = content
         }
         return entries
+    }
+
+    private fun entryContent(
+        bytes: ByteArray,
+        localOffset: Int,
+        method: Int,
+        compressedSize: Long,
+        size: Int,
+    ): ByteArray {
+        if (u32(bytes, localOffset) != 0x04034b50L) throw ZipFormatException("bad local header")
+        val dataStart = localOffset + 30 + u16(bytes, localOffset + 26) + u16(bytes, localOffset + 28)
+        if (compressedSize > bytes.size - dataStart) throw ZipFormatException("truncated entry")
+        val data = bytes.copyOfRange(dataStart, dataStart + compressedSize.toInt())
+        return when (method) {
+            0 -> data
+            8 -> Inflater.inflate(data, size)
+            else -> throw ZipFormatException("unsupported compression $method")
+        }
     }
 
     /** A zip of [entries] stored without compression, which every unzip tool and Actual's import can read. */
@@ -256,7 +269,7 @@ internal object Inflater {
         data: ByteArray,
         expectedSize: Int,
     ): ByteArray {
-        val out = ByteArrayBuilder(expectedSize)
+        val out = ByteArrayBuilder(minOf(expectedSize, 1 shl 20), limit = expectedSize)
         val input = Bits(data)
         do {
             val last = input.bits(1)
@@ -357,12 +370,15 @@ internal object Inflater {
 
 internal class ByteArrayBuilder(
     initialCapacity: Int,
+    private val limit: Int = Int.MAX_VALUE,
 ) {
     private var buffer = ByteArray(maxOf(16, initialCapacity))
     private var size = 0
 
     private fun ensure(extra: Int) {
-        if (size + extra > buffer.size) buffer = buffer.copyOf(maxOf(buffer.size * 2, size + extra))
+        if (extra > limit - size) throw ZipFormatException("entry larger than declared")
+        if (size + extra <= buffer.size) return
+        buffer = buffer.copyOf(minOf(maxOf(buffer.size.toLong() * 2, size.toLong() + extra), limit.toLong()).toInt())
     }
 
     fun append(b: Byte) {
