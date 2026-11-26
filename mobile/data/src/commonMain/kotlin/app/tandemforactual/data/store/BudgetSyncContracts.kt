@@ -161,6 +161,11 @@ interface BudgetSyncRemote {
         encryptionPassword: String?,
     ): RemoteOperationResult = readOperation(operationId)
 
+    suspend fun readOperation(
+        operation: OutboxOperationEntity,
+        encryptionPassword: String?,
+    ): RemoteOperationResult = readOperation(operation.operationId, encryptionPassword)
+
     suspend fun discardUncertainOperation(operationId: String): RemoteOperationResult =
         throw BudgetSyncProtocolException("Server-confirmed removal is unavailable")
 

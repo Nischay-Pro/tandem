@@ -79,7 +79,33 @@ class BudgetSyncContractsTest {
 
         kotlinx.coroutines.runBlocking {
             assertEquals(expected, remote.readOperation("operation-1", "budget-password"))
+            val entry =
+                OutboxOperationEntity(
+                    "operation-2",
+                    "key",
+                    "budget-1",
+                    "transaction",
+                    "transaction-1",
+                    "UPDATE",
+                    null,
+                    null,
+                    "{}",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "uncertain",
+                    1,
+                    null,
+                    null,
+                    1L,
+                    1L,
+                )
+            assertEquals(expected, remote.readOperation(entry, "budget-password"))
         }
-        assertEquals("operation-1", readOperationId)
+        assertEquals("operation-2", readOperationId)
     }
 }
