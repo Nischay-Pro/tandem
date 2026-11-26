@@ -6,11 +6,14 @@ import app.tandemforactual.data.regions.ca.retirement.fhsa.Fhsa
 import app.tandemforactual.data.regions.ca.retirement.grouprrsp.GroupRrsp
 import app.tandemforactual.data.regions.ca.retirement.rpp.Rpp
 import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
+import app.tandemforactual.data.regions.ca.retirement.tfsa.Tfsa
 import app.tandemforactual.data.regions.global.pension.PublicPensions
+import app.tandemforactual.data.regions.global.retirement.AnnualLimit
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.data.regions.india.retirement.eps.Eps
 import app.tandemforactual.data.regions.india.retirement.vpf.Vpf
 import app.tandemforactual.data.regions.us.retirement.dcfsa.DependentCareFsa
+import app.tandemforactual.data.regions.us.retirement.fsa.HealthFsa
 import app.tandemforactual.data.regions.us.retirement.hsa.Hsa
 import app.tandemforactual.data.regions.us.retirement.ira.Ira
 import app.tandemforactual.data.regions.us.retirement.k401.EmployerMatch
@@ -32,9 +35,47 @@ class RetirementPlansTest {
         assertEquals(1_800_000, K401.limitFor(2015).limit.standardMinor)
         val future = K401.limitFor(2031)
         assertFalse(future.published)
-        assertEquals(2026, future.limit.year)
+        assertEquals(2027, future.limit.year)
         assertEquals(2015, K401.limitFor(2001).limit.year)
         assertTrue(K401.limitFor(2024).published)
+    }
+
+    @Test
+    fun the2027LimitsArePublishedFigures() {
+        listOf(K401, Ira, Hsa, HealthFsa, DependentCareFsa, Rrsp, GroupRrsp, Rpp, Fhsa).forEach {
+            assertTrue(it.limitFor(2027).published, it.id)
+        }
+        assertEquals(
+            AnnualLimit(2027, 2_550_000, 850_000, combinedMinor = 7_500_000, superCatchUpMinor = 1_175_000),
+            K401.limitFor(2027).limit,
+        )
+        assertEquals(3_400_000, K401.allowance(2027, 52))
+        assertEquals(3_725_000, K401.allowance(2027, 61))
+        assertEquals(860_000, Ira.allowance(2027, 50))
+        assertEquals(900_000, Hsa.allowance(2027, 40, family = true))
+        assertEquals(550_000, Hsa.allowance(2027, 56))
+        assertEquals(350_000, HealthFsa.allowance(2027, 40))
+        assertEquals(750_000, DependentCareFsa.allowance(2027, 40))
+        assertEquals(800_000, Fhsa.allowance(2027, 30))
+    }
+
+    @Test
+    fun rrspAndRppReadOneMoneyPurchaseTable() {
+        assertEquals(3_539_000, Rrsp.limitFor(2027).limit.standardMinor)
+        assertEquals(3_539_000, Rrsp.personalRoom(2027, 50_000_000, 0, 0))
+        assertEquals(3_639_000, Rpp.limitFor(2027).limit.standardMinor)
+        assertEquals(3_639_000, Rrsp.limitFor(2028).limit.standardMinor)
+        assertTrue(Rrsp.limitFor(2028).published)
+        Rpp.limits.forEach { assertEquals(it.standardMinor, Rrsp.limitFor(it.year + 1).limit.standardMinor) }
+    }
+
+    @Test
+    fun limitsNotPublishedYetStayMarked() {
+        assertFalse(Tfsa.limitFor(2027).published)
+        RetirementPlans.forRegion(Region.IN).forEach { assertFalse(it.limitFor(2027).published, it.id) }
+        val match = EmployerMatch.simple(5_000, 600)
+        assertTrue(K401.match(2027, 35, 10_000_000, 400_000, match).published)
+        assertFalse(K401.match(2031, 35, 10_000_000, 400_000, match).published)
     }
 
     @Test
@@ -55,8 +96,8 @@ class RetirementPlansTest {
     @Test
     fun employerMatchShowsWhatIsLeftOnTheTable() {
         val match = EmployerMatch.simple(5_000, 600)
-        assertEquals(MatchResult(400_000, 200_000, 100_000), K401.match(2026, 35, 10_000_000, 400_000, match))
-        assertEquals(MatchResult(2_450_000, 300_000, 0), K401.match(2026, 35, 10_000_000, 9_000_000, match))
+        assertEquals(MatchResult(400_000, 200_000, 100_000, true), K401.match(2026, 35, 10_000_000, 400_000, match))
+        assertEquals(MatchResult(2_450_000, 300_000, 0, true), K401.match(2026, 35, 10_000_000, 9_000_000, match))
         val tiered = EmployerMatch(listOf(MatchTier(10_000, MatchBand.AMOUNT, 100_000), MatchTier(5_000, MatchBand.AMOUNT, 100_000)))
         assertEquals(50_000, tiered.on(50_000, 10_000_000))
         assertEquals(125_000, tiered.on(150_000, 10_000_000))
@@ -81,7 +122,8 @@ class RetirementPlansTest {
                 plan.source.isNotBlank() && plan.description.isNotBlank() && plan.displayName.isNotBlank() && plan.currency.length == 3,
             )
             val years = plan.limits.map { it.year }
-            assertEquals((years.first()..2026).toList(), years)
+            assertEquals((years.first()..years.last()).toList(), years)
+            assertTrue(years.last() >= 2026)
             assertTrue(plan.limitFor(2026).published)
             assertTrue(plan.matchesAccount("My ${plan.accountKeywords.first()} account"))
             assertTrue(plan.allowance(2026, 70) >= plan.allowance(2026, 30))

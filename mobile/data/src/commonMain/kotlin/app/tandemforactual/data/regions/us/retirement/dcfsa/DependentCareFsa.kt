@@ -15,5 +15,5 @@ object DependentCareFsa : RetirementPlan() {
     override val source = "IRC section 129, as amended in 2025 (irs.gov)"
     override val advanced = true
 
-    override val limits = (2015..2025).map { AnnualLimit(it, 500_000) } + AnnualLimit(2026, 750_000)
+    override val limits = (2015..2025).map { AnnualLimit(it, 500_000) } + (2026..2027).map { AnnualLimit(it, 750_000) }
 }

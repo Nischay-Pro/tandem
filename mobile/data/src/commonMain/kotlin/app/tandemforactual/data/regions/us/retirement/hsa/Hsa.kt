@@ -29,5 +29,6 @@ object Hsa : RetirementPlan() {
             2024 to (415_000L to 830_000L),
             2025 to (430_000L to 855_000L),
             2026 to (440_000L to 875_000L),
+            2027 to (450_000L to 900_000L),
         ).map { (year, amounts) -> AnnualLimit(year, amounts.first, 100_000, familyMinor = amounts.second) }
 }

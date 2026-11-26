@@ -119,6 +119,8 @@ data class MatchResult(
     val employerMinor: Long,
     /** Match the employer would add if you contributed enough to get all of it. */
     val missedMinor: Long,
+    /** False when the year's limit isn't published yet and the latest known one was used. */
+    val published: Boolean,
 )
 
 /** Employer 401(k), 403(b) and most 457(b) plans share these elective-deferral limits. */
@@ -147,6 +149,7 @@ object K401 : RetirementPlan() {
             AnnualLimit(2024, 2_300_000, 750_000, combinedMinor = 6_900_000),
             AnnualLimit(2025, 2_350_000, 750_000, combinedMinor = 7_000_000, superCatchUpMinor = 1_125_000),
             AnnualLimit(2026, 2_450_000, 800_000, combinedMinor = 7_200_000, superCatchUpMinor = 1_125_000),
+            AnnualLimit(2027, 2_550_000, 850_000, combinedMinor = 7_500_000, superCatchUpMinor = 1_175_000),
         )
 
     /**
@@ -178,6 +181,6 @@ object K401 : RetirementPlan() {
         val employee = minOf(employeeMinor, allowance(year, age))
         val employer = match.on(employee, salaryMinor)
         val full = match.on(minOf(match.fullMatchAt(salaryMinor), allowance(year, age)), salaryMinor)
-        return MatchResult(employee, employer, (full - employer).coerceAtLeast(0))
+        return MatchResult(employee, employer, (full - employer).coerceAtLeast(0), limitFor(year).published)
     }
 }

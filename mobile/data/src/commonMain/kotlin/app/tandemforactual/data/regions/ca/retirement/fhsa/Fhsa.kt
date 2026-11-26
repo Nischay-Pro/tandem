@@ -15,5 +15,5 @@ object Fhsa : RetirementPlan() {
     override val source = "CRA First Home Savings Account (canada.ca)"
     override val advanced = true
 
-    override val limits = (2023..2026).map { AnnualLimit(it, 800_000) }
+    override val limits = (2023..2027).map { AnnualLimit(it, 800_000) }
 }

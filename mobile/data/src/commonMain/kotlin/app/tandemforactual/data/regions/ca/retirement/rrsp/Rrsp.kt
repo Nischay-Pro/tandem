@@ -14,21 +14,26 @@ object Rrsp : RetirementPlan() {
     override val accountKeywords = listOf("RRSP")
     override val source = "CRA MP, DB, RRSP, DPSP, ALDA, TFSA limits (canada.ca)"
 
-    override val limits =
+    /** The CRA money purchase limit by year; a year's RRSP dollar limit is the previous year's money purchase limit. */
+    val moneyPurchaseLimits =
         listOf(
-            2015 to 2_493_000L,
-            2016 to 2_537_000L,
-            2017 to 2_601_000L,
-            2018 to 2_623_000L,
-            2019 to 2_650_000L,
-            2020 to 2_723_000L,
-            2021 to 2_783_000L,
-            2022 to 2_921_000L,
-            2023 to 3_078_000L,
-            2024 to 3_156_000L,
-            2025 to 3_249_000L,
-            2026 to 3_381_000L,
+            2014 to 2_493_000L,
+            2015 to 2_537_000L,
+            2016 to 2_601_000L,
+            2017 to 2_623_000L,
+            2018 to 2_650_000L,
+            2019 to 2_723_000L,
+            2020 to 2_783_000L,
+            2021 to 2_921_000L,
+            2022 to 3_078_000L,
+            2023 to 3_156_000L,
+            2024 to 3_249_000L,
+            2025 to 3_381_000L,
+            2026 to 3_539_000L,
+            2027 to 3_639_000L,
         ).map { (year, amount) -> AnnualLimit(year, amount) }
+
+    override val limits = moneyPurchaseLimits.map { AnnualLimit(it.year + 1, it.standardMinor) }
 
     /**
      * Your own room for [year]: 18% of last year's earned income up to the dollar limit, less last year's pension adjustment,

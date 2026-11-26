@@ -2,7 +2,6 @@ package app.tandemforactual.data.regions.ca.retirement.rpp
 
 import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.ca.retirement.rrsp.Rrsp
-import app.tandemforactual.data.regions.global.retirement.AnnualLimit
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 
 /**
@@ -19,6 +18,5 @@ object Rpp : RetirementPlan() {
     override val source = Rrsp.source
     override val advanced = true
 
-    override val limits =
-        Rrsp.limits.zipWithNext { year, next -> AnnualLimit(year.year, next.standardMinor) } + AnnualLimit(2026, 3_539_000)
+    override val limits = Rrsp.moneyPurchaseLimits
 }
