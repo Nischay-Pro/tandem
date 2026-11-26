@@ -70,7 +70,7 @@ internal fun WebDavBackupDialog(
                     scope.launch {
                         problem =
                             try {
-                                WebDavClient.connect(address.trim(), name.trim(), password).check()
+                                WebDavClient.connect(address.trim(), name.trim(), password).use { it.check() }
                                 null
                             } catch (error: WebDavException) {
                                 error.message

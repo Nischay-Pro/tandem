@@ -22,6 +22,7 @@ internal fun apiFailureMessage(
         "address_unreachable", "network-error" -> "Actual isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
+        "server_timeout" -> "The Actual server took too long to answer. Try again."
         "tandem_route_unavailable" ->
             "Tandem isn’t available here. Check the server address."
         "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."

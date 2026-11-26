@@ -61,6 +61,7 @@ private val errorMessages =
         "rule_unsupported" to "A rule uses a formula or template that Tandem can’t run yet. Make this change in Actual.",
         "invalid_request" to "Tandem couldn’t use those details. Check the form.",
         "invalid-server-url" to "Enter a server address that starts with https://.",
+        "server_timeout" to "The Actual server took too long to answer. Try again.",
     )
 
 class TandemApiException(

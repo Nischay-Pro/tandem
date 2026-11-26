@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
@@ -30,18 +31,17 @@ class BankIcon(
  * Finds a bank's icon on its own website: `/favicon.ico` first, then the icons its home page declares. Only the bank's
  * domain is ever sent, over HTTPS, with every redirect checked, small size limits and short timeouts.
  */
-class BankIconFetcher(
-    http: HttpClient,
-    private val formats: Set<BankIconFormat> = BankIconFormat.entries.toSet(),
-) {
-    private val http =
-        http.config {
-            followRedirects = false
-            install(HttpTimeout) {
-                requestTimeoutMillis = TIMEOUT_MILLIS
-                connectTimeoutMillis = TIMEOUT_MILLIS
-            }
-        }
+class BankIconFetcher private constructor(
+    private val http: HttpClient,
+    private val formats: Set<BankIconFormat>,
+    @Suppress("UNUSED_PARAMETER") configured: Unit,
+) : AutoCloseable {
+    constructor(
+        http: HttpClient,
+        formats: Set<BankIconFormat> = BankIconFormat.entries.toSet(),
+    ) : this(http.config { limits() }, formats, Unit)
+
+    override fun close() = http.close()
 
     /** The icon for [domain], or null when the site has none Tandem can use; throws when the site can't be reached. */
     suspend fun fetch(domain: String): BankIcon? {
@@ -121,7 +121,15 @@ class BankIconFetcher(
         private const val TIMEOUT_MILLIS = 10_000L
 
         /** A fetcher with the platform's default HTTP engine, keeping only icons in [formats]. */
-        fun connect(formats: Set<BankIconFormat> = BankIconFormat.entries.toSet()) = BankIconFetcher(HttpClient(), formats)
+        fun connect(formats: Set<BankIconFormat> = BankIconFormat.entries.toSet()) = BankIconFetcher(HttpClient { limits() }, formats, Unit)
+
+        private fun HttpClientConfig<*>.limits() {
+            followRedirects = false
+            install(HttpTimeout) {
+                requestTimeoutMillis = TIMEOUT_MILLIS
+                connectTimeoutMillis = TIMEOUT_MILLIS
+            }
+        }
     }
 }
 

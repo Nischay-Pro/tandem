@@ -149,6 +149,7 @@ class BackgroundBudgetSyncWorker(
             }
             Result.retry()
         } finally {
+            apiClient?.close()
             progress.clear()
             database.close()
         }

@@ -39,7 +39,7 @@ data class ExchangeRateFetching(
     ): ExchangeRateFetching {
         if (!enabled || checked == key) return this
         return try {
-            planning.fetchExchangeRates(budgetId, budgetCurrency, source(server), today, historyStart)
+            source(server).use { planning.fetchExchangeRates(budgetId, budgetCurrency, it, today, historyStart) }
             copy(checked = key, fetchedOn = today, error = "")
         } catch (error: CancellationException) {
             throw error
