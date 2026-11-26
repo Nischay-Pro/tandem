@@ -139,6 +139,28 @@ class ActualBankSyncTest {
     }
 
     @Test
+    fun firstSyncRecordsWhenTheAccountLastSynced() {
+        val (db, writer) = fixture()
+        val sync = ActualBankSync(writer) { "2026-11-21" }
+        sync.setSyncIntervalMinutes(1_440)
+        val edits = ActualBudgetEdits(writer, { "2026-11-21" })
+        val downloads =
+            listOf(
+                """{"transactions":[{"transactionId":"f1","booked":true,"date":"2026-11-10","payeeName":"Shop","amount":"-2.00"}],"startingBalance":100}""",
+                """{"transactions":[]}""",
+            )
+        for ((index, download) in downloads.withIndex()) {
+            val id = edits.createLinkedAccount("First $index", false, "simpleFin", "F-$index", "first.example", "First Bank")
+            val before = System.currentTimeMillis()
+            sync.apply(sync.linkedAccounts().first { it.id == id }, json(download))
+            val lastSync = (db.first("SELECT last_sync FROM accounts WHERE id = ?", id)!!["last_sync"] as String?)?.toLong()
+            assertTrue(lastSync != null && lastSync in before..System.currentTimeMillis(), download)
+            assertEquals(lastSync, sync.linkedAccounts().first { it.id == id }.lastSyncMillis)
+        }
+        assertFalse(sync.automaticSyncDue(System.currentTimeMillis(), null))
+    }
+
+    @Test
     fun firstSyncRecordsTheStartingBalance() {
         val (db, writer) = fixture()
         val fresh = ActualBudgetEdits(writer, { "2026-11-21" }).createAccount("Card", false, null)
