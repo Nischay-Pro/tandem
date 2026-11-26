@@ -169,7 +169,7 @@ internal suspend fun BudgetEdits.markTransactionsReconciled(
     budgetId: String,
     accountId: String,
     transactionIds: Set<String>,
-    selectedTransactionIds: Set<String>,
+    clearedChoices: Map<String, Boolean>,
 ): Boolean {
     host.reportTransactionWriteMessage(null)
     if (host.refuseWriteInReadOnlyMode()) return false
@@ -183,7 +183,6 @@ internal suspend fun BudgetEdits.markTransactionsReconciled(
         host.reportTransactionWriteMessage("There are no unreconciled transactions to review.")
         return false
     }
-    val selectedIds = selectedTransactionIds.intersect(ids.toSet())
     if (host.isSavingTransaction) return false
     host.markSavingTransaction(true)
     try {
@@ -215,8 +214,8 @@ internal suspend fun BudgetEdits.markTransactionsReconciled(
                 return false
             }
             if (base.booleanValue("reconciled") == true) continue
-            val shouldBeCleared = transactionId in selectedIds
             val currentlyCleared = base.booleanValue("cleared") == true
+            val shouldBeCleared = clearedChoices[transactionId] ?: currentlyCleared
             if (currentlyCleared == shouldBeCleared && !shouldBeCleared) continue
             requests += reconcileWriteRequest(budgetId, transactionId, base, revision, baseJson, currentlyCleared, shouldBeCleared)
         }

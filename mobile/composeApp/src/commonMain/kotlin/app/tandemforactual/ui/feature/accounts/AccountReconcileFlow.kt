@@ -16,18 +16,18 @@ import app.tandemforactual.ui.core.state.TransactionItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** Visibility and draft selection for the reconcile dialog. */
+/** Visibility and the cleared ticks the user changed in the reconcile dialog. */
 internal class AccountReconcileState(
     showDialog: MutableState<Boolean>,
-    selectedIds: MutableState<Set<String>>,
+    clearedChoices: MutableState<Map<String, Boolean>>,
     statementBalance: MutableState<String>,
 ) {
     var showDialog by showDialog
-    var selectedIds by selectedIds
+    var clearedChoices by clearedChoices
     var statementBalance by statementBalance
 
     fun open(mobileSession: TandemMobileSession) {
-        selectedIds = emptySet()
+        clearedChoices = emptyMap()
         statementBalance = ""
         mobileSession.clearTransactionWriteMessage()
         showDialog = true
@@ -40,9 +40,9 @@ internal fun rememberAccountReconcileState(
     liveAccount: LiveAccountSummary?,
 ): AccountReconcileState {
     val showDialog = rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(false) }
-    val selectedIds = remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptySet<String>()) }
+    val clearedChoices = remember(state.selectedBudgetId, liveAccount?.id) { mutableStateOf(emptyMap<String, Boolean>()) }
     val statementBalance = rememberSaveable(state.selectedBudgetId, liveAccount?.id) { mutableStateOf("") }
-    return AccountReconcileState(showDialog, selectedIds, statementBalance)
+    return AccountReconcileState(showDialog, clearedChoices, statementBalance)
 }
 
 /** Reconcile dialog for the account, marking the selected cleared transactions as reconciled. */
@@ -63,7 +63,7 @@ internal fun AccountReconcileFlow(
                     state.selectedBudgetId,
                     liveAccount.id,
                     reconciliationCandidates.mapNotNull { it.recordId }.toSet(),
-                    reconcile.selectedIds,
+                    reconcile.clearedChoices,
                 )
             ) {
                 closeAfterSuccess()
@@ -81,13 +81,13 @@ internal fun AccountReconcileFlow(
             activity.loadingOlder = true
             activity.offset += ACCOUNT_RECONCILIATION_PAGE_SIZE
         },
-        selectedIds = reconcile.selectedIds,
+        selectedIds = reconcileTickedIds(reconciliationCandidates, reconcile.clearedChoices),
         statementBalance = reconcile.statementBalance,
         busy = mobileSession.isSavingTransaction,
         message = mobileSession.transactionWriteMessage,
         onStatementBalanceChange = { reconcile.statementBalance = it },
         onSelectedChange = { id, selected ->
-            reconcile.selectedIds = if (selected) reconcile.selectedIds + id else reconcile.selectedIds - id
+            reconcile.clearedChoices += id to selected
         },
         onDismiss = { if (!mobileSession.isSavingTransaction) reconcile.showDialog = false },
         onConfirm = didReconcile,
