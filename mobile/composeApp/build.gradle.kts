@@ -78,8 +78,10 @@ kotlin {
     target.binaries.framework {
       baseName = "ComposeApp"
       isStatic = true
-      // Whole-program devirtualization outgrew the macOS runners' memory: hours of garbage collection, then out of memory.
-      if (buildType == NativeBuildType.RELEASE) freeCompilerArgs += "-Xdisable-phases=DevirtualizationAnalysis"
+      // The whole-program call-graph passes outgrew the macOS runners' memory: hours of garbage collection, then out of memory.
+      if (buildType == NativeBuildType.RELEASE) {
+        freeCompilerArgs += "-Xdisable-phases=DevirtualizationAnalysis,RemoveRedundantCallsToStaticInitializersPhase,EscapeAnalysis"
+      }
     }
   }
 

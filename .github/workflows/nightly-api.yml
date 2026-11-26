@@ -441,7 +441,7 @@ jobs:
 
       - name: Build the Release Kotlin framework
         working-directory: mobile
-        run: /usr/bin/time -l ./gradlew --console=plain --configuration-cache :composeApp:linkReleaseFrameworkIosArm64
+        run: /usr/bin/time -l ./gradlew --no-daemon --console=plain --configuration-cache :composeApp:linkReleaseFrameworkIosArm64
 
       - name: Build the unsigned iOS app
         env:
