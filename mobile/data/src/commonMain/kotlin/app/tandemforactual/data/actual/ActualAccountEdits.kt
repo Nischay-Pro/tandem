@@ -65,7 +65,6 @@ fun ActualBudgetEdits.closeAccount(
 ) = writer.batch {
     val all = accounts()
     if (all.none { it["id"] == id }) fail("Account does not exist in this budget")
-    if (transferAccountId == null && accountBalance(id, today()) != 0L) fail("Choose an account to move this balance before closing it")
     if (transferAccountId != null) {
         val destination = all.firstOrNull { it["id"] == transferAccountId }
         if (destination == null ||
@@ -115,6 +114,7 @@ fun ActualBudgetEdits.closeAccount(
         writer.delete("accounts", id)
         return@batch
     }
+    if (balance != 0L && transferAccountId == null) fail("Choose an account to move this balance before closing it")
     writer.update("accounts", id, mapOf("closed" to 1L))
     if (balance != 0L && transferAccountId != null) {
         val payee = checkNotNull(db.first("SELECT id FROM payees WHERE transfer_acct = ?", transferAccountId)?.get("id"))

@@ -3,6 +3,7 @@ package app.tandemforactual.data.store
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.BudgetSyncStateEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -24,6 +25,13 @@ suspend fun LocalBudgetRepository.findRecords(
         fromDate,
         throughDate,
     )
+
+/** The account's balance on this device through [throughDate], or across every date when it is null, as Actual counts it when closing. */
+suspend fun LocalBudgetRepository.readAccountBalance(
+    budgetId: String,
+    accountId: String,
+    throughDate: String? = null,
+): Long = observeAccountBalanceThrough(budgetId, accountId, throughDate ?: "9999-12-31").first()
 
 suspend fun LocalBudgetRepository.findRecordsByIds(
     budgetId: String,

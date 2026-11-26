@@ -963,6 +963,8 @@ class LocalBudgetRepositoryTest {
                 assertEquals(-250L, repository.observeAccountBalanceThrough(BUDGET, "checking", "2026-11-25").first())
                 assertEquals(650L, repository.observeAccountBalanceThrough(BUDGET, "checking", "2026-12-31").first())
                 assertEquals(0L, repository.observeAccountBalanceThrough(BUDGET, "missing-account", "2026-12-31").first())
+                assertEquals(-250L, repository.readAccountBalance(BUDGET, "checking", "2026-11-25"))
+                assertEquals(650L, repository.readAccountBalance(BUDGET, "checking"))
             } finally {
                 database.close()
             }
