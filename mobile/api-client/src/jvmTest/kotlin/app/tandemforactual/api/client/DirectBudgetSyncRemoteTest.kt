@@ -205,15 +205,12 @@ class DirectBudgetSyncRemoteTest {
             val stale = remote.submitOperation(op("UPDATE", id, """{"amount":-900}""", base), null)
             assertEquals(RemoteOperationStatus.CONFLICT, stale.status)
             assertEquals("transaction-conflict", stale.errorCode)
-            assertEquals(
-                "invalid_request",
-                assertFailsWith<TandemApiException> {
-                    remote.submitOperation(
-                        op("UPDATE", "missing", """{"amount":-1}"""),
-                        null,
-                    )
-                }.errorCode,
-            )
+            val invalid =
+                assertFailsWith<BudgetSyncRemoteException> {
+                    remote.submitOperation(op("UPDATE", "missing", """{"amount":-1}"""), null)
+                }
+            assertEquals("invalid_request", invalid.errorCode)
+            assertTrue(invalid.isDefinitiveClientError)
             assertEquals(
                 RemoteOperationStatus.CONFLICT,
                 remote.submitOperation(op("UPDATE", "missing", """{"amount":-1}""", base), null).status,
@@ -268,6 +265,81 @@ class DirectBudgetSyncRemoteTest {
             assertFailsWith<Exception> { reopened.budget("group") }
             val defaults = TandemApiClient()
             assertEquals(10, defaults.today().length)
+        }
+
+    @Test
+    fun uncertainWritesResolveFromTheOutcomeStoredInTheBudget(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
+            client.signInWithPassword("https://budget.example", "test", "Phone")
+            val cache = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val repository = LocalBudgetRepository(cache) { 1_795_255_200_000L }
+                val remote = DirectBudgetSyncRemote(client)
+                val coordinator = BudgetSyncCoordinator(repository, remote)
+                coordinator.synchronize("group")
+                val checking =
+                    client
+                        .budget("group")
+                        .snapshot("2026-11-21")
+                        .records
+                        .first { it.type == "account" && it.body["name"] == JsonPrimitive("Checking") }
+                        .id
+
+                suspend fun uncertain(
+                    account: String,
+                    apply: Boolean,
+                ): String {
+                    val id = "tandem:${UUID.randomUUID()}"
+                    val patch =
+                        """{"account":"$account","amount":-300,"date":"2026-11-20","payee":null,"category":null,"notes":null,"cleared":false}"""
+                    val request =
+                        LocalWriteRequest(
+                            operationId = UUID.randomUUID().toString(),
+                            idempotencyKey = UUID.randomUUID().toString(),
+                            budgetId = "group",
+                            recordType = "transaction",
+                            recordId = id,
+                            action = LocalWriteAction.CREATE,
+                            baseRevision = null,
+                            baseSnapshotJson = null,
+                            patchJson = patch,
+                            optimisticJson = """{"id":"$id","account":"$account","amount":-300,"date":"2026-11-20"}""",
+                            createdAtEpochMs = 1L,
+                            optimisticProjection =
+                                app.tandemforactual.data.store
+                                    .LocalRecordProjection("2026-11-20", account, null, null, -300, null),
+                        )
+                    val entry = repository.enqueueWrite(request).operation
+                    if (apply) remote.submitOperation(entry, null)
+                    cache.outboxDao().put(entry.copy(status = "uncertain"))
+                    return id
+                }
+                val applied = uncertain(checking, apply = true)
+                val neverApplied = uncertain(checking, apply = false)
+                val rejected = uncertain("missing", apply = true)
+
+                val result = coordinator.synchronize("group")
+
+                assertEquals(2, result.writesCommitted)
+                assertEquals(1, result.writesRejected)
+                val statuses = repository.budgetWrites("group").associate { it.recordId to it.status }
+                assertEquals("committed", statuses[applied])
+                assertEquals("committed", statuses[neverApplied])
+                assertEquals("rejected", statuses[rejected])
+                val ids =
+                    client
+                        .budget("group")
+                        .snapshot("2026-11-21")
+                        .records
+                        .filter { it.type == "transaction" }
+                        .map { it.id }
+                assertEquals(1, ids.count { it == applied })
+                assertEquals(1, ids.count { it == neverApplied })
+            } finally {
+                cache.closeDatabase()
+            }
         }
 
     @Test

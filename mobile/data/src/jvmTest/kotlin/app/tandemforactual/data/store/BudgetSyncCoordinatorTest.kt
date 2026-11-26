@@ -426,6 +426,7 @@ class BudgetSyncCoordinatorTest {
                 assertEquals(1, reconnected.writesCommitted)
                 assertEquals(1, remote.submitCount)
                 assertEquals(2, remote.operationPolls)
+                assertEquals(listOf(BUDGET, BUDGET), remote.operationBudgets)
                 assertEquals("committed", database.outboxDao().find(request.operationId)?.status)
                 assertEquals(1, database.outboxDao().find(request.operationId)?.attemptCount)
                 assertNull(repository.findRecord(BUDGET, "transaction", TXN)?.localJson)
@@ -1559,6 +1560,7 @@ class BudgetSyncCoordinatorTest {
         var discardCount = 0
         var operationPolls = 0
         val operationPasswords = mutableListOf<String?>()
+        val operationBudgets = mutableListOf<String>()
         var submitError: Exception? = null
         var discardError: Exception? = null
         var readOperationError: Exception? = null
@@ -1632,6 +1634,14 @@ class BudgetSyncCoordinatorTest {
         }
 
         override suspend fun readOperation(operationId: String): RemoteOperationResult = readOperation(operationId, null)
+
+        override suspend fun readOperation(
+            operation: app.tandemforactual.data.database.OutboxOperationEntity,
+            encryptionPassword: String?,
+        ): RemoteOperationResult {
+            operationBudgets += operation.budgetId
+            return readOperation(operation.operationId, encryptionPassword)
+        }
 
         override suspend fun readOperation(
             operationId: String,

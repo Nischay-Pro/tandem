@@ -279,6 +279,8 @@ class ActualDirectBudget private constructor(
         baseSnapshot: JsonObject?,
     ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
 
+    internal suspend fun outcome(operationId: String) = locked { operations.find(operationId) }
+
     /**
      * Applies a transaction assigned to this budget's direct outbox. The caller must establish ownership of the
      * outbox before switching from the gateway.

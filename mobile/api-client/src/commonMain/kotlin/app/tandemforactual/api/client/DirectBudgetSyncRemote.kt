@@ -167,7 +167,13 @@ class DirectBudgetSyncRemote(
         encryptionPassword: String?,
     ): RemoteOperationResult {
         val budget = client.budget(operation.budgetId, encryptionPassword)
-        val outcome = client.call { budget.submit(operation) }
+        val outcome =
+            try {
+                client.call { budget.submit(operation) }
+            } catch (error: TandemApiException) {
+                if (error.httpStatus == 422) throw BudgetSyncRemoteException(error.errorCode, 422, error)
+                throw error
+            }
         try {
             client.call { budget.sync() }
         } catch (error: TandemApiException) {
@@ -180,6 +186,23 @@ class DirectBudgetSyncRemote(
 
     override suspend fun readOperation(operationId: String): RemoteOperationResult =
         throw BudgetSyncRemoteException("operation_not_found", 404)
+
+    override suspend fun readOperation(
+        operation: OutboxOperationEntity,
+        encryptionPassword: String?,
+    ): RemoteOperationResult {
+        val budget = client.budget(operation.budgetId, encryptionPassword)
+        val outcome =
+            client.call { budget.outcome(operation.operationId) }
+                ?: return RemoteOperationResult(
+                    operation.operationId,
+                    operation.budgetId,
+                    operation.recordId,
+                    RemoteOperationStatus.QUEUED,
+                    null,
+                )
+        return result(operation.budgetId, outcome)
+    }
 
     override suspend fun readTransaction(
         budgetId: String,

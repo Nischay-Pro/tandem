@@ -415,7 +415,7 @@ class BudgetSyncCoordinator(
     ): WriteOutcome {
         val polled =
             try {
-                remote.readOperation(operation.operationId, encryptionPassword)
+                remote.readOperation(operation, encryptionPassword)
             } catch (error: Exception) {
                 if (error is CancellationException) {
                     persistUncertainAfterCancellation(operation.operationId, "sync-cancelled-during-poll")
@@ -451,7 +451,7 @@ class BudgetSyncCoordinator(
         encryptionPassword: String?,
     ): UncertainWriteResolution =
         try {
-            val result = remote.readOperation(operation.operationId, encryptionPassword)
+            val result = remote.readOperation(operation, encryptionPassword)
             val outcome = applyOperationResult(operation, result, generation, encryptionPassword)
             if (outcome == WriteOutcome.PENDING) {
                 if (result.status == RemoteOperationStatus.QUEUED) {
