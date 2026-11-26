@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.ConvertedTotal
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.rateBetween
+import app.tandemforactual.data.planning.rateHistory
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.format.convertedBalance
 import app.tandemforactual.ui.core.format.formatAccountMoney
@@ -137,6 +138,7 @@ internal fun ExchangeRatesScreen(
         editing = null
         scope.launch {
             mobileSession.planning.exchangeRates
+                .filter { it.asOf == rate.asOf && it.id != rate.id.takeIf { !delete } }
                 .filter { (it.from == rate.from && it.to == rate.to) || (it.from == rate.to && it.to == rate.from) }
                 .forEach { mobileSession.planning.deleteExchangeRate(state.selectedBudgetId, it) }
             if (!delete) mobileSession.planning.saveExchangeRate(state.selectedBudgetId, rate)
@@ -223,9 +225,10 @@ private fun ExchangeRateDialog(
     onDismiss: () -> Unit,
     onSave: (ExchangeRate, Boolean) -> Unit,
 ) {
-    val existing = currency?.let { rateBetween(it, budgetCurrency, rates) }
+    val history = currency?.let { rateHistory(it, budgetCurrency, rates) }.orEmpty()
+    val existing = history.lastOrNull()
     var rate by remember(currency) { mutableStateOf(existing?.value?.let(::formatRate).orEmpty()) }
-    var date by remember(currency) { mutableStateOf(existing?.asOf ?: platformTodayIsoDate()) }
+    var date by remember(currency) { mutableStateOf(platformTodayIsoDate()) }
     var error by remember(currency) { mutableStateOf<String?>(null) }
     TandemChoiceDialog(visible = currency != null, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
@@ -238,6 +241,16 @@ private fun ExchangeRateDialog(
                 )
                 TextFieldCard("1 $currency in $budgetCurrency", rate, { rate = it.take(14) }, TextFieldOptions(placeholder = "1.08"))
                 TextFieldCard("As of", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2026-11-21"))
+                if (history.size > 1) {
+                    Text(
+                        "Earlier rates\n" +
+                            history.dropLast(1).takeLast(5).asReversed().joinToString("\n") {
+                                "${formatRate(it.value!!)} $budgetCurrency · ${formatLiveDate(it.asOf)}"
+                            },
+                        color = tandemPalette.muted,
+                        fontSize = TandemTypography.compactBody,
+                    )
+                }
                 error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
                 TandemActionButton("Save rate", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                     val parsed =

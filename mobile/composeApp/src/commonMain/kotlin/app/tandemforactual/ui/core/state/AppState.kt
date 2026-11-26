@@ -13,6 +13,7 @@ import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.search.ActivitySortOrder
+import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.design.theme.AccentChoice
@@ -141,8 +142,9 @@ internal class AppState {
     var backgroundSyncEnabled by mutableStateOf(false)
     var automaticBackup by mutableStateOf(AutomaticBackupSettings())
 
-    /** When the last automatic backup finished, as the background task recorded it; read on start. */
+    /** When an automatic backup last reached a destination, as the background task recorded it. */
     var automaticBackupLastRun by mutableStateOf<Long?>(null)
+    var automaticBackupResult by mutableStateOf<AutomaticBackupResult?>(null)
     var syncNetwork by mutableStateOf(SyncNetwork.ANY)
     var hasCompletedSyncOnboarding by mutableStateOf(false)
     var interfaceMode by mutableStateOf(InterfaceMode.MINIMAL)
@@ -309,6 +311,11 @@ internal class AppState {
                 NotificationPolicy.BILL_LEAD_DAYS to billLeadDays.toString(),
             )
 
+    fun restoreAutomaticBackupStatus(saved: Map<String, String>) {
+        automaticBackupLastRun = saved[AutomaticBackupSettings.LAST_RUN]?.toLongOrNull()
+        automaticBackupResult = AutomaticBackupResult.decode(saved[AutomaticBackupResult.KEY])
+    }
+
     fun restorePersistentSettings(saved: Map<String, String>) {
         theme = ThemeMode.entries.firstOrNull { it.name == saved["theme"] } ?: theme
         accent = AccentChoice.entries.firstOrNull { it.name == saved["accent"] } ?: accent
@@ -356,7 +363,7 @@ internal class AppState {
         appLanguage = saved["appLanguage"] ?: appLanguage
         backgroundSyncEnabled = saved["backgroundSyncEnabled"]?.toBooleanStrictOrNull() ?: backgroundSyncEnabled
         automaticBackup = AutomaticBackupSettings.from(saved)
-        automaticBackupLastRun = saved[AutomaticBackupSettings.LAST_RUN]?.toLongOrNull()
+        restoreAutomaticBackupStatus(saved)
         syncNetwork = SyncNetwork.restore(saved["syncNetwork"], saved["syncOnWifi"]?.toBooleanStrictOrNull()) ?: syncNetwork
         hasCompletedSyncOnboarding = saved["hasCompletedSyncOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedSyncOnboarding
         interfaceMode = InterfaceMode.entries.firstOrNull { it.name == saved["interfaceMode"] } ?: interfaceMode

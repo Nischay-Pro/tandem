@@ -36,6 +36,11 @@ class ActualRuleEngine(
             val high: Double,
         ) : Value()
 
+        data class DateBetween(
+            val low: String,
+            val high: String,
+        ) : Value()
+
         data class Date(
             val kind: String,
             val date: String,
@@ -101,8 +106,12 @@ class ActualRuleEngine(
                     Value.Number((raw as JsonPrimitive).content.toDouble())
                 }
             "date" ->
-                when (raw) {
-                    is JsonObject -> Value.Recur(RecurConfig.parse(raw))
+                when {
+                    op == "isbetween" -> {
+                        val range = raw as JsonObject
+                        Value.DateBetween(range.value("num1") as String, range.value("num2") as String)
+                    }
+                    raw is JsonObject -> Value.Recur(RecurConfig.parse(raw))
                     else -> {
                         val text = (raw as JsonPrimitive).content
                         Value.Date(
@@ -205,11 +214,7 @@ class ActualRuleEngine(
         return when (condition.op) {
             "is", "isapprox" -> isMatch(condition.op, value, field)
             "isNot" -> field != (value as Value.Literal).value
-            "isbetween" -> {
-                val between = value as Value.Between
-                val n = num(field) ?: return false
-                n >= minOf(between.low, between.high) && n <= maxOf(between.low, between.high)
-            }
+            "isbetween" -> isBetween(value, field)
             "contains" -> field != null && (value as Value.Literal).value.toString() in jsString(field)
             "doesNotContain" -> field != null && (value as Value.Literal).value.toString() !in jsString(field)
             "oneOf" -> field != null && field in ((value as Value.Literal).value as List<*>)
@@ -233,6 +238,19 @@ class ActualRuleEngine(
     }
 
     private fun num(any: Any?) = (any as? Number)?.toDouble()
+
+    private fun isBetween(
+        value: Value,
+        field: Any?,
+    ): Boolean {
+        if (value is Value.DateBetween) {
+            val day = field as? String ?: return false
+            return day >= minOf(value.low, value.high) && day <= maxOf(value.low, value.high)
+        }
+        val between = value as Value.Between
+        val n = num(field) ?: return false
+        return n >= minOf(between.low, between.high) && n <= maxOf(between.low, between.high)
+    }
 
     private fun isMatch(
         op: String,

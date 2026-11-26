@@ -29,6 +29,9 @@
     <string name="settings_security_detail">Biometric unlock, encrypted budget, and hidden amounts</string>
     <string name="settings_local_data">Local data and storage</string>
     <string name="settings_local_data_detail">Cached records and pending edits</string>
+    <string name="settings_section_your_data">Your data</string>
+    <string name="settings_export_backup">Export &amp; backup</string>
+    <string name="settings_export_backup_detail">Automatic backups, recovery and exports</string>
     <string name="settings_section_support">Support</string>
     <string name="settings_getting_started">Getting started</string>
     <string name="settings_getting_started_detail">Tips for using Tandem</string>

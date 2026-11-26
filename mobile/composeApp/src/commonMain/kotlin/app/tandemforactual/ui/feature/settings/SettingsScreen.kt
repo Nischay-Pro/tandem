@@ -42,6 +42,8 @@ import app.tandemforactual.ui.generated.resources.settings_budget_preferences
 import app.tandemforactual.ui.generated.resources.settings_budget_preferences_detail
 import app.tandemforactual.ui.generated.resources.settings_budget_rules
 import app.tandemforactual.ui.generated.resources.settings_budget_rules_detail
+import app.tandemforactual.ui.generated.resources.settings_export_backup
+import app.tandemforactual.ui.generated.resources.settings_export_backup_detail
 import app.tandemforactual.ui.generated.resources.settings_getting_started
 import app.tandemforactual.ui.generated.resources.settings_getting_started_detail
 import app.tandemforactual.ui.generated.resources.settings_language
@@ -60,6 +62,7 @@ import app.tandemforactual.ui.generated.resources.settings_section_connection
 import app.tandemforactual.ui.generated.resources.settings_section_personalization
 import app.tandemforactual.ui.generated.resources.settings_section_privacy
 import app.tandemforactual.ui.generated.resources.settings_section_support
+import app.tandemforactual.ui.generated.resources.settings_section_your_data
 import app.tandemforactual.ui.generated.resources.settings_security
 import app.tandemforactual.ui.generated.resources.settings_security_detail
 import app.tandemforactual.ui.generated.resources.settings_server_device
@@ -70,6 +73,7 @@ import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.Database
+import com.composables.icons.lucide.FileDown
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Languages
@@ -103,6 +107,7 @@ internal fun SettingsScreen(
         ConnectionSection(navigation)
         PrivacySection(state, navigation, mobileSession)
         ExternalConnectionsSection(state)
+        YourDataSection(navigation)
         SupportSection(state, navigation)
     }
 }
@@ -257,6 +262,19 @@ private fun PrivacySection(
             stringResource(Res.string.settings_local_data_detail),
             leading = RowLeading.Icon(Lucide.Database),
             onClick = { navigation.open(AppRoute.LOCAL_DATA) },
+        )
+    }
+}
+
+/** Backups, recovery and exports of the budget and planning data. */
+@Composable
+private fun YourDataSection(navigation: AppNavigation) {
+    SectionCard(stringResource(Res.string.settings_section_your_data)) {
+        ListRow(
+            stringResource(Res.string.settings_export_backup),
+            stringResource(Res.string.settings_export_backup_detail),
+            leading = RowLeading.Icon(Lucide.FileDown),
+            onClick = { navigation.open(AppRoute.EXPORT) },
         )
     }
 }

@@ -2,13 +2,21 @@ import type { BudgetAccess } from "./actual-access.js";
 import type { ExtensionStore, RecordWrite, WrappedKey } from "./store.js";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
-import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyServerOptions,
+  LogController,
+} from "fastify";
 
 // Planning record ids carry their kind, such as "currency:USD", "fx:USD:EUR" or "device:<id>".
 const RECORD_ID = "^[A-Za-z0-9:._-]{1,100}$";
 
 export const API_VERSION = 1;
 const MAX_CIPHERTEXT = 65_536;
+const MAX_INT = 2_147_483_647;
+const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 
 const error = (code: string, message: string) => ({ error: { code, message } });
 const errorSchema = {
@@ -77,6 +85,7 @@ export interface AppOptions {
   requestsPerMinute?: number;
   /** Proxies whose X-Forwarded-For is trusted, so limits apply to the real client address. */
   trustProxy?: boolean | string;
+  logger?: FastifyServerOptions["logger"];
 }
 
 /**
@@ -86,7 +95,8 @@ export interface AppOptions {
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     bodyLimit: 256 * 1024,
-    logger: false,
+    logger: options.logger ?? false,
+    logController: new LogController({ disableRequestLogging: true }),
     trustProxy: options.trustProxy ?? false,
   });
   await app.register(swagger, {
@@ -119,6 +129,14 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
       statusCode: context.statusCode,
       ...error("rate_limited", "Too many requests. Try again in a minute."),
     }),
+  });
+  app.setErrorHandler<FastifyError>((failure, request, reply) => {
+    if (typeof failure.statusCode === "number" && failure.statusCode < 500)
+      return reply.code(failure.statusCode).send(failure);
+    request.log.error({ err: failure }, "Request failed");
+    return reply
+      .code(500)
+      .send(error("internal_error", "Something went wrong on the server."));
   });
   const scope = (budgetId: string) => `${options.actualServerUrl}|${budgetId}`;
 
@@ -318,7 +336,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
         querystring: {
           type: "object",
           properties: {
-            after: { type: "integer", minimum: 0 },
+            after: { type: "integer", minimum: 0, maximum: MAX_SAFE },
             limit: { type: "integer", minimum: 1, maximum: 500 },
             anchor: { type: "string", pattern: RECORD_ID },
           },
@@ -378,9 +396,13 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
           type: "object",
           properties: {
             recordType: { type: "string", pattern: "^[a-z_.]{1,64}$" },
-            schemaVersion: { type: "integer", minimum: 1 },
-            revision: { type: "integer", minimum: 1 },
-            baseRevision: { type: ["integer", "null"], minimum: 1 },
+            schemaVersion: { type: "integer", minimum: 1, maximum: MAX_INT },
+            revision: { type: "integer", minimum: 1, maximum: MAX_SAFE },
+            baseRevision: {
+              type: ["integer", "null"],
+              minimum: 1,
+              maximum: MAX_SAFE,
+            },
             deleted: { type: "boolean" },
             iv: base64,
             ciphertext: base64,

@@ -61,6 +61,11 @@ data class NotificationPolicy(
         minuteOfDay: Int,
     ): Boolean = kind in enabled && quietHours?.contains(minuteOfDay) != true
 
+    fun holds(
+        kind: AlertKind,
+        minuteOfDay: Int,
+    ): Boolean = kind in enabled && quietHours?.contains(minuteOfDay) == true
+
     companion object {
         const val QUIET_HOURS = "quietHours"
         const val LARGE_TRANSACTION_MINOR = "largeTransactionMinor"
@@ -180,6 +185,7 @@ suspend fun uncategorizedAlert(
     budgetId: String,
     today: String,
     policy: NotificationPolicy,
+    minuteOfDay: Int,
     formatAmount: (Long) -> String,
 ): LocalAlert? {
     val offBudget =
@@ -193,9 +199,15 @@ suspend fun uncategorizedAlert(
             .findRecords(budgetId, "transaction", fromDate = ActualDates.addDays(today, -UNCATEGORIZED_WINDOW_DAYS))
             .filter { it.categoryId == null && !it.isParent && it.transfer != true && it.accountId !in offBudget && !it.localDeleted }
     val key = "internal:announced-uncategorized:$budgetId"
-    val stored = preferences.read()[key]
-    preferences.putValue(key, waiting.joinToString(",") { it.recordId })
-    val announced = stored?.split(',')?.filter(String::isNotEmpty)?.toSet() ?: return null
+    val announced =
+        preferences
+            .read()[key]
+            ?.split(',')
+            ?.filter(String::isNotEmpty)
+            ?.toSet()
+    val held = announced != null && policy.holds(AlertKind.UNCATEGORIZED, minuteOfDay)
+    preferences.putValue(key, waiting.filter { !held || it.recordId in announced }.joinToString(",") { it.recordId })
+    if (announced == null || !policy.allows(AlertKind.UNCATEGORIZED, minuteOfDay)) return null
     val fresh = waiting.filterNot { it.recordId in announced }
     if (fresh.isEmpty()) return null
     if (fresh.size >
@@ -216,6 +228,8 @@ suspend fun bankSyncFailureAlert(
     preferences: AppPreferencesStore,
     budgetId: String,
     failingAccounts: List<String>,
+    policy: NotificationPolicy,
+    minuteOfDay: Int,
 ): LocalAlert? {
     val key = "internal:announced-bank-failures:$budgetId"
     val announced =
@@ -225,7 +239,9 @@ suspend fun bankSyncFailureAlert(
             .split('\n')
             .filter(String::isNotEmpty)
             .toSet()
-    preferences.putValue(key, failingAccounts.joinToString("\n"))
+    val held = policy.holds(AlertKind.BANK_SYNC_FAILURE, minuteOfDay)
+    preferences.putValue(key, failingAccounts.filter { !held || it in announced }.joinToString("\n"))
+    if (!policy.allows(AlertKind.BANK_SYNC_FAILURE, minuteOfDay)) return null
     val fresh = failingAccounts.filterNot { it in announced }
     if (fresh.isEmpty()) return null
     val message =

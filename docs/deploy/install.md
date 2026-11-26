@@ -19,8 +19,9 @@ devices. See [architecture and trust](../concepts/architecture-and-trust.md).
    curl -fsSL https://raw.githubusercontent.com/Nischay-Pro/tandem/main/deploy/tandem-setup.sh | bash
    ```
 
-2. Set `ACTUAL_SERVER_URL` in `.env` to the Actual address reachable from the
-   container, for example `http://actual:5006`.
+2. When asked, enter the Actual address reachable from the container, for
+   example `http://actual:5006`. The script saves it as `ACTUAL_SERVER_URL` in
+   `.env`.
 3. Start the services:
 
    ```sh

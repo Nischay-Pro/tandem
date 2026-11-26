@@ -91,17 +91,18 @@ class PlanningSync(
     }
 
     /**
-     * Replaces the shared planning key, as after losing a device: queues every record to upload again, swaps the wrapped key
-     * only if no other device changed it first, then re-seals local records under [to]. Devices that don't know [newSecret]
-     * can no longer unwrap the key. Returns false when another device's key change won.
+     * Replaces the shared planning key, as after losing a device: takes in other devices' edits, queues every record to
+     * upload again, swaps the wrapped key only if it is still [from], then re-seals local records under [to]. Devices that
+     * don't know [newSecret] can no longer unwrap the key. Returns false when another device's key change won.
      */
     suspend fun rotate(
         from: ByteArray,
         to: ByteArray,
         newSecret: ByteArray,
     ): Boolean {
+        downloadChanges(transport.changes(0), null)
         for (record in dao.all(budgetId)) dao.upsert(record.copy(pendingUpload = true))
-        if (!transport.putKey(PlanningKeys.wrap(to, newSecret, budgetId), transport.key()?.keyId)) return false
+        if (!transport.putKey(PlanningKeys.wrap(to, newSecret, budgetId), PlanningKeys.keyId(from))) return false
         rekey(PlanningCipher(from), PlanningCipher(to))
         return true
     }

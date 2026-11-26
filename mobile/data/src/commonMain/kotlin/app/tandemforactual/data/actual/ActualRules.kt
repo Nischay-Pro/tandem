@@ -43,7 +43,7 @@ internal object ActualRules {
 
     private val typeOps =
         mapOf(
-            "date" to setOf("is", "isapprox", "gt", "gte", "lt", "lte"),
+            "date" to setOf("is", "isapprox", "isbetween", "gt", "gte", "lt", "lte"),
             "id" to setOf("is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf", "onBudget", "offBudget"),
             "saved" to emptySet(),
             "string" to setOf("is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf", "hasTags", "hasAnyTag"),
@@ -114,6 +114,7 @@ internal object ActualRules {
         if (!valid) throw RuleError()
         var value = item["value"] ?: JsonNull
         if (type !in nullableTypes && value is JsonNull) throw RuleError()
+        if (type == "date" && op == "isbetween" && !isDateRange(value)) throw RuleError()
         if (type == "id") {
             value =
                 when (op) {
@@ -132,6 +133,12 @@ internal object ActualRules {
         item["options"]?.takeIf { it !is JsonNull }?.let { out["options"] = it }
         return JsonObject(out)
     }
+
+    private fun isDateRange(value: JsonElement): Boolean =
+        listOf("num1", "num2").all { key ->
+            val bound = (value as? JsonObject)?.get(key) as? JsonPrimitive
+            bound != null && bound.isString && isIsoDate(bound.content)
+        }
 
     private fun action(
         item: JsonObject,

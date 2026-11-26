@@ -15,16 +15,35 @@ data class ConvertedTotal(
     val oldestRateDate: String?,
 )
 
-/** The rate that turns one [from] into [to], from a rate entered either way round. */
+/**
+ * The rate that turns one [from] into [to], from rates entered either way round. With [onOrBefore], it's the latest
+ * entry dated on or before that day, or the earliest entry when none is that old; without it, the newest entry.
+ */
 fun rateBetween(
     from: String,
     to: String,
     rates: List<ExchangeRate>,
+    onOrBefore: String? = null,
 ): ExchangeRate? {
     if (from == to) return null
-    rates.firstOrNull { it.from == from && it.to == to && it.value != null }?.let { return it }
-    val inverse = rates.firstOrNull { it.from == to && it.to == from && it.value != null } ?: return null
-    return ExchangeRate(from, to, (1.0 / inverse.value!!).toString(), inverse.asOf)
+    val history = rateHistory(from, to, rates)
+    return history.lastOrNull { onOrBefore == null || it.asOf <= onOrBefore } ?: history.firstOrNull()
+}
+
+/** Every usable entry for one pair as a [from] to [to] rate, oldest first; a direct entry wins over an inverse one on the same day. */
+fun rateHistory(
+    from: String,
+    to: String,
+    rates: List<ExchangeRate>,
+): List<ExchangeRate> {
+    val direct = rates.filter { it.from == from && it.to == to && it.value != null }
+    val inverse =
+        rates
+            .filter { it.from == to && it.to == from && it.value != null }
+            .map { ExchangeRate(from, to, (1.0 / it.value!!).toString(), it.asOf) }
+    return (inverse.map { it to 0 } + direct.map { it to 1 })
+        .sortedWith(compareBy({ it.first.asOf }, { it.second }))
+        .map { it.first }
 }
 
 fun convertMinor(
@@ -37,6 +56,7 @@ fun convertedTotal(
     balances: List<Pair<Long, String?>>,
     budgetCurrency: String,
     rates: List<ExchangeRate>,
+    onOrBefore: String? = null,
 ): ConvertedTotal {
     var total = 0L
     var approximate = false
@@ -47,7 +67,7 @@ fun convertedTotal(
             total += amount
             continue
         }
-        val rate = rateBetween(currency, budgetCurrency, rates)
+        val rate = rateBetween(currency, budgetCurrency, rates, onOrBefore)
         if (rate == null) {
             missing += currency
             continue

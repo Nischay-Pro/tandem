@@ -280,7 +280,7 @@ if ((${#nginx_matches[@]} == 0)); then
   if ((${#nginx_manager_images[@]} > 0)); then
     printf 'Detected a managed Nginx proxy (%s); leaving its generated configuration untouched.\n' \
       "${nginx_manager_images[0]}"
-    printf 'Configure /extension/v1/ in that proxy and route it to tandem-api:19753 on the tandem-edge network.\n'
+    printf 'Configure /extension/v1/ in that proxy and route it to tandem-api:19753 on the %s network.\n' "$network_name"
   else
     printf 'No matching HTTPS Nginx site was detected; leaving Nginx unchanged.\n'
   fi
@@ -573,9 +573,13 @@ if ! jq -e --arg network "$network_name" 'has($network)' <<< "$network_json" >/d
 fi
 
 proxy_ip="$(docker inspect "$nginx_container" | jq -r --arg network "$network_name" '.[0].NetworkSettings.Networks[$network].IPAddress // empty')"
-if [[ -n "$proxy_ip" && -z "$requested_trust_proxy" && -f "$environment_file" ]]; then
+network_subnet="$(docker network inspect "$network_name" | jq -r '
+  [.[0].IPAM.Config[]? | select((.Subnet // "") | test("^[0-9.]+/[0-9]+$")) | .Subnet][0] // empty
+')"
+trusted_proxy="${network_subnet:-$proxy_ip}"
+if [[ -n "$trusted_proxy" && -z "$requested_trust_proxy" && -f "$environment_file" ]]; then
   temporary_environment="$temporary_directory/.env"
-  TRUST_PROXY_DETECTED="$proxy_ip" awk '
+  TRUST_PROXY_DETECTED="$trusted_proxy" awk '
     BEGIN { updated = 0 }
     /^TRUST_PROXY=/ {
       print "TRUST_PROXY=" ENVIRON["TRUST_PROXY_DETECTED"]
@@ -587,7 +591,7 @@ if [[ -n "$proxy_ip" && -z "$requested_trust_proxy" && -f "$environment_file" ]]
   ' "$environment_file" > "$temporary_environment"
   chmod 600 "$temporary_environment"
   mv -- "$temporary_environment" "$environment_file"
-  printf 'Set Tandem proxy trust to the detected Nginx address %s.\n' "$proxy_ip"
+  printf 'Set Tandem proxy trust to the %s network %s.\n' "$network_name" "$trusted_proxy"
 fi
 
 compose_directory="$(docker inspect "$nginx_container" | jq -r '.[0].Config.Labels["com.docker.compose.project.working_dir"] // empty')"
@@ -596,37 +600,27 @@ if [[ -n "$compose_directory" && -n "$compose_service" && -d "$compose_directory
   "$compose_service" =~ ^[A-Za-z0-9_-]+$ ]]; then
   override_file="$compose_directory/compose.override.yaml"
   if [[ ! -e "$override_file" ]]; then
-    if [[ "$proxy_ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
-      cat > "$temporary_directory/compose.override.yaml" <<YAML
+    service_networks="$(docker compose --project-directory "$compose_directory" config --format json 2>/dev/null |
+      jq -r --arg service "$compose_service" '.services[$service].networks // {} | keys[]' 2>/dev/null || true)"
+    default_network=""
+    if grep -qx default <<< "$service_networks"; then
+      default_network=$'\n      default: {}'
+    fi
+    cat > "$temporary_directory/compose.override.yaml" <<YAML
 # Managed by Tandem setup to keep the Nginx network attachment after recreation.
 services:
   $compose_service:
-    networks:
-      tandem-edge:
-        ipv4_address: "$proxy_ip"
-
-networks:
-  tandem-edge:
-    name: tandem-edge
-    external: true
-YAML
-    else
-      cat > "$temporary_directory/compose.override.yaml" <<YAML
-# Managed by Tandem setup to keep the Nginx network attachment after recreation.
-services:
-  $compose_service:
-    networks:
+    networks:$default_network
       tandem-edge: {}
 
 networks:
   tandem-edge:
-    name: tandem-edge
+    name: "$network_name"
     external: true
 YAML
-    fi
     if install -m 0644 "$temporary_directory/compose.override.yaml" "$override_file"; then
       if docker compose --project-directory "$compose_directory" config --quiet; then
-        printf 'Added a Compose override for the Nginx tandem-edge network in %s.\n' "$compose_directory"
+        printf 'Added a Compose override for the Nginx %s network in %s.\n' "$network_name" "$compose_directory"
       else
         rm -f -- "$override_file"
         printf 'Could not validate the generated Compose override; it was removed. The current Nginx container remains connected until it is recreated.\n' >&2

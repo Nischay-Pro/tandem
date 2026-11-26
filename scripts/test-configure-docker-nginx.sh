@@ -16,6 +16,7 @@ trap cleanup EXIT
 
 fake_bin="$test_root/bin"
 mkdir -p "$fake_bin"
+export TANDEM_NGINX_TEST_REAL_DOCKER="$real_docker"
 
 cat > "$fake_bin/docker" <<'SH'
 #!/usr/bin/env bash
@@ -41,7 +42,7 @@ case "${1-}" in
   inspect)
     network_json='{}'
     if [[ -e "$TANDEM_NGINX_TEST_NETWORK_STATE" ]]; then
-      network_json='{"tandem-edge":{"IPAddress":"172.30.0.10"}}'
+      network_json="$(jq -cn --arg name "${TANDEM_NGINX_TEST_NETWORK_NAME:-tandem-edge}" '{($name):{IPAddress:"172.30.0.10"}}')"
     fi
     jq -cn \
       --arg source "$TANDEM_NGINX_TEST_CONFIG" \
@@ -55,12 +56,12 @@ case "${1-}" in
     ;;
   network)
     if [[ "${2-}" == "inspect" ]]; then
-      printf '[{"IPAM":{"Config":[{"Gateway":"172.30.0.1"}]}}]'
+      printf '[{"IPAM":{"Config":[{"Subnet":"172.30.0.0/16","Gateway":"172.30.0.1"}]}}]'
     elif [[ "${2-}" == "connect" ]]; then
       touch "$TANDEM_NGINX_TEST_NETWORK_STATE"
     fi
     ;;
-  compose) exit 0 ;;
+  compose) exec "$TANDEM_NGINX_TEST_REAL_DOCKER" "$@" ;;
   *) printf 'Unexpected Docker command: %s\n' "$*" >&2; exit 1 ;;
 esac
 SH
@@ -90,6 +91,13 @@ make_install_tree() {
   local root="$1"
   mkdir -p "$root/install" "$root/actual-budget"
   printf 'TANDEM_API_HOST_PORT=19753\nTRUST_PROXY=\n' > "$root/install/.env"
+  cat > "$root/actual-budget/compose.yaml" <<'YAML'
+services:
+  nginx:
+    image: nginx:1.30-alpine
+  actual:
+    image: actualbudget/actual-server:latest
+YAML
   cat > "$root/nginx.conf" <<'NGINX'
 server {
     listen [::]:443 ssl;
@@ -117,9 +125,12 @@ printf 'y\n' | TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
 grep -Fq '# TANDEM-SETUP-MANAGED-ROUTES' "$tls_root/nginx.conf"
 grep -Fq 'location ^~ /extension/v1/' "$tls_root/nginx.conf"
 grep -Fq 'limit_req_zone $binary_remote_addr zone=tandem_setup_api:10m rate=600r/m;' "$tls_root/nginx.conf"
-grep -Fq 'TRUST_PROXY=172.30.0.10' "$tls_root/install/.env"
-grep -Fq 'tandem-edge:' "$tls_root/actual-budget/compose.override.yaml"
-grep -Fq 'ipv4_address: "172.30.0.10"' "$tls_root/actual-budget/compose.override.yaml"
+grep -Fq 'TRUST_PROXY=172.30.0.0/16' "$tls_root/install/.env"
+"$real_docker" compose --project-directory "$tls_root/actual-budget" config --format json > "$tls_root/nginx-compose.json"
+jq -e '.services.nginx.networks | keys == ["default", "tandem-edge"]' "$tls_root/nginx-compose.json" >/dev/null
+jq -e '.services.nginx.networks["tandem-edge"].ipv4_address == null' "$tls_root/nginx-compose.json" >/dev/null
+jq -e '.networks["tandem-edge"].name == "tandem-edge" and .networks["tandem-edge"].external' \
+  "$tls_root/nginx-compose.json" >/dev/null
 test ! -e "$tls_root/nginx.conf.tandem-setup-"*.bak
 
 TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
@@ -130,6 +141,30 @@ TANDEM_NGINX_TEST_CONFIG="$tls_root/nginx.conf" \
     > "$tls_root/second-run.log"
 grep -Fq 'Tandem routes are already present' "$tls_root/second-run.log"
 test "$(find "$tls_root" -name 'nginx.conf.tandem-setup-*.bak' -type f | wc -l)" -eq 0
+
+custom_root="$test_root/custom-network"
+make_install_tree "$custom_root"
+printf 'TANDEM_EDGE_NETWORK=custom-edge\n' >> "$custom_root/install/.env"
+cat > "$custom_root/actual-budget/compose.yaml" <<'YAML'
+services:
+  nginx:
+    image: nginx:1.30-alpine
+    networks:
+      - proxy
+networks:
+  proxy: {}
+YAML
+printf 'y\n' | TANDEM_NGINX_TEST_CONFIG="$custom_root/nginx.conf" \
+  TANDEM_NGINX_TEST_COMPOSE_DIRECTORY="$custom_root/actual-budget" \
+  TANDEM_NGINX_TEST_NETWORK_STATE="$custom_root/network-attached" \
+  TANDEM_NGINX_TEST_NETWORK_NAME=custom-edge \
+  PATH="$fake_bin:$PATH" \
+  bash "$project_root/deploy/configure-docker-nginx.sh" "$custom_root/install" \
+    > "$custom_root/run.log"
+"$real_docker" compose --project-directory "$custom_root/actual-budget" config --format json > "$custom_root/nginx-compose.json"
+jq -e '.services.nginx.networks | keys == ["proxy", "tandem-edge"]' "$custom_root/nginx-compose.json" >/dev/null
+jq -e '.networks["tandem-edge"].name == "custom-edge"' "$custom_root/nginx-compose.json" >/dev/null
+grep -Fq 'custom-edge network' "$custom_root/run.log"
 
 http_root="$test_root/http-only"
 make_install_tree "$http_root"

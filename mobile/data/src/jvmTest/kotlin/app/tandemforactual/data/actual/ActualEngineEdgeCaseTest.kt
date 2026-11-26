@@ -89,7 +89,7 @@ class ActualEngineEdgeCaseTest {
             damaged { it[centralOffset + 20] = 0x7f },
             damaged { it[38] = 0xff.toByte() },
         ).forEachIndexed { i, bytes -> assertFailsWith<ZipFormatException>("case $i") { ZipArchive.read(bytes) } }
-        assertFailsWith<ZipFormatException> { ZipArchive.read(good, maxEntryBytes = 2) }
+        assertFailsWith<ZipFormatException> { ZipArchive.read(good, maxTotalBytes = 2) }
         assertFailsWith<ZipFormatException>("inflate 1") { Inflater.inflate(byteArrayOf(0x07), 1) }
         assertFailsWith<ZipFormatException>("inflate 2") { Inflater.inflate(byteArrayOf(0x01, 0x05, 0x00, 0x00, 0x00), 5) }
         assertFailsWith<ZipFormatException>(

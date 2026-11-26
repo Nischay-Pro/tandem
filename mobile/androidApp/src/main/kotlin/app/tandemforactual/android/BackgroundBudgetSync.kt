@@ -195,9 +195,8 @@ class BackgroundBudgetSyncWorker(
                 BudgetSystemNotifications.post(applicationContext, it)
             }
         }
-        val uncategorized = uncategorizedAlert(repository, store, budgetId, today, policy, format)
-        if (uncategorized != null && policy.allows(AlertKind.UNCATEGORIZED, minute)) {
-            BudgetSystemNotifications.post(applicationContext, uncategorized)
+        uncategorizedAlert(repository, store, budgetId, today, policy, minute, format)?.let {
+            BudgetSystemNotifications.post(applicationContext, it)
         }
     }
 

@@ -67,6 +67,8 @@ object PlanningKeys {
     /** A short value that lets devices tell whether they hold the same key without revealing it. */
     fun check(key: ByteArray): ByteArray = hmac(key, "tandem-planning-check".encodeToByteArray()).copyOf(16)
 
+    fun keyId(key: ByteArray): String = check(key).toHex()
+
     fun wrap(
         planningKey: ByteArray,
         secret: ByteArray,
@@ -78,7 +80,7 @@ object PlanningKeys {
             aes(
                 hkdf(secret, salt, "$INFO|$budgetId".encodeToByteArray()),
             ).encryptWithIvBlocking(iv, planningKey, budgetId.encodeToByteArray())
-        return WrappedPlanningKey(check(planningKey).toHex(), iv + sealed, salt, check(planningKey))
+        return WrappedPlanningKey(keyId(planningKey), iv + sealed, salt, check(planningKey))
     }
 
     fun unwrap(
