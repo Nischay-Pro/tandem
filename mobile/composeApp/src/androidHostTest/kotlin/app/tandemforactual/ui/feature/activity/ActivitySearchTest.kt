@@ -362,6 +362,7 @@ class ActivitySearchTest {
         assertEquals(listOf(2, 1, 0), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_HIGH_TO_LOW))
         assertEquals(listOf(0, 1, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.AMOUNT_LOW_TO_HIGH))
         assertEquals(listOf(1, 0, 2), sortActivitySearchIndices(indices, records, ActivitySortOrder.PAYEE_A_TO_Z))
+        assertEquals(listOf(1, 0), sortActivitySearchIndices(listOf(0, 5, 1), records.take(2), ActivitySortOrder.PAYEE_A_TO_Z))
     }
 
     @Test
