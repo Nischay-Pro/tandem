@@ -70,15 +70,7 @@ class FrankfurterRateSource(
             }
         }
 
-    private val root =
-        try {
-            parseServerUrl(baseUrl, allowInsecurePrivateNetwork = true)
-                .takeIf { it.encodedQuery.isEmpty() && it.encodedFragment.isEmpty() }
-                ?.toString()
-                ?.trimEnd('/')
-        } catch (_: TandemApiException) {
-            null
-        } ?: throw ExchangeRateException.InvalidAddress()
+    private val root = address(baseUrl) ?: throw ExchangeRateException.InvalidAddress()
 
     /** The newest rate for each currency, dated by the oldest of them so a stale rate never looks current. */
     override suspend fun latest(
@@ -174,5 +166,19 @@ class FrankfurterRateSource(
         private val DECIMAL = Regex("^\\d+(\\.\\d+)?([eE][+-]?\\d+)?$")
 
         private fun normalized(code: String) = code.trim().uppercase()
+
+        /** A source using the platform's HTTP engine; a blank [baseUrl] means Frankfurter's public server. */
+        fun connect(baseUrl: String = DEFAULT_URL) = FrankfurterRateSource(HttpClient(), baseUrl.ifBlank { DEFAULT_URL })
+
+        /** The server address [baseUrl] names, without a trailing slash, or null when it isn't one Tandem would use. */
+        fun address(baseUrl: String): String? =
+            try {
+                parseServerUrl(baseUrl, allowInsecurePrivateNetwork = true)
+                    .takeIf { it.encodedQuery.isEmpty() && it.encodedFragment.isEmpty() }
+                    ?.toString()
+                    ?.trimEnd('/')
+            } catch (_: TandemApiException) {
+                null
+            }
     }
 }

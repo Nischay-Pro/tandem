@@ -149,7 +149,16 @@ class FrankfurterRateSourceTest {
         ).forEach { address ->
             val error = assertFailsWith<ExchangeRateException.InvalidAddress>(address) { server.source(address) }
             assertEquals("Use an https:// exchange-rate address, or http:// on your local network.", error.message)
+            assertNull(FrankfurterRateSource.address(address), address)
         }
+    }
+
+    @Test
+    fun checksAnAddressWithoutConnecting() {
+        assertEquals("https://rates.example.com/v2", FrankfurterRateSource.address(" https://rates.example.com/v2/ "))
+        assertEquals("http://192.168.1.20:8080/v2", FrankfurterRateSource.address("http://192.168.1.20:8080/v2"))
+        FrankfurterRateSource.connect("")
+        assertFailsWith<ExchangeRateException.InvalidAddress> { FrankfurterRateSource.connect("http://rates.example.com/v2") }
     }
 
     @Test

@@ -4,10 +4,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import app.tandemforactual.api.client.BankIcon
 import app.tandemforactual.api.client.BankIconFetcher
 import app.tandemforactual.api.client.BankIconFormat
@@ -104,6 +107,56 @@ class ExternalConnectionsTest {
         assertTrue(state.bankIconsEnabled)
         composeTestRule.onNodeWithText("Show bank logos").performClick()
         assertFalse(state.bankIconsEnabled)
+    }
+
+    @Test
+    fun setupAsksAboutExchangeRatesWithFetchingOff() {
+        val state = AppState().apply { selectedBudgetId = "budget-1" }
+        val mobileSession = session()
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                FirstSyncScreen(state, mobileSession, navigation, onRetrySync = {}, notificationPermissionEnabled = false)
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "Tandem downloads daily reference rates for your budget’s currencies from Frankfurter, a free, open-source service. Only currency codes and dates are sent.",
+            ).performScrollTo()
+        composeTestRule
+            .onNodeWithText("Fetch exchange rates")
+            .performScrollTo()
+            .assertIsOff()
+            .performClick()
+        assertTrue(state.exchangeRateFetching.enabled)
+        composeTestRule.onNodeWithText("Custom Frankfurter server (optional)").assertDoesNotExist()
+    }
+
+    @Test
+    fun settingsTakesACustomRateServerOnlyWhenItsAddressIsUsable() {
+        val state = AppState()
+        val mobileSession = session()
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                SettingsScreen(state, navigation, mobileSession)
+            }
+        }
+
+        composeTestRule.onNodeWithText("Custom Frankfurter server (optional)").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Fetch exchange rates").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Custom Frankfurter server (optional)").performScrollTo()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("http://rates.example.com/v2")
+        composeTestRule.onNodeWithText("Use this server").performScrollTo().performClick()
+        composeTestRule
+            .onNodeWithText("Use an https:// address, or http:// on your local network, ending in /v2.")
+            .assertExists()
+        assertEquals("", state.exchangeRateFetching.server)
+
+        composeTestRule.onNode(hasSetTextAction()).performTextClearance()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("http://192.168.1.20:8080/v2")
+        composeTestRule.onNodeWithText("Use this server").performScrollTo().performClick()
+        assertEquals("http://192.168.1.20:8080/v2", state.exchangeRateFetching.server)
+        composeTestRule.onNodeWithText("Server saved").assertExists()
     }
 
     @Test

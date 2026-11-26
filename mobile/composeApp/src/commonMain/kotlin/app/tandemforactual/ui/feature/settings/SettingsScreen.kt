@@ -106,7 +106,7 @@ internal fun SettingsScreen(
         BudgetSettingsSection(navigation)
         ConnectionSection(navigation)
         PrivacySection(state, navigation, mobileSession)
-        ExternalConnectionsSection(state)
+        ExternalConnectionsSection(state, showAdvanced = true)
         YourDataSection(navigation)
         SupportSection(state, navigation)
     }

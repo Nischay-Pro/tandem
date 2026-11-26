@@ -230,4 +230,10 @@
     <string name="connections_detail">Each one stays off until you turn it on.</string>
     <string name="connections_bank_logos">Show bank logos</string>
     <string name="connections_bank_logos_detail">Tandem downloads each linked bank’s logo from that bank’s website. The bank can see that your device asked, but nothing about your budget.</string>
+    <string name="connections_exchange_rates">Fetch exchange rates</string>
+    <string name="connections_exchange_rates_detail">Tandem downloads daily reference rates for your budget’s currencies from Frankfurter, a free, open-source service. Only currency codes and dates are sent.</string>
+    <string name="connections_rate_server">Custom Frankfurter server (optional)</string>
+    <string name="connections_rate_server_invalid">Use an https:// address, or http:// on your local network, ending in /v2.</string>
+    <string name="connections_rate_server_save">Use this server</string>
+    <string name="connections_rate_server_saved">Server saved</string>
 </resources>

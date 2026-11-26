@@ -102,7 +102,7 @@ internal class PlanningController(
     var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
         private set
 
-    private fun planningStore(budgetId: String): PlanningStore? =
+    internal fun planningStore(budgetId: String): PlanningStore? =
         database()?.let { PlanningStore(it.planningRecordDao(), budgetId, { keyring.cipherFor(budgetId) }, nowEpochMillis) }
 
     var syncStatus by mutableStateOf(PlanningSyncStatus.OFF)

@@ -25,6 +25,7 @@ import app.tandemforactual.ui.core.format.formatAccountMoney
 import app.tandemforactual.ui.core.format.formatConverted
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.planning.ExchangeRateFetching
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
@@ -173,13 +174,18 @@ private fun ForeignCurrencySections(
             InlineMessageKind.WARNING,
         )
     }
-    SectionCard("Exchange rates", "Entered by you, with the date you checked them") {
+    val fetching = state.exchangeRateFetching
+    val service = if (fetching.server.isBlank()) "Frankfurter" else "your server"
+    SectionCard(
+        "Exchange rates",
+        if (fetching.enabled) "Fetched daily from $service, or entered by you" else "Entered by you, with the date you checked them",
+    ) {
         foreign.forEachIndexed { index, code ->
             if (index > 0) DividerLine()
             val rate = rateBetween(code, budgetCurrency, mobileSession.planning.exchangeRates)
             ListRow(
                 "1 $code = ${rate?.let { "${formatRate(it.value!!)} $budgetCurrency" } ?: "?"}",
-                rate?.let { "As of ${formatLiveDate(it.asOf)}" } ?: "No rate yet · Tap to add one",
+                rate?.let { "As of ${formatLiveDate(it.asOf)}${if (it.fetched) " · Fetched" else ""}" } ?: "No rate yet · Tap to add one",
                 leading = RowLeading.Icon(Lucide.ArrowLeftRight),
                 options =
                     ListRowOptions(
@@ -188,6 +194,17 @@ private fun ForeignCurrencySections(
                 onClick = { onEditRate(code) },
             )
         }
+    }
+    if (fetching.enabled) ExchangeRateFetchStatus(fetching)
+}
+
+/** How the last fetch went: when it worked, or what went wrong in plain words. */
+@Composable
+private fun ExchangeRateFetchStatus(fetching: ExchangeRateFetching) {
+    when {
+        fetching.error.isNotEmpty() -> InlineMessage(fetching.error, InlineMessageKind.WARNING)
+        fetching.fetchedOn.isNotEmpty() -> InlineMessage("Last fetched ${formatLiveDate(fetching.fetchedOn)}.", InlineMessageKind.INFO)
+        else -> InlineMessage("Tandem fetches rates the next time this budget opens or syncs.", InlineMessageKind.INFO)
     }
 }
 
