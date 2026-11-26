@@ -30,12 +30,14 @@ internal fun findSplit(
         records.firstOrNull { it.recordId == recordId && it.isParent }
             ?: records.firstOrNull { record -> record.isParent && parts(record).any { it.id() == recordId } }
             ?: return null
+    val spending = (parent.amountMinor ?: 0L) < 0
     val lines =
         parts(parent).mapIndexed { index, part ->
             val category = (part["category"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val amount = (part["amount"] as? JsonPrimitive)?.longOrNull ?: 0L
             SplitLine(
                 key = index + 1,
-                amountText = formatAmount(kotlin.math.abs((part["amount"] as? JsonPrimitive)?.longOrNull ?: 0L)),
+                amountText = formatAmount(if (spending) -amount else amount),
                 categoryId = category,
                 categoryName = categoryName(category).orEmpty(),
                 id = part.id(),

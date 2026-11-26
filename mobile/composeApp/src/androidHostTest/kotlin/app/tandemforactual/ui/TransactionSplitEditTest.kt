@@ -12,6 +12,7 @@ import app.tandemforactual.ui.core.state.loadSplitForEdit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -54,6 +55,7 @@ class TransactionSplitEditTest {
         )
     private val names = mapOf("food" to "Food", "home" to "Home")
     private val format = { minor: Long -> "%.2f".format(minor / 100.0) }
+    private val parse = { text: String -> text.toBigDecimalOrNull()?.movePointRight(2)?.toLong() }
 
     @Test
     fun findsTheWholeSplitFromAnyPart() {
@@ -66,6 +68,32 @@ class TransactionSplitEditTest {
         assertEquals(fromChild, findSplit(records, "tandem:p", names::get, format))
         assertNull(findSplit(records, "plain", names::get, format))
         assertNull(findSplit(listOf(record("tandem:p", """{"subtransactions":[]}""", parent = true)), "tandem:p", names::get, format))
+    }
+
+    @Test
+    fun mixedSignSplitsLoadBalancedAndSaveWithTheirOwnSigns() {
+        val purchase =
+            """{"id":"p","amount":-5000,"subtransactions":[{"id":"c1","amount":-8000,"category":"food"},""" +
+                """{"id":"c2","amount":3000,"category":"home"}]}"""
+        val split = findSplit(listOf(record("p", purchase, parent = true)), "p", names::get, format)!!
+        assertEquals(listOf("80.00", "-30.00"), split.lines.map { it.amountText })
+        val draft = TransactionSplitDraft(split.lines)
+        assertEquals(0L, draft.remaining(5000, parse))
+        assertTrue(draft.isReady(5000, parse))
+        assertEquals(
+            listOf(SplitEditLine("c1", -8000, "food"), SplitEditLine("c2", 3000, "home")),
+            draft.editedLines(parse, income = false),
+        )
+
+        val refund =
+            """{"id":"r","amount":2000,"subtransactions":[{"id":"c1","amount":5000,"category":"food"},""" +
+                """{"id":"c2","amount":-3000,"category":"home"}]}"""
+        val refundSplit = findSplit(listOf(record("r", refund, parent = true).copy(amountMinor = 2000)), "r", names::get, format)!!
+        assertEquals(listOf("50.00", "-30.00"), refundSplit.lines.map { it.amountText })
+        assertEquals(
+            listOf(SplitEditLine("c1", 5000, "food"), SplitEditLine("c2", -3000, "home")),
+            TransactionSplitDraft(refundSplit.lines).editedLines(parse, income = true),
+        )
     }
 
     @Test
@@ -86,7 +114,6 @@ class TransactionSplitEditTest {
     @Test
     fun sendsTheLinesAndOnlyTheParentFieldsThatChanged() {
         val base = Json.parseToJsonElement(parentJson).jsonObject
-        val parse = { text: String -> text.toBigDecimalOrNull()?.movePointRight(2)?.toLong() }
         val lines =
             TransactionSplitDraft(listOf(SplitLine(1, "30", "food", id = "c1"), SplitLine(2, "25", "home")))
                 .editedLines(parse, income = false)
