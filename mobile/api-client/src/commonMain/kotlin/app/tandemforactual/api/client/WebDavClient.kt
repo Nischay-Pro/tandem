@@ -32,7 +32,7 @@ class WebDavClient(
     folderUrl: String,
     private val username: String,
     private val password: String,
-) {
+) : AutoCloseable {
     private val folder =
         try {
             parseServerUrl(folderUrl, allowInsecurePrivateNetwork = true).toString().trimEnd('/') + "/"
@@ -106,6 +106,8 @@ class WebDavClient(
             throw WebDavException(null, "Couldn’t reach the WebDAV server.")
         }
 
+    override fun close() = http.close()
+
     private fun fail(
         response: HttpResponse,
         message: String,
@@ -116,12 +118,12 @@ class WebDavClient(
         )
 
     companion object {
-        /** A client with the platform's default HTTP engine. */
+        /** A client with the platform's default HTTP engine; close it when done. */
         fun connect(
             folderUrl: String,
             username: String,
             password: String,
-        ) = WebDavClient(HttpClient(), folderUrl, username, password)
+        ) = WebDavClient(actualHttpClient(), folderUrl, username, password)
 
         private val PROPFIND = HttpMethod("PROPFIND")
         private val MKCOL = HttpMethod("MKCOL")

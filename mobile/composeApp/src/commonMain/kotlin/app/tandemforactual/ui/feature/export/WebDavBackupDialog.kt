@@ -73,7 +73,7 @@ internal fun WebDavBackupDialog(
                         problem =
                             try {
                                 lanAccess?.request(address.trim())
-                                WebDavClient.connect(address.trim(), name.trim(), password).check()
+                                WebDavClient.connect(address.trim(), name.trim(), password).use { it.check() }
                                 null
                             } catch (error: WebDavException) {
                                 error.message
