@@ -233,4 +233,21 @@ class AutomaticBackupsTest {
         assertEquals("Skipped: sign in to back up", automaticBackupSummary(on, "today", restored.automaticBackupResult))
         assertNull(AutomaticBackupResult.decode("nonsense"))
     }
+
+    @Test
+    fun neverWritesAnEncryptedBudgetUnsealed() {
+        assertTrue(AutomaticBackups.needsPassphrase(budgetEncrypted = true, hasPassphrase = false))
+        assertFalse(AutomaticBackups.needsPassphrase(budgetEncrypted = true, hasPassphrase = true))
+        assertFalse(AutomaticBackups.needsPassphrase(budgetEncrypted = false, hasPassphrase = false))
+        assertFalse(AutomaticBackups.mayWrite(budgetEncrypted = true, sealed = false))
+        assertTrue(AutomaticBackups.mayWrite(budgetEncrypted = true, sealed = true))
+        assertTrue(AutomaticBackups.mayWrite(budgetEncrypted = false, sealed = false))
+        val skipped = AutomaticBackupResult.skipped(BackupProblem.NEEDS_PASSPHRASE)
+        assertEquals(skipped, AutomaticBackupResult.decode(skipped.encode()))
+        assertNull(skipped.preferences(now = 42)[AutomaticBackupSettings.LAST_RUN])
+        assertEquals(
+            "Skipped: set a backup passphrase for this encrypted budget",
+            automaticBackupSummary(on, "today", skipped),
+        )
+    }
 }
