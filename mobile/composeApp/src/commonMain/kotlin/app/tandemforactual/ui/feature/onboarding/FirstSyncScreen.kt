@@ -26,6 +26,7 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.ui.ExternalConnectionsSection
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
@@ -78,6 +79,7 @@ internal fun FirstSyncScreen(
             SetupHeadline(stringResource(Res.string.setup_making_it_yours), stringResource(Res.string.setup_downloading_a_local_copy_so))
             FirstSyncStatusBadge(mobileSession)
             FirstSyncStatusText(state, mobileSession, navigation)
+            ExternalConnectionsSection(state)
         },
         actions = { FirstSyncActions(state, mobileSession, navigation, onRetrySync, notificationPermissionEnabled) },
     )

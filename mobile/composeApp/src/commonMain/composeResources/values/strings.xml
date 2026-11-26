@@ -223,4 +223,8 @@
     <string name="tools_add_short">Add</string>
     <string name="tools_added_short">Added</string>
     <string name="personalize_progress">Step %1$d of %2$d</string>
+    <string name="connections_title">Connections to other services</string>
+    <string name="connections_detail">Each one stays off until you turn it on.</string>
+    <string name="connections_bank_logos">Show bank logos</string>
+    <string name="connections_bank_logos_detail">Tandem downloads each linked bank’s logo from that bank’s website. The bank can see that your device asked, but nothing about your budget.</string>
 </resources>

@@ -44,6 +44,11 @@ class FileBankIconStore(
         at: Long,
     ) = write(file(host, MISSING)) { writeString(at.toString()) }
 
+    override suspend fun clear() {
+        if (!SystemFileSystem.exists(root)) return
+        SystemFileSystem.list(root).forEach { SystemFileSystem.delete(it, mustExist = false) }
+    }
+
     private fun file(
         host: String,
         extension: String,

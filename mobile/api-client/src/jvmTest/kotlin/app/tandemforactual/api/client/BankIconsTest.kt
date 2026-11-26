@@ -33,6 +33,11 @@ class BankIconsTest {
         ) {
             missing[host] = at
         }
+
+        override suspend fun clear() {
+            icons.clear()
+            missing.clear()
+        }
     }
 
     private var requests = 0
