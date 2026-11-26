@@ -33,6 +33,11 @@ class BankIconsTest {
         ) {
             missing[host] = at
         }
+
+        override suspend fun clear() {
+            icons.clear()
+            missing.clear()
+        }
     }
 
     private var requests = 0
@@ -97,5 +102,18 @@ class BankIconsTest {
             offline = false
             clock += 1
             assertNotNull(icons.icon("bank.com"))
+        }
+
+    @Test
+    fun clearForgetsDownloadedIconsAndMisses(): Unit =
+        runBlocking {
+            assertNotNull(icons.icon("bank.com"))
+            hasIcon = false
+            assertNull(icons.icon("other.com"))
+
+            icons.clear()
+
+            assertNull(icons.cached("bank.com"))
+            assertEquals(emptyMap(), store.missing)
         }
 }

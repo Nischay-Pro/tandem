@@ -19,6 +19,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
+import app.tandemforactual.ui.core.ui.ExternalConnectionsSection
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -105,6 +106,7 @@ internal fun SettingsScreen(
         BudgetSettingsSection(navigation)
         ConnectionSection(navigation)
         PrivacySection(state, navigation, mobileSession)
+        ExternalConnectionsSection(state)
         YourDataSection(navigation)
         SupportSection(state, navigation)
     }

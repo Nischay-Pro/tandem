@@ -123,7 +123,7 @@ internal class AppState {
     var privacyModeEnabled by mutableStateOf(false)
 
     /** Whether linked banks' icons are downloaded from their own websites. */
-    var bankIconsEnabled by mutableStateOf(true)
+    var bankIconsEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)

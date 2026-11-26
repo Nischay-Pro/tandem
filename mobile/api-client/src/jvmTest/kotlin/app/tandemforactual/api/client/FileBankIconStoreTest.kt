@@ -30,4 +30,26 @@ class FileBankIconStoreTest {
             java.io.File(directory, "odd.com.missing").writeText("not a time")
             assertNull(reopened.missingSince("odd.com"))
         }
+
+    @Test
+    fun clearDeletesEveryIconAndMiss(): Unit =
+        runBlocking {
+            val directory = Files.createTempDirectory("bank-icons").toString()
+            val store = FileBankIconStore(directory)
+            store.clear()
+            store.saveIcon("bank.com", BankIcon(byteArrayOf(1), BankIconFormat.PNG))
+            store.saveMissing("other.com", 42)
+
+            store.clear()
+
+            assertNull(store.icon("bank.com"))
+            assertNull(store.missingSince("other.com"))
+            assertEquals(
+                0,
+                java.io
+                    .File(directory)
+                    .listFiles()!!
+                    .size,
+            )
+        }
 }

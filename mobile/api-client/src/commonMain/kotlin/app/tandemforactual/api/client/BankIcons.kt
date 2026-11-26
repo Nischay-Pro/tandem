@@ -19,6 +19,8 @@ interface BankIconStore {
         host: String,
         at: Long,
     )
+
+    suspend fun clear()
 }
 
 /**
@@ -55,6 +57,9 @@ class BankIcons(
             icon
         }
     }
+
+    /** Deletes every downloaded icon and every remembered miss. */
+    suspend fun clear() = lock.withLock { store.clear() }
 
     companion object {
         const val RETRY_AFTER_MILLIS = 7L * 24 * 60 * 60 * 1000
