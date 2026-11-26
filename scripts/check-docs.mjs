@@ -73,22 +73,12 @@ export function markdownFiles(repoRoot = root, gitExecutable = "git") {
   return files.sort();
 }
 
-function untilStable(text, strip) {
-  let previous;
-  do {
-    previous = text;
-    text = strip(text);
-  } while (text !== previous);
-  return text;
-}
-
 function withoutCode(text) {
-  return untilStable(text, (current) =>
-    current
-      .replace(/^ {0,3}(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[ \t]*$/gm, "")
-      .replace(/(\x60+)[^\x60\n]*\1/g, "")
-      .replace(/<!--[\s\S]*?-->/g, ""),
-  );
+  return text
+    .replace(/^ {0,3}(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[ \t]*$/gm, "")
+    .replace(/(\x60+)[^\x60\n]*\1/g, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/[<>]/g, "");
 }
 
 function headingIds(text) {
@@ -97,9 +87,9 @@ function headingIds(text) {
   for (const match of withoutCode(text).matchAll(
     /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm,
   )) {
-    const slug = untilStable(match[1], (current) =>
-      current.replace(/<[^>]*>/g, ""),
-    )
+    const slug = match[1]
+      .replace(/<[^>]*>/g, "")
+      .replace(/[<>]/g, "")
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/[\x60*_~]/g, "")
       .toLowerCase()
