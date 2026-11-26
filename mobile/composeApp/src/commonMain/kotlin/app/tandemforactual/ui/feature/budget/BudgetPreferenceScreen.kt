@@ -38,6 +38,7 @@ internal fun BudgetPreferencesScreen(
     mobileSession: TandemMobileSession,
 ) {
     val currencyCode = state.budgetDisplaySettings?.currencyCode ?: platformCurrencyCode()
+    val isTrackingBudget = state.budgetDisplaySettings?.budgetType == "tracking"
     PageColumn {
         SectionCard(
             "Number format",
@@ -57,9 +58,15 @@ internal fun BudgetPreferencesScreen(
                 "From the Actual budget",
             )
             DividerLine()
-            ListRow("Carry balances forward", "Change this in Actual", "Read-only")
+            if (isTrackingBudget) {
+                ListRow("Category rollover", "Change this in Actual", "Read-only")
+            } else {
+                ListRow("Roll overspending into next month", "Turn on for a category from its page in Budget", "Per category")
+            }
         }
-        PreviewNote("Tandem displays planning rules set in Actual. To change them, update the rules on the Actual website.")
+        if (!isTrackingBudget) {
+            PreviewNote("Unused money always stays in its category. Overspending rollover only changes where a shortfall comes from.")
+        }
     }
 }
 

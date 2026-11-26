@@ -66,3 +66,14 @@ internal fun decodeBudgetTemplates(serialized: String): List<BudgetTemplate> {
 }
 
 private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+
+internal fun budgetTemplateReplacedCount(
+    template: List<Pair<String, Long>>,
+    current: List<Pair<String, Long>>,
+): Int {
+    val currentById = current.toMap()
+    return template.count { (categoryId, amount) ->
+        val existing = currentById[categoryId] ?: 0L
+        existing != 0L && existing != amount
+    }
+}
