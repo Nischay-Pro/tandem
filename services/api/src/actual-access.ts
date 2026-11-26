@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
-const CACHE_MS = 60_000;
-const DENIED_MS = 10_000;
+const CACHE_MS = 15_000;
+const DENIED_MS = 5_000;
+const MISS_RECHECK_MS = 2_000;
 const MAX_CACHED = 10_000;
 
 export type Access = "allowed" | "denied" | "unavailable";
@@ -23,13 +24,15 @@ type Fetch = (
 
 /**
  * Asks the Actual server whether a session can see a budget. The service never trusts a budget id on its own: the
- * caller's Actual token has to list it. Answers are cached briefly per token so sync doesn't hit Actual on every call.
+ * caller's Actual token has to list it. Token answers are cached briefly; a budget missing from the cached list is
+ * rechecked so a newly created budget isn't refused until the cache expires.
  */
 export class ActualBudgetAccess implements BudgetAccess {
   private readonly cache = new Map<
     string,
-    { budgets: Set<string> | null; until: number }
+    { budgets: Set<string> | null; fetchedAt: number; until: number }
   >();
+  private readonly pending = new Map<string, Promise<Access>>();
 
   constructor(
     private readonly actualServerUrl: string,
@@ -40,8 +43,28 @@ export class ActualBudgetAccess implements BudgetAccess {
   async check(token: string, budgetId: string): Promise<Access> {
     const cacheKey = hash(token);
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.until > this.now())
-      return cached.budgets?.has(budgetId) ? "allowed" : "denied";
+    const now = this.now();
+    if (cached && cached.until > now) {
+      if (cached.budgets === null) return "denied";
+      if (cached.budgets.has(budgetId)) return "allowed";
+      if (now - cached.fetchedAt < MISS_RECHECK_MS) return "denied";
+    }
+    let budgets = this.pending.get(cacheKey);
+    if (!budgets) {
+      budgets = this.fetchBudgets(token, cacheKey);
+      this.pending.set(cacheKey, budgets);
+      void budgets.finally(() => this.pending.delete(cacheKey));
+    }
+    return budgets.then((access) =>
+      access !== "allowed"
+        ? access
+        : this.cache.get(cacheKey)?.budgets?.has(budgetId)
+          ? "allowed"
+          : "denied",
+    );
+  }
+
+  private async fetchBudgets(token: string, cacheKey: string): Promise<Access> {
     let response: Awaited<ReturnType<Fetch>>;
     try {
       response = await this.fetcher(
@@ -68,7 +91,7 @@ export class ActualBudgetAccess implements BudgetAccess {
         .map((file) => file.groupId as string),
     );
     this.remember(cacheKey, budgets, CACHE_MS);
-    return budgets.has(budgetId) ? "allowed" : "denied";
+    return "allowed";
   }
 
   isKnown(token: string): boolean {
@@ -87,7 +110,7 @@ export class ActualBudgetAccess implements BudgetAccess {
       this.cache.delete(this.cache.keys().next().value!);
     }
     this.cache.delete(key);
-    this.cache.set(key, { budgets, until: now + ttl });
+    this.cache.set(key, { budgets, fetchedAt: now, until: now + ttl });
   }
 }
 
