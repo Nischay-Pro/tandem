@@ -136,6 +136,53 @@ class ActualRuleEngineTest {
     }
 
     @Test
+    fun matchesDateBetweenRulesInclusively() {
+        val db = fixtureDb()
+        val engine = ActualRuleEngine(db) { error("unused") }
+        db.execute(
+            "INSERT INTO rules (id, stage, conditions_op, conditions, actions, tombstone) VALUES ('date-range', 'post', 'and', ?, ?, 0)",
+            """[{"op":"isbetween","field":"date","value":{"num1":"2026-11-30","num2":"2026-11-01"}}]""",
+            """[{"op":"set","field":"notes","value":"November"}]""",
+        )
+
+        fun notes(date: String?) = engine.run(mapOf("id" to "t", "date" to date, "amount" to -100L)) { "generated" }["notes"]
+        assertEquals(listOf("November", "November", "November"), listOf("2026-11-01", "2026-11-15", "2026-11-30").map(::notes))
+        assertEquals(listOf(null, null, null), listOf("2026-10-31", "2026-12-01", null).map(::notes))
+    }
+
+    @Test
+    fun previewsDateBetweenRulesAndDropsInvalidRanges() {
+        val db = fixtureDb()
+        val engine = ActualRuleEngine(db) { error("unused") }
+        val account = db.first("SELECT id FROM accounts WHERE tombstone = 0")!!["id"]
+        db.execute(
+            "INSERT INTO transactions (id, acct, amount, date, isParent, isChild, tombstone, cleared, sort_order) VALUES " +
+                "('range-before', ?, -1, 20261031, 0, 0, 0, 1, 1), ('range-start', ?, -1, 20261101, 0, 0, 0, 1, 2), " +
+                "('range-end', ?, -1, 20261130, 0, 0, 0, 1, 3), ('range-after', ?, -1, 20261201, 0, 0, 0, 1, 4)",
+            account,
+            account,
+            account,
+            account,
+        )
+
+        fun preview(range: String) =
+            engine
+                .preview(
+                    Json
+                        .parseToJsonElement("""{"conditions":[{"field":"date","op":"isbetween","range":$range}]}""")
+                        .jsonObject,
+                ).filter { it.startsWith("range-") }
+        assertEquals(listOf("range-end", "range-start"), preview("""{"num1":"2026-11-01","num2":"2026-11-30"}"""))
+        listOf(
+            """{"num1":"2026-11","num2":"2026-11-30"}""",
+            """{"num1":"2026-11-01","num2":"2026-02-30"}""",
+            """{"num1":20261101,"num2":"2026-11-30"}""",
+            """{"num1":"2026-11-01"}""",
+            "\"2026-11-01\"",
+        ).forEach { assertEquals(emptyList(), preview(it), it) }
+    }
+
+    @Test
     fun rulesMatchActualsOwnEngine() {
         val db = fixtureDb()
         val engine = ActualRuleEngine(db) { error("Actual already created every payee these cases need") }

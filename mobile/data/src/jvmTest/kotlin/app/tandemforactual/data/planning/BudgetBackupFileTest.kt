@@ -1,12 +1,17 @@
 package app.tandemforactual.data.planning
 
 import app.tandemforactual.data.actual.ZipArchive
+import dev.whyoleg.cryptography.BinarySize
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.algorithms.PBKDF2
+import dev.whyoleg.cryptography.algorithms.SHA512
 import java.io.ByteArrayInputStream
 import java.util.zip.ZipInputStream
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -37,7 +42,7 @@ class BudgetBackupFileTest {
         val bytes = BudgetBackupFile.build(database, metadata, planning, passphrase = null)
         assertFalse(BudgetBackupFile.isSealed(bytes))
         assertEquals(BudgetBackupContents.Opened(database, planning, metadata), BudgetBackupFile.read(bytes, null))
-        val budgetOnly = BudgetBackupFile.build(database, metadata, null, "")
+        val budgetOnly = BudgetBackupFile.build(database, metadata, null, null)
         assertNull((BudgetBackupFile.read(budgetOnly, null) as BudgetBackupContents.Opened).planningJson)
     }
 
@@ -60,5 +65,38 @@ class BudgetBackupFileTest {
         assertFalse(opened.equals("x"))
         assertFalse(opened == opened.copy(planningJson = null))
         assertEquals(opened.hashCode(), opened.copy().hashCode())
+    }
+
+    @Test
+    fun refusesToWriteAnUnsealedBackupForAnEmptyPassphrase() {
+        assertFailsWith<IllegalArgumentException> { BudgetBackupFile.build(database, metadata, planning, "") }
+    }
+
+    @Test
+    fun rejectsIterationCountsOutsideWhatTandemWrites() {
+        val zip = ZipArchive.write(mapOf("db.sqlite" to database, "metadata.json" to metadata.encodeToByteArray()))
+        val opened = BudgetBackupContents.Opened(database, null, metadata)
+        assertEquals(opened, BudgetBackupFile.read(sealedWith(zip, 210_000), "correct horse"))
+        assertEquals(opened, BudgetBackupFile.read(sealedWith(zip, 1_050_000), "correct horse"))
+        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1), "correct horse"))
+        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 209_999), "correct horse"))
+        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1_050_001), "correct horse"))
+        assertEquals(BudgetBackupContents.WrongPassphrase, BudgetBackupFile.read(sealedWith(zip, 1, Int.MAX_VALUE), "correct horse"))
+    }
+
+    private fun sealedWith(
+        zip: ByteArray,
+        iterations: Int,
+        claimed: Int = iterations,
+    ): ByteArray {
+        val salt = Random(3).nextBytes(16)
+        val key =
+            CryptographyProvider.Default
+                .get(PBKDF2)
+                .secretDerivation(SHA512, iterations, with(BinarySize) { PlanningCipher.KEY_BYTES.bytes }, salt)
+                .deriveSecretToByteArrayBlocking("correct horse".encodeToByteArray())
+        val (iv, sealed) = PlanningCipher(key).seal(zip, "tandem-budget-backup/v1")
+        val count = ByteArray(4) { (claimed shr (24 - 8 * it)).toByte() }
+        return "TNDMBK01".encodeToByteArray() + count + salt + iv + sealed
     }
 }

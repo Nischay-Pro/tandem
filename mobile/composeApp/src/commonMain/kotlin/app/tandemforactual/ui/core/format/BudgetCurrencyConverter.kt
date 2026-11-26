@@ -14,13 +14,14 @@ internal data class BudgetCurrencyConverter(
     val budgetCurrency: String,
     val rates: List<ExchangeRate>,
 ) {
-    /** The amount in the budget's currency, or null when the account's currency has no rate. */
+    /** The amount in the budget's currency, or null when the account's currency has no rate. [onOrBefore] picks a past rate. */
     fun convert(
         accountId: String,
         amountMinor: Long,
+        onOrBefore: String? = null,
     ): Long? {
         val currency = accountCurrencies[accountId]?.takeIf { it != budgetCurrency } ?: return amountMinor
-        return rateBetween(currency, budgetCurrency, rates)?.let { convertMinor(amountMinor, it) }
+        return rateBetween(currency, budgetCurrency, rates, onOrBefore)?.let { convertMinor(amountMinor, it) }
     }
 
     fun total(accounts: List<Pair<String, Long?>>): ConvertedTotal =

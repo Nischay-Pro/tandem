@@ -298,7 +298,7 @@ internal fun netWorthPoints(
             }
             activityIndex += 1
         }
-        val converted = balances.mapNotNull { (id, balance) -> converter.convert(id, balance)?.let { id to it } }
+        val converted = balances.mapNotNull { (id, balance) -> converter.convert(id, balance, monthEndDate)?.let { id to it } }
         val onBudget = converted.filter { it.first in onBudgetIds }.map { it.second }
         val all = converted.map { it.second }
         pointsDescending +=
