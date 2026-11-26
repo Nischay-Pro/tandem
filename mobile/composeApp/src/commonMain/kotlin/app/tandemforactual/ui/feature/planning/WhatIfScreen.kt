@@ -29,8 +29,6 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.formatCurrency
-import app.tandemforactual.ui.core.state.monthMoneyIn
-import app.tandemforactual.ui.core.state.rememberMonthTransactions
 import app.tandemforactual.ui.core.ui.saved
 import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -60,8 +58,6 @@ internal fun WhatIfScreen(
     liveAccounts: List<LiveAccountSummary>,
     month: LiveBudgetMonthSummary?,
 ) {
-    val palette = tandemPalette
-    val transactions = rememberMonthTransactions(state, mobileSession)
     if (month == null) {
         PageColumn { EmptyStateCard("Open a budget month first", "What-if uses this month’s income and spending as the starting point.") }
         return
@@ -69,8 +65,9 @@ internal fun WhatIfScreen(
     var incomeChange by rememberSaveable { mutableStateOf(0L) }
     var spendingChange by rememberSaveable { mutableStateOf(0L) }
     var toDebt by rememberSaveable { mutableStateOf(50) }
-    val income = monthMoneyIn(state, month, transactions).first.coerceAtLeast(0)
-    val spending = (-month.groups.filterNot { it.isIncome }.sumOf { it.activityMinor }).coerceAtLeast(0)
+    val typical = rememberTypicalMonth(state, mobileSession, month)
+    val income = typical.money.incomeMinor
+    val spending = typical.money.spendingMinor
     val leftover = income + incomeChange - (spending + spendingChange)
     val spare = leftover.coerceAtLeast(0)
     val debtExtra = spare * toDebt / 100
@@ -85,7 +82,7 @@ internal fun WhatIfScreen(
         IntroCard(
             "See how earning or spending a little differently moves your debt-free date and savings goals. Nothing here changes your budget.",
         )
-        WhatIfSummary(state, leftover, income, spending)
+        WhatIfSummary(state, leftover, income, spending, typicalMonthLabel(typical, state.selectedMonth))
         WhatIfControls(
             state = state,
             steps =
@@ -127,13 +124,14 @@ internal fun whatIfDebts(
         }
     }
 
-/** What is left over each month after the changes, and this month's money in and out. */
+/** What is left over each month after the changes, and the typical month's money in and out. */
 @Composable
 private fun WhatIfSummary(
     state: AppState,
     leftover: Long,
     income: Long,
     spending: Long,
+    source: String,
 ) {
     val palette = tandemPalette
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
@@ -146,7 +144,7 @@ private fun WhatIfSummary(
             fontFamily = tandemAlloFamily(),
         )
         Text(
-            "From ${state.selectedMonth}: ${state.formatCurrency(income)} in, ${state.formatCurrency(spending)} out",
+            "$source: ${state.formatCurrency(income)} in, ${state.formatCurrency(spending)} out",
             color = palette.muted,
             fontSize = TandemTypography.compactBody,
         )
