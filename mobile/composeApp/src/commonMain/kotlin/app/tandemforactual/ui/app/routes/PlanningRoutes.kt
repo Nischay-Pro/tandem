@@ -23,7 +23,7 @@ internal val planningScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
         AppRoute.WHAT_IF to
             @Composable { ctx ->
                 with(ctx) {
-                    WhatIfScreen(state, mobileSession, liveAccounts, liveBudgetMonth, liveTransactions)
+                    WhatIfScreen(state, mobileSession, liveAccounts, liveBudgetMonth)
                 }
             },
         AppRoute.EXTRA_MONEY to

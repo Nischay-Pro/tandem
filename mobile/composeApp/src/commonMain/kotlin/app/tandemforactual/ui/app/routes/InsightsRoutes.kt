@@ -33,7 +33,7 @@ internal val insightsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
         AppRoute.MONTHLY_REVIEW to
             @Composable { ctx ->
                 with(ctx) {
-                    MonthlyReviewScreen(state, liveBudgetMonth, liveTransactions)
+                    MonthlyReviewScreen(state, mobileSession, liveBudgetMonth)
                 }
             },
         AppRoute.SPENDING_TRENDS to

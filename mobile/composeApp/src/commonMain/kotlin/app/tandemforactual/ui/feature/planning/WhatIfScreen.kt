@@ -28,9 +28,9 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
-import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.monthMoneyIn
+import app.tandemforactual.ui.core.state.rememberMonthTransactions
 import app.tandemforactual.ui.core.ui.saved
 import app.tandemforactual.ui.design.cards.IntroCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -59,9 +59,9 @@ internal fun WhatIfScreen(
     mobileSession: TandemMobileSession,
     liveAccounts: List<LiveAccountSummary>,
     month: LiveBudgetMonthSummary?,
-    transactions: List<TransactionItem>,
 ) {
     val palette = tandemPalette
+    val transactions = rememberMonthTransactions(state, mobileSession)
     if (month == null) {
         PageColumn { EmptyStateCard("Open a budget month first", "What-if uses this month’s income and spending as the starting point.") }
         return

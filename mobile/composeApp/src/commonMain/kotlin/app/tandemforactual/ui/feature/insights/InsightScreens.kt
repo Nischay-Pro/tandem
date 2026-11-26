@@ -25,15 +25,16 @@ import app.tandemforactual.data.actual.ActualDates
 import app.tandemforactual.data.planning.CashFlow
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
-import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.monthMoneyIn
+import app.tandemforactual.ui.core.state.rememberMonthTransactions
 import app.tandemforactual.ui.design.cards.StatTile
 import app.tandemforactual.ui.design.charts.AreaChart
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -143,10 +144,11 @@ private const val MAX_FLOW_ROWS = 40
 @Composable
 internal fun MonthlyReviewScreen(
     state: AppState,
+    mobileSession: TandemMobileSession,
     month: LiveBudgetMonthSummary?,
-    transactions: List<TransactionItem>,
 ) {
     val palette = tandemPalette
+    val transactions = rememberMonthTransactions(state, mobileSession)
     val (income, monthTransactions) = monthMoneyIn(state, month, transactions)
     val categories =
         month
