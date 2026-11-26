@@ -300,6 +300,62 @@ describe("extension sync", () => {
     ).toEqual({ status: "stored" });
   });
 
+  it("hides unexpected storage failures from clients and logs them", async () => {
+    class BrokenStore extends InMemoryExtensionStore {
+      override async changes(): Promise<never> {
+        throw new Error('relation "planning_records" does not exist');
+      }
+    }
+    const lines: string[] = [];
+    const server = await buildApp({
+      store: new BrokenStore(),
+      access: allow(),
+      actualServerUrl: "https://actual.example",
+      logger: { stream: { write: (line: string) => lines.push(line) } },
+    });
+    const failed = await server.inject({
+      url: `/extension/v1/budgets/${budget}/changes`,
+      headers: auth,
+    });
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toEqual({
+      error: {
+        code: "internal_error",
+        message: "Something went wrong on the server.",
+      },
+    });
+    expect(failed.body).not.toContain("planning_records");
+    expect(lines.join("")).toContain("planning_records");
+  });
+
+  it("rejects integers outside what storage can hold", async () => {
+    const server = await app();
+    const put = (body: object) =>
+      server.inject({
+        method: "PUT",
+        url: `/extension/v1/budgets/${budget}/records/r1`,
+        payload: { ...record, ...body },
+        headers: auth,
+      });
+    for (const body of [
+      { revision: 2 ** 63 },
+      { revision: 2, baseRevision: 2 ** 63 },
+      { schemaVersion: 2 ** 31 },
+    ]) {
+      const rejected = await put(body);
+      expect(rejected.statusCode).toBe(400);
+      expect(rejected.json().code).toBe("FST_ERR_VALIDATION");
+    }
+    expect(
+      (
+        await server.inject({
+          url: `/extension/v1/budgets/${budget}/changes?after=99999999999999999999`,
+          headers: auth,
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+
   it("publishes an OpenAPI description", async () => {
     const server = await app();
     await server.ready();

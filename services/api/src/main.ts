@@ -31,6 +31,7 @@ export async function run(
     access: new ActualBudgetAccess(config.actualServerUrl),
     actualServerUrl: config.actualServerUrl,
     trustProxy: config.trustProxy,
+    logger: true,
   });
   await app.listen({ host: config.host, port: config.port });
   const stop = () => {
