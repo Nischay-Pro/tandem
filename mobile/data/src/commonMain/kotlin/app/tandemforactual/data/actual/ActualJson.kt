@@ -8,6 +8,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 
+/** JavaScript's `Math.round`: halves round up, so 2.5 becomes 3 and -2.5 becomes -2. */
+fun jsMathRound(value: Double): Double {
+    if (!value.isFinite()) return value
+    val floor = kotlin.math.floor(value)
+    return if (value - floor >= 0.5) floor + 1 else floor
+}
+
 /** A JSON number as JavaScript prints it: integral values without a fraction. */
 internal fun jsonNumber(value: Any?): JsonElement =
     when (value) {

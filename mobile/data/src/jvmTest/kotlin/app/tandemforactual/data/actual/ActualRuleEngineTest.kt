@@ -151,6 +151,33 @@ class ActualRuleEngineTest {
     }
 
     @Test
+    fun approximateAmountsAndSplitPercentagesRoundLikeJavaScript() {
+        val db = fixtureDb()
+        val engine = ActualRuleEngine(db) { error("unused") }
+        db.execute(
+            "INSERT INTO rules (id, stage, conditions_op, conditions, actions, tombstone) VALUES ('approx', 'post', 'and', ?, ?, 0)",
+            """[{"op":"isapprox","field":"amount","value":-300}]""",
+            """[{"op":"set","field":"notes","value":"About 3"}]""",
+        )
+        db.execute(
+            "INSERT INTO rules (id, stage, conditions_op, conditions, actions, tombstone) VALUES ('split', 'post', 'and', ?, ?, 0)",
+            """[{"op":"is","field":"amount","value":-103}]""",
+            """[{"op":"set-split-amount","field":"amount","value":50,"options":{"splitIndex":1,"method":"fixed-percent"}},""" +
+                """{"op":"set-split-amount","field":"amount","options":{"splitIndex":2,"method":"remainder"}}]""",
+        )
+
+        fun notes(amount: Long) = engine.run(mapOf("id" to "t", "date" to "2026-11-02", "amount" to amount)) { "generated" }["notes"]
+        assertEquals(listOf("About 3", "About 3", null), listOf(-323L, -277L, -324L).map(::notes))
+
+        var next = 0
+        val split = engine.run(mapOf("id" to "t", "date" to "2026-11-02", "amount" to -103L)) { "child-${next++}" }
+
+        @Suppress("UNCHECKED_CAST")
+        val children = split["subtransactions"] as List<Map<String, Any?>>
+        assertEquals(listOf(-51L, -52L), children.map { it["amount"] })
+    }
+
+    @Test
     fun previewsDateBetweenRulesAndDropsInvalidRanges() {
         val db = fixtureDb()
         val engine = ActualRuleEngine(db) { error("unused") }

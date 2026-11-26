@@ -165,7 +165,7 @@ private fun HoldSheetSummary(
     if (readyToAssignMinor < 0) {
         InfoBubble(
             if (heldForNextMonthMinor > 0) {
-                "This month is overbudgeted by ${state.formatCurrency(-readyToAssignMinor)}. Lower the hold to cover it."
+                "This month is overbudgeted by ${state.formatCurrency(-readyToAssignMinor)}. Release the hold to cover it."
             } else {
                 "This month is overbudgeted. Move money back before holding it for next month."
             },
@@ -239,7 +239,6 @@ private fun HoldSheetActions(
         TandemActionButton(
             when {
                 mobileSession.isPerformingBudgetAction -> "Holding…"
-                heldForNextMonthMinor > 0 -> "Update hold"
                 else -> "Hold amount"
             },
             TandemActionButtonTone.PRIMARY,
@@ -248,7 +247,7 @@ private fun HoldSheetActions(
             enabled =
                 !state.readOnlyMode &&
                     !mobileSession.isPerformingBudgetAction &&
-                    holdAmountAllowed(parsedHoldAmount, figures.readyToAssignMinor, heldForNextMonthMinor),
+                    holdAmountAllowed(parsedHoldAmount, figures.readyToAssignMinor),
             loading = mobileSession.isPerformingBudgetAction,
         ) {
             scope.launch {

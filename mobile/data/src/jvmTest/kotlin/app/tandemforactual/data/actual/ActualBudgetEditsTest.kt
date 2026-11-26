@@ -461,7 +461,6 @@ class ActualBudgetEditsTest {
         assertEquals(true, f.category("2027-03", dining).value("carryover"))
         f.edits.setBudgetCarryover(dining, month, false)
         f.rejects("Choose a category in this budget month") { setBudgetCarryover("missing", month, true) }
-        f.rejects("budget-set-carryover: category is an income category") { setBudgetCarryover(income, month, true) }
         f.rejects("No budget exists for month: 1990-01") { setBudgetCarryover(dining, "1990-01", true) }
 
         f.edits.copyBudgetMonth("2026-12")
@@ -483,10 +482,12 @@ class ActualBudgetEditsTest {
         val ready = f.month(month).value("toBudget") as Long
         f.edits.holdBudgetForNextMonth(month, 1_000)
         assertEquals(1_000L, f.month(month).value("forNextMonth"))
-        f.edits.holdBudgetForNextMonth(month, 1_000)
         f.edits.holdBudgetForNextMonth(month, 2_000)
-        assertEquals(2_000L, f.month(month).value("forNextMonth"))
-        f.rejects("The hold cannot exceed the amount ready to assign") { holdBudgetForNextMonth(month, ready + 5_000) }
+        assertEquals(3_000L, f.month(month).value("forNextMonth"))
+        f.edits.holdBudgetForNextMonth(month, ready + 5_000)
+        assertEquals(ready, f.month(month).value("forNextMonth"))
+        assertEquals(0L, f.month(month).value("toBudget"))
+        f.rejects("There is no money ready to assign to hold") { holdBudgetForNextMonth(month, 1) }
         f.rejects("Enter a positive amount to hold for next month") { holdBudgetForNextMonth(month, 0) }
         f.rejects("Choose a valid budget month") { holdBudgetForNextMonth("x", 1) }
         f.edits.resetBudgetHold(month)
@@ -514,6 +515,116 @@ class ActualBudgetEditsTest {
         }
         tracking.db.execute("DELETE FROM transactions")
         tracking.edits.setBudgetAmount(trackingGroceries, month, 8)
+    }
+
+    @Test
+    fun copyLastMonthCopiesOnlyThePreviousMonthsVisibleExpenseRows() {
+        val f = fixture()
+        val groceries = f.id("categories", "Groceries")
+        val dining = f.edits.createCategory(f.id("category_groups", "Everyday"), "Fresh")
+        val power = f.id("categories", "Electricity")
+        val misc = f.edits.createCategory(f.id("category_groups", "Everyday"), "Hidden")
+        f.edits.manageCategory(misc, "hide", null, null)
+        val old = f.id("categories", "Old category")
+        val income = f.id("categories", "Income")
+        f.edits.setBudgetAmount(groceries, month, 40_000)
+        f.edits.setBudgetAmount(power, month, 0)
+        f.edits.setBudgetAmount(misc, month, 1_000)
+        f.edits.setBudgetAmount(old, month, 2_000)
+        f.edits.setBudgetAmount(income, month, 3_000)
+        f.edits.setBudgetAmount(dining, "2026-12", 7_000)
+        f.edits.setBudgetAmount(power, "2026-12", 5_000)
+        f.edits.setBudgetAmount(misc, "2026-12", 9)
+
+        f.edits.copyBudgetMonth("2026-12")
+
+        val decemberSql = "SELECT amount FROM zero_budgets WHERE month = 202612 AND category = ?"
+
+        fun december(category: String) = f.one(decemberSql, category)?.get("amount")
+        assertEquals(40_000L, december(groceries))
+        assertEquals(7_000L, december(dining))
+        assertEquals(0L, december(power))
+        assertEquals(9L, december(misc))
+        assertNull(december(old))
+        assertNull(december(income))
+
+        val tracking = fixture("parity-tracking")
+        val trackingIncome = tracking.id("categories", "Income")
+        tracking.edits.setBudgetAmount(trackingIncome, month, 6_000)
+        tracking.edits.copyBudgetMonth("2026-12")
+        assertEquals(
+            6_000L,
+            tracking.one("SELECT amount FROM reflect_budgets WHERE month = 202612 AND category = ?", trackingIncome)?.get("amount"),
+        )
+    }
+
+    @Test
+    fun budgetMonthsExtendPastTheLatestAmountUpToSixtyMonthsAhead() {
+        val f = fixture()
+        val groceries = f.id("categories", "Groceries")
+
+        fun lastMonth() =
+            ActualBudgetReader(f.db)
+                .read(today)
+                .records
+                .filter { it.type == "budget-month" }
+                .maxOf { it.id }
+        assertEquals("2027-10", lastMonth())
+        f.rejects("No budget exists for month: 2027-11") { setBudgetAmount(groceries, "2027-11", 1) }
+
+        f.edits.setBudgetAmount(groceries, "2027-10", 1_000)
+        assertEquals("2027-12", lastMonth())
+        f.edits.setBudgetAmount(groceries, "2027-12", 1_000)
+        assertEquals("2028-02", lastMonth())
+
+        f.edits.setBudget("2031-07", groceries, 1_000)
+        assertEquals("2031-09", lastMonth())
+        f.edits.setBudget("2031-10", groceries, 1_000)
+        assertEquals("2031-10", lastMonth())
+        assertEquals("2031-11", f.edits.createdMonths().last())
+
+        f.edits.setBudget("2031-10", groceries, 0)
+        f.edits.setBudget("2031-07", groceries, 0)
+        assertEquals("2028-02", lastMonth())
+    }
+
+    @Test
+    fun movingMoneyAddsActualsReassignedNoteToTheMonth() {
+        val f = fixture()
+        val groceries = f.id("categories", "Groceries")
+        val dining = f.id("categories", "Dining")
+        f.edits.setBudgetAmount(groceries, month, 500_000)
+        f.edits.setBudgetAmount(dining, month, 500_000)
+        f.edits.moveMoney(month, groceries, dining, 500)
+        assertEquals(
+            "- Reassigned 5.00 from Groceries → Dining on November 21",
+            f.one("SELECT note FROM notes WHERE id = ?", "budget-$month")?.get("note"),
+        )
+        f.edits.moveMoney(month, dining, groceries, 123_456)
+        assertEquals(
+            "- Reassigned 5.00 from Groceries → Dining on November 21\n- Reassigned 1,234.56 from Dining → Groceries on November 21",
+            f.one("SELECT note FROM notes WHERE id = ?", "budget-$month")?.get("note"),
+        )
+    }
+
+    @Test
+    fun incomeCarryoverIsAllowedAndReplacesTheManualHold() {
+        val f = fixture()
+        val income = f.id("categories", "Income")
+        f.edits.holdBudgetForNextMonth(month, 1_000)
+        f.edits.setBudgetCarryover(income, month, true)
+        assertEquals(0L, f.month(month).value("forNextMonth"))
+        assertEquals(1L, f.one("SELECT carryover FROM zero_budgets WHERE month = 202703 AND category = ?", income)?.get("carryover"))
+        f.edits.setBudgetCarryover(income, month, false)
+        assertEquals(0L, f.one("SELECT carryover FROM zero_budgets WHERE month = 202703 AND category = ?", income)?.get("carryover"))
+
+        val tracking = fixture("parity-tracking")
+        val trackingIncome = tracking.id("categories", "Income")
+        tracking.edits.setBudgetCarryover(trackingIncome, month, true)
+        assertEquals(
+            1L,
+            tracking.one("SELECT carryover FROM reflect_budgets WHERE month = 202611 AND category = ?", trackingIncome)?.get("carryover"),
+        )
     }
 
     @Test

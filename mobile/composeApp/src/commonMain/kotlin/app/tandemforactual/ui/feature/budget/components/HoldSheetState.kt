@@ -39,11 +39,8 @@ internal class HoldSheetState(
     var enterNewOperand by enterNewOperand
     var message by message
 
-    fun open(
-        readyToAssignMinor: Long,
-        heldForNextMonthMinor: Long,
-    ) {
-        amountMinor = suggestedHoldAmount(readyToAssignMinor, heldForNextMonthMinor)
+    fun open(readyToAssignMinor: Long) {
+        amountMinor = suggestedHoldAmount(readyToAssignMinor)
         accumulator = null
         operator = null
         enterNewOperand = false

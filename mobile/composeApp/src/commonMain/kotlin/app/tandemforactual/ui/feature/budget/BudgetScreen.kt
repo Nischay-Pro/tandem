@@ -137,7 +137,7 @@ internal fun BudgetScreen(
             onPlanTemplates = { dialogs.showTemplates = true },
             onOpenHold = {
                 mobileSession.feedback.clearBudgetActionMessage()
-                hold.open(readyToAssignMinor, holdFigures.heldForNextMonthMinor)
+                hold.open(readyToAssignMinor)
             },
             onAutoAssign = { dialogs.showAutoAssign = true },
         )

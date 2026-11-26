@@ -273,7 +273,7 @@ private class LiveBudgetMonthBuilder(
                     }
                 }
                 BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
-                    replayedHold = payload.longValue("amountMinor") ?: replayedHold
+                    replayedHold = (replayedHold ?: 0L) + (payload.longValue("amountMinor") ?: 0L)
                     heldForNextMonthPending = true
                 }
                 BudgetReorderKind.RESET_BUDGET_HOLD -> {

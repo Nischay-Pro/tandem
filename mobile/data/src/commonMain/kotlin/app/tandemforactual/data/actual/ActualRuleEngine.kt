@@ -282,7 +282,7 @@ class ActualRuleEngine(
             is Value.Number -> {
                 val n = num(field) ?: return false
                 if (op == "isapprox") {
-                    val threshold = kotlin.math.round(kotlin.math.abs(value.value) * 0.075)
+                    val threshold = jsMathRound(kotlin.math.abs(value.value) * 0.075)
                     n >= value.value - threshold && n <= value.value + threshold
                 } else {
                     n == value.value
@@ -432,12 +432,12 @@ class ActualRuleEngine(
         }
         val afterFixed = remainder(list)
         actions.filter { it.op == "set-split-amount" && it.method == "fixed-percent" }.forEach {
-            list[it.splitIndex + 1]["amount"] = kotlin.math.round(afterFixed * ((it.value as Number).toDouble() / 100)).toLong()
+            list[it.splitIndex + 1]["amount"] = jsMathRound(afterFixed * ((it.value as Number).toDouble() / 100)).toLong()
         }
         val remainders = actions.filter { it.op == "set-split-amount" && it.method == "remainder" }
         val afterPercent = remainder(list)
         if (remainders.isNotEmpty()) {
-            val each = kotlin.math.round(afterPercent.toDouble() / remainders.size).toLong()
+            val each = jsMathRound(afterPercent.toDouble() / remainders.size).toLong()
             remainders.forEach { list[it.splitIndex + 1]["amount"] = each }
             val last = remainders.maxOf { it.splitIndex + 1 }
             list[last]["amount"] = (list[last]["amount"] as Long) + remainder(list)

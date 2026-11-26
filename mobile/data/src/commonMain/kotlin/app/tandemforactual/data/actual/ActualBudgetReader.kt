@@ -28,7 +28,6 @@ class ActualBudgetReader(
     private val db: ActualDatabase,
 ) {
     private val tandemId = Regex("^tandem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
-    private val numberFormats = setOf("comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in")
 
     /** [today] is the device's local date as `YYYY-MM-DD`; it sets the current month and the account-balance cutoff. */
     fun read(today: String): ActualSnapshot {
@@ -75,7 +74,7 @@ class ActualBudgetReader(
         val created = months.createdMonths(ActualMonths.fromIsoDate(today))
         months.compute(created, created.dropLast(1)).forEach { (month, body) -> records += record("budget-month", body, month) }
         records += transactions()
-        return ActualSnapshot(records, displaySettings(preferences))
+        return ActualSnapshot(records, budgetDisplaySettings(preferences))
     }
 
     private fun readAccounts(
@@ -347,35 +346,6 @@ class ActualBudgetReader(
         )
     }
 
-    private fun displaySettings(preferences: Map<String, String?>): BudgetDisplaySettings {
-        val currencyEnabled = preferences["flags.currency"] == "true"
-        val configured = preferences["defaultCurrencyCode"]?.takeIf { currencyEnabled && Regex("^[A-Z]{3}$").matches(it) }
-        val configuredMetadata = configured?.let(ACTUAL_CURRENCIES::get)
-        val currencyCode = configured ?: "USD"
-        val metadata = configuredMetadata ?: if (configured != null) UNKNOWN_ACTUAL_CURRENCY else ACTUAL_CURRENCIES.getValue("USD")
-        val numberFormat =
-            preferences["numberFormat"]?.takeIf { it in numberFormats } ?: configuredMetadata?.numberFormat
-        val symbolPosition = preferences["currencySymbolPosition"]
-        return BudgetDisplaySettings(
-            currencyCode = currencyCode,
-            currencySymbol = metadata.symbol,
-            currencyFractionDigits = metadata.decimalPlaces,
-            numberFormat = numberFormat,
-            hideFraction = preferences["hideFraction"] == "true",
-            currencySymbolPosition =
-                if (configuredMetadata != null && (symbolPosition == "before" || symbolPosition == "after")) {
-                    symbolPosition
-                } else if (metadata.symbolFirst) {
-                    "before"
-                } else {
-                    "after"
-                },
-            currencySpaceBetweenAmountAndSymbol =
-                configuredMetadata != null && preferences["currencySpaceBetweenAmountAndSymbol"] == "true",
-            budgetType = if (preferences["budgetType"] == "tracking") "tracking" else "envelope",
-        )
-    }
-
     private fun record(
         type: String,
         body: JsonObject,
@@ -391,4 +361,35 @@ class ActualBudgetReader(
     private fun obj(vararg fields: Pair<String, JsonElement>): JsonObject = JsonObject(linkedMapOf(*fields))
 
     private fun JsonObject.str(key: String): String = (getValue(key) as JsonPrimitive).content
+}
+
+private val numberFormats = setOf("comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in")
+
+internal fun budgetDisplaySettings(preferences: Map<String, String?>): BudgetDisplaySettings {
+    val currencyEnabled = preferences["flags.currency"] == "true"
+    val configured = preferences["defaultCurrencyCode"]?.takeIf { currencyEnabled && Regex("^[A-Z]{3}$").matches(it) }
+    val configuredMetadata = configured?.let(ACTUAL_CURRENCIES::get)
+    val currencyCode = configured ?: "USD"
+    val metadata = configuredMetadata ?: if (configured != null) UNKNOWN_ACTUAL_CURRENCY else ACTUAL_CURRENCIES.getValue("USD")
+    val numberFormat =
+        preferences["numberFormat"]?.takeIf { it in numberFormats } ?: configuredMetadata?.numberFormat
+    val symbolPosition = preferences["currencySymbolPosition"]
+    return BudgetDisplaySettings(
+        currencyCode = currencyCode,
+        currencySymbol = metadata.symbol,
+        currencyFractionDigits = metadata.decimalPlaces,
+        numberFormat = numberFormat,
+        hideFraction = preferences["hideFraction"] == "true",
+        currencySymbolPosition =
+            if (configuredMetadata != null && (symbolPosition == "before" || symbolPosition == "after")) {
+                symbolPosition
+            } else if (metadata.symbolFirst) {
+                "before"
+            } else {
+                "after"
+            },
+        currencySpaceBetweenAmountAndSymbol =
+            configuredMetadata != null && preferences["currencySpaceBetweenAmountAndSymbol"] == "true",
+        budgetType = if (preferences["budgetType"] == "tracking") "tracking" else "envelope",
+    )
 }
