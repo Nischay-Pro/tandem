@@ -98,6 +98,10 @@ internal class BudgetActions(
         val originalAmount = state.selectedTransactionAmountMinor
         val amount = state.parseAmountMinorUnits(state.transactionAmount)
         if (state.readOnlyMode || originalAmount == null || amount == null || mobileSession.isSavingTransaction) return onComplete(false)
+        if (state.transactionType == "Transfer") {
+            mobileSession.reportTransactionWriteMessage("A split can’t be a transfer. Remove the split first.")
+            return onComplete(false)
+        }
         if (state.newTransactionAccountId != state.selectedTransactionAccountId || state.transactionDate != state.selectedTransactionDate) {
             mobileSession.reportTransactionWriteMessage("Change a split transaction’s account or date in Actual.")
             return onComplete(false)
