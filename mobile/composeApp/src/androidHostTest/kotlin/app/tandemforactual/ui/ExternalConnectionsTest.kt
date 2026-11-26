@@ -35,10 +35,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class ExternalConnectionsTest {
     @get:Rule
     val composeTestRule = createComposeRule()

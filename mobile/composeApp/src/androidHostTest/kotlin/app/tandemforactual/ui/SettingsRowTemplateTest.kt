@@ -23,10 +23,8 @@ import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class SettingsRowTemplateTest {
     @get:Rule
     val composeTestRule = createComposeRule()

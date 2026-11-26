@@ -39,10 +39,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class CloseAccountDialogTest {
     @get:Rule
     val composeTestRule = createComposeRule()

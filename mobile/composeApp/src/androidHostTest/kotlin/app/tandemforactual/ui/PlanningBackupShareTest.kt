@@ -15,10 +15,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class PlanningBackupShareTest {
     @Test
     fun openingTheShareSheetDoesNotRecordABackup(): Unit =

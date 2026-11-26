@@ -23,10 +23,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class AccountReconcileWriteTest {
     @Test
     fun reconcileLocksClearedTransactionsAndOnlyUnclearsWhatTheUserUnticked() =
