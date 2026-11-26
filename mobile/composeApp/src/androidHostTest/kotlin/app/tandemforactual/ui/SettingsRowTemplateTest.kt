@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -81,5 +82,40 @@ class SettingsRowTemplateTest {
         composeTestRule.onNodeWithText("Appearance").performClick()
 
         assertEquals(AppRoute.APPEARANCE, openedRoute)
+    }
+
+    @Test
+    fun yourDataSectionOpensExportAndBackup() {
+        var openedRoute: AppRoute? = null
+        val navigation =
+            AppNavigation(
+                open = { openedRoute = it },
+                reset = {},
+                replaceTop = {},
+                newTransaction = {},
+                selectTab = {},
+                back = {},
+                backToList = {},
+            )
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                SettingsScreen(
+                    AppState(),
+                    navigation,
+                    TandemMobileSession(
+                        app.tandemforactual.api.client
+                            .TandemApiClient(),
+                        null,
+                        { 0L },
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Your data").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("Automatic backups, recovery and exports").assertExists()
+        composeTestRule.onNodeWithText("Export & backup").performScrollTo().performClick()
+
+        assertEquals(AppRoute.EXPORT, openedRoute)
     }
 }

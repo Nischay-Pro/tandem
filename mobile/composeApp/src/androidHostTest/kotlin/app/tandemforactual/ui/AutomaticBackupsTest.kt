@@ -1,15 +1,21 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.AutomaticBackups
+import app.tandemforactual.ui.core.session.BackupDestination
+import app.tandemforactual.ui.core.session.BackupProblem
+import app.tandemforactual.ui.core.session.BackupProblemException
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.core.session.automaticBackupSummary
 import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
@@ -168,5 +174,63 @@ class AutomaticBackupsTest {
         assertEquals("secret", store.value)
         assertTrue(secrets.setPassphrase(null))
         assertFalse(secrets.hasPassphrase())
+    }
+
+    @Test
+    fun reportsAFailedWebDavPasswordSave() {
+        val store = FlakyStore(broken = true)
+        val secrets = BackupSecrets(FlakyStore(), store)
+        assertFalse(secrets.setWebDavPassword("pw"))
+        store.broken = false
+        assertTrue(secrets.setWebDavPassword("pw"))
+        assertEquals("pw", store.value)
+    }
+
+    @Test
+    fun aMissingWebDavPasswordFailsTheRunWithoutMovingTheLastBackup() =
+        runBlocking {
+            val result =
+                AutomaticBackupResult.deliver(toFolder = null, toWebDav = { throw BackupProblemException(BackupProblem.WEBDAV_PASSWORD) })
+            assertEquals(AutomaticBackupResult.failed(BackupProblem.WEBDAV_PASSWORD), result)
+            val saved = result.preferences(now = 42)
+            assertNull(saved[AutomaticBackupSettings.LAST_RUN])
+            val state = AppState()
+            state.automaticBackup = on.copy(folder = null, webDavUrl = "https://dav")
+            state.restoreAutomaticBackupStatus(saved)
+            assertNull(state.automaticBackupLastRun)
+            assertEquals(
+                "Last backup failed: Tandem can’t read the WebDAV password. Set up WebDAV again.",
+                automaticBackupSummary(state.automaticBackup, null, state.automaticBackupResult),
+            )
+        }
+
+    @Test
+    fun keepsTheFolderCopyWhenWebDavFailsAndSaysSo() =
+        runBlocking {
+            val result = AutomaticBackupResult.deliver(toFolder = {}, toWebDav = { error("503") })
+            assertEquals(setOf(BackupDestination.FOLDER), result.savedTo)
+            assertEquals(BackupProblem.WEBDAV, result.problem)
+            val saved = result.preferences(now = 42)
+            assertEquals("42", saved[AutomaticBackupSettings.LAST_RUN])
+            assertEquals(result, AutomaticBackupResult.decode(saved[AutomaticBackupResult.KEY]))
+            val settings = on.copy(webDavUrl = "https://dav")
+            assertEquals("Saved to the folder; WebDAV upload failed", automaticBackupSummary(settings, "today", result))
+            val lost = AutomaticBackupResult.deliver(toFolder = { error("permission revoked") }, toWebDav = null)
+            assertEquals("Last backup failed: Tandem can’t reach the backup folder", automaticBackupSummary(on, "today", lost))
+            val both = AutomaticBackupResult.deliver(toFolder = {}, toWebDav = {})
+            assertEquals("Last backup today", automaticBackupSummary(settings, "today", both))
+        }
+
+    @Test
+    fun recordsASkippedRunWithItsReason() {
+        val skipped = AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
+        val saved = skipped.preferences(now = 42)
+        assertNull(saved[AutomaticBackupSettings.LAST_RUN])
+        val restored = AppState()
+        restored.restorePersistentSettings(on.toPreferences() + saved + (AutomaticBackupSettings.LAST_RUN to "7"))
+        assertEquals(skipped, restored.automaticBackupResult)
+        assertEquals(7L, restored.automaticBackupLastRun)
+        assertEquals("Skipped: sign in to back up", automaticBackupSummary(on, "today", restored.automaticBackupResult))
+        assertNull(AutomaticBackupResult.decode("nonsense"))
     }
 }

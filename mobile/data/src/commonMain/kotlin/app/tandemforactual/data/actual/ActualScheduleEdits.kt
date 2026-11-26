@@ -458,10 +458,10 @@ class ActualScheduleEdits(
             if (end == null || !isIsoDate(end) || end < start) fail("The end date must be on or after the start date")
         }
     }
-
-    private fun isIsoDate(value: String): Boolean =
-        Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value) && parseIsoMillis("${value}T00:00:00.000Z") != null
 }
+
+internal fun isIsoDate(value: String): Boolean =
+    Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value) && parseIsoMillis("${value}T00:00:00.000Z") != null
 
 /** `getScheduledAmount`: a fixed amount, or the rounded midpoint of a range. */
 internal fun scheduledAmount(value: JsonElement?): Long =

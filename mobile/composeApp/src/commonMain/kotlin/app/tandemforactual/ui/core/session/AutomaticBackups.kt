@@ -23,6 +23,9 @@ class BackupSecrets(
     /** Saves the passphrase, or removes it when null; false when the device couldn't. */
     fun setPassphrase(value: String?): Boolean =
         runCatching { if (value == null) passphrase.clear() else passphrase.write(value) }.isSuccess
+
+    /** Saves the WebDAV password; false when the device couldn't. */
+    fun setWebDavPassword(value: String): Boolean = runCatching { webDavPassword.write(value) }.isSuccess
 }
 
 /** The platform's [BackupSecrets]; without them backups stay plain and WebDAV can't be set up. */
