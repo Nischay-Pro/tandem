@@ -111,7 +111,7 @@ internal data class ActivitySearchDateQuery(
     val label: String,
 ) {
     fun matches(dateIso: String): Boolean {
-        if (monthOfYear != null) return dateIso.getOrNull(5)?.let { it.digitToIntOrNull() } == monthOfYear
+        if (monthOfYear != null) return monthOf(dateIso) == monthOfYear
         if (monthDay != null) return dateIso.substringOrNull(5, 10) == monthDay
         return (startInclusive == null || dateIso >= startInclusive) && (endInclusive == null || dateIso <= endInclusive)
     }
@@ -254,7 +254,7 @@ private fun matchesFilter(
             range.size == 2 && record.dateIso >= range[0] && record.dateIso <= range[1]
         }
         ActivitySearchField.DATE_MONTH_OF_YEAR ->
-            record.dateIso.getOrNull(5)?.digitToIntOrNull() == filter.value.toIntOrNull()
+            monthOf(record.dateIso) == filter.value.toIntOrNull()
         ActivitySearchField.DATE_MONTH_DAY -> record.dateIso.substringOrNull(5, 10) == filter.value
         ActivitySearchField.CLEARED -> record.cleared == true
         ActivitySearchField.UNCLEARED -> record.cleared == false
@@ -296,3 +296,6 @@ internal fun parseActivitySearchTags(notes: String): List<String> {
     }
     return tags.toList()
 }
+
+/** The month of an ISO date, from both of its digits. */
+private fun monthOf(dateIso: String): Int? = dateIso.substringOrNull(5, 7)?.toIntOrNull()
