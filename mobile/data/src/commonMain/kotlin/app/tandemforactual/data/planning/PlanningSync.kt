@@ -220,8 +220,13 @@ class PlanningSync(
                     sent,
                 )
             if (result is RemoteWrite.Stored) {
+                val current = dao.find(budgetId, record.recordId)
                 dao.upsert(
-                    record.copy(revision = revision, syncedRevision = revision, iv = iv, ciphertext = sealed, pendingUpload = false),
+                    if (current == null || current == record) {
+                        record.copy(revision = revision, syncedRevision = revision, iv = iv, ciphertext = sealed, pendingUpload = false)
+                    } else {
+                        current.copy(syncedRevision = revision)
+                    },
                 )
                 return true
             }

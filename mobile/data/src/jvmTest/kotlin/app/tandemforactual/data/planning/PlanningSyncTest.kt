@@ -314,6 +314,58 @@ class PlanningSyncTest {
         }
 
     @Test
+    fun anEditMadeDuringItsUploadStaysQueued(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer()
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val store = PlanningStore(db.planningRecordDao(), "b", cipher) { 1L }
+                var editing = true
+                val transport =
+                    object : PlanningTransport by server.transport() {
+                        override suspend fun put(
+                            recordId: String,
+                            recordType: String,
+                            schemaVersion: Int,
+                            revision: Long,
+                            baseRevision: Long?,
+                            deleted: Boolean,
+                            iv: ByteArray,
+                            ciphertext: ByteArray,
+                        ): RemoteWrite {
+                            val stored =
+                                server.transport().put(recordId, recordType, schemaVersion, revision, baseRevision, deleted, iv, ciphertext)
+                            if (editing) store.save(SavingsGoal("g", "Holiday", 2_000, "USD"))
+                            editing = false
+                            return stored
+                        }
+                    }
+                val sync = PlanningSync(db.planningRecordDao(), "b", transport)
+                store.save(SavingsGoal("g", "Holiday", 1_000, "USD"))
+
+                assertEquals(1, sync.sync(cipher, 0).uploaded)
+                assertEquals(listOf(SavingsGoal("g", "Holiday", 2_000, "USD")), store.savingsGoals().first())
+                val pending = db.planningRecordDao().pending("b").single()
+                assertEquals(1L, pending.syncedRevision)
+
+                assertEquals(1, sync.sync(cipher, 0).uploaded)
+                assertEquals(2L, server.records.getValue("g").revision)
+                assertTrue(db.planningRecordDao().pending("b").isEmpty())
+                val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+                try {
+                    PlanningSync(tabletDb.planningRecordDao(), "b", server.transport()).sync(cipher, 0)
+                    val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", cipher) { 2L }
+                    assertEquals(listOf(SavingsGoal("g", "Holiday", 2_000, "USD")), tablet.savingsGoals().first())
+                } finally {
+                    tabletDb.closeDatabase()
+                }
+            } finally {
+                db.closeDatabase()
+            }
+        }
+
+    @Test
     fun rotatingTheKeyLocksOutDevicesWithoutTheNewSecret(): Unit =
         runBlocking {
             val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
