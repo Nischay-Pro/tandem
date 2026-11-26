@@ -36,7 +36,7 @@ android {
   defaultConfig {
     applicationId = "app.tandemforactual.android"
     minSdk = 26
-    targetSdk = 36
+    targetSdk = 37
     versionCode = providers.gradleProperty("tandemVersionCode").orNull?.toIntOrNull() ?: 1
     versionName = providers.gradleProperty("tandemVersionName").orNull ?: "0.1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

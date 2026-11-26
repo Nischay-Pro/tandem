@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.configureLocalServer
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -30,6 +31,7 @@ internal fun LocalServerAddressScreen(
     navigation: AppNavigation,
 ) {
     val scope = rememberCoroutineScope()
+    val lanAccess = LocalLanAccess.current
     var address by rememberSaveable { mutableStateOf(state.localServerUrl) }
     var checking by remember { mutableStateOf(false) }
     var checked by remember { mutableStateOf<Boolean?>(null) }
@@ -64,6 +66,7 @@ internal fun LocalServerAddressScreen(
             checking = true
             scope.launch {
                 val saved = address.trim()
+                lanAccess?.request(saved)
                 checked = mobileSession.configureLocalServer(saved)
                 if (mobileSession.localServerError == null) state.localServerUrl = saved
                 checking = false

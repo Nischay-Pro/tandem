@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.OpenIdLoginProofState
 import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -68,6 +69,13 @@ internal fun StartupEffects(
         } finally {
             shell.sessionRestoreComplete = true
         }
+    }
+    val lanAccess = LocalLanAccess.current
+    LaunchedEffect(shell.sessionRestoreComplete, mobileSession.isAuthenticated, state.localServerUrl, state.automaticBackup.webDavUrl) {
+        if (lanAccess == null || !shell.sessionRestoreComplete || !mobileSession.isAuthenticated) return@LaunchedEffect
+        listOfNotNull(state.serverUrl, state.localServerUrl, state.automaticBackup.webDavUrl)
+            .filter(String::isNotBlank)
+            .forEach { lanAccess.request(it) }
     }
     LaunchedEffect(state.selectedBudgetId, state.selectedBudgetEncrypted) {
         val keyFor = BackgroundBudgetKey.budgetIn(env.backgroundBudgetKeyStore)
