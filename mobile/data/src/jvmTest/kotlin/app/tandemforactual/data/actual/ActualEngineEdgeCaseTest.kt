@@ -410,6 +410,38 @@ class ActualEngineEdgeCaseTest {
     }
 
     @Test
+    fun aLargeUploadGoesUpInChunksUnderTheLimit() {
+        val server = FakeServer(null)
+        val now = 1_795_254_060_000L
+        val store = crdtDb()
+        try {
+            val clock = store.loadClock()
+            store.apply(
+                (1..30).map { CrdtMessage(clock.clock.send(now), "payees", "p$it", "name", CrdtValue.Text("Payee $it")) },
+                clock,
+                false,
+            )
+            runBlocking {
+                ActualSyncEngine(
+                    store,
+                    server.transport,
+                    "group",
+                    "file",
+                    null,
+                    maxUploadBytes = 400,
+                ) { now }.fullSync(clock, null)
+            }
+
+            assertEquals(30, server.store.size)
+            val uploads = server.requests.filter { it.messages.isNotEmpty() }
+            assertTrue(uploads.size > 1)
+            assertTrue(uploads.all { request -> request.messages.sumOf { it.content.size + it.timestamp.length + 16 } <= 400 })
+        } finally {
+            store.db.close()
+        }
+    }
+
+    @Test
     fun twoDevicesConvergeThroughEncryptedSync() {
         val server = FakeServer(XorCipher())
         val now = 1_795_254_060_000L
