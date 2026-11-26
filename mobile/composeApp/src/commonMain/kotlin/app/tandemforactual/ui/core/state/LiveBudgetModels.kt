@@ -37,6 +37,7 @@ internal data class LiveBudgetMonthSummary(
     val groups: List<LiveCategoryGroupSummary>,
     val heldForNextMonthMinor: Long? = null,
     val heldForNextMonthPending: Boolean = false,
+    val totalIncomeMinor: Long? = null,
 )
 
 internal fun BudgetRecordEntity.recordBody(): JsonObject? {
@@ -214,6 +215,7 @@ private class LiveBudgetMonthBuilder(
             groups = groupsWithPendingCategories,
             heldForNextMonthMinor = heldForNextMonthOverride ?: month.longValue("forNextMonth"),
             heldForNextMonthPending = heldForNextMonthPending,
+            totalIncomeMinor = month.longValue("totalIncome"),
         )
     }
 

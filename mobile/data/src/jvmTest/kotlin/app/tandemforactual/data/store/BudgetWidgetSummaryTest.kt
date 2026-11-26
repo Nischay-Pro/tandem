@@ -14,6 +14,8 @@ class BudgetWidgetSummaryTest {
     fun monthTotalsReadReadyToAssignAndSpending() {
         assertEquals(12_00L to 340_50L, budgetMonthTotals("""{"toBudget":1200,"totalSpent":-34050}"""))
         assertEquals(null to null, budgetMonthTotals("""{"toBudget":"x"}"""))
+        assertEquals(-50L to 0L, budgetMonthTotals("""{"toBudget":-50,"totalSpent":4000}"""))
+        assertEquals(0L to 0L, budgetMonthTotals("""{"toBudget":0,"totalSpent":0}"""))
         assertEquals(null to null, budgetMonthTotals("not json"))
         assertEquals(null to null, budgetMonthTotals("[]"))
     }
@@ -42,6 +44,14 @@ class BudgetWidgetSummaryTest {
                             ),
                             RemoteBudgetRecord(
                                 "budget",
+                                "budget-month",
+                                "2026-12",
+                                "r3",
+                                """{"toBudget":250,"totalSpent":1200}""",
+                                "generation",
+                            ),
+                            RemoteBudgetRecord(
+                                "budget",
                                 "budget-settings",
                                 "display",
                                 "r2",
@@ -52,23 +62,27 @@ class BudgetWidgetSummaryTest {
                 )
                 val open = mapOf("selectedBudgetId" to "budget", "selectedBudget" to "Home")
 
-                assertNull(budgetWidgetSummary(repository, emptyMap(), "2026-11"))
-                assertNull(budgetWidgetSummary(repository, mapOf("selectedBudgetId" to " "), "2026-11"))
+                assertNull(budgetWidgetSummary(repository, emptyMap(), "2026-11-26"))
+                assertNull(budgetWidgetSummary(repository, mapOf("selectedBudgetId" to " "), "2026-11-26"))
 
-                val summary = budgetWidgetSummary(repository, open, "2026-11")!!
+                val summary = budgetWidgetSummary(repository, open, "2026-11-30")!!
                 assertEquals("Home", summary.budgetName)
                 assertEquals(500L, summary.readyToAssignMinor)
                 assertEquals(2500L, summary.spentMinor)
                 assertEquals(false, summary.amountsHidden)
                 assertEquals("EUR", summary.displaySettings?.currencyCode)
 
-                val noMonth = budgetWidgetSummary(repository, mapOf("selectedBudgetId" to "budget"), "2026-12")!!
+                val nextMonth = budgetWidgetSummary(repository, open, "2026-12-01")!!
+                assertEquals(250L, nextMonth.readyToAssignMinor)
+                assertEquals(0L, nextMonth.spentMinor)
+
+                val noMonth = budgetWidgetSummary(repository, mapOf("selectedBudgetId" to "budget"), "2027-01-01")!!
                 assertEquals("Budget", noMonth.budgetName)
                 assertNull(noMonth.readyToAssignMinor)
                 assertNull(noMonth.spentMinor)
 
                 listOf("biometricLockEnabled", "privacyModeEnabled", "selectedBudgetEncrypted").forEach { key ->
-                    val hidden = budgetWidgetSummary(repository, open + (key to "true"), "2026-11")!!
+                    val hidden = budgetWidgetSummary(repository, open + (key to "true"), "2026-11-26")!!
                     assertEquals(true, hidden.amountsHidden, key)
                     assertNull(hidden.readyToAssignMinor)
                     assertNull(hidden.displaySettings)
