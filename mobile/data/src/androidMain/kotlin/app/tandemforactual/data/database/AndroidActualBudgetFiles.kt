@@ -49,15 +49,7 @@ class AndroidActualBudgetFiles(
             prepareRoot()
             val target = file(budgetId)
             removeCopies(budgetId)
-            val destination = AtomicFile(target)
-            val output = destination.startWrite()
-            try {
-                write(output)
-                destination.finishWrite(output)
-            } catch (error: Throwable) {
-                destination.failWrite(output)
-                throw error
-            }
+            writeAtomically(target, write)
             ActualDatabase(driver.open(target.absolutePath))
         }
 
@@ -123,13 +115,20 @@ class AndroidActualBudgetFiles(
         deleteWithSidecars(sealed)
         check(next.renameTo(sealed)) { "Could not save the encrypted budget copy." }
         deleteWithSidecars(next)
-        val info = AtomicFile(keyInfoFile(budgetId))
-        val output = info.startWrite()
+        writeAtomically(keyInfoFile(budgetId)) { it.write(keyInfo.encodeToByteArray()) }
+    }
+
+    private fun writeAtomically(
+        target: File,
+        write: (java.io.OutputStream) -> Unit,
+    ) {
+        val destination = AtomicFile(target)
+        val output = destination.startWrite()
         try {
-            output.write(keyInfo.encodeToByteArray())
-            info.finishWrite(output)
+            write(output)
+            destination.finishWrite(output)
         } catch (error: Throwable) {
-            info.failWrite(output)
+            destination.failWrite(output)
             throw error
         }
     }

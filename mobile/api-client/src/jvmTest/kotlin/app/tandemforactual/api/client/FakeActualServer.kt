@@ -223,6 +223,8 @@ internal class TempBudgetFiles : ActualBudgetFiles {
 internal class SealingBudgetFiles(
     private val plain: TempBudgetFiles = TempBudgetFiles(),
 ) : ActualBudgetFiles by plain {
+    val directory get() = plain.directory
+
     val keys = mutableMapOf<String, ByteArray>()
     private val keyInfo = mutableMapOf<String, String>()
 
