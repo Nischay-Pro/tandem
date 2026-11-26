@@ -233,14 +233,18 @@ data class AccountCurrency(
     }
 }
 
-/** One exchange rate the person entered: one [from] is worth [rate] of [to], as of [asOf]. */
+/**
+ * One exchange rate the person entered: one [from] is worth [rate] of [to], as of [asOf]. Each date is its own record;
+ * [recordId] is set only for a record stored under an older id, such as the undated `fx:FROM:TO`.
+ */
 data class ExchangeRate(
     val from: String,
     val to: String,
     val rate: String,
     val asOf: String,
+    val recordId: String? = null,
 ) {
-    val id: String get() = "fx:$from:$to"
+    val id: String get() = recordId ?: "fx:$from:$to:$asOf"
 
     val value: Double? get() = rate.toDoubleOrNull()?.takeIf { it > 0 && it.isFinite() }
 
@@ -257,6 +261,11 @@ data class ExchangeRate(
 
         fun fromJson(body: JsonObject) =
             ExchangeRate(body.text("from").orEmpty(), body.text("to").orEmpty(), body.text("rate").orEmpty(), body.text("asOf").orEmpty())
+
+        fun fromJson(
+            recordId: String,
+            body: JsonObject,
+        ): ExchangeRate = fromJson(body).let { if (it.id == recordId) it else it.copy(recordId = recordId) }
     }
 }
 
