@@ -13,6 +13,9 @@ class ActualTransactions(
 
     internal fun runRules(transaction: Map<String, Any?>) = rules.run(transaction, writer::uuid)
 
+    /** Runs [block] with the budget's rules and payees loaded once for every transaction it adds. */
+    internal fun <T> batchRules(block: () -> T): T = rules.batch(block)
+
     /** `db.insertPayee`: a payee and the mapping row that points it at itself. */
     fun insertPayee(
         name: String,
@@ -20,6 +23,7 @@ class ActualTransactions(
     ): String {
         writer.insert("payees", linkedMapOf("id" to id, "name" to name))
         writer.insert("payee_mapping", linkedMapOf("id" to id, "targetId" to id))
+        rules.payeeAdded(name, id)
         return id
     }
 
@@ -31,51 +35,51 @@ class ActualTransactions(
         accountId: String,
         transactions: List<Map<String, Any?>>,
         runTransfers: Boolean,
-    ): List<String> =
-        writer.batch {
-            val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
-            val added = mutableListOf<MutableMap<String, Any?>>()
-            for (input in transactions) {
-                require(input["date"] != null) { "`date` is required when adding a transaction" }
-                val trans = LinkedHashMap(input - setOf("payee_name", "subtransactions"))
-                val payeeName = (input["payee_name"] as String?)?.trim()?.ifEmpty { null }
-                trans["imported_payee"] = ((trans["imported_payee"] as String?)?.ifEmpty { null } ?: payeeName)?.trim()
-                trans["account"] = accountId
-                if (trans["payee"] == null && payeeName != null) {
-                    trans["payee"] =
-                        payeesToCreate[payeeName.lowercase()]?.first
-                            ?: db
-                                .query("SELECT id, name FROM payees WHERE tombstone = 0")
-                                .firstOrNull {
-                                    (it["name"] as String?)?.lowercase() ==
-                                        payeeName.lowercase()
-                                }?.get("id")
-                            ?: writer.uuid().also { payeesToCreate[payeeName.lowercase()] = it to payeeName }
-                }
-                trans["category"] = trans["category"]
-                @Suppress("UNCHECKED_CAST")
-                val given = (input["subtransactions"] as List<Map<String, Any?>>?)?.map { it + ("account" to accountId) }
-                val ruled = runRules(trans)
-                val final = LinkedHashMap<String, Any?>()
-                final["id"] = writer.uuid()
-                final.putAll(ruled)
-                final["account"] = accountId
-                final["cleared"] = ruled["cleared"] ?: true
-                @Suppress("UNCHECKED_CAST")
-                val ruledSplit = final.remove("subtransactions") as List<Map<String, Any?>>?
-                val subtransactions = given?.takeIf { it.isNotEmpty() } ?: ruledSplit
-                if (!subtransactions.isNullOrEmpty()) added += makeSplit(final, subtransactions) else added += final
+    ): List<String> = batchRules { writer.batch { add(accountId, transactions, runTransfers) } }
+
+    private fun add(
+        accountId: String,
+        transactions: List<Map<String, Any?>>,
+        runTransfers: Boolean,
+    ): List<String> {
+        val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
+        val added = mutableListOf<MutableMap<String, Any?>>()
+        for (input in transactions) {
+            require(input["date"] != null) { "`date` is required when adding a transaction" }
+            val trans = LinkedHashMap(input - setOf("payee_name", "subtransactions"))
+            val payeeName = (input["payee_name"] as String?)?.trim()?.ifEmpty { null }
+            trans["imported_payee"] = ((trans["imported_payee"] as String?)?.ifEmpty { null } ?: payeeName)?.trim()
+            trans["account"] = accountId
+            if (trans["payee"] == null && payeeName != null) {
+                trans["payee"] =
+                    payeesToCreate[payeeName.lowercase()]?.first
+                        ?: rules.payeeByName(payeeName)
+                        ?: writer.uuid().also { payeesToCreate[payeeName.lowercase()] = it to payeeName }
             }
-            val used = added.map { it["payee"] }.toSet()
-            payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> insertPayee(name, id) }
-            val now = writer.nowMillis()
-            added.forEachIndexed { index, t -> if (t["sort_order"] == null) t["sort_order"] = now - index * 1024L }
-            if (runTransfers) {
-                batchUpdate(added = added)
-            } else {
-                added.map { insert(it) }
-            }
+            trans["category"] = trans["category"]
+            @Suppress("UNCHECKED_CAST")
+            val given = (input["subtransactions"] as List<Map<String, Any?>>?)?.map { it + ("account" to accountId) }
+            val ruled = runRules(trans)
+            val final = LinkedHashMap<String, Any?>()
+            final["id"] = writer.uuid()
+            final.putAll(ruled)
+            final["account"] = accountId
+            final["cleared"] = ruled["cleared"] ?: true
+            @Suppress("UNCHECKED_CAST")
+            val ruledSplit = final.remove("subtransactions") as List<Map<String, Any?>>?
+            val subtransactions = given?.takeIf { it.isNotEmpty() } ?: ruledSplit
+            if (!subtransactions.isNullOrEmpty()) added += makeSplit(final, subtransactions) else added += final
         }
+        val used = added.map { it["payee"] }.toSet()
+        payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> insertPayee(name, id) }
+        val now = writer.nowMillis()
+        added.forEachIndexed { index, t -> if (t["sort_order"] == null) t["sort_order"] = now - index * 1024L }
+        return if (runTransfers) {
+            batchUpdate(added = added)
+        } else {
+            added.map { insert(it) }
+        }
+    }
 
     internal fun makeSplit(
         parent: Map<String, Any?>,
@@ -153,37 +157,39 @@ class ActualTransactions(
         deleted: List<String> = emptyList(),
         runTransfers: Boolean = true,
     ): List<String> =
-        writer.batch {
-            val deletedIds = LinkedHashSet(deleted)
-            if (deleted.isNotEmpty()) {
-                db
-                    .query(
-                        "SELECT id FROM v_transactions_internal WHERE parent_id IN (${deleted.joinToString { "?" }})",
-                        *deleted.toTypedArray(),
-                    ).forEach { deletedIds += it["id"] as String }
-            }
-            val accounts = db.query("SELECT * FROM accounts WHERE tombstone = 0").associateBy { it["id"] as String }
-            val addedIds =
-                added.map { t ->
-                    val offBudget = (accounts[t["account"]]?.get("offbudget") as Number?)?.toLong() == 1L
-                    insert(if (truthy(t["is_parent"]) || offBudget) t + ("category" to null) else t)
+        batchRules {
+            writer.batch {
+                val deletedIds = LinkedHashSet(deleted)
+                if (deleted.isNotEmpty()) {
+                    db
+                        .query(
+                            "SELECT id FROM v_transactions_internal WHERE parent_id IN (${deleted.joinToString { "?" }})",
+                            *deleted.toTypedArray(),
+                        ).forEach { deletedIds += it["id"] as String }
                 }
-            deletedIds.forEach { writer.delete("transactions", it) }
-            updated.forEach { t ->
-                val id = t.getValue("id") as String
-                var fields = t - "id"
-                if (t["account"] != null) {
-                    val offBudget = (accounts[t["account"]]?.get("offbudget") as Number?)?.toLong() == 1L
-                    if (truthy(t["is_parent"]) || offBudget) fields = fields + ("category" to null)
+                val accounts = db.query("SELECT * FROM accounts WHERE tombstone = 0").associateBy { it["id"] as String }
+                val addedIds =
+                    added.map { t ->
+                        val offBudget = (accounts[t["account"]]?.get("offbudget") as Number?)?.toLong() == 1L
+                        insert(if (truthy(t["is_parent"]) || offBudget) t + ("category" to null) else t)
+                    }
+                deletedIds.forEach { writer.delete("transactions", it) }
+                updated.forEach { t ->
+                    val id = t.getValue("id") as String
+                    var fields = t - "id"
+                    if (t["account"] != null) {
+                        val offBudget = (accounts[t["account"]]?.get("offbudget") as Number?)?.toLong() == 1L
+                        if (truthy(t["is_parent"]) || offBudget) fields = fields + ("category" to null)
+                    }
+                    update(id, fields)
                 }
-                update(id, fields)
+                if (runTransfers) {
+                    addedIds.mapNotNull(::get).forEach(::onInsert)
+                    updated.mapNotNull { get(it.getValue("id") as String) }.forEach(::onUpdate)
+                    deletedIds.mapNotNull(::get).forEach(::onDelete)
+                }
+                addedIds
             }
-            if (runTransfers) {
-                addedIds.mapNotNull(::get).forEach(::onInsert)
-                updated.mapNotNull { get(it.getValue("id") as String) }.forEach(::onUpdate)
-                deletedIds.mapNotNull(::get).forEach(::onDelete)
-            }
-            addedIds
         }
 
     private fun transferredAccount(transaction: Map<String, Any?>): String? {

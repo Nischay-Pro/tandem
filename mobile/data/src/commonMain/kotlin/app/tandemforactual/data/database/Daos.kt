@@ -7,45 +7,39 @@ import androidx.room3.Query
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
-private const val REPORT_CATEGORY_JSON = "COALESCE(category.localJson, category.remoteJson)"
-private const val REPORT_ACCOUNT_JSON = "COALESCE(account.localJson, account.remoteJson)"
+private const val REPORT_LIVE = """localDeleted = 0 AND remoteDeleted = 0
+          AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)"""
 
-private const val REPORT_CATEGORY_IS_INCOME = """COALESCE(
-        CASE WHEN json_valid($REPORT_CATEGORY_JSON) = 1
-          THEN COALESCE(json_extract($REPORT_CATEGORY_JSON, '$.is_income'), json_extract($REPORT_CATEGORY_JSON, '$.isIncome'))
-          ELSE 0
-        END,
-        0
-      )"""
+private const val REPORT_INCOME_CATEGORIES = """SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'category' AND $REPORT_LIVE
+          AND COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(json_extract(COALESCE(localJson, remoteJson), '$.is_income'), json_extract(COALESCE(localJson, remoteJson), '$.isIncome'))
+              ELSE 0
+            END,
+            0
+          ) = 1"""
 
-private const val REPORT_ACCOUNT_OFF_BUDGET = """COALESCE(
-        CASE WHEN json_valid($REPORT_ACCOUNT_JSON) = 1
-          THEN COALESCE(json_extract($REPORT_ACCOUNT_JSON, '$.offbudget'), json_extract($REPORT_ACCOUNT_JSON, '$.offBudget'))
-          ELSE 0
-        END,
-        0
-      )"""
+private const val REPORT_OFF_BUDGET_ACCOUNTS = """SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'account' AND $REPORT_LIVE
+          AND COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(json_extract(COALESCE(localJson, remoteJson), '$.offbudget'), json_extract(COALESCE(localJson, remoteJson), '$.offBudget'))
+              ELSE 0
+            END,
+            0
+          ) = 1"""
+
+private const val REPORT_CATEGORY_IS_INCOME = "(tx.categoryId IN ($REPORT_INCOME_CATEGORIES))"
 
 private const val REPORT_TRANSACTIONS = """FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
-    LEFT JOIN budget_records AS account
-      ON account.budgetId = tx.budgetId
-      AND account.recordType = 'account'
-      AND account.recordId = tx.accountId
-      AND account.localDeleted = 0 AND account.remoteDeleted = 0
-      AND (account.localJson IS NOT NULL OR account.remoteJson IS NOT NULL)
     WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
       AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
       AND tx.amountMinor IS NOT NULL
       AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
       AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
       AND tx.isParent = 0
-      AND $REPORT_ACCOUNT_OFF_BUDGET = 0
+      AND (tx.accountId IS NULL OR tx.accountId NOT IN ($REPORT_OFF_BUDGET_ACCOUNTS))
       AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
       AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)"""
 
@@ -280,6 +274,38 @@ interface BudgetRecordDao {
         categoryId: String?,
         payeeId: String?,
         fromDate: String?,
+        throughDate: String?,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findAllVisible(
+        budgetId: String,
+        recordType: String,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND recordDate >= :fromDate
+      AND (:throughDate IS NULL OR recordDate <= :throughDate)
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findVisibleFrom(
+        budgetId: String,
+        recordType: String,
+        fromDate: String,
         throughDate: String?,
     ): List<BudgetRecordEntity>
 

@@ -18,7 +18,7 @@ import androidx.sqlite.SQLiteConnection
         OutboxOperationEntity::class,
         app.tandemforactual.data.planning.PlanningRecordEntity::class,
     ],
-    version = 8,
+    version = 9,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = BudgetRecordDisplayMetadataMigration::class),
@@ -27,6 +27,7 @@ import androidx.sqlite.SQLiteConnection
         AutoMigration(from = 5, to = 6, spec = BudgetRecordParentMetadataMigration::class),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9),
     ],
     exportSchema = true,
 )

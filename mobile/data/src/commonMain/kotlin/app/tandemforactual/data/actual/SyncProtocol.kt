@@ -169,7 +169,8 @@ object SyncProtocol {
 }
 
 private class ProtoWriter {
-    private val out = mutableListOf<Byte>()
+    private var out = ByteArray(64)
+    private var size = 0
 
     fun string(
         field: Int,
@@ -197,19 +198,30 @@ private class ProtoWriter {
     ): ProtoWriter {
         varint(((field shl 3) or 2).toLong())
         varint(value.size.toLong())
-        value.forEach { out += it }
+        ensure(value.size)
+        value.copyInto(out, size)
+        size += value.size
         return this
     }
 
-    fun bytes(): ByteArray = out.toByteArray()
+    fun bytes(): ByteArray = out.copyOf(size)
+
+    private fun ensure(extra: Int) {
+        if (size + extra > out.size) out = out.copyOf(maxOf(out.size * 2, size + extra))
+    }
+
+    private fun put(byte: Byte) {
+        ensure(1)
+        out[size++] = byte
+    }
 
     private fun varint(value: Long) {
         var v = value
         while (v and 0x7fL.inv() != 0L) {
-            out += ((v and 0x7f) or 0x80).toByte()
+            put(((v and 0x7f) or 0x80).toByte())
             v = v ushr 7
         }
-        out += v.toByte()
+        put(v.toByte())
     }
 }
 
