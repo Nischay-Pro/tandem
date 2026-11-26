@@ -81,6 +81,7 @@ class TransactionSyncStatusTest {
                     listOf("queued", "conflict", "rejected", null).forEachIndexed { index, status ->
                         TransactionRow(
                             TransactionItem("NumberBarn", "Phone", "Nov 19", -2L - index, "N", recordId = "t$index"),
+                            privacyModeEnabled = false,
                             activityStyle = true,
                             showDateHeader = index == 0,
                             showDivider = true,

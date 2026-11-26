@@ -286,6 +286,7 @@ private fun LazyListScope.activityTransactionItems(
         val transactionId = transaction.recordId
         TransactionRow(
             transaction,
+            state.privacyModeEnabled,
             activityStyle = true,
             selectionMode = selection.selectionMode,
             selected = transactionId != null && transactionId in selection.selectedTransactionIds,

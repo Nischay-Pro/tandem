@@ -344,7 +344,7 @@ private fun LazyListScope.budgetActivityItems(
                     ) {
                         recentTransactions.take(3).forEach { transaction ->
                             SurfaceCard {
-                                TransactionRow(transaction) {
+                                TransactionRow(transaction, state.privacyModeEnabled) {
                                     openTransaction(
                                         state,
                                         navigation,
