@@ -37,6 +37,8 @@ import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
 internal suspend fun TransactionController.updateTransaction(
@@ -108,7 +110,8 @@ internal suspend fun TransactionController.updateTransaction(
         host.reportTransactionWriteMessage("Choose a category from this budget before saving.")
         return false
     }
-    val signedAmount = signedEditAmount(transactionType, enteredAmount, originalAmountMinor)
+    val wasTransfer = (base["transferId"] as? JsonPrimitive)?.contentOrNull != null
+    val signedAmount = signedEditAmount(transactionType, enteredAmount, originalAmountMinor, wasTransfer)
     val details = editDetails(updateDetails, requestedAccountId, payeeId, requestedCategoryId, requestedDate)
     val patch = buildTransactionEditPatch(base, signedAmount, current.amountMinor, notes, details)
     if (patch.isEmpty()) {
@@ -192,14 +195,19 @@ private fun TransactionController.validateEditedTransactionPayee(
     return true
 }
 
-private fun signedEditAmount(
+/**
+ * The signed amount to save. An existing transfer keeps its direction; anything changed into a transfer sends money
+ * from this account to the chosen one, as a new transfer does.
+ */
+internal fun signedEditAmount(
     transactionType: String,
     enteredAmount: Long,
     originalAmountMinor: Long,
+    wasTransfer: Boolean,
 ): Long =
     when (transactionType) {
         "Income" -> enteredAmount
-        "Transfer" -> if (originalAmountMinor >= 0L) enteredAmount else -enteredAmount
+        "Transfer" -> if (wasTransfer && originalAmountMinor >= 0L) enteredAmount else -enteredAmount
         else -> -enteredAmount
     }
 
