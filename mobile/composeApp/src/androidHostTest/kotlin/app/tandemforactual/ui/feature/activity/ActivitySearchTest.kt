@@ -523,6 +523,17 @@ class ActivitySearchTest {
         assertEquals("https://my-tandem.home", cleanServerAddress(" https://my-tandem.home "))
     }
 
+    @Test
+    fun aMonthNameMatchesOnlyThatMonth() {
+        val january = ActivitySearchFilter(ActivitySearchField.DATE_MONTH_OF_YEAR, "1", "January")
+        val november = ActivitySearchFilter(ActivitySearchField.DATE_MONTH_OF_YEAR, "11", "November")
+        assertTrue(matchesActivitySearch(record(date = "2026-01-14"), "", listOf(january)))
+        assertFalse(matchesActivitySearch(record(date = "2026-05-14"), "", listOf(january)))
+        assertFalse(matchesActivitySearch(record(date = "2026-10-14"), "", listOf(january)))
+        assertTrue(matchesActivitySearch(record(date = "2026-11-14"), "", listOf(november)))
+        assertFalse(matchesActivitySearch(record(date = "2026-12-14"), "", listOf(november)))
+    }
+
     private fun record(
         payee: String = "Market",
         payeeId: String? = null,
