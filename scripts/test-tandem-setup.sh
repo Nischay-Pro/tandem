@@ -54,7 +54,7 @@ SH
 chmod +x "$fake_bin"/*
 
 install_directory="$test_root/tandem"
-printf 'latest-nightly\n' |
+printf 'latest-nightly\nhttp://actual:5006\n' |
   PATH="$fake_bin:$PATH" \
     TANDEM_INSTALL_DIRECTORY="$install_directory" \
     TANDEM_SETUP_TEST_SOURCE="$project_root/deploy" \
@@ -68,6 +68,8 @@ test -s "$install_directory/.env"
 test "$(stat -c '%a' "$install_directory/.env")" = 600
 grep -Fq 'TANDEM_API_TAG=latest-nightly' "$install_directory/.env"
 grep -Fq 'POSTGRES_PASSWORD=' "$install_directory/.env"
+test "$(grep -c '^ACTUAL_SERVER_URL=' "$install_directory/.env")" -eq 1
+grep -Fqx 'ACTUAL_SERVER_URL=http://actual:5006' "$install_directory/.env"
 ! grep -Fq 'AUTH_TOKEN_ENCRYPTION_KEY=' "$install_directory/.env"
 grep -Fq 'image: ghcr.io/nischay-pro/tandem-api:${TANDEM_API_TAG:-latest-nightly}' \
   "$install_directory/docker-compose.yml"
@@ -91,7 +93,7 @@ grep -Fq 'Keeping existing .env unchanged.' "$test_root/second-run.log"
 ! grep -Fq 'stale Compose' "$install_directory/docker-compose.yml"
 
 custom_directory="$test_root/custom"
-printf 'my-tag\n' |
+printf 'my-tag\nhttps://budget.example.com/actual\n' |
   PATH="$fake_bin:$PATH" \
     TANDEM_INSTALL_DIRECTORY="$custom_directory" \
     TANDEM_SETUP_TEST_SOURCE="$project_root/deploy" \
@@ -100,6 +102,31 @@ printf 'my-tag\n' |
     TANDEM_DEPLOY_BASE_URL=https://downloads.invalid/deploy \
     bash "$project_root/deploy/tandem-setup.sh" > "$test_root/custom-run.log"
 grep -Fq 'TANDEM_API_TAG=my-tag' "$custom_directory/.env"
+grep -Fqx 'ACTUAL_SERVER_URL=https://budget.example.com/actual' "$custom_directory/.env"
+
+sed -i 's/^ACTUAL_SERVER_URL=.*/ACTUAL_SERVER_URL=/' "$custom_directory/.env"
+printf 'http://actual-server:5006\n' | PATH="$fake_bin:$PATH" \
+  TANDEM_INSTALL_DIRECTORY="$custom_directory" \
+  TANDEM_SETUP_TEST_SOURCE="$project_root/deploy" \
+  TANDEM_SETUP_TEST_NGINX_HELPER="$test_root/nginx-helper" \
+  TANDEM_SETUP_TEST_NETWORK="$test_root/network" \
+  TANDEM_DEPLOY_BASE_URL=https://downloads.invalid/deploy \
+  bash "$project_root/deploy/tandem-setup.sh" > "$test_root/fill-url.log"
+grep -Fqx 'ACTUAL_SERVER_URL=http://actual-server:5006' "$custom_directory/.env"
+grep -Fq 'TANDEM_API_TAG=my-tag' "$custom_directory/.env"
+test "$(stat -c '%a' "$custom_directory/.env")" = 600
+
+if printf 'latest-nightly\nactual:5006\n' | PATH="$fake_bin:$PATH" \
+  TANDEM_INSTALL_DIRECTORY="$test_root/no-url" \
+  TANDEM_SETUP_TEST_SOURCE="$project_root/deploy" \
+  TANDEM_SETUP_TEST_NGINX_HELPER="$test_root/nginx-helper" \
+  TANDEM_SETUP_TEST_NETWORK="$test_root/network" \
+  TANDEM_DEPLOY_BASE_URL=https://downloads.invalid/deploy \
+  bash "$project_root/deploy/tandem-setup.sh" > "$test_root/no-url.log" 2>&1; then
+  echo 'Setup accepted an Actual server address without http:// or https://.' >&2
+  exit 1
+fi
+test ! -e "$test_root/no-url/.env"
 
 if printf 'bad@sha256\n' | PATH="$fake_bin:$PATH" \
   TANDEM_INSTALL_DIRECTORY="$test_root/invalid" \
@@ -113,4 +140,4 @@ if printf 'bad@sha256\n' | PATH="$fake_bin:$PATH" \
 fi
 test ! -e "$test_root/invalid/.env"
 
-echo 'Tandem setup writes one root docker-compose.yml and .env, refreshes Compose, preserves settings, and uses a mutable API tag.'
+echo 'Tandem setup writes one root docker-compose.yml and .env, asks for the Actual server URL, refreshes Compose, preserves settings, and uses a mutable API tag.'

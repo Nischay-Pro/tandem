@@ -47,6 +47,29 @@ if [[ -L "$environment_file" || ( -e "$environment_file" && ! -f "$environment_f
   exit 1
 fi
 
+read_actual_server_url() {
+  read -r -p 'Actual server URL reachable from the Tandem container, such as http://actual:5006: ' actual_server_url || actual_server_url=""
+  if [[ ! "$actual_server_url" =~ ^https?://[^[:space:]/?#]+(/[^[:space:]]*)?$ ]]; then
+    printf 'Enter the Actual server URL, starting with http:// or https://.\n' >&2
+    exit 1
+  fi
+}
+
+write_actual_server_url() {
+  TANDEM_ACTUAL_SERVER_URL="$actual_server_url" awk '
+    BEGIN { updated = 0 }
+    index($0, "ACTUAL_SERVER_URL=") == 1 && !updated {
+      print "ACTUAL_SERVER_URL=" ENVIRON["TANDEM_ACTUAL_SERVER_URL"]
+      updated = 1
+      next
+    }
+    { print }
+    END { if (!updated) print "ACTUAL_SERVER_URL=" ENVIRON["TANDEM_ACTUAL_SERVER_URL"] }
+  ' "$1" > "$temporary_directory/actual.env"
+  chmod 600 "$temporary_directory/actual.env"
+  mv -- "$temporary_directory/actual.env" "$1"
+}
+
 if [[ ! -e "$environment_file" ]]; then
   read -r -p 'Tandem API image tag [latest-nightly]: ' api_tag
   api_tag="${api_tag:-latest-nightly}"
@@ -54,6 +77,7 @@ if [[ ! -e "$environment_file" ]]; then
     printf 'Enter a Docker image tag, such as latest-nightly.\n' >&2
     exit 1
   fi
+  read_actual_server_url
 
   postgres_password="$(openssl rand -hex 32)"
   cp "$temporary_directory/example.env" "$temporary_directory/.env"
@@ -62,8 +86,12 @@ if [[ ! -e "$environment_file" ]]; then
     -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$postgres_password/" \
     "$temporary_directory/.env"
   umask 077
-  chmod 600 "$temporary_directory/.env"
+  write_actual_server_url "$temporary_directory/.env"
   mv "$temporary_directory/.env" "$environment_file"
+elif [[ -z "$(awk 'index($0, "ACTUAL_SERVER_URL=") == 1 { print substr($0, 19); exit }' "$environment_file")" ]]; then
+  read_actual_server_url
+  write_actual_server_url "$environment_file"
+  printf 'Set ACTUAL_SERVER_URL in the existing .env.\n'
 else
   printf 'Keeping existing .env unchanged.\n'
 fi
