@@ -25,7 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.formatSignedCurrency
+import app.tandemforactual.ui.core.session.ConflictResolutionFeedback
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -67,17 +69,15 @@ internal fun ConflictChoiceSaved(
     val feedback =
         mobileSession.conflicts.conflictResolutionFeedback
             ?.takeIf { it.operationId == state.selectedConflictOperationId }
-            ?.message
-    SyncPageHeading(eyebrow = "Sync", title = "Choice saved.", detail = null)
-    SyncStatusRing(icon = Lucide.Check, color = tandemPalette.positive, active = false, caption = null)
-    BodyText(
-        feedback
-            ?: if (nextConflict != null) {
-                "Your choice has been kept. ${if (openConflicts.size == 1) "One more change needs" else "${openConflicts.size} more changes need"} your review."
-            } else {
-                "Your choice has been kept."
-            },
+    val copy = conflictDoneCopy(feedback, openConflicts.size)
+    SyncPageHeading(eyebrow = "Sync", title = copy.title, detail = null)
+    SyncStatusRing(
+        icon = if (copy.saved || nextConflict == null) Lucide.Check else Lucide.TriangleAlert,
+        color = if (copy.saved || nextConflict == null) tandemPalette.positive else tandemPalette.warning,
+        active = false,
+        caption = null,
     )
+    BodyText(copy.body)
     if (nextConflict != null) {
         val nextTitle = conflictPayeeTitle(nextConflict, liveTransactions, mobileSession) ?: "Transaction"
         SurfaceCard {
@@ -87,6 +87,33 @@ internal fun ConflictChoiceSaved(
     } else {
         PrimaryButton("Back to Sync Center") { navigation.open(AppRoute.SYNC_CENTER) }
     }
+}
+
+internal data class ConflictDoneCopy(
+    val title: String,
+    val body: String,
+    val saved: Boolean,
+)
+
+/** What to say once the selected conflict is no longer open: a saved choice only when one was actually saved. */
+internal fun conflictDoneCopy(
+    feedback: ConflictResolutionFeedback?,
+    openConflicts: Int,
+): ConflictDoneCopy {
+    val remaining =
+        when (openConflicts) {
+            0 -> null
+            1 -> "One change needs your review."
+            else -> "${formatInteger(openConflicts)} changes need your review."
+        }
+    if (feedback?.saved == true) {
+        return ConflictDoneCopy("Choice saved.", listOfNotNull(feedback.message, remaining).joinToString(" "), saved = true)
+    }
+    return ConflictDoneCopy(
+        title = if (remaining == null) "Nothing to review." else "Changes to review.",
+        body = feedback?.message ?: remaining ?: "No changes need your review right now.",
+        saved = false,
+    )
 }
 
 /** Heading with the conflict's position and the transaction details as edited on this device. */

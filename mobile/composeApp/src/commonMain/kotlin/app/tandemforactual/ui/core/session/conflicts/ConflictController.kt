@@ -106,13 +106,8 @@ internal class ConflictController(
                 )
             reportConflictResolution(
                 operationId,
-                workflow.resolve(
-                    budgetId,
-                    operationId,
-                    keepDeviceVersion,
-                    encryptionPassword,
-                    reviewedRevision,
-                ),
+                workflow.resolve(budgetId, operationId, keepDeviceVersion, encryptionPassword, reviewedRevision),
+                saved = true,
             )
             host.loadLocalRecords(budgetId)
         } catch (error: CancellationException) {
@@ -311,9 +306,10 @@ internal class ConflictController(
     private fun reportConflictResolution(
         operationId: String,
         message: String,
+        saved: Boolean = false,
     ) {
         host.reportTransactionWriteMessage(message)
-        conflictResolutionFeedback = ConflictResolutionFeedback(operationId, message)
+        conflictResolutionFeedback = ConflictResolutionFeedback(operationId, message, saved)
     }
 
     var conflictResolutionFeedback by mutableStateOf<ConflictResolutionFeedback?>(null)

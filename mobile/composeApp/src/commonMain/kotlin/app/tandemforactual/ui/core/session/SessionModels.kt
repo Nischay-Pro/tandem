@@ -34,6 +34,7 @@ internal data class TransactionEditDetails(
 internal data class ConflictResolutionFeedback(
     val operationId: String,
     val message: String,
+    val saved: Boolean = false,
 )
 
 internal data class UndoNotice(

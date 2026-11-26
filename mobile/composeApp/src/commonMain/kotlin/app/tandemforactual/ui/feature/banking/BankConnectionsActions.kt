@@ -38,6 +38,7 @@ internal class BankConnectionsState {
     val providerStates = mutableStateMapOf<String, BankProviderState>()
     var linking by mutableStateOf<Pair<BankProvider, BankProviderAccount>?>(null)
     var managing by mutableStateOf<LinkedAccount?>(null)
+    var unlinking by mutableStateOf<LinkedAccount?>(null)
     var relinkFor by mutableStateOf<LinkedAccount?>(null)
     var browserProvider by mutableStateOf<BrowserBankProvider?>(null)
 }
@@ -84,8 +85,14 @@ internal class BankConnectionsActions(
         loadAccounts(BankProviders.forSource(account.source))
     }
 
+    fun confirmUnlink(account: LinkedAccount) {
+        ui.managing = null
+        ui.unlinking = account
+    }
+
     fun unlink(account: LinkedAccount) {
         ui.managing = null
+        ui.unlinking = null
         scope.launch {
             if (mobileSession.banking.unlinkBankAccount(state.selectedBudgetId, account.id, password)) ui.reload++
         }

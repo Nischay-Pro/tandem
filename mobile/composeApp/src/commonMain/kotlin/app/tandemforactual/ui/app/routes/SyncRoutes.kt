@@ -89,7 +89,7 @@ internal val syncScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
         AppRoute.CHANGE_HISTORY to
             @Composable { ctx ->
                 with(ctx) {
-                    ChangeHistoryScreen(state, mobileSession, deviceName)
+                    ChangeHistoryScreen(state, mobileSession)
                 }
             },
     )

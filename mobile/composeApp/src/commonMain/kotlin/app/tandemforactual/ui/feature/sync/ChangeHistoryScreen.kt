@@ -52,6 +52,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
 import app.tandemforactual.ui.design.inputs.FilterPills
+import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -74,7 +75,6 @@ import kotlinx.coroutines.launch
 internal fun ChangeHistoryScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
-    deviceName: String,
 ) {
     val scope = rememberCoroutineScope()
     var history by remember(state.selectedBudgetId) { mutableStateOf<BudgetChangeHistory?>(null) }
@@ -83,14 +83,12 @@ internal fun ChangeHistoryScreen(
     var filter by rememberSaveable { mutableStateOf(ChangeFilter.ALL) }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
+    var confirmingUndo by remember { mutableStateOf<ChangeSet?>(null) }
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
         history = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)
         loading = false
-        history?.deviceNode?.takeIf { it !in mobileSession.planning.deviceNames }?.let {
-            mobileSession.planning.nameDevice(state.selectedBudgetId, it, deviceName)
-        }
     }
     val names =
         remember(mobileSession.payeeRecords, mobileSession.categoryRecords, mobileSession.accountRecords) {
@@ -130,18 +128,38 @@ internal fun ChangeHistoryScreen(
                     expanded = expanded == set.id,
                     undoing = mobileSession.isPerformingBudgetAction,
                     onToggle = { expanded = if (expanded == set.id) null else set.id },
-                    onUndo = {
-                        scope.launch {
-                            val result = mobileSession.insights.undoChange(state.selectedBudgetId, set.id, password)
-                            notice = undoNotice(result, mobileSession.budgetActionMessage)
-                            expanded = null
-                            reload++
-                        }
-                    },
+                    onUndo = { confirmingUndo = set },
                 )
             }
         }
     }
+    confirmingUndo?.let { set ->
+        UndoChangeDialog(describe.title(set), onDismiss = { confirmingUndo = null }) {
+            confirmingUndo = null
+            scope.launch {
+                val result = mobileSession.insights.undoChange(state.selectedBudgetId, set.id, password)
+                notice = undoNotice(result, mobileSession.budgetActionMessage)
+                expanded = null
+                reload++
+            }
+        }
+    }
+}
+
+@Composable
+private fun UndoChangeDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    DestructiveConfirmationDialog(
+        title = "Undo this change?",
+        message = "Reverts “$title” in Actual for everyone on this budget. Fields changed again since stay as they are.",
+        confirmLabel = "Undo",
+        dismissLabel = "Cancel",
+        onDismissRequest = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 private fun changeDeviceLabel(
