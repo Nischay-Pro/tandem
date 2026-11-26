@@ -23,9 +23,7 @@ data class ExchangeRateDay(
 )
 
 /** Reference exchange rates. Dates are ISO `yyyy-MM-dd` strings; an empty set of symbols asks for every currency. */
-interface ExchangeRateSource : AutoCloseable {
-    override fun close() = Unit
-
+interface ExchangeRateSource {
     suspend fun latest(
         base: String,
         symbols: Set<String>,
@@ -65,7 +63,8 @@ class FrankfurterRateSource private constructor(
     private val http: HttpClient,
     baseUrl: String,
     @Suppress("UNUSED_PARAMETER") configured: Unit,
-) : ExchangeRateSource {
+) : ExchangeRateSource,
+    AutoCloseable {
     constructor(http: HttpClient, baseUrl: String = DEFAULT_URL) : this(http.config { limits() }, baseUrl, Unit)
 
     override fun close() = http.close()

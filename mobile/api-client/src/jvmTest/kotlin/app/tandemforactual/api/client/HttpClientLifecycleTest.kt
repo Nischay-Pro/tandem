@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,6 +25,10 @@ class HttpClientLifecycleTest {
             val client = TandemApiClient(http = http)
             val error = assertFailsWith<TandemApiException> { client.readActualLoginMethods("https://actual.example") }
             assertEquals("server_timeout", error.errorCode)
+            assertEquals(
+                "server_timeout",
+                assertFailsWith<TandemApiException> { client.call { throw SocketTimeoutException("slow") } }.errorCode,
+            )
         }
 
     @Test
@@ -39,5 +44,8 @@ class HttpClientLifecycleTest {
             val dav = HttpClient(MockEngine { respond("") })
             WebDavClient(dav, "https://cloud.example/dav", "a", "b").use { assertTrue(dav.isActive) }
             assertFalse(dav.isActive)
+
+            BankIconFetcher.connect().close()
+            FrankfurterRateSource.connect().close()
         }
 }

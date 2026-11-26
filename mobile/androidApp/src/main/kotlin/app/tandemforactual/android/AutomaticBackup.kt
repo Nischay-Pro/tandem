@@ -83,9 +83,8 @@ class AutomaticBackupWorker(
         budgetId ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BUDGET)
         val storedSession =
             AndroidDeviceCredentialStore(applicationContext).read() ?: return AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
-        return TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = AndroidActualBudgetFiles(applicationContext)).use { client ->
-            attemptWith(client, settings, budgetId, storedSession, database, progress)
-        }
+        val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = AndroidActualBudgetFiles(applicationContext))
+        return client.use { attemptWith(it, settings, budgetId, storedSession, database, progress) }
     }
 
     private suspend fun attemptWith(
