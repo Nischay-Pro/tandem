@@ -12,16 +12,18 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.WebDavClient
-import app.tandemforactual.api.client.WebDavException
 import app.tandemforactual.data.database.AndroidActualBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.data.planning.BudgetBackupFile
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.AutomaticBackups
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.BackupProblem
+import app.tandemforactual.ui.core.session.BackupProblemException
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -51,36 +53,59 @@ class AutomaticBackupWorker(
     override suspend fun doWork(): Result {
         val database = runCatching { openTandemDatabase(tandemDatabaseBuilder(applicationContext)) }.getOrElse { return Result.retry() }
         val progress = BackupProgress(BackgroundWorkProgress(applicationContext, BackgroundWork.BACKUP))
+        val store = AppPreferencesStore(database)
+        val now = System.currentTimeMillis()
         return try {
-            val store = AppPreferencesStore(database)
             val preferences = store.read()
             val settings = AutomaticBackupSettings.from(preferences)
-            val now = System.currentTimeMillis()
             val lastRun = preferences[AutomaticBackupSettings.LAST_RUN]?.toLongOrNull()
-            val budgetId = preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() }
-            if (!AutomaticBackups.due(settings, lastRun, now) || budgetId == null) return Result.success()
-            if (!networkAllows(settings.network)) return Result.success()
-            val storedSession = AndroidDeviceCredentialStore(applicationContext).read() ?: return Result.success()
-            val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = AndroidActualBudgetFiles(applicationContext))
-            progress.show(0)
-            client.restoreStoredSession(storedSession)
-            val budget = client.listBudgets().firstOrNull { it.budgetId == budgetId } ?: return Result.success()
-            val password = if (budget.isEncrypted) backgroundPassword(budgetId) ?: return Result.success() else null
-            progress.show(25)
-            val bytes = backup(database, client, budgetId, budget.name, password)
-            progress.show(70)
-            deliver(store, settings, budget.name, bytes, now, progress)
-            progress.show(100)
-            Result.success()
+            if (!AutomaticBackups.due(settings, lastRun, now) || !networkAllows(settings.network)) return Result.success()
+            val result = attempt(settings, preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() }, database, progress)
+            record(store, result, now)
+            if (result.outcome == AutomaticBackupResult.Outcome.FAILED) Result.retry() else Result.success()
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
+            runCatching { record(store, AutomaticBackupResult.failed(BackupProblem.BACKUP), now) }
             Result.retry()
         } finally {
             progress.clear()
             database.close()
         }
     }
+
+    private suspend fun attempt(
+        settings: AutomaticBackupSettings,
+        budgetId: String?,
+        database: TandemDatabase,
+        progress: BackupProgress,
+    ): AutomaticBackupResult {
+        budgetId ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BUDGET)
+        val storedSession =
+            AndroidDeviceCredentialStore(applicationContext).read() ?: return AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
+        val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = AndroidActualBudgetFiles(applicationContext))
+        progress.show(0)
+        client.restoreStoredSession(storedSession)
+        val budget =
+            client.listBudgets().firstOrNull { it.budgetId == budgetId }
+                ?: return AutomaticBackupResult.skipped(BackupProblem.BUDGET_GONE)
+        val password =
+            if (budget.isEncrypted) {
+                backgroundPassword(budgetId) ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BACKGROUND_KEY)
+            } else {
+                null
+            }
+        progress.show(25)
+        val bytes = backup(database, client, budgetId, budget.name, password)
+        progress.show(70)
+        return deliver(settings, budget.name, bytes, progress).also { progress.show(100) }
+    }
+
+    private suspend fun record(
+        store: AppPreferencesStore,
+        result: AutomaticBackupResult,
+        now: Long,
+    ) = result.preferences(now).forEach { (name, value) -> store.putValue(name, value) }
 
     /** The backup bytes, with planning records from the encrypted budget's vault when the budget has one. */
     private suspend fun backup(
@@ -102,44 +127,40 @@ class AutomaticBackupWorker(
         }
     }
 
-    /**
-     * Saves the backup to the folder and WebDAV, trimming old copies in each. Once the folder has it the run counts, so a
-     * failed upload waits for the next backup instead of writing duplicates.
-     */
+    /** Saves the backup to the folder and WebDAV, trimming old copies in each. */
     private suspend fun deliver(
-        store: AppPreferencesStore,
         settings: AutomaticBackupSettings,
         budgetName: String,
         bytes: ByteArray,
-        now: Long,
         progress: BackupProgress,
-    ) {
+    ): AutomaticBackupResult {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))
         val name = AutomaticBackups.fileName(budgetName, stamp, BudgetBackupFile.isSealed(bytes))
-        settings.folder?.let { folder ->
-            BackupFolder(applicationContext, Uri.parse(folder)).apply {
-                write(name, bytes)
-                AutomaticBackups.toDelete(names(), budgetName, settings.keep).forEach(::delete)
-            }
-            store.putValue(AutomaticBackupSettings.LAST_RUN, now.toString())
-        }
-        progress.show(85)
-        try {
-            uploadToWebDav(settings, name, bytes, budgetName)
-        } catch (error: WebDavException) {
-            if (settings.folder == null) throw error
-        }
-        store.putValue(AutomaticBackupSettings.LAST_RUN, now.toString())
+        return AutomaticBackupResult.deliver(
+            toFolder =
+                settings.folder?.let { folder ->
+                    {
+                        BackupFolder(applicationContext, Uri.parse(folder)).apply {
+                            write(name, bytes)
+                            AutomaticBackups.toDelete(names(), budgetName, settings.keep).forEach(::delete)
+                        }
+                        progress.show(85)
+                    }
+                },
+            toWebDav = settings.webDavUrl?.let { url -> { uploadToWebDav(settings, url, name, bytes, budgetName) } },
+        )
     }
 
     private suspend fun uploadToWebDav(
         settings: AutomaticBackupSettings,
+        url: String,
         name: String,
         bytes: ByteArray,
         budgetName: String,
     ) {
-        val url = settings.webDavUrl ?: return
-        val password = runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE).read() }.getOrNull() ?: return
+        val password =
+            runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE).read() }.getOrNull()
+                ?: throw BackupProblemException(BackupProblem.WEBDAV_PASSWORD)
         val dav = WebDavClient.connect(url, settings.webDavUser.orEmpty(), password)
         dav.check()
         dav.upload(name, bytes)
