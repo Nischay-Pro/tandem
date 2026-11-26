@@ -74,7 +74,7 @@ internal data class RecurConfig(
  * weekend move to the nearest weekday when the config asks for it.
  */
 internal object ActualRecurrence {
-    private const val MAX_PERIODS = 5_000
+    private const val MAX_EMPTY_PERIODS = 5_000
     private val weekdays =
         mapOf(
             "monday" to 1,
@@ -115,13 +115,29 @@ internal object ActualRecurrence {
         month: Long,
     ) = daysInMonth(year, month)
 
+    /** The period [day] falls in, so a search can start there instead of at the schedule's first period. */
+    private fun periodOf(
+        config: RecurConfig,
+        day: Day,
+    ): Long {
+        val start = config.start
+        val units =
+            when (config.frequency) {
+                "daily" -> day.epoch - start.epoch
+                "weekly" -> (day.epoch - start.epoch).floorDiv(7L)
+                "monthly" -> (day.year * 12 + day.month) - (start.year * 12 + start.month)
+                else -> day.year - start.year
+            }
+        return maxOf(0L, units.floorDiv(config.interval.toLong()))
+    }
+
     private fun candidates(
         rule: Rule,
-        period: Int,
+        period: Long,
     ): List<Day> {
         val config = rule.config
         val start = config.start
-        val step = period.toLong() * config.interval
+        val step = period * config.interval
         return when (config.frequency) {
             "daily" -> listOf(start.plus(step))
             "weekly" -> listOf(start.plus(step * 7))
@@ -157,20 +173,37 @@ internal object ActualRecurrence {
         }
     }
 
-    /** Occurrences of one rule in order, honouring its count and end date. */
-    private fun occurrences(rule: Rule): Sequence<Day> =
+    /** Occurrences of one rule on or after [from] in order, honouring its count and end date. */
+    private fun occurrences(
+        rule: Rule,
+        from: Day,
+    ): Sequence<Day> =
         sequence {
+            val config = rule.config
             var produced = 0
-            for (period in 0 until MAX_PERIODS) {
-                for (day in candidates(rule, period)) {
-                    if (day < rule.config.start) continue
-                    if (rule.config.end != null && day > rule.config.end) return@sequence
-                    yield(day)
+            var period = if (config.count == null) periodOf(config, from) else 0L
+            var empty = 0
+            while (empty < MAX_EMPTY_PERIODS) {
+                val days = candidates(rule, period++).filter { it >= config.start }
+                empty = if (days.isEmpty()) empty + 1 else 0
+                for (day in days) {
+                    if (config.end != null && day > config.end) return@sequence
+                    if (day >= from) yield(day)
                     produced++
-                    if (rule.config.count != null && produced >= rule.config.count) return@sequence
+                    if (config.count != null && produced >= config.count) return@sequence
                 }
             }
         }
+
+    /** The final occurrence of a rule that ends, searching back from its end date. */
+    private fun last(rule: Rule): Day? {
+        val config = rule.config
+        if (config.count != null) return occurrences(rule, config.start).lastOrNull()
+        val end = config.end ?: return null
+        return generateSequence(periodOf(config, end)) { it - 1 }
+            .takeWhile { it >= 0 }
+            .firstNotNullOfOrNull { period -> candidates(rule, period).filter { it >= config.start && it <= end }.maxOrNull() }
+    }
 
     private fun skipWeekend(
         day: Day,
@@ -187,7 +220,7 @@ internal object ActualRecurrence {
         config: RecurConfig,
         from: Day,
         to: Day,
-    ): Boolean = rules(config).any { rule -> occurrences(rule).firstOrNull { it >= from }?.let { it <= to } == true }
+    ): Boolean = rules(config).any { rule -> occurrences(rule, from).firstOrNull()?.let { it <= to } == true }
 
     /** `getNextDate`: the first occurrence on or after [from], or the final occurrence of a finished schedule. */
     fun nextDate(
@@ -197,11 +230,8 @@ internal object ActualRecurrence {
     ): Day? {
         val all = rules(config)
         val date =
-            all.mapNotNull { rule -> occurrences(rule).firstOrNull { it >= from } }.minOrNull()
-                ?: all
-                    .mapNotNull { rule ->
-                        occurrences(rule).takeIf { rule.config.count != null || rule.config.end != null }?.lastOrNull()
-                    }.maxOrNull()
+            all.mapNotNull { rule -> occurrences(rule, from).firstOrNull() }.minOrNull()
+                ?: all.mapNotNull(::last).maxOrNull()
                 ?: return null
         return if (config.skipWeekend && !noSkipWeekend) skipWeekend(date, config.weekendSolveMode) else date
     }

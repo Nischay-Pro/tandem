@@ -70,4 +70,41 @@ class ActualRecurrenceTest {
             ),
         )
     }
+
+    @Test
+    fun longRunningSchedulesKeepTheirDates() {
+        fun config(json: String) = RecurConfig.parse(Json.parseToJsonElement(json).jsonObject)
+        val today = Day.parse("2026-11-21")
+        val daily = config("""{"frequency":"daily","start":"2010-01-01"}""")
+        assertEquals("2026-11-21", ActualRecurrence.nextDate(daily, today).toString())
+        assertEquals("2026-11-22", ActualRecurrence.nextDateAfter(daily, today).toString())
+        assertEquals(true, ActualRecurrence.occursBetween(daily, today, today))
+        assertEquals(
+            "2026-11-30",
+            ActualRecurrence.nextDate(config("""{"frequency":"weekly","start":"1900-01-01","interval":2}"""), today).toString(),
+        )
+        assertEquals(
+            "2024-12-31",
+            ActualRecurrence
+                .nextDate(config("""{"frequency":"daily","start":"2000-01-01","endMode":"on_date","endDate":"2024-12-31"}"""), today)
+                .toString(),
+        )
+        assertEquals(
+            "2016-06-04",
+            ActualRecurrence
+                .nextDate(
+                    config("""{"frequency":"daily","start":"2000-01-01","endMode":"after_n_occurrences","endOccurrences":6000}"""),
+                    today,
+                ).toString(),
+        )
+        assertEquals(
+            null,
+            ActualRecurrence.nextDate(
+                config(
+                    """{"frequency":"monthly","start":"2000-01-01","patterns":[{"type":"friday","value":0}],"endMode":"on_date","endDate":"2001-01-01"}""",
+                ),
+                today,
+            ),
+        )
+    }
 }
