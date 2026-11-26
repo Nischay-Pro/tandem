@@ -12,6 +12,7 @@ import app.tandemforactual.ui.core.state.ReportRangePreset
 import app.tandemforactual.ui.feature.reports.BudgetedSpentPoint
 import app.tandemforactual.ui.feature.reports.CategorySpendingPoint
 import app.tandemforactual.ui.feature.reports.MonthlyMoneyPoint
+import app.tandemforactual.ui.feature.reports.MonthlySpendingAverage
 import app.tandemforactual.ui.feature.reports.NetWorthPoint
 import app.tandemforactual.ui.feature.reports.OTHER_CATEGORY_CHART_ID
 import app.tandemforactual.ui.feature.reports.budgetedSpentPoints
@@ -390,8 +391,16 @@ class ReportsPresentationTest {
         val count: (Int) -> String = { "n=$it" }
 
         assertEquals("You spent ¢350 across n=2 categories.", categorySpendingSummary(350, 2, currency, count))
-        assertEquals("Average monthly spending was ¢100 across n=3 months.", spendingOverTimeSummary(300, 3, currency, count))
-        assertEquals("No monthly spending is available for this period.", spendingOverTimeSummary(0, 0, currency, count))
+        assertEquals(
+            "Average monthly spending was ¢100 across n=3 full months.",
+            spendingOverTimeSummary(MonthlySpendingAverage(100, 3, false), currency, count),
+        )
+        assertEquals(
+            "Average monthly spending was ¢100 across n=1 full month.",
+            spendingOverTimeSummary(MonthlySpendingAverage(100, 1, false), currency, count),
+        )
+        assertEquals("Spending so far this month is ¢40.", spendingOverTimeSummary(MonthlySpendingAverage(40, 1, true), currency, count))
+        assertEquals("No monthly spending is available for this period.", spendingOverTimeSummary(null, currency, count))
         assertEquals("You are spending less than you make.", incomeSpendingSummary(200))
         assertEquals("You are spending more than you make.", incomeSpendingSummary(-200))
         assertEquals("You are spending as much as you make.", incomeSpendingSummary(0))

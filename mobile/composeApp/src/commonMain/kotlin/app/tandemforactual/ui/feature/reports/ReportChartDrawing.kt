@@ -128,7 +128,7 @@ private fun DrawScope.drawSpendingBars(
             CornerRadius(TandemShapes.small.toPx()),
         )
     }
-    val average = values.averageLong().toDouble()
+    val average = monthlySpendingAverage(monthly)?.averageMinor?.toDouble() ?: return
     val averageY = frame.chartBottom - frame.chartHeight * (average / maxValue).toFloat()
     drawLine(palette.syncing, Offset(frame.inset, averageY), Offset(size.width - frame.inset, averageY), 2.dp.toPx())
 }

@@ -269,10 +269,7 @@ private fun ReportTopCategoryRows(
     onOpenCategoryActivity: (String, String, ReportWindow) -> Unit,
 ) {
     val otherCategoryId = OTHER_CATEGORY_CHART_ID
-    val listedCategories =
-        data.categories.take(5) +
-            categoryChartPoints(data.categories).filter { it.categoryId == otherCategoryId }
-    listedCategories.forEach { point ->
+    categoryCardRows(data.categories).forEach { point ->
         ListRow(
             point.category,
             trailing = formatReportCurrency(point.spendingMinor, data.displaySettings),
