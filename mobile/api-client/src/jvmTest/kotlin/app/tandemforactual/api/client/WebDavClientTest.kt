@@ -8,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 class WebDavClientTest {
@@ -39,6 +40,12 @@ class WebDavClientTest {
                                 (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes()
                             respond("", HttpStatusCode.Created)
                         }
+                        "MOVE" -> {
+                            val to = request.headers["Destination"].orEmpty().substringAfterLast('/')
+                            val moved = files.remove(path.substringAfterLast('/'))
+                            if (moved != null) files[to] = moved
+                            respond("", if (moved != null) HttpStatusCode.Created else HttpStatusCode.NotFound)
+                        }
                         "DELETE" ->
                             respond(
                                 "",
@@ -67,6 +74,13 @@ class WebDavClientTest {
             client.upload("tandem-backup-home-2026-11-25-0930.zip", byteArrayOf(4))
             assertContentEquals(byteArrayOf(1, 2, 3), dav.files["tandem-backup-home-2026-11-24-0930.zip"])
             assertEquals(listOf("tandem-backup-home-2026-11-24-0930.zip", "tandem-backup-home-2026-11-25-0930.zip"), client.list())
+            client.upload("x.zip.partial", byteArrayOf(5))
+            client.move("x.zip.partial", "x.zip")
+            assertContentEquals(byteArrayOf(5), dav.files["x.zip"])
+            assertEquals(listOf("tandem-backup-home-2026-11-24-0930.zip", "tandem-backup-home-2026-11-25-0930.zip", "x.zip"), client.list())
+            assertTrue(dav.seen.any { it.startsWith("MOVE /dav/backups/x.zip.partial") })
+            assertFailsWith<WebDavException> { client.move("missing.partial", "missing") }
+            client.delete("x.zip")
             client.delete("tandem-backup-home-2026-11-24-0930.zip")
             client.delete("missing.zip")
             assertEquals(listOf("tandem-backup-home-2026-11-25-0930.zip"), client.list())
