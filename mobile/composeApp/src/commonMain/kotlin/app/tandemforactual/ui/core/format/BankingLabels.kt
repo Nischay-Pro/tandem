@@ -7,5 +7,6 @@ internal fun bankFailureLabel(code: String): String =
         "RATE_LIMIT_EXCEEDED" -> "the bank asked to wait before syncing again"
         "ACCOUNT_NEEDS_ATTENTION" -> "the bank needs attention"
         "NO_ACCOUNTS", "ACCOUNT_MISSING" -> "the bank no longer shares this account"
+        "UNREADABLE_TRANSACTION" -> "a transaction from the bank couldn’t be read"
         else -> code.lowercase().replace('_', ' ')
     }
