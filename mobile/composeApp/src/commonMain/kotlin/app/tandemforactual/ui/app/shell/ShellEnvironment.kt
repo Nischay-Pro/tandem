@@ -44,4 +44,5 @@ internal class ShellEnvironment(
     val backgroundBudgetKeyStore: DeviceCredentialStore? = null,
     /** Opens an OpenID provider's page in the platform's sign-in browser, which hands the callback only to Tandem. */
     val openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
+    val onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
 )

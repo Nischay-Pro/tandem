@@ -59,8 +59,12 @@ class IosDeviceAuthenticator : DeviceAuthenticator {
         title: String,
         onResult: (Boolean) -> Unit,
     ) {
+        iosAuthenticationPrompts++
         LAContext().evaluatePolicy(LAPolicyDeviceOwnerAuthentication, localizedReason = title) { success, _ ->
-            onMain { onResult(success) }
+            onMain {
+                iosAuthenticationPrompts--
+                onResult(success)
+            }
         }
     }
 
@@ -111,6 +115,7 @@ class IosDeviceAuthenticator : DeviceAuthenticator {
         onResult: (String?) -> Unit,
     ) {
         val context = LAContext().apply { localizedReason = title }
+        iosAuthenticationPrompts++
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH.toLong(), 0u)) {
             val secret =
                 memScoped {
@@ -132,7 +137,10 @@ class IosDeviceAuthenticator : DeviceAuthenticator {
                         )?.let { NSString.create(data = it, encoding = NSUTF8StringEncoding)?.toString() }
                     }
                 }
-            onMain { onResult(secret) }
+            onMain {
+                iosAuthenticationPrompts--
+                onResult(secret)
+            }
         }
     }
 
