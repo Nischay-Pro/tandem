@@ -495,11 +495,14 @@ class ActualRuleEngine(
                 db.first("SELECT rule FROM schedules WHERE id = ?", it)?.get("rule") as String?
             }
         val scheduleRules = db.query("SELECT rule FROM schedules").mapNotNull { it["rule"] as String? }.filter { it != scheduleRule }
+        val completedRules =
+            db.query("SELECT rule FROM schedules WHERE completed = 1 AND tombstone = 0").mapNotNull { it["rule"] as String? }.toSet()
         for (rule in rank(loadRules())) {
             val run =
                 when {
                     scheduleRule != null && rule.id == scheduleRule -> true
                     scheduleRule != null && rule.id in scheduleRules -> continue
+                    scheduleRule == null && rule.id in completedRules -> continue
                     else -> matches(rule, current)
                 }
             if (run) current = execActions(rule.actions, current, newId)

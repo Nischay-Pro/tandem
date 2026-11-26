@@ -88,16 +88,13 @@ class ActualScheduleEdits(
             ),
         )
 
-        fun valueOf(
+        fun condition(
             list: List<JsonObject>,
             field: String,
-        ) = list.firstOrNull { it.value("field") == field }?.let { it["value"] }
-        val reset =
-            accountId != null ||
-                date != null ||
-                valueOf(old, "account") != valueOf(conditions, "account") ||
-                valueOf(old, "date") != valueOf(conditions, "date")
-        if (reset) setNextDate(id, conditions, NextDate.RESET)
+        ) = list.firstOrNull { it.value("field") == field }?.let { JsonObject(it - "type" - "field") }
+        if (condition(old, "account") != condition(conditions, "account") || condition(old, "date") != condition(conditions, "date")) {
+            setNextDate(id, conditions, NextDate.RESET)
+        }
         writer.update(
             "schedules",
             id,
@@ -310,13 +307,15 @@ class ActualScheduleEdits(
                 schedules().filter { schedule ->
                     val account = schedule.value("account") as String?
                     schedule.value("completed") != true &&
-                        account != null &&
-                        db.first("SELECT closed FROM accounts WHERE id = ?", account)?.let { !truthy(it["closed"]) } == true
+                        (
+                            account == null ||
+                                db.first("SELECT closed FROM accounts WHERE id = ?", account)?.let { !truthy(it["closed"]) } == true
+                        )
                 }
             for (start in open) {
                 var schedule = start
                 var current = status(schedule)
-                val posts = schedule.value("posts_transaction") == true
+                val posts = schedule.value("posts_transaction") == true && schedule.value("account") != null
                 if (posts && (current != "paid" || isRecurring(schedule)) && current in setOf("paid", "due", "missed")) {
                     while (current in setOf("paid", "due", "missed")) {
                         if (current != "paid") {
