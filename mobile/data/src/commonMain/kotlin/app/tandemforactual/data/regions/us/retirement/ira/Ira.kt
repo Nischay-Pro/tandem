@@ -23,5 +23,6 @@ object Ira : RetirementPlan() {
                 AnnualLimit(2024, 700_000, 100_000),
                 AnnualLimit(2025, 700_000, 100_000),
                 AnnualLimit(2026, 750_000, 110_000),
+                AnnualLimit(2027, 750_000, 110_000),
             )
 }

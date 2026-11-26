@@ -28,5 +28,6 @@ object HealthFsa : RetirementPlan() {
             2024 to 320_000L,
             2025 to 330_000L,
             2026 to 340_000L,
+            2027 to 350_000L,
         ).map { (year, amount) -> AnnualLimit(year, amount) }
 }
