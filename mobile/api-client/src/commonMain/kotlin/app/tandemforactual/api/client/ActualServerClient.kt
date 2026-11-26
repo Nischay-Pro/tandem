@@ -23,6 +23,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.Url
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLParameter
 import io.ktor.http.hostWithPortIfSpecified
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -185,6 +186,59 @@ class ActualServerClient(
         return response.bodyAsBytes()
     }
 
+    /** Sends a budget zip as Actual's `upload` does, without a group id, so the server answers with a new sync group. */
+    suspend fun upload(
+        fileId: String,
+        name: String,
+        body: ByteArray,
+        encryptMeta: JsonObject?,
+    ): String {
+        val response =
+            http.post("$base/sync/upload-user-file") {
+                auth()
+                header("x-actual-file-id", fileId)
+                header("x-actual-name", name.encodeURLParameter())
+                header("x-actual-format", "2")
+                encryptMeta?.let { header("x-actual-encrypt-meta", it.toString()) }
+                contentType(ContentType("application", "encrypted-file"))
+                setBody(body)
+            }
+        return json(response).text("groupId") ?: throw ActualServerException("missing-group-id")
+    }
+
+    /** Clears the file's sync group, so devices still on it are told to download the budget again. */
+    suspend fun resetFile(fileId: String) {
+        filePost("reset-user-file", buildJsonObject { put("fileId", fileId) })
+    }
+
+    suspend fun createKey(
+        fileId: String,
+        keyId: String,
+        salt: String,
+        test: String,
+    ) {
+        filePost(
+            "user-create-key",
+            buildJsonObject {
+                put("fileId", fileId)
+                put("keyId", keyId)
+                put("keySalt", salt)
+                put("testContent", test)
+            },
+        )
+    }
+
+    private suspend fun filePost(
+        route: String,
+        body: JsonObject,
+    ) = json(
+        http.post("$base/sync/$route") {
+            auth()
+            contentType(ContentType.Application.Json)
+            setBody(body.toString())
+        },
+    )
+
     /** Whether the provider is set up on the server, through its standard `status` route. */
     suspend fun bankConfigured(provider: BankProvider): Boolean =
         (bankPost(provider.statusRoute, "{}")["configured"] as? JsonPrimitive)?.content == "true"
@@ -262,14 +316,7 @@ class ActualServerClient(
     }
 
     suspend fun keyInfo(fileId: String): ActualKeyInfo {
-        val data =
-            json(
-                http.post("$base/sync/user-get-key") {
-                    auth()
-                    contentType(ContentType.Application.Json)
-                    setBody(buildJsonObject { put("fileId", fileId) }.toString())
-                },
-            ).getValue("data").jsonObject
+        val data = filePost("user-get-key", buildJsonObject { put("fileId", fileId) }).getValue("data").jsonObject
         return ActualKeyInfo(data.text("id"), data.text("salt"), data.text("test"))
     }
 
@@ -313,6 +360,7 @@ class ActualServerClient(
             text.trim().matches(Regex("^[a-z-]{3,40}$")) -> text.trim()
             status == 401 || status == 403 -> "unauthorized"
             status == 404 -> "not-found"
+            status == 413 -> "file-too-large"
             else -> "network-failure"
         }
 
