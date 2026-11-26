@@ -203,7 +203,7 @@ class ActualBudgetUploadTest {
         )
         assertEquals("file-has-reset", failure { respond("file-has-reset", HttpStatusCode.BadRequest) }.reason)
         assertEquals("file-access-not-allowed", failure { respond("file-access-not-allowed", HttpStatusCode.Forbidden) }.reason)
-        assertEquals("network-failure", failure { respond("""{"status":"error"}""", HttpStatusCode.InternalServerError) }.reason)
+        assertEquals("server-unavailable", failure { respond("""{"status":"error"}""", HttpStatusCode.InternalServerError) }.reason)
         assertEquals("missing-group-id", failure { respond("""{"status":"ok"}""") }.reason)
         failure { throw IOException("connection reset") }.let {
             assertEquals("network-failure", it.reason)
