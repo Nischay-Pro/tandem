@@ -32,7 +32,6 @@ import app.tandemforactual.data.planning.ReportRange
 import app.tandemforactual.data.planning.ReportRow
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
-import app.tandemforactual.ui.core.format.wholePercent
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
@@ -262,9 +261,7 @@ private fun ReportResult(
             fontSize = TandemTypography.compactBody,
         )
     }
-    if (result.months.size >= 3) {
-        AreaChart(result.months.map { it.second }, "${report.flow.label} each month from ${formatLiveDate(result.from)}")
-    }
+    if (result.months.size >= 3) CustomReportTrend(state, report, result)
     SectionCard("Chart", "Largest ${groupNoun(report.grouping)} first") {
         val top = result.rows.take(MAX_CHART_ROWS)
         val largest = top.maxOf { kotlin.math.abs(it.totalMinor) }.coerceAtLeast(1)
@@ -299,6 +296,55 @@ private fun ReportResult(
     ReportTable(state, report, result, names)
 }
 
+/** The monthly totals as a line with its first and last month, scrubbable to read any month. */
+@Composable
+private fun CustomReportTrend(
+    state: AppState,
+    report: CustomReport,
+    result: CustomReportResult,
+) {
+    val palette = tandemPalette
+    var scrub by remember(result) { mutableStateOf<Int?>(null) }
+    val values = result.months.map { it.second }
+    val shown = scrub ?: values.indices.maxBy { values[it] }
+    val monthLabel = reportMonthLabelShort(result.months[shown].first)
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (scrub == null) "Highest · $monthLabel" else monthLabel,
+                Modifier.weight(1f),
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                state.formatCurrency(values[shown]),
+                color = if (values[shown] < 0) palette.negative else palette.text,
+                fontSize = TandemTypography.compactBody,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+        AreaChart(
+            values,
+            "${report.flow.label} each month from ${formatLiveDate(result.from)}",
+            height = 140.dp,
+            selected = scrub,
+            onScrub = { scrub = it },
+        )
+        Row {
+            Text(
+                reportMonthLabelShort(result.months.first().first),
+                Modifier.weight(1f),
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+            )
+            Text(reportMonthLabelShort(result.months.last().first), color = palette.muted, fontSize = TandemTypography.caption)
+        }
+    }
+}
+
 @Composable
 private fun ReportTable(
     state: AppState,
@@ -307,16 +353,16 @@ private fun ReportTable(
     names: RecordNames,
 ) {
     val palette = tandemPalette
-    val showShare = report.flow != ReportFlow.NET && result.totalMinor > 0
+    val shares = if (report.flow == ReportFlow.NET) null else customReportShareColumn(result.rows.map(ReportRow::totalMinor))
     SectionCard("Table", null) {
         Column(Modifier.fillMaxWidth()) {
-            TableRow(report.grouping.label, "Count", if (showShare) "Share" else null, "Total", header = true)
-            result.rows.take(MAX_TABLE_ROWS).forEach { row: ReportRow ->
+            TableRow(report.grouping.label, "Count", shares?.let { "Share" }, "Total", header = true)
+            result.rows.take(MAX_TABLE_ROWS).forEachIndexed { index, row ->
                 DividerLine()
                 TableRow(
                     names.group(report.grouping, row.key),
                     row.count.toString(),
-                    if (showShare) wholePercent((row.totalMinor * 10_000 / result.totalMinor).toInt()) else null,
+                    shares?.rows?.get(index),
                     state.formatCurrency(row.totalMinor),
                 )
             }
@@ -324,7 +370,7 @@ private fun ReportTable(
             TableRow(
                 "Total",
                 result.count.toString(),
-                if (showShare) "100%" else null,
+                shares?.total,
                 state.formatCurrency(result.totalMinor),
                 header = true,
             )

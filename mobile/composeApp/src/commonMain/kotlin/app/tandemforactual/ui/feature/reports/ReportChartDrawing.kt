@@ -9,10 +9,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.design.theme.TandemPalette
@@ -35,7 +38,7 @@ internal fun DrawScope.drawReport(
     showMonthlyGuides: Boolean,
     palette: TandemPalette,
 ) {
-    val inset = 8.dp.toPx()
+    val inset = ReportChartInset.toPx()
     val chartTop = inset
     val chartBottom = size.height - inset
     val frame = ReportChartFrame(inset, chartTop, chartBottom, (chartBottom - chartTop).coerceAtLeast(1f))
@@ -62,42 +65,55 @@ private fun DrawScope.drawCategoryRing(
     palette: TandemPalette,
 ) {
     val inset = frame.inset
-    val values = chartCategories.map(CategorySpendingPoint::spendingMinor)
+    val values = chartCategories.map { it.spendingMinor.coerceAtLeast(0L) }
     val total = values.sum()
     val diameter = minOf(size.width, size.height) - inset * 2
     val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
     if (total <= 0L) {
         drawArc(palette.border, -90f, 360f, false, topLeft, Size(diameter, diameter), style = Stroke(26.dp.toPx()))
-    } else {
-        val colors =
-            listOf(
-                palette.accent,
-                palette.syncing,
-                palette.positive,
-                palette.warning,
-                palette.negative,
-                palette.muted,
-            )
-        var startAngle = -90f
-        values.forEachIndexed { index, value ->
-            val sweep = value.toDouble().div(total).toFloat() * 360f
-            drawArc(
-                color =
-                    if (selection == null || selection.index == index) {
-                        colors[index % colors.size]
-                    } else {
-                        palette.muted.copy(alpha = 0.3f + (index % 4) * 0.13f)
-                    },
-                startAngle = startAngle,
-                sweepAngle = sweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = Size(diameter, diameter),
-                style = Stroke(width = 28.dp.toPx(), cap = StrokeCap.Butt),
-            )
-            startAngle += sweep
-        }
+        return
     }
+    var startAngle = -90f
+    values.forEachIndexed { index, value ->
+        val sweep = value.toDouble().div(total).toFloat() * 360f
+        if (sweep <= 0f) return@forEachIndexed
+        drawArc(
+            color =
+                if (selection == null || selection.index == index) {
+                    categorySliceColor(index, chartCategories[index].categoryId == OTHER_CATEGORY_CHART_ID, palette)
+                } else {
+                    palette.muted.copy(alpha = 0.3f + (index % 4) * 0.13f)
+                },
+            startAngle = startAngle,
+            sweepAngle = sweep,
+            useCenter = false,
+            topLeft = topLeft,
+            size = Size(diameter, diameter),
+            style = Stroke(width = 28.dp.toPx(), cap = StrokeCap.Butt),
+        )
+        startAngle += sweep
+    }
+}
+
+/** A distinct colour for each named slice, up to the eight the ring can show, with Other always muted. */
+internal fun categorySliceColor(
+    index: Int,
+    isOther: Boolean,
+    palette: TandemPalette,
+): Color {
+    if (isOther) return palette.muted
+    val colors =
+        listOf(
+            palette.accent,
+            palette.syncing,
+            palette.positive,
+            palette.warning,
+            palette.negative,
+            lerp(palette.syncing, palette.positive, 0.5f),
+            lerp(palette.warning, palette.negative, 0.5f),
+            lerp(palette.accent, palette.text, 0.5f),
+        )
+    return colors[index.mod(colors.size)]
 }
 
 private fun DrawScope.drawSpendingBars(
@@ -208,25 +224,14 @@ private fun DrawScope.drawNetWorthLine(
     frame: ReportChartFrame,
     palette: TandemPalette,
 ) {
-    val inset = frame.inset
-    val chartBottom = frame.chartBottom
     val values = data.netWorth.map(NetWorthPoint::allAccountsMinor)
-    if (values.isEmpty()) return
-    val (observedMin, observedMax) = netWorthValueRange(values)
-    val minValue = axisValues?.lastOrNull()?.toDouble() ?: observedMin
-    val maxValue = axisValues?.firstOrNull()?.toDouble() ?: observedMax
-    val spread = (maxValue - minValue).coerceAtLeast(1.0)
-    val points =
-        values.mapIndexed { index, value ->
-            val x =
-                if (values.size == 1) {
-                    size.width / 2f
-                } else {
-                    inset + (size.width - inset * 2) * index / (values.size - 1)
-                }
-            val y = chartBottom - frame.chartHeight * ((value - minValue) / spread).toFloat()
-            Offset(x, y)
-        }
+    val points = netWorthPointOffsets(values, axisValues, size.width, frame.chartTop, frame.chartBottom)
+    if (points.isEmpty()) return
+    val (minimum, maximum) = netWorthScale(values, axisValues)
+    val baseline = reportZeroY(minimum, maximum, frame.chartTop, frame.chartBottom)
+    if (minimum < 0.0 && maximum > 0.0) {
+        drawLine(palette.muted.copy(alpha = 0.6f), Offset(frame.inset, baseline), Offset(size.width - frame.inset, baseline), 1.dp.toPx())
+    }
     val line =
         Path().apply {
             moveTo(points.first().x, points.first().y)
@@ -234,13 +239,13 @@ private fun DrawScope.drawNetWorthLine(
         }
     val fill =
         Path().apply {
-            moveTo(points.first().x, chartBottom)
+            moveTo(points.first().x, baseline)
             points.forEach { lineTo(it.x, it.y) }
-            lineTo(points.last().x, chartBottom)
+            lineTo(points.last().x, baseline)
             close()
         }
     drawPath(fill, palette.accent.copy(alpha = 0.18f))
-    drawPath(line, palette.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+    drawPath(line, palette.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     points.forEachIndexed { index, point ->
         val isSelected = selection?.index == index
         drawCircle(palette.accent, if (isSelected) 7.dp.toPx() else 4.dp.toPx(), point)

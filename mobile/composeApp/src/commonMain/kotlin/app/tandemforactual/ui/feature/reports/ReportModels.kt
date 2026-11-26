@@ -29,21 +29,20 @@ internal data class CategorySpendingPoint(
 internal const val OTHER_CATEGORY_CHART_ID = "__tandem_report_other__"
 
 internal fun categoryChartPoints(categories: List<CategorySpendingPoint>): List<CategorySpendingPoint> {
-    if (categories.size <= 1) return categories
-    val total = categories.sumOf { it.spendingMinor.coerceAtLeast(0L) }
-    if (total <= 0L) return categories.take(8)
-
+    val spending = categories.filter { it.spendingMinor > 0L }
+    if (spending.size <= 1) return spending
+    val total = spending.sumOf(CategorySpendingPoint::spendingMinor)
     val visible =
-        categories
+        spending
             .filter { it.spendingMinor.toDouble() / total.toDouble() >= 0.04 }
             .take(7)
-            .ifEmpty { categories.take(7) }
+            .ifEmpty { spending.take(7) }
     val visibleIds = visible.mapTo(mutableSetOf(), CategorySpendingPoint::categoryId)
     val otherAmount =
-        categories
+        spending
             .asSequence()
             .filterNot { it.categoryId in visibleIds }
-            .sumOf { it.spendingMinor.coerceAtLeast(0L) }
+            .sumOf(CategorySpendingPoint::spendingMinor)
     return if (otherAmount > 0L) {
         visible + CategorySpendingPoint(OTHER_CATEGORY_CHART_ID, "Other", otherAmount)
     } else {
@@ -204,7 +203,7 @@ internal fun reportMonthRangeLabel(
     endMonthId: String,
 ): String = "${reportMonthLabelShort(startMonthId)} – ${reportMonthLabelShort(endMonthId)}"
 
-private fun reportMonthLabelShort(monthId: String): String =
+internal fun reportMonthLabelShort(monthId: String): String =
     parseReportMonth(monthId)?.let { formatShortMonth(it.year, it.month) } ?: monthId
 
 internal fun reportMonthAxisLabel(monthId: String): String =

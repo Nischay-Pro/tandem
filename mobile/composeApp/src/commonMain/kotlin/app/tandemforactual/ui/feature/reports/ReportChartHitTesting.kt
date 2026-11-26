@@ -29,7 +29,7 @@ internal fun reportSelectionAt(
     val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
     if (kind == ReportKind.SPENDING_BY_CATEGORY) return categoryRingSelectionAt(categories, tap, width, height, inset, density)
     if (kind == ReportKind.NET_WORTH) {
-        return netWorthSelectionAt(netWorth, axisValues, tap, width, inset, chartBottom, chartHeight, density)
+        return netWorthSelectionAt(netWorth, axisValues, tap, width, chartTop, chartBottom, density)
     }
     if (kind != ReportKind.SPENDING_OVER_TIME && kind != ReportKind.INCOME_AND_SPENDING) return null
     if (monthly.isEmpty()) return null
@@ -75,23 +75,11 @@ private fun netWorthSelectionAt(
     axisValues: List<Long>?,
     tap: Offset,
     width: Float,
-    inset: Float,
+    chartTop: Float,
     chartBottom: Float,
-    chartHeight: Float,
     density: Float,
 ): ReportChartSelection? {
-    val values = netWorth.map(NetWorthPoint::allAccountsMinor)
-    if (values.isEmpty()) return null
-    val (observedMin, observedMax) = netWorthValueRange(values)
-    val minimum = axisValues?.lastOrNull()?.toDouble() ?: observedMin
-    val maximum = axisValues?.firstOrNull()?.toDouble() ?: observedMax
-    val spread = (maximum - minimum).coerceAtLeast(1.0)
-    val points =
-        values.mapIndexed { index, value ->
-            val x = if (values.size == 1) width / 2f else inset + (width - inset * 2f) * index / (values.size - 1)
-            val y = chartBottom - chartHeight * ((value - minimum) / spread).toFloat()
-            Offset(x, y)
-        }
+    val points = netWorthPointOffsets(netWorth.map(NetWorthPoint::allAccountsMinor), axisValues, width, chartTop, chartBottom)
     val nearest =
         points.indices.minByOrNull { index ->
             val dx = tap.x - points[index].x
@@ -197,17 +185,9 @@ internal fun reportSelectionAnchor(
             val barHeight = chartHeight * (value.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
             return Offset(barLeft + barWidth / 2f, chartBottom - barHeight)
         }
-        ReportKind.NET_WORTH -> {
-            val values = netWorth.map(NetWorthPoint::allAccountsMinor)
-            val value = values.getOrNull(selection.index)?.toDouble() ?: return null
-            val (observedMin, observedMax) = netWorthValueRange(values)
-            val minimum = axisValues?.lastOrNull()?.toDouble() ?: observedMin
-            val maximum = axisValues?.firstOrNull()?.toDouble() ?: observedMax
-            val spread = (maximum - minimum).coerceAtLeast(1.0)
-            val x = if (values.size == 1) width / 2f else inset + (width - inset * 2f) * selection.index / (values.size - 1)
-            val y = chartBottom - chartHeight * ((value - minimum) / spread).toFloat()
-            return Offset(x, y)
-        }
+        ReportKind.NET_WORTH ->
+            return netWorthPointOffsets(netWorth.map(NetWorthPoint::allAccountsMinor), axisValues, width, inset, chartBottom)
+                .getOrNull(selection.index)
         else -> return null
     }
 }

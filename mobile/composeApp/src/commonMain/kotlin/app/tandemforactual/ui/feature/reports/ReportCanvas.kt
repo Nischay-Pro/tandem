@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +41,7 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import kotlinx.coroutines.flow.drop
 
 @Composable
 internal fun ReportCanvas(
@@ -49,16 +52,18 @@ internal fun ReportCanvas(
     showMonthlyGuides: Boolean = false,
     axisValues: List<Long>? = null,
     onNetWorthSelectionChange: (Int?) -> Unit = {},
-    calloutViewportStartPx: Float = 0f,
+    calloutViewportStart: () -> Float = { 0f },
     calloutViewportWidthPx: Float? = null,
 ) {
     val palette = tandemPalette
     val monthly = monthlyPoints(kind, data)
     val chartCategories = remember(data.categories) { categoryChartPoints(data.categories) }
-    var selection by remember(kind, monthly, chartCategories, data.netWorth, calloutViewportStartPx) {
+    var selection by remember(kind, monthly, chartCategories, data.netWorth) {
         mutableStateOf<ReportChartSelection?>(null)
     }
     val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
+    val viewportStart by rememberUpdatedState(calloutViewportStart)
+    LaunchedEffect(kind, monthly, chartCategories, data.netWorth) { snapshotFlow { viewportStart() }.drop(1).collect { selection = null } }
     val selectedCategory = selection?.takeIf { kind == ReportKind.SPENDING_BY_CATEGORY }?.let { chartCategories.getOrNull(it.index) }
     val callout = reportCallout(kind, selection, selectedCategory, monthly, chartCategories, data)
     val description = reportChartDescription(kind, data, netWorthScope)
@@ -68,11 +73,11 @@ internal fun ReportCanvas(
     val gap = with(density) { 8.dp.toPx() }
     val chartWidth = chartSize.width.toFloat()
     val chartHeight = chartSize.height.toFloat()
-    val calloutOffset =
+    val calloutOffset: (() -> IntOffset)? =
         selection
             ?.takeIf { selectedCategory == null }
             ?.let { reportSelectionAnchor(kind, it, monthly, data.netWorth, axisValues, chartWidth, chartHeight, gap) }
-            ?.let { anchor -> reportCalloutOffset(anchor, chartSize, calloutSize, gap, calloutViewportStartPx, calloutViewportWidthPx) }
+            ?.let { anchor -> { reportCalloutOffset(anchor, chartSize, calloutSize, gap, viewportStart(), calloutViewportWidthPx) } }
     Box(modifier.onSizeChanged { chartSize = it }) {
         Canvas(
             Modifier
@@ -118,7 +123,7 @@ internal fun ReportCanvas(
 private fun ReportCallout(
     callout: String,
     fractionDigits: Int,
-    offset: IntOffset?,
+    offset: (() -> IntOffset)?,
     onSizeChange: (IntSize) -> Unit,
     modifier: Modifier,
 ) {
@@ -126,7 +131,7 @@ private fun ReportCallout(
         amountAnnotatedString(callout, fractionDigits),
         modifier =
             modifier
-                .then(if (offset != null) Modifier.offset { offset } else Modifier)
+                .then(if (offset != null) Modifier.offset { offset() } else Modifier)
                 .onSizeChanged(onSizeChange)
                 .clip(RoundedCornerShape(TandemShapes.pill))
                 .background(tandemPalette.raised)

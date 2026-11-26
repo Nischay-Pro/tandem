@@ -1,32 +1,37 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.reports
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -45,6 +50,8 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.drop
 
 @Composable
 internal fun ReportSummary(
@@ -119,7 +126,54 @@ internal fun ReportChart(
             BudgetedSpentChart(data, if (compact) 5 else null) { categoryId, category ->
                 onOpenCategoryActivity(categoryId, category, window)
             }
-        else -> ReportCanvas(kind, data, "All accounts", Modifier.fillMaxWidth().height(height))
+        else ->
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                ReportCanvas(kind, data, "All accounts", Modifier.fillMaxWidth().height(height))
+                if (!compact) CategoryRingLegend(data.categories)
+            }
+    }
+}
+
+/** Names each slice of the category ring with its colour and share. */
+@Composable
+private fun CategoryRingLegend(categories: List<CategorySpendingPoint>) {
+    val points = remember(categories) { categoryChartPoints(categories) }
+    if (points.isEmpty()) return
+    val total = points.sumOf(CategorySpendingPoint::spendingMinor)
+    val palette = tandemPalette
+    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        points.withIndex().chunked(2).forEach { pair ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+                pair.forEach { (index, point) ->
+                    Row(
+                        Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                    ) {
+                        Box(
+                            Modifier
+                                .size(10.dp)
+                                .background(categorySliceColor(index, point.categoryId == OTHER_CATEGORY_CHART_ID, palette), CircleShape),
+                        )
+                        Text(
+                            point.category,
+                            Modifier.weight(1f),
+                            color = palette.text,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            categoryPercentage(point.spendingMinor, total),
+                            color = palette.muted,
+                            fontSize = TandemTypography.caption,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 
@@ -133,68 +187,79 @@ internal fun TimeSeriesReportChart(
     val monthly = monthlyPoints(kind, data)
     val monthIds = if (kind == ReportKind.NET_WORTH) data.netWorth.map(NetWorthPoint::monthId) else monthly.map(MonthlyMoneyPoint::monthId)
     val axisValues = reportChartAxisValues(kind, data)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val yAxisWidth = 72.dp
-        val axisGap = TandemSpacing.small
-        val viewportWidth = maxOf(1.dp, maxWidth - yAxisWidth - axisGap)
-        val slotWidth = viewportWidth / 6
-        val chartWidth = maxOf(viewportWidth, slotWidth * monthIds.size.coerceAtLeast(1))
-        val scrollState = rememberScrollState()
-        val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
-        LaunchedEffect(monthIds, chartWidth) {
-            withFrameNanos { }
-            scrollState.scrollTo(scrollState.maxValue)
-        }
-        LaunchedEffect(scrollState) {
-            var previousScroll = scrollState.value
-            snapshotFlow { scrollState.value }.collect { currentScroll ->
-                if (currentScroll != previousScroll) {
-                    previousScroll = currentScroll
-                    selectionCallback(null)
-                }
+    val axisMaximum = axisValues.maxOfOrNull { abs(it) } ?: 1L
+    val selectionCallback by rememberUpdatedState(onNetWorthSelectionChange)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+        verticalAlignment = Alignment.Top,
+    ) {
+        ReportYAxis(
+            axisValues.map { reportAxisValue(it, axisMaximum, data.displaySettings) },
+            Modifier.height(height),
+        )
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val viewportWidth = maxOf(1.dp, maxWidth)
+            val slotWidth = viewportWidth / 6
+            val chartWidth = maxOf(viewportWidth, slotWidth * monthIds.size.coerceAtLeast(1))
+            val viewportWidthPx = with(LocalDensity.current) { viewportWidth.toPx() }
+            val scrollState = rememberScrollState()
+            LaunchedEffect(monthIds, chartWidth) {
+                withFrameNanos { }
+                scrollState.scrollTo(scrollState.maxValue)
+            }
+            LaunchedEffect(scrollState) {
+                snapshotFlow { scrollState.value }.drop(1).collect { selectionCallback(null) }
+            }
+            Column(Modifier.horizontalScroll(scrollState)) {
+                ReportCanvas(
+                    kind,
+                    data,
+                    netWorthScope = "All accounts",
+                    modifier = Modifier.width(chartWidth).height(height),
+                    showMonthlyGuides = true,
+                    axisValues = axisValues,
+                    onNetWorthSelectionChange = onNetWorthSelectionChange,
+                    calloutViewportStart = { scrollState.value.toFloat() },
+                    calloutViewportWidthPx = viewportWidthPx,
+                )
+                ReportMonthAxis(monthIds, chartWidth, chartWidth / monthIds.size.coerceAtLeast(1))
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(axisGap),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    Modifier.width(yAxisWidth).height(height).padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    axisValues.forEach { value ->
-                        Text(
-                            reportAxisValue(value, axisValues.maxOfOrNull { kotlin.math.abs(it) } ?: 1L, data.displaySettings),
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.caption,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip,
-                        )
-                    }
-                }
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .horizontalScroll(scrollState),
-                ) {
-                    ReportCanvas(
-                        kind,
-                        data,
-                        netWorthScope = "All accounts",
-                        modifier = Modifier.width(chartWidth).height(height),
-                        showMonthlyGuides = true,
-                        axisValues = axisValues,
-                        onNetWorthSelectionChange = onNetWorthSelectionChange,
-                        calloutViewportStartPx = scrollState.value.toFloat(),
-                        calloutViewportWidthPx =
-                            with(androidx.compose.ui.platform.LocalDensity.current) {
-                                viewportWidth.toPx()
-                            },
-                    )
-                    ReportMonthAxis(monthIds, chartWidth, chartWidth / monthIds.size.coerceAtLeast(1))
-                }
+    }
+}
+
+/** Value labels for the chart's gridlines, each centred on its line and as wide as the widest label needs. */
+@Composable
+private fun ReportYAxis(
+    labels: List<String>,
+    modifier: Modifier,
+) {
+    Layout(
+        content = {
+            labels.forEach { label ->
+                Text(
+                    label,
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.caption,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val labelConstraints =
+            Constraints(maxWidth = if (constraints.hasBoundedWidth) (constraints.maxWidth * 0.4f).toInt() else Constraints.Infinity)
+        val placeables = measurables.map { it.measure(labelConstraints) }
+        val width = (placeables.maxOfOrNull { it.width } ?: 0).coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = constraints.maxHeight
+        val inset = ReportChartInset.toPx()
+        layout(width, height) {
+            placeables.forEachIndexed { index, placeable ->
+                val top = reportAxisLabelTop(index, placeables.size, height.toFloat(), inset, placeable.height.toFloat())
+                placeable.placeRelative(width - placeable.width, top.roundToInt())
             }
         }
     }
