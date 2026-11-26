@@ -138,6 +138,31 @@ class ActualBudgetEditsTest {
     }
 
     @Test
+    fun closeAccountUsesTheWholeBalanceLikeActual() {
+        val f = fixture()
+        val checking = f.id("accounts", "Checking")
+        val wallet = f.edits.createAccount("Wallet", false, null)
+        val card = f.edits.createAccount("Card", false, null)
+        f.edits.transactions.batchUpdate(
+            added =
+                listOf(
+                    linkedMapOf("id" to UUID.randomUUID().toString(), "account" to wallet, "amount" to 5000L, "date" to today),
+                    linkedMapOf("id" to UUID.randomUUID().toString(), "account" to wallet, "amount" to -5000L, "date" to "2026-12-15"),
+                    linkedMapOf("id" to UUID.randomUUID().toString(), "account" to card, "amount" to 2500L, "date" to "2026-12-15"),
+                ),
+        )
+        assertEquals(0L, f.edits.accountBalance(card, today))
+        f.rejects("Choose an account to move this balance before closing it") { closeAccount(card, null, null) }
+        assertEquals(0L, f.one("SELECT closed FROM accounts WHERE id = ?", card)!!["closed"])
+        f.edits.closeAccount(card, checking, null)
+        assertEquals(1L, f.one("SELECT closed FROM accounts WHERE id = ?", card)!!["closed"])
+        assertEquals(0L, f.edits.accountBalance(card, "2100-01-01"))
+        f.edits.closeAccount(wallet, null, null)
+        assertEquals(1L, f.one("SELECT closed FROM accounts WHERE id = ?", wallet)!!["closed"])
+        assertEquals(5000L, f.edits.accountBalance(wallet, today))
+    }
+
+    @Test
     fun payeesFollowActual() {
         val f = fixture()
         val payee = f.edits.createPayee("Bakery")
