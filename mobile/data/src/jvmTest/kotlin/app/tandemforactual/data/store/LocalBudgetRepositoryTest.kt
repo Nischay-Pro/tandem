@@ -944,6 +944,31 @@ class LocalBudgetRepositoryTest {
         }
 
     @Test
+    fun accountBalanceThroughADateCountsQueuedEditsButNotLaterRows() =
+        runBlocking {
+            val database = newDatabase()
+            try {
+                val repository = LocalBudgetRepository(database) { 100L }
+                repository.applySnapshot(
+                    BUDGET,
+                    GENERATION,
+                    "c1",
+                    listOf(
+                        transaction(amountMinor = -200L),
+                        transaction(recordId = "txn-2", date = "2026-12-01", amountMinor = 900L),
+                    ),
+                )
+                repository.enqueueWrite(createRequest(amountMinor = -50L))
+
+                assertEquals(-250L, repository.observeAccountBalanceThrough(BUDGET, "checking", "2026-11-25").first())
+                assertEquals(650L, repository.observeAccountBalanceThrough(BUDGET, "checking", "2026-12-31").first())
+                assertEquals(0L, repository.observeAccountBalanceThrough(BUDGET, "missing-account", "2026-12-31").first())
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun clearedAccountBalanceAggregatesOnlyVisibleClearedTransactions() =
         runBlocking {
             val database = newDatabase()

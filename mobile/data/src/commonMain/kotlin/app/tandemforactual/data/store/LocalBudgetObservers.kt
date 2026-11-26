@@ -8,6 +8,7 @@ import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 fun LocalBudgetRepository.observeRecords(
     budgetId: String,
@@ -40,6 +41,16 @@ fun LocalBudgetRepository.observeClearedAccountBalance(
     budgetId: String,
     accountId: String,
 ): Flow<Long> = database.budgetRecordDao().observeClearedAccountBalance(budgetId, accountId).stabilized()
+
+/** The account's balance through [throughDate] on this device, counting edits still waiting to sync. */
+fun LocalBudgetRepository.observeAccountBalanceThrough(
+    budgetId: String,
+    accountId: String,
+    throughDate: String,
+): Flow<Long> =
+    observeAccountDailyActivity(budgetId, throughDate).map { days ->
+        days.filter { it.accountId == accountId }.sumOf { it.amountMinor }
+    }
 
 fun LocalBudgetRepository.observeRecordIds(
     budgetId: String,
