@@ -236,9 +236,13 @@ class TandemApiClient(
             val client = requireServer()
             val files = budgetFiles ?: throw TandemApiException("not_supported")
             val existing = files.open(budgetId)
+            val fileId = existing?.let(ActualDirectBudget::storedFileId)
+            if (existing != null && fileId == null) {
+                existing.close()
+                files.remove(budgetId)
+            }
             val budget =
-                if (existing != null) {
-                    val fileId = ActualDirectBudget.storedFileId(existing) ?: call { fileFor(client, budgetId).fileId }
+                if (existing != null && fileId != null) {
                     val key =
                         ActualDirectBudget.storedKeyInfo(existing)?.let { info ->
                             runCatching { unlock(budgetId, info) }.onFailure { existing.close() }.getOrThrow()
