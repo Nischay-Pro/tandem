@@ -119,6 +119,8 @@ kover {
           // Kover attributes the tested default method's signature-only line to its synthetic bridge.
           "app.tandemforactual.data.store.BudgetSyncRemote",
           "app.tandemforactual.data.store.BudgetSyncRemote\$*",
+          "app.tandemforactual.data.database.ActualBudgetFiles",
+          "app.tandemforactual.data.database.ActualBudgetFiles\$*",
           "app.tandemforactual.data.store.LocalBudgetRepository$*",
           "app.tandemforactual.data.store.LocalBudgetLifecycleKt$*",
           "app.tandemforactual.data.store.LocalBudgetMutationQueueKt$*",

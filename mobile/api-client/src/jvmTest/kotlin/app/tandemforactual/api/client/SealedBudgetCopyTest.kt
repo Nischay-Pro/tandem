@@ -59,4 +59,38 @@ class SealedBudgetCopyTest {
             assertFalse(plain.directory.resolve("locked.sqlite").exists())
             assertNotNull(files.sealedKeyInfo("locked"))
         }
+
+    @Test
+    fun anUnreadableSealedCopyIsDownloadedAgain(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val files = SealingBudgetFiles()
+            signedIn(server, files).budget("locked", "secret").closeNow()
+            files.directory.resolve("locked.sealed").writeText("not a database")
+            assertTrue(
+                signedIn(server, files)
+                    .budget("locked", "secret")
+                    .snapshot("2026-11-21")
+                    .records
+                    .isNotEmpty(),
+            )
+        }
+
+    @Test
+    fun aDownloadWithoutSealingInstallsThePlainCopy(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val plain = TempBudgetFiles()
+            val budget =
+                ActualDirectBudget.download(
+                    ActualServerClient(server.http, "https://budget.example").apply { token = "session" },
+                    "file",
+                    { 0L },
+                    { "id" },
+                    expectedGroupId = null,
+                    unlock = { error("Not encrypted") },
+                ) { plain.install("group", it) }
+            budget.closeNow()
+            assertTrue(plain.directory.resolve("group.sqlite").isFile)
+        }
 }
