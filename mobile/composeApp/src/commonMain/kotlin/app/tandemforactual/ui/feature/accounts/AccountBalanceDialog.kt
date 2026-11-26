@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.store.observeAccountBalanceThrough
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.transactions.createTransaction
@@ -56,11 +58,10 @@ internal fun balanceAdjustmentMinor(
 internal fun AccountBalanceDialog(
     visible: Boolean,
     state: AppState,
-    account: LiveAccountSummary,
+    current: Long,
     onDismiss: () -> Unit,
     onSave: (adjustmentMinor: Long) -> Unit,
 ) {
-    val current = account.balanceMinor ?: 0L
     var draft by remember(visible) { mutableStateOf(state.formatAmount(current)) }
     val target = state.parseAmountMinorUnits(draft)
     val adjustment = target?.let { balanceAdjustmentMinor(current, it) }
@@ -117,7 +118,12 @@ internal fun AccountBalanceUpdate(
     account: LiveAccountSummary,
     scope: CoroutineScope,
 ) {
-    AccountBalanceDialog(visible.value, state, account, onDismiss = { visible.value = false }) { adjustment ->
+    val today = platformTodayIsoDate()
+    val local =
+        remember(state.selectedBudgetId, account.id, today) {
+            mobileSession.repository?.observeAccountBalanceThrough(state.selectedBudgetId, account.id, today)
+        }?.collectAsState(null)?.value
+    AccountBalanceDialog(visible.value, state, local ?: account.balanceMinor ?: 0L, onDismiss = { visible.value = false }) { adjustment ->
         visible.value = false
         scope.launch { mobileSession.adjustAccountBalance(state, account.id, adjustment) }
     }
