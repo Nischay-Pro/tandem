@@ -25,7 +25,14 @@ class PlanningStore(
                     .open(
                         record.iv,
                         record.ciphertext,
-                        PlanningCipher.identity(record.budgetId, record.recordId, record.schemaVersion, record.revision),
+                        PlanningCipher.identity(
+                            record.budgetId,
+                            record.recordId,
+                            record.recordType,
+                            record.schemaVersion,
+                            record.revision,
+                            record.deleted,
+                        ),
                     ).decodeToString(),
             ).jsonObject
 
@@ -65,7 +72,7 @@ class PlanningStore(
         val (iv, sealed) =
             cipher.seal(
                 body.toString().encodeToByteArray(),
-                PlanningCipher.identity(budgetId, recordId, SCHEMA_VERSION, revision),
+                PlanningCipher.identity(budgetId, recordId, recordType, SCHEMA_VERSION, revision, deleted),
             )
         dao.upsert(
             PlanningRecordEntity(

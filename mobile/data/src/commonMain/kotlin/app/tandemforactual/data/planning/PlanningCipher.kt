@@ -6,8 +6,9 @@ import dev.whyoleg.cryptography.algorithms.AES
 import dev.whyoleg.cryptography.random.CryptographyRandom
 
 /**
- * Seals planning records with AES-256-GCM under a random per-budget key. The budget, record, schema version and
- * revision are authenticated with each record, so a sealed record can't be replayed under another identity or revision.
+ * Seals planning records with AES-256-GCM under a random per-budget key. The budget, record, type, schema version,
+ * revision and deleted flag are authenticated with each record, so a sealed record can't be replayed under another
+ * identity, type or revision, or brought back after it was deleted.
  */
 @OptIn(DelicateCryptographyApi::class)
 class PlanningCipher(
@@ -47,8 +48,10 @@ class PlanningCipher(
         internal fun identity(
             budgetId: String,
             recordId: String,
+            recordType: String,
             schemaVersion: Int,
             revision: Long,
-        ) = "tandem-planning/v1|$budgetId|$recordId|$schemaVersion|$revision"
+            deleted: Boolean,
+        ) = "tandem-planning/v1|$budgetId|$recordId|$recordType|$schemaVersion|$revision|${if (deleted) 1 else 0}"
     }
 }
