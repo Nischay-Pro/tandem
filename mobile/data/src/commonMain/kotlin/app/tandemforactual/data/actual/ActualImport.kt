@@ -41,6 +41,7 @@ class ActualImport(
         reimportDeleted: Boolean = true,
         strictIdChecking: Boolean = true,
         updateDates: Boolean = false,
+        bankSync: Boolean = false,
     ): ImportResult {
         val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
         val payeesByName =
@@ -49,6 +50,7 @@ class ActualImport(
                     it["id"] as String
             }
         val matched = HashSet<String>()
+        val exactParents = HashSet<String>()
         val steps =
             rows.map { row ->
                 val payeeName =
@@ -62,12 +64,17 @@ class ActualImport(
                             ?: writer.uuid().also { payeesToCreate[name.lowercase()] = it to name }
                     }
                 importStep(accountId, row, payeeName, payee, matched, reimportDeleted, strictIdChecking)
+                    .also { step -> step.match?.takeIf { bankSync && truthy(it["is_parent"]) }?.let { exactParents += it["id"] as String } }
             }
         for (pass in 0..1) {
             for (step in steps) {
                 if (step.match != null) continue
                 step.match =
-                    step.fuzzy.firstOrNull { (it["id"] as String) !in matched && (pass == 1 || it["payee"] == step.trans["payee"]) }
+                    step.fuzzy.firstOrNull {
+                        (it["id"] as String) !in matched &&
+                            (it["parent_id"] as String?) !in exactParents &&
+                            (pass == 1 || it["payee"] == step.trans["payee"])
+                    }
                 step.match?.let { matched += it["id"] as String }
             }
         }

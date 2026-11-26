@@ -9,14 +9,18 @@ internal fun categorySpendingSummary(
 ): String = "You spent ${formatCurrency(totalMinor)} across ${formatCount(categoryCount)} categories."
 
 internal fun spendingOverTimeSummary(
-    totalMinor: Long,
-    monthCount: Int,
+    average: MonthlySpendingAverage?,
     formatCurrency: (Long) -> String,
     formatCount: (Int) -> String,
-): String {
-    if (monthCount == 0) return "No monthly spending is available for this period."
-    return "Average monthly spending was ${formatCurrency(totalMinor / monthCount)} across ${formatCount(monthCount)} months."
-}
+): String =
+    when {
+        average == null -> "No monthly spending is available for this period."
+        average.isCurrentMonthSoFar -> "Spending so far this month is ${formatCurrency(average.averageMinor)}."
+        else -> {
+            val months = if (average.monthCount == 1) "full month" else "full months"
+            "Average monthly spending was ${formatCurrency(average.averageMinor)} across ${formatCount(average.monthCount)} $months."
+        }
+    }
 
 internal fun incomeSpendingSummary(netMinor: Long): String =
     when {

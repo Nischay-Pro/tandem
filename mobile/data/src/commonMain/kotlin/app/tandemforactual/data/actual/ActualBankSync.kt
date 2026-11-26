@@ -159,8 +159,10 @@ class ActualBankSync(
                 account.id,
                 list,
                 titleCasePayees = false,
+                reimportDeleted = pref("sync-reimport-deleted-${account.id}", true),
                 strictIdChecking = false,
                 updateDates = pref("sync-update-dates-${account.id}", false),
+                bankSync = true,
             )
         }
         if (initial) {
@@ -214,12 +216,12 @@ class ActualBankSync(
 
     private fun amountOf(transaction: JsonObject): Long =
         amountToInteger(
-            (transaction["amount"] as? JsonPrimitive)?.contentOrNull
-                ?: transaction["transactionAmount"]
-                    ?.jsonObject
+            (transaction["amount"] as? JsonPrimitive)?.contentOrNull?.takeUnless { it.isEmpty() }
+                ?: (transaction["transactionAmount"] as? JsonObject)
                     ?.get("amount")
-                    ?.jsonPrimitive
-                    ?.content ?: "0",
+                    ?.let { it as? JsonPrimitive }
+                    ?.contentOrNull
+                ?: error("`amount` is required when adding a transaction"),
         )
 
     /** `normalizeBankSyncTransactions`: booked rows are cleared, pending rows follow the account's setting. */
@@ -287,12 +289,19 @@ class ActualBankSync(
         const val SYNC_INTERVAL_PREF = "bank-sync-interval"
         const val MIN_SYNC_INTERVAL_MINUTES = 15
 
-        /** `amountToInteger`: a decimal amount string or number in cents, rounded like Actual. */
-        fun amountToInteger(amount: String): Long {
-            val value = amount.trim().toBigDecimalOrZero()
-            return kotlin.math.round(value * 100).toLong()
-        }
+        private val decimal = Regex("[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?")
 
-        private fun String.toBigDecimalOrZero(): Double = toDoubleOrNull() ?: 0.0
+        /** `amountToInteger`: a decimal amount string or number in cents, rounded like Actual; anything else fails the sync. */
+        fun amountToInteger(amount: String): Long {
+            val value =
+                amount
+                    .trim()
+                    .takeIf(decimal::matches)
+                    ?.toDoubleOrNull()
+                    ?.times(100)
+                    ?.takeIf { it.isFinite() }
+                    ?: error("Unreadable bank amount: ${amount.trim()}")
+            return kotlin.math.round(value).toLong()
+        }
     }
 }
