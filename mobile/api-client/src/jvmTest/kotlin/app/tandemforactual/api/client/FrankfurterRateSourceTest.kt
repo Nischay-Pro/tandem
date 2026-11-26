@@ -35,72 +35,86 @@ class FrankfurterRateSourceTest {
             )
     }
 
-    private val latestBody = """{"amount":1.0,"base":"EUR","date":"2026-11-25","rates":{"GBP":0.8373,"USD":1.10,"IDR":2.4E-5}}"""
+    private fun row(
+        date: String,
+        quote: String,
+        rate: String,
+        base: String = "EUR",
+    ) = """{"date":"$date","base":"$base","quote":"$quote","rate":$rate}"""
+
+    private val latestBody =
+        listOf(
+            row("2026-11-26", "GBP", "0.83656"),
+            row("2026-11-26", "USD", "1.10"),
+            row("2026-11-25", "IDR", "2.4E-5"),
+        ).joinToString(",", "[", "]")
 
     @Test
-    fun readsTheLatestRatesAsExactDecimalsAndSendsOnlyTheBaseAndSymbols(): Unit =
+    fun readsTheLatestRatesAsExactDecimalsAndSendsOnlyTheBaseAndQuotes(): Unit =
         runBlocking {
             val server = Server { latestBody }
             val day = server.source().latest("eur", setOf("usd", "GBP", "IDR"))
-            assertEquals(ExchangeRateDay("2026-11-25", "EUR", mapOf("GBP" to "0.8373", "USD" to "1.10", "IDR" to "2.4E-5")), day)
+            assertEquals(ExchangeRateDay("2026-11-25", "EUR", mapOf("IDR" to "2.4E-5", "GBP" to "0.83656", "USD" to "1.10")), day)
             val request = server.seen.single()
-            assertEquals("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=GBP%2CIDR%2CUSD", request.url.toString())
-            assertEquals(setOf("base", "symbols"), request.url.parameters.names())
+            assertEquals("https://api.frankfurter.dev/v2/rates?base=EUR&quotes=GBP%2CIDR%2CUSD", request.url.toString())
+            assertEquals(setOf("base", "quotes"), request.url.parameters.names())
             assertNull(request.headers["Authorization"])
             assertNull(request.headers["Cookie"])
         }
 
     @Test
-    fun anEmptySymbolSetAsksForEveryCurrency(): Unit =
+    fun anEmptySymbolSetAsksForEveryCurrencyAndDropsTheBaseItself(): Unit =
         runBlocking {
-            val server = Server { latestBody }
-            FrankfurterRateSource(
-                HttpClient(
-                    MockEngine { request ->
-                        server.seen += request
-                        respond(latestBody)
-                    },
-                ),
-            ).latest("EUR", emptySet())
-            assertEquals(
-                "https://api.frankfurter.dev/v1/latest?base=EUR",
-                server.seen
-                    .single()
-                    .url
-                    .toString(),
-            )
+            val seen = mutableListOf<HttpRequestData>()
+            val body = listOf(row("2026-11-26", "EUR", "1.0"), row("2026-11-26", "AAVE", "0.011515")).joinToString(",", "[", "]")
+            val day =
+                FrankfurterRateSource(
+                    HttpClient(
+                        MockEngine { request ->
+                            seen += request
+                            respond(body)
+                        },
+                    ),
+                ).latest("EUR", emptySet())
+            assertEquals(ExchangeRateDay("2026-11-26", "EUR", mapOf("AAVE" to "0.011515")), day)
+            assertEquals("https://api.frankfurter.dev/v2/rates?base=EUR", seen.single().url.toString())
         }
 
     @Test
-    fun readsARangeOldestFirst(): Unit =
+    fun readsARangeGroupedByDayOldestFirst(): Unit =
         runBlocking {
             val server =
                 Server {
-                    """{"amount":1.0,"base":"EUR","start_date":"2025-12-31","end_date":"2026-01-05",
-                    "rates":{"2026-01-05":{"USD":1.1664},"2025-12-31":{"USD":1.175},"2026-01-02":{"USD":1.1721}}}"""
+                    listOf(
+                        row("2026-01-02", "USD", "1.1744"),
+                        row("2026-01-02", "GBP", "0.87"),
+                        row("2025-12-31", "GBP", "0.871"),
+                        row("2026-01-01", "USD", "1.1748"),
+                    ).joinToString(",", "[", "]")
                 }
-            val days = server.source().range("EUR", setOf("USD"), "2026-01-01", "2026-01-05")
+            val days = server.source().range("EUR", setOf("USD", "GBP"), "2026-01-01", "2026-01-02")
             assertEquals(
                 listOf(
-                    ExchangeRateDay("2025-12-31", "EUR", mapOf("USD" to "1.175")),
-                    ExchangeRateDay("2026-01-02", "EUR", mapOf("USD" to "1.1721")),
-                    ExchangeRateDay("2026-01-05", "EUR", mapOf("USD" to "1.1664")),
+                    ExchangeRateDay("2025-12-31", "EUR", mapOf("GBP" to "0.871")),
+                    ExchangeRateDay("2026-01-01", "EUR", mapOf("USD" to "1.1748")),
+                    ExchangeRateDay("2026-01-02", "EUR", mapOf("USD" to "1.1744", "GBP" to "0.87")),
                 ),
                 days,
             )
             assertEquals(
-                "https://api.frankfurter.dev/v1/2026-01-01..2026-01-05?base=EUR&symbols=USD",
+                "https://api.frankfurter.dev/v2/rates?base=EUR&quotes=GBP%2CUSD&from=2026-01-01&to=2026-01-02",
                 server.seen
                     .single()
                     .url
                     .toString(),
             )
+            assertEquals(emptyList(), Server { "[]" }.source().range("EUR", setOf("USD"), "2026-01-01", "2026-01-02"))
         }
 
     @Test
     fun rejectsRangesThatArentIsoDatesOldestFirst(): Unit =
         runBlocking {
-            val server = Server { "{}" }
+            val server = Server { "[]" }
             assertFailsWith<IllegalArgumentException> { server.source().range("EUR", setOf("USD"), "2026-03-01", "2026-01-01") }
             assertFailsWith<IllegalArgumentException> { server.source().range("EUR", setOf("USD"), "2026-1-1", "2026-03-01") }
             assertFailsWith<IllegalArgumentException> { server.source().range("EUR", setOf("USD"), "2026-01-01", "soon") }
@@ -111,12 +125,12 @@ class FrankfurterRateSourceTest {
     fun usesASelfHostedServerWithATrailingSlash(): Unit =
         runBlocking {
             val server = Server { latestBody }
-            server.source("https://rates.example.com/frankfurter/").latest("EUR", setOf("USD"))
-            server.source("http://192.168.1.20:8080/").latest("EUR", setOf("USD"))
+            server.source("https://rates.example.com/frankfurter/v2/").latest("EUR", setOf("USD"))
+            server.source("http://192.168.1.20:8080/v2/").latest("EUR", setOf("USD"))
             assertEquals(
                 listOf(
-                    "https://rates.example.com/frankfurter/latest?base=EUR&symbols=USD",
-                    "http://192.168.1.20:8080/latest?base=EUR&symbols=USD",
+                    "https://rates.example.com/frankfurter/v2/rates?base=EUR&quotes=USD",
+                    "http://192.168.1.20:8080/v2/rates?base=EUR&quotes=USD",
                 ),
                 server.seen.map { it.url.toString() },
             )
@@ -126,12 +140,12 @@ class FrankfurterRateSourceTest {
     fun rejectsInsecureOrMalformedAddresses() {
         val server = Server { latestBody }
         listOf(
-            "http://rates.example.com",
-            "ftp://rates.example.com",
+            "http://rates.example.com/v2",
+            "ftp://rates.example.com/v2",
             "rates.example.com",
-            "https://user:pass@rates.example.com",
-            "https://rates.example.com/v1?key=1",
-            "https://rates.example.com/v1#top",
+            "https://user:pass@rates.example.com/v2",
+            "https://rates.example.com/v2?key=1",
+            "https://rates.example.com/v2#top",
         ).forEach { address ->
             val error = assertFailsWith<ExchangeRateException.InvalidAddress>(address) { server.source(address) }
             assertEquals("Use an https:// exchange-rate address, or http:// on your local network.", error.message)
@@ -143,9 +157,9 @@ class FrankfurterRateSourceTest {
         runBlocking {
             suspend fun failure(status: HttpStatusCode) =
                 assertFailsWith<ExchangeRateException> {
-                    Server(
-                        status,
-                    ) { """{"message":"not found"}""" }.source().latest("EUR", setOf("USD"))
+                    Server(status) { """{"status":${status.value},"message":"invalid currency: ABC"}""" }
+                        .source()
+                        .latest("EUR", setOf("USD"))
                 }
             assertTrue(failure(HttpStatusCode.TooManyRequests) is ExchangeRateException.RateLimited)
             assertTrue(failure(HttpStatusCode.NotFound) is ExchangeRateException.UnknownCurrency)
@@ -155,7 +169,7 @@ class FrankfurterRateSourceTest {
             assertEquals("The exchange-rate server is busy. Try again later.", failure(HttpStatusCode.TooManyRequests).message)
             assertEquals(
                 "The exchange-rate server doesn’t have rates for one of these currencies.",
-                failure(HttpStatusCode.NotFound).message,
+                failure(HttpStatusCode.UnprocessableEntity).message,
             )
         }
 
@@ -177,7 +191,7 @@ class FrankfurterRateSourceTest {
     fun rejectsCurrencyCodesBeforeAskingTheServer(): Unit =
         runBlocking {
             val server = Server { latestBody }
-            assertFailsWith<ExchangeRateException.UnknownCurrency> { server.source().latest("EURO", setOf("USD")) }
+            assertFailsWith<ExchangeRateException.UnknownCurrency> { server.source().latest("E", setOf("USD")) }
             assertFailsWith<ExchangeRateException.UnknownCurrency> { server.source().latest("EUR", setOf("US&D")) }
             assertTrue(server.seen.isEmpty())
         }
@@ -185,36 +199,27 @@ class FrankfurterRateSourceTest {
     @Test
     fun rejectsMalformedResponses(): Unit =
         runBlocking {
-            val latest =
-                listOf(
-                    "not json",
-                    "[]",
-                    """{"base":"USD","date":"2026-11-25","rates":{"GBP":0.8}}""",
-                    """{"date":"2026-11-25","rates":{"GBP":0.8}}""",
-                    """{"base":"EUR","rates":{"GBP":0.8}}""",
-                    """{"base":"EUR","date":2026,"rates":{"GBP":0.8}}""",
-                    """{"base":"EUR","date":"25/11/2026","rates":{"GBP":0.8}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":[]}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"GBP":"0.8"}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"GBP":{}}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"GBP":-0.8}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"GBP":0}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"GBP":1e999}}""",
-                    """{"base":"EUR","date":"2026-11-25","rates":{"gbp":0.8}}""",
-                )
-            latest.forEach { body ->
+            listOf(
+                "not json",
+                "{}",
+                "[]",
+                "[1]",
+                """[{"base":"EUR","quote":"GBP","rate":0.8}]""",
+                """[{"date":2026,"base":"EUR","quote":"GBP","rate":0.8}]""",
+                """[{"date":"25/11/2026","base":"EUR","quote":"GBP","rate":0.8}]""",
+                "[${row("2026-11-25", "GBP", "0.8", base = "USD")}]",
+                """[{"date":"2026-11-25","base":"EUR","rate":0.8}]""",
+                "[${row("2026-11-25", "gbp", "0.8")}]",
+                """[{"date":"2026-11-25","base":"EUR","quote":"GBP"}]""",
+                "[${row("2026-11-25", "GBP", "\"0.8\"")}]",
+                "[${row("2026-11-25", "GBP", "{}")}]",
+                "[${row("2026-11-25", "GBP", "-0.8")}]",
+                "[${row("2026-11-25", "GBP", "0")}]",
+                "[${row("2026-11-25", "GBP", "1e999")}]",
+            ).forEach { body ->
                 val error =
                     assertFailsWith<ExchangeRateException.BadResponse>(body) { Server { body }.source().latest("EUR", setOf("GBP")) }
                 assertEquals("The exchange-rate server sent a response Tandem couldn’t read.", error.message)
-            }
-            listOf(
-                """{"base":"EUR","rates":[]}""",
-                """{"base":"EUR","rates":{"2026-01-02":5}}""",
-                """{"base":"EUR","rates":{"soon":{"USD":1.1}}}""",
-            ).forEach { body ->
-                assertFailsWith<ExchangeRateException.BadResponse>(body) {
-                    Server { body }.source().range("EUR", setOf("USD"), "2026-01-01", "2026-01-05")
-                }
             }
         }
 }
