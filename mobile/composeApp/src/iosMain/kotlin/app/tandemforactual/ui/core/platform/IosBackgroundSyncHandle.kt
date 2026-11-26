@@ -6,8 +6,6 @@ import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.data.database.TandemDatabase
-import app.tandemforactual.data.database.openTandemDatabase
-import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
@@ -71,7 +69,7 @@ fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int, String
 private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
     val database =
         try {
-            openTandemDatabase(tandemDatabaseBuilder())
+            iosTandemDatabase
         } catch (_: Exception) {
             return IosBackgroundSyncAlerts(taskSucceeded = false)
         }
@@ -141,8 +139,6 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         IosBackgroundSyncAlerts(taskSucceeded = false, notifySyncFailure = syncRemindersEnabled)
     } catch (_: Exception) {
         IosBackgroundSyncAlerts(taskSucceeded = false, notifySyncFailure = syncRemindersEnabled)
-    } finally {
-        database.close()
     }
 }
 

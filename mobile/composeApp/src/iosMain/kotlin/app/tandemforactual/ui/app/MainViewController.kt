@@ -6,14 +6,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
-import app.tandemforactual.data.database.openTandemDatabase
-import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.core.platform.IosCrashReports
 import app.tandemforactual.ui.core.platform.IosDeviceAuthenticator
 import app.tandemforactual.ui.core.platform.IosDeviceCredentialStore
 import app.tandemforactual.ui.core.platform.IosEncryptedBudgetVault
 import app.tandemforactual.ui.core.platform.IosSyncEventSource
 import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
+import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
 import app.tandemforactual.ui.core.platform.shareTextOnIos
 import app.tandemforactual.ui.core.session.LocalBankIcons
@@ -36,7 +35,7 @@ fun MainViewController(
     onOpenNotificationSettings: (() -> Unit)? = null,
 ): UIViewController =
     createTandemViewController(
-        openTandemDatabase(tandemDatabaseBuilder()),
+        iosTandemDatabase,
         onBackgroundSyncSettingsChanged,
         onSystemAppearanceChanged,
         onRequestNotificationPermission,
@@ -55,7 +54,6 @@ private fun createTandemViewController(
         DisposableEffect(database, syncEvents) {
             onDispose {
                 syncEvents.close()
-                database.close()
             }
         }
         val bankIcons =
