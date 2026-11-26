@@ -147,7 +147,7 @@ class PlanningStore(
         }
 
     fun exchangeRates(): Flow<List<ExchangeRate>> =
-        observe(ExchangeRate.TYPE).map { list -> list.map { (_, body) -> ExchangeRate.fromJson(body) } }
+        observe(ExchangeRate.TYPE).map { list -> list.map { (id, body) -> ExchangeRate.fromJson(id, body) } }
 
     suspend fun save(rate: ExchangeRate) = put(rate.id, ExchangeRate.TYPE, rate.toJson())
 

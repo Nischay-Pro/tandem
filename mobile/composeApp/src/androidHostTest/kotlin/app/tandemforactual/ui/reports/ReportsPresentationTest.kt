@@ -311,6 +311,33 @@ class ReportsPresentationTest {
     }
 
     @Test
+    fun netWorthConvertsEachMonthWithTheRateFromThatMonthsEnd() {
+        val accounts = listOf(LiveAccountSummary("euro", "Euro savings", 10_000, "savings", offBudget = false))
+        val converter =
+            BudgetCurrencyConverter(
+                mapOf("euro" to "EUR"),
+                "USD",
+                listOf(
+                    ExchangeRate("EUR", "USD", "1.5", "2025-01-20"),
+                    ExchangeRate("EUR", "USD", "2", "2025-02-28"),
+                    ExchangeRate("EUR", "USD", "3", "2025-04-01"),
+                ),
+            )
+
+        val points =
+            netWorthPoints(
+                emptyList(),
+                accounts,
+                listOf("2024-12", "2025-01", "2025-02", "2025-03", "2025-04"),
+                "2025-04-10",
+                converter,
+            )
+
+        assertEquals(listOf(15_000L, 15_000L, 20_000L, 20_000L, 30_000L), points.map(NetWorthPoint::allAccountsMinor))
+        assertEquals(converter.total(accounts.map { it.id to it.balanceMinor }).totalMinor, points.last().allAccountsMinor)
+    }
+
+    @Test
     fun netWorthCanBeNegativeWhenDebtsExceedAssets() {
         val points =
             netWorthPoints(
