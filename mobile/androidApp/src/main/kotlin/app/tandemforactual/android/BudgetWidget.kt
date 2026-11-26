@@ -1,5 +1,6 @@
 package app.tandemforactual.android
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -17,7 +18,8 @@ import app.tandemforactual.data.store.BudgetWidgetSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.budgetWidgetSummary
 import app.tandemforactual.ui.core.format.formatBudgetCurrency
-import java.time.YearMonth
+import java.time.LocalDate
+import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,8 +42,43 @@ class BudgetWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
+        if (!refreshesOnAction(intent.action)) return super.onReceive(context, intent)
+        val appContext = context.applicationContext
+        val manager = AppWidgetManager.getInstance(appContext)
+        val ids = manager.getAppWidgetIds(ComponentName(appContext, BudgetWidget::class.java))
+        if (ids.isEmpty()) return
+        val pending = goAsync()
+        scope.launch {
+            try {
+                render(appContext, manager, ids)
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    override fun onDisabled(context: Context) {
+        context.getSystemService(AlarmManager::class.java)?.cancel(monthChangeIntent(context))
+    }
+
     companion object {
+        private const val ACTION_MONTH_CHANGED = "app.tandemforactual.android.WIDGET_MONTH_CHANGED"
+        private val DATE_ACTIONS =
+            setOf(ACTION_MONTH_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        internal fun refreshesOnAction(action: String?): Boolean = action in DATE_ACTIONS
+
+        internal fun nextMonthStart(now: ZonedDateTime): ZonedDateTime =
+            now
+                .toLocalDate()
+                .withDayOfMonth(1)
+                .plusMonths(1)
+                .atStartOfDay(now.zone)
 
         fun refresh(context: Context) {
             val appContext = context.applicationContext
@@ -62,14 +99,29 @@ class BudgetWidget : AppWidgetProvider() {
                         budgetWidgetSummary(
                             LocalBudgetRepository(database) { System.currentTimeMillis() },
                             AppPreferencesStore(database).read(),
-                            YearMonth.now().toString(),
+                            LocalDate.now().toString(),
                         )
                     } finally {
                         database.close()
                     }
                 }.getOrNull()
             manager.updateAppWidget(ids, views(context, summary))
+            scheduleMonthChange(context)
         }
+
+        private fun scheduleMonthChange(context: Context) {
+            val alarms = context.getSystemService(AlarmManager::class.java) ?: return
+            val at = nextMonthStart(ZonedDateTime.now()).toInstant().toEpochMilli()
+            alarms.set(AlarmManager.RTC, at, monthChangeIntent(context))
+        }
+
+        private fun monthChangeIntent(context: Context): PendingIntent =
+            PendingIntent.getBroadcast(
+                context,
+                0,
+                Intent(context, BudgetWidget::class.java).setAction(ACTION_MONTH_CHANGED),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
 
         private fun views(
             context: Context,

@@ -67,6 +67,14 @@ internal fun CategoryProgressCard(
     }
 }
 
+/** The month's income, budgeted and net spending; refunds beyond spending show as nothing spent. */
+internal fun monthSummaryRows(month: LiveBudgetMonthSummary?): List<Pair<String, Long>> =
+    listOfNotNull(
+        month?.totalIncomeMinor?.let { "Income" to it },
+        month?.totalBudgetedMinor?.let { "Budgeted" to kotlin.math.abs(it) },
+        month?.totalSpentMinor?.let { "Spent" to (-it).coerceAtLeast(0) },
+    )
+
 /** Income, budgeted and spent for the month. */
 @Composable
 internal fun MonthSummaryCard(
@@ -78,11 +86,7 @@ internal fun MonthSummaryCard(
     SectionCard(stringResource(module.title()), stringResource(module.detail()), "Reports", onClick = {
         navigation.selectTab(AppRoute.REPORTS)
     }) {
-        listOfNotNull(
-            month?.incomeAvailableMinor?.let { "Income" to it },
-            month?.totalBudgetedMinor?.let { "Budgeted" to kotlin.math.abs(it) },
-            month?.totalSpentMinor?.let { "Spent" to kotlin.math.abs(it) },
-        ).forEachIndexed { index, (label, amount) ->
+        monthSummaryRows(month).forEachIndexed { index, (label, amount) ->
             if (index > 0) DividerLine()
             ListRow(
                 label,
