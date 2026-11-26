@@ -205,7 +205,8 @@ internal fun parseActivitySearchAmount(
             else -> ungrouped.replace(",", "").replace(".", "")
         }
     if (!normalized.matches(Regex("[+-]?(?:\\d+(?:\\.\\d{0,2})?|\\.\\d{1,2})"))) return null
-    val whole = normalized.substringBefore('.').trimStart('+', '-').ifEmpty { "0" }.toLongOrNull() ?: return null
+    val wholeText = normalized.substringBefore('.').trimStart('+', '-')
+    val whole = wholeText.ifEmpty { "0" }.toLongOrNull() ?: return null
     val cents = normalized.substringAfter('.', "").padEnd(2, '0').toLong()
     if (whole > (Long.MAX_VALUE - cents) / 100) return null
     return whole * 100 + cents

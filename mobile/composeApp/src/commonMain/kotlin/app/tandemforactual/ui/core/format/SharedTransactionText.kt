@@ -43,7 +43,7 @@ private fun sharedAmountHundredths(text: String): Long? {
     val fraction = sharedFraction.find(text)
     val wholeText = if (fraction != null) text.substring(0, fraction.range.first) else text
     val whole = wholeText.filter(Char::isDigit).toLongOrNull() ?: return null
-    val cents = fraction?.groupValues?.get(1)?.padEnd(2, '0')?.toLong() ?: 0L
+    val cents = fraction?.let { it.groupValues[1].padEnd(2, '0').toLong() } ?: 0L
     if (whole > (Long.MAX_VALUE - cents) / 100) return null
     return whole * 100 + cents
 }
