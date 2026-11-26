@@ -351,8 +351,8 @@ class ActualBudgetReader(
         val currencyEnabled = preferences["flags.currency"] == "true"
         val configured = preferences["defaultCurrencyCode"]?.takeIf { currencyEnabled && Regex("^[A-Z]{3}$").matches(it) }
         val configuredMetadata = configured?.let(ACTUAL_CURRENCIES::get)
-        val currencyCode = if (configured != null && configuredMetadata != null) configured else "USD"
-        val metadata = configuredMetadata ?: ACTUAL_CURRENCIES.getValue("USD")
+        val currencyCode = configured ?: "USD"
+        val metadata = configuredMetadata ?: if (configured != null) UNKNOWN_ACTUAL_CURRENCY else ACTUAL_CURRENCIES.getValue("USD")
         val numberFormat =
             preferences["numberFormat"]?.takeIf { it in numberFormats } ?: configuredMetadata?.numberFormat
         val symbolPosition = preferences["currencySymbolPosition"]

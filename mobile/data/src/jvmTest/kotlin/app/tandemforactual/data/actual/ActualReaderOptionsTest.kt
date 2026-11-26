@@ -1,6 +1,7 @@
 package app.tandemforactual.data.actual
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import app.tandemforactual.data.store.BudgetDisplaySettings
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,6 +52,33 @@ class ActualReaderOptionsTest {
         assertTrue(",-12.34," in csv && "Reconciled" in csv)
         assertTrue("Cleared" in csv.replace("Reconciled", "") || other == null)
         assertTrue("Not cleared" in csv || db.first("SELECT count(*) AS n FROM v_transactions")!!["n"] == 2L)
+        db.close()
+    }
+
+    @Test
+    fun currencyDisplayMatchesActualsCurrencyTable() {
+        val db = fixtureDb()
+        db.execute("INSERT INTO preferences (id, value) VALUES ('flags.currency', 'true')")
+
+        fun settings(code: String): BudgetDisplaySettings {
+            db.execute("INSERT OR REPLACE INTO preferences (id, value) VALUES ('defaultCurrencyCode', ?)", code)
+            return ActualBudgetReader(db).read("2026-11-21").displaySettings
+        }
+        val norway = settings("NOK")
+        assertEquals(
+            listOf("NOK", "kr", "space-comma", "after"),
+            listOf(norway.currencyCode, norway.currencySymbol, norway.numberFormat, norway.currencySymbolPosition),
+        )
+        assertEquals(2, norway.currencyFractionDigits)
+        assertEquals("CHF", settings("CHF").currencySymbol)
+        assertEquals(listOf("R", "before"), settings("ZAR").let { listOf(it.currencySymbol, it.currencySymbolPosition) })
+        assertEquals("TSh", settings("TZS").currencySymbol)
+        assertEquals(listOf("৳", "comma-dot-in"), settings("BDT").let { listOf(it.currencySymbol, it.numberFormat) })
+        assertEquals(0, settings("JPY").currencyFractionDigits)
+        assertEquals(0, settings("KRW").currencyFractionDigits)
+        val unknown = settings("XYZ")
+        assertEquals(listOf("XYZ", ""), listOf(unknown.currencyCode, unknown.currencySymbol))
+        assertEquals(2, unknown.currencyFractionDigits)
         db.close()
     }
 

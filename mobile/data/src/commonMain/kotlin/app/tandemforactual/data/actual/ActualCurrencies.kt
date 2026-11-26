@@ -13,10 +13,11 @@ internal val ACTUAL_CURRENCIES: Map<String, ActualCurrency> =
         "AED" to ActualCurrency("د.إ", 2, "comma-dot", false),
         "ARS" to ActualCurrency("Arg$", 2, "dot-comma", true),
         "AUD" to ActualCurrency("A$", 2, "comma-dot", true),
+        "BDT" to ActualCurrency("৳", 2, "comma-dot-in", true),
         "BRL" to ActualCurrency("R$", 2, "dot-comma", true),
         "BYN" to ActualCurrency("Br", 2, "space-comma", false),
         "CAD" to ActualCurrency("CA$", 2, "comma-dot", true),
-        "CHF" to ActualCurrency("Fr.", 2, "apostrophe-dot", true),
+        "CHF" to ActualCurrency("CHF", 2, "apostrophe-dot", true),
         "CLP" to ActualCurrency("CLP$", 2, "dot-comma", true),
         "CNY" to ActualCurrency("¥", 2, "comma-dot", true),
         "COP" to ActualCurrency("Col$", 2, "dot-comma", true),
@@ -42,6 +43,7 @@ internal val ACTUAL_CURRENCIES: Map<String, ActualCurrency> =
         "MKD" to ActualCurrency("ден", 2, "dot-comma", false),
         "MXN" to ActualCurrency("$", 2, "comma-dot", true),
         "MYR" to ActualCurrency("RM", 2, "comma-dot", true),
+        "NOK" to ActualCurrency("kr", 2, "space-comma", false),
         "PEN" to ActualCurrency("S/", 2, "comma-dot", true),
         "PHP" to ActualCurrency("₱", 2, "comma-dot", true),
         "PKR" to ActualCurrency("Rs.", 2, "comma-dot", true),
@@ -56,8 +58,12 @@ internal val ACTUAL_CURRENCIES: Map<String, ActualCurrency> =
         "THB" to ActualCurrency("฿", 2, "comma-dot", true),
         "TRY" to ActualCurrency("₺", 2, "dot-comma", true),
         "TWD" to ActualCurrency("NT$", 2, "comma-dot", true),
+        "TZS" to ActualCurrency("TSh", 2, "comma-dot", true),
         "UAH" to ActualCurrency("₴", 2, "space-comma", false),
         "USD" to ActualCurrency("$", 2, "comma-dot", true),
         "UYU" to ActualCurrency("\$U", 2, "dot-comma", true),
         "UZS" to ActualCurrency("UZS", 2, "space-comma", false),
+        "ZAR" to ActualCurrency("R", 2, "space-comma", true),
     )
+
+internal val UNKNOWN_ACTUAL_CURRENCY = ActualCurrency("", 2, "comma-dot", true)
