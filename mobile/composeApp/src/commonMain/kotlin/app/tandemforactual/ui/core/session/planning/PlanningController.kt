@@ -326,6 +326,10 @@ internal class PlanningController(
         planningStore(budgetId)?.deleteSavedSearch(id)
     }
 
+    /** Every planning and profile record in the budget, or null when its planning store isn't open. */
+    suspend fun backupRecords(budgetId: String): List<Triple<String, String, kotlinx.serialization.json.JsonObject>>? =
+        planningStore(budgetId)?.backupRecords()
+
     /** Writes every planning record back from a backup; records already on the device with the same id are replaced. */
     suspend fun restore(
         budgetId: String,

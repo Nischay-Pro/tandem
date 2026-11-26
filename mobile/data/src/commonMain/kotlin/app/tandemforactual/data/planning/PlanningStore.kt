@@ -39,7 +39,7 @@ class PlanningStore(
     suspend fun backupRecords(): List<Triple<String, String, JsonObject>> =
         dao
             .all(budgetId)
-            .filter { !it.deleted && it.recordType.startsWith("planning.") }
+            .filter { !it.deleted && isBackedUp(it.recordType) }
             .mapNotNull { record -> runCatching { Triple(record.recordId, record.recordType, open(record)) }.getOrNull() }
             .sortedWith(compareBy({ it.second }, { it.first }))
 
@@ -175,5 +175,8 @@ class PlanningStore(
 
     companion object {
         const val SCHEMA_VERSION = 1
+
+        /** Planning and profile records are what a planning backup holds; anything else on the device stays out. */
+        fun isBackedUp(recordType: String): Boolean = recordType.startsWith("planning.") || recordType.startsWith("profile.")
     }
 }
