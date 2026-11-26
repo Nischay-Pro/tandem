@@ -8,7 +8,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.withFrameNanos
-import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.bankSyncFailureAlert
 import app.tandemforactual.data.store.uncategorizedAlert
@@ -60,8 +59,8 @@ internal fun SessionQueueEffects(
         val links = mobileSession.banking.bankLinks.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         val store = appPreferencesStore ?: return@LaunchedEffect
         val post = env.postLocalAlert ?: return@LaunchedEffect
-        val alert = bankSyncFailureAlert(store, state.selectedBudgetId, links.filter { it.failure != null }.map { it.name })
-        if (alert != null && state.notificationPolicy.allows(AlertKind.BANK_SYNC_FAILURE, platformMinuteOfDay())) post(alert)
+        val failing = links.filter { it.failure != null }.map { it.name }
+        bankSyncFailureAlert(store, state.selectedBudgetId, failing, state.notificationPolicy, platformMinuteOfDay())?.let(post)
     }
     LaunchedEffect(mobileSession.transactionRecords) {
         val repository = mobileSession.repository ?: return@LaunchedEffect
@@ -69,9 +68,9 @@ internal fun SessionQueueEffects(
         val post = env.postLocalAlert ?: return@LaunchedEffect
         if (state.selectedBudgetId.isBlank() || mobileSession.transactionRecords.isEmpty()) return@LaunchedEffect
         val policy = state.notificationPolicy
-        val alert =
-            uncategorizedAlert(repository, store, state.selectedBudgetId, platformTodayIsoDate(), policy) { state.formatCurrency(it) }
-        if (alert != null && policy.allows(AlertKind.UNCATEGORIZED, platformMinuteOfDay())) post(alert)
+        uncategorizedAlert(repository, store, state.selectedBudgetId, platformTodayIsoDate(), policy, platformMinuteOfDay()) {
+            state.formatCurrency(it)
+        }?.let(post)
     }
 }
 

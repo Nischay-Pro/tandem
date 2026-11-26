@@ -180,7 +180,7 @@ class NotificationPolicyTest {
             val format = { minor: Long -> "$$minor" }
 
             suspend fun alert(hide: Boolean = false) =
-                uncategorizedAlert(repository, preferences, "budget", "2026-11-21", policy.copy(hideAmounts = hide), format)
+                uncategorizedAlert(repository, preferences, "budget", "2026-11-21", policy.copy(hideAmounts = hide), NOON, format)
             val key = "internal:announced-uncategorized:budget"
             repository.load(
                 listOf(
@@ -235,16 +235,72 @@ class NotificationPolicyTest {
     @Test
     fun announcesBankFailuresUntilTheyRecover() =
         withRepository { _, preferences ->
+            val policy = NotificationPolicy.read(emptyMap())
             assertEquals(
                 "Checking couldn’t sync with its bank. Open Bank connections to fix it.",
-                bankSyncFailureAlert(preferences, "budget", listOf("Checking"))?.message,
+                bankSyncFailureAlert(preferences, "budget", listOf("Checking"), policy, NOON)?.message,
             )
-            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking")))
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking"), policy, NOON))
             assertEquals(
                 "2 accounts couldn’t sync with their banks. Open Bank connections to fix them.",
-                bankSyncFailureAlert(preferences, "budget", listOf("Checking", "Savings", "Card"))?.message,
+                bankSyncFailureAlert(preferences, "budget", listOf("Checking", "Savings", "Card"), policy, NOON)?.message,
             )
-            assertNull(bankSyncFailureAlert(preferences, "budget", emptyList()))
-            assertEquals(AlertKind.BANK_SYNC_FAILURE, bankSyncFailureAlert(preferences, "budget", listOf("Checking"))?.kind)
+            assertNull(bankSyncFailureAlert(preferences, "budget", emptyList(), policy, NOON))
+            assertEquals(AlertKind.BANK_SYNC_FAILURE, bankSyncFailureAlert(preferences, "budget", listOf("Checking"), policy, NOON)?.kind)
+        }
+
+    @Test
+    fun holdsNewUncategorizedTransactionsUntilQuietHoursEnd() =
+        withRepository { repository, preferences ->
+            val night = NotificationPolicy.read(mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
+            val key = "internal:announced-uncategorized:budget"
+
+            suspend fun alert(
+                minute: Int,
+                policy: NotificationPolicy = night,
+            ) = uncategorizedAlert(repository, preferences, "budget", "2026-11-21", policy, minute) { "$$it" }
+            repository.load(
+                listOf(
+                    record("transaction", "seen", """{"date":"2026-11-20","amount":-5}"""),
+                    record("transaction", "fresh", """{"date":"2026-11-21","amount":-1200}"""),
+                ),
+            )
+            preferences.putValue(key, "seen,gone")
+            assertNull(alert(23 * 60), "silent during quiet hours")
+            assertEquals("seen", preferences.read()[key])
+            assertNull(alert(60))
+            assertEquals("$1200 needs a category.", alert(8 * 60)?.message, "shown once quiet hours end")
+            assertNull(alert(8 * 60), "not repeated")
+            assertNull(alert(9 * 60))
+
+            preferences.putValue(key, "seen")
+            assertNull(alert(NOON, night.copy(enabled = emptySet())), "turned off drops it rather than holding it")
+            assertEquals("fresh,seen", preferences.read()[key])
+            assertNull(alert(NOON))
+        }
+
+    @Test
+    fun holdsNewBankFailuresUntilQuietHoursEnd() =
+        withRepository { _, preferences ->
+            val night = NotificationPolicy.read(mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
+            val key = "internal:announced-bank-failures:budget"
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 23 * 60))
+            assertEquals("", preferences.read()[key])
+            assertEquals(
+                "Checking couldn’t sync with its bank. Open Bank connections to fix it.",
+                bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 8 * 60)?.message,
+            )
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 9 * 60), "not repeated")
+
+            assertNull(bankSyncFailureAlert(preferences, "budget", emptyList(), night, 23 * 60), "recovery is still noted")
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 23 * 60))
+            assertEquals(AlertKind.BANK_SYNC_FAILURE, bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 8 * 60)?.kind)
+
+            val off = night.copy(enabled = emptySet())
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Savings"), off, NOON))
+            assertEquals("Savings", preferences.read()[key])
+            assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Savings"), night, NOON))
         }
 }
+
+private const val NOON = 12 * 60
