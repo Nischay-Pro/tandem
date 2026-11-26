@@ -225,6 +225,55 @@ class PlanningSyncTest {
         }
 
     @Test
+    fun anEditNeverBringsBackARecordAnotherDeviceDeleted(): Unit =
+        runBlocking {
+            val phoneDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            val tabletDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val server = FakeServer().apply { pageSize = 50 }
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val phoneSync = PlanningSync(phoneDb.planningRecordDao(), "b", server.transport())
+                val tabletSync = PlanningSync(tabletDb.planningRecordDao(), "b", server.transport())
+                val phone = PlanningStore(phoneDb.planningRecordDao(), "b", cipher) { 1L }
+                val tablet = PlanningStore(tabletDb.planningRecordDao(), "b", cipher) { 2L }
+                phone.save(SavingsGoal("g", "Holiday", 1_000, "USD"))
+                phoneSync.sync(cipher, 0)
+                tabletSync.sync(cipher, 0)
+
+                phone.delete("g", SavingsGoal.TYPE)
+                tablet.save(SavingsGoal("g", "Holiday", 2_000, "USD"))
+                phoneSync.sync(cipher, 0)
+                val result = tabletSync.sync(cipher, 0)
+                assertEquals(0, result.uploaded)
+                assertTrue(server.records.getValue("g").deleted)
+                assertEquals(emptyList(), tablet.savingsGoals().first())
+                assertTrue(tabletDb.planningRecordDao().pending("b").isEmpty())
+
+                tablet.save(SavingsGoal("g", "Holiday again", 3_000, "USD"))
+                tabletSync.sync(cipher, 0)
+                phoneSync.sync(cipher, 0)
+                assertEquals(listOf("Holiday again"), phone.savingsGoals().first().map { it.name })
+
+                val freshDb = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+                try {
+                    phone.delete("h", SavingsGoal.TYPE)
+                    phone.save(SavingsGoal("h", "Car", 1, "USD"))
+                    phone.delete("h", SavingsGoal.TYPE)
+                    phoneSync.sync(cipher, 0)
+                    val fresh = PlanningStore(freshDb.planningRecordDao(), "b", cipher) { 3L }
+                    fresh.save(SavingsGoal("h", "Car", 5, "USD"))
+                    assertEquals(1, PlanningSync(freshDb.planningRecordDao(), "b", server.transport()).sync(cipher, 0).uploaded)
+                    assertFalse(server.records.getValue("h").deleted)
+                } finally {
+                    freshDb.closeDatabase()
+                }
+            } finally {
+                phoneDb.closeDatabase()
+                tabletDb.closeDatabase()
+            }
+        }
+
+    @Test
     fun agreeingOnAKeyHandlesARace(): Unit =
         runBlocking {
             val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))

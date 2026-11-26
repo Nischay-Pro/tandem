@@ -1,6 +1,7 @@
 package app.tandemforactual.data.planning
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -96,9 +97,16 @@ class PlanningStore(
     fun retirementProfiles(): Flow<List<RetirementProfile>> =
         observe(RetirementProfile.TYPE).map { list -> list.map { (id, body) -> RetirementProfile.fromJson(id, body) } }
 
+    /** The settings record, with checkup findings marked as fine on any device added to its own list. */
     fun settings(): Flow<PlanningSettings> =
-        observe(PlanningSettings.TYPE).map { list ->
-            list.firstOrNull()?.let { PlanningSettings.fromJson(it.second) } ?: PlanningSettings()
+        combine(observe(PlanningSettings.TYPE), observe(IgnoredCheck.TYPE)) { settings, checks ->
+            val saved = settings.firstOrNull()?.let { PlanningSettings.fromJson(it.second) } ?: PlanningSettings()
+            saved.copy(ignoredChecks = (saved.ignoredChecks + checks.mapNotNull { IgnoredCheck.fromJson(it.second) }).distinct())
+        }
+
+    suspend fun ignoreChecks(keys: List<String>) =
+        keys.distinct().forEach {
+            put(IgnoredCheck.id(it), IgnoredCheck.TYPE, IgnoredCheck.toJson(it))
         }
 
     suspend fun save(settings: PlanningSettings) = put(PlanningSettings.ID, PlanningSettings.TYPE, settings.toJson())

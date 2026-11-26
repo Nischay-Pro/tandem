@@ -142,6 +142,20 @@ data class PlanningSettings(
     }
 }
 
+/**
+ * One budget checkup finding marked as fine, keyed `KIND:id`. Each is its own record, so devices marking different
+ * findings never overwrite each other; older budgets also list them in [PlanningSettings.ignoredChecks].
+ */
+object IgnoredCheck {
+    const val TYPE = "planning.ignored_check"
+
+    fun id(key: String) = "check:$key"
+
+    fun toJson(key: String): JsonObject = jsonOf("key" to JsonPrimitive(key))
+
+    fun fromJson(body: JsonObject): String? = body.text("key")?.takeIf { it.isNotBlank() }
+}
+
 /** Money someone owes back for a purchase, keyed by the Actual transaction it came from. */
 data class Reimbursement(
     val transactionId: String,

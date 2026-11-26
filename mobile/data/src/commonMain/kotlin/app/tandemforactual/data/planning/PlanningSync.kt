@@ -68,7 +68,8 @@ data class PlanningSyncResult(
 
 /**
  * Exchanges one budget's sealed planning records with extension sync. Local edits go up as the next server revision; if
- * another device got there first, the edit is re-based on the newest revision so the latest writer wins. A record marked
+ * another device got there first, the edit is re-based on the newest revision so the latest writer wins, except that an
+ * edit never brings back a record another device deleted. A record marked
  * private stays on this device; one that was shared before goes up as a deletion so other devices drop it. The cursor only
  * advances after received records are stored, and a failure leaves local edits pending for the next attempt.
  */
@@ -231,9 +232,26 @@ class PlanningSync(
                 )
                 return true
             }
-            base = (result as RemoteWrite.Conflict).current?.revision
+            val current = (result as RemoteWrite.Conflict).current
+            if (current?.deleted == true && !record.deleted && record.syncedRevision > 0) {
+                adoptDeletion(record, current)
+                return false
+            }
+            base = current?.revision
         }
         return false
+    }
+
+    /**
+     * Another device deleted the record while this one edited a copy it had synced; the deletion stands so the record
+     * doesn't come back. A record created here without a synced copy is new, so it still goes up.
+     */
+    private suspend fun adoptDeletion(
+        record: PlanningRecordEntity,
+        deletion: RemotePlanningRecord,
+    ) {
+        val local = dao.find(budgetId, record.recordId)
+        if (local == null || local == record) dao.upsert(deletion.toEntity())
     }
 
     private suspend fun downloadChanges(
