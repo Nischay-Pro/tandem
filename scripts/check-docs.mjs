@@ -86,6 +86,18 @@ function withoutComments(text) {
   }
 }
 
+function withoutTags(text) {
+  let kept = "";
+  let position = 0;
+  for (;;) {
+    const start = text.indexOf("<", position);
+    if (start < 0) return kept + text.slice(position);
+    kept += text.slice(position, start);
+    const end = text.indexOf(">", start + 1);
+    position = end < 0 ? start + 1 : end + 1;
+  }
+}
+
 function withoutCode(text) {
   return withoutComments(
     text
@@ -100,9 +112,7 @@ function headingIds(text) {
   for (const match of withoutCode(text).matchAll(
     /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm,
   )) {
-    const slug = match[1]
-      .replace(/<[^>]*>/g, "")
-      .replace(/[<>]/g, "")
+    const slug = withoutTags(match[1])
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/[\x60*_~]/g, "")
       .toLowerCase()
