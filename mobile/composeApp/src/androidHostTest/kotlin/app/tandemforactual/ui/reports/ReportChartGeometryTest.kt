@@ -80,6 +80,7 @@ class ReportChartGeometryTest {
                 syncing = Color(0xFF73B7FF),
                 warning = Color(0xFFFFD18A),
                 negative = Color(0xFFFF9CA5),
+                negativeContent = Color(0xFF111827),
             )
         val colors = (0 until 8).map { categorySliceColor(it, isOther = false, palette = palette) }
 
