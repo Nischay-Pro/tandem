@@ -73,11 +73,25 @@ export function markdownFiles(repoRoot = root, gitExecutable = "git") {
   return files.sort();
 }
 
+function withoutComments(text) {
+  let kept = "";
+  let position = 0;
+  for (;;) {
+    const start = text.indexOf("<!--", position);
+    if (start < 0) return kept + text.slice(position);
+    kept += text.slice(position, start);
+    const end = text.indexOf("-->", start + 4);
+    if (end < 0) return kept;
+    position = end + 3;
+  }
+}
+
 function withoutCode(text) {
-  return text
-    .replace(/^ {0,3}(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[ \t]*$/gm, "")
-    .replace(/(\x60+)[^\x60\n]*\1/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
+  return withoutComments(
+    text
+      .replace(/^ {0,3}(\x60{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[ \t]*$/gm, "")
+      .replace(/(\x60+)[^\x60\n]*\1/g, ""),
+  );
 }
 
 function headingIds(text) {
@@ -88,6 +102,7 @@ function headingIds(text) {
   )) {
     const slug = match[1]
       .replace(/<[^>]*>/g, "")
+      .replace(/[<>]/g, "")
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/[\x60*_~]/g, "")
       .toLowerCase()
