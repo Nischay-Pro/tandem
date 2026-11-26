@@ -7,7 +7,6 @@ import app.tandemforactual.ui.app.routes.accountsMenu
 import app.tandemforactual.ui.app.routes.bankingMenu
 import app.tandemforactual.ui.app.routes.checkupMenu
 import app.tandemforactual.ui.app.routes.currencyMenu
-import app.tandemforactual.ui.app.routes.exportMenu
 import app.tandemforactual.ui.app.routes.homeMenu
 import app.tandemforactual.ui.app.routes.householdMenu
 import app.tandemforactual.ui.app.routes.insightsMenu
@@ -79,7 +78,6 @@ internal val menuEntries: List<MenuEntry> =
             bankingMenu +
             checkupMenu +
             currencyMenu +
-            exportMenu +
             homeMenu +
             householdMenu +
             insightsMenu +
