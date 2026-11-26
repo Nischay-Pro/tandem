@@ -6,6 +6,8 @@ import app.tandemforactual.api.client.budgetBackup
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.PlanningCipher
 import app.tandemforactual.data.planning.PlanningStore
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -89,11 +91,53 @@ object AutomaticBackups {
             (settings.folder != null || settings.webDavUrl != null) &&
             (lastRun == null || now - lastRun >= settings.intervalHours * 3_600_000L)
 
-    /** `tandem-backup-household-2026-11-24-0930.zip`; sealed backups aren't zips, so they get their own extension. */
+    const val PARTIAL_SUFFIX = ".partial"
+    private const val SLUG_LENGTH = 40
+
+    /**
+     * `tandem-backup-household-2026-11-24-0930.zip`; sealed backups aren't zips, so they get their own extension. Names
+     * longer than the slug allows also carry a hash of [budgetId], so two long names never share a file pattern.
+     */
     fun fileName(
         budgetName: String,
+        budgetId: String,
         stamp: String,
         sealed: Boolean,
+    ): String = "$FILE_PREFIX${stem(budgetName, budgetId)}-$stamp.${if (sealed) "tandembackup" else "zip"}"
+
+    /** The oldest of this budget's finished backups beyond the newest [keep], plus any partial copies left by failed writes. */
+    fun toDelete(
+        names: List<String>,
+        budgetName: String,
+        budgetId: String,
+        keep: Int,
+    ): List<String> {
+        val backup = Regex("${Regex.escape(FILE_PREFIX + stem(budgetName, budgetId))}-\\d{4}-\\d{2}-\\d{2}-\\d{4}\\.(zip|tandembackup)")
+        val finished = names.filter(backup::matches).sortedDescending().drop(keep)
+        val partial = names.filter { it.endsWith(PARTIAL_SUFFIX) && backup.matches(it.removeSuffix(PARTIAL_SUFFIX)) }
+        return finished + partial
+    }
+
+    /** Writes [name] under a partial name first and renames it once complete; a failure removes the partial copy. */
+    suspend fun saveCompletely(
+        name: String,
+        write: suspend (String) -> Unit,
+        rename: suspend (from: String, to: String) -> Unit,
+        delete: suspend (String) -> Unit,
+    ) {
+        val partial = name + PARTIAL_SUFFIX
+        try {
+            write(partial)
+            rename(partial, name)
+        } catch (error: Throwable) {
+            withContext(NonCancellable) { runCatching { delete(partial) } }
+            throw error
+        }
+    }
+
+    private fun stem(
+        budgetName: String,
+        budgetId: String,
     ): String {
         val slug =
             budgetName
@@ -101,18 +145,13 @@ object AutomaticBackups {
                 .replace(Regex("[^a-z0-9]+"), "-")
                 .trim('-')
                 .ifEmpty { "budget" }
-                .take(40)
-        return "$FILE_PREFIX$slug-$stamp.${if (sealed) "tandembackup" else "zip"}"
+        return if (slug.length <= SLUG_LENGTH) slug else "${slug.take(SLUG_LENGTH).trimEnd('-')}-${shortHash(budgetId)}"
     }
 
-    /** The oldest of this budget's backups beyond the newest [keep]; names sort by their timestamp. */
-    fun toDelete(
-        names: List<String>,
-        budgetName: String,
-        keep: Int,
-    ): List<String> {
-        val mine = fileName(budgetName, "", sealed = false).substringBeforeLast("-.")
-        return names.filter { it.startsWith("$mine-") }.sortedDescending().drop(keep)
+    private fun shortHash(value: String): String {
+        var hash = 0x811c9dc5.toInt()
+        value.encodeToByteArray().forEach { hash = (hash xor (it.toInt() and 0xff)) * 0x01000193 }
+        return hash.toUInt().toString(16).padStart(8, '0')
     }
 
     /**

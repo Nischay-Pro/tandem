@@ -8,8 +8,10 @@ import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class AutomaticBackupsTest {
     private val on = AutomaticBackupSettings(enabled = true, intervalHours = 24, folder = "content://tree/Documents")
@@ -29,9 +31,12 @@ class AutomaticBackupsTest {
     fun namesBackupsAndKeepsOnlyTheNewest() {
         assertEquals(
             "tandem-backup-our-home-2026-11-24-0930.zip",
-            AutomaticBackups.fileName("Our Home!", "2026-11-24-0930", sealed = false),
+            AutomaticBackups.fileName("Our Home!", "id-1", "2026-11-24-0930", sealed = false),
         )
-        assertEquals("tandem-backup-budget-2026-11-24-0930.tandembackup", AutomaticBackups.fileName("  ", "2026-11-24-0930", sealed = true))
+        assertEquals(
+            "tandem-backup-budget-2026-11-24-0930.tandembackup",
+            AutomaticBackups.fileName("  ", "id-1", "2026-11-24-0930", sealed = true),
+        )
         val names =
             listOf(
                 "tandem-backup-our-home-2026-11-20-0900.zip",
@@ -40,9 +45,75 @@ class AutomaticBackupsTest {
                 "tandem-backup-other-2026-11-01-0900.zip",
                 "notes.txt",
             )
-        assertEquals(listOf("tandem-backup-our-home-2026-11-20-0900.zip"), AutomaticBackups.toDelete(names, "Our Home!", keep = 2))
-        assertEquals(emptyList(), AutomaticBackups.toDelete(names, "Our Home!", keep = 7))
+        assertEquals(listOf("tandem-backup-our-home-2026-11-20-0900.zip"), AutomaticBackups.toDelete(names, "Our Home!", "id-1", keep = 2))
+        assertEquals(emptyList(), AutomaticBackups.toDelete(names, "Our Home!", "id-1", keep = 7))
     }
+
+    @Test
+    fun leavesOtherBudgetsBackupsAlone() {
+        val names =
+            listOf(
+                "tandem-backup-home-2026-11-20-0900.zip",
+                "tandem-backup-home-2026-11-24-0900.zip",
+                "tandem-backup-home-office-2026-11-25-0900.zip",
+                "tandem-backup-home-office-2026-11-26-0900.zip",
+                "tandem-backup-home-2026-11-24-0900-copy.zip",
+            )
+        assertEquals(listOf("tandem-backup-home-2026-11-20-0900.zip"), AutomaticBackups.toDelete(names, "Home", "a", keep = 1))
+    }
+
+    @Test
+    fun givesLongNamesSharingAPrefixTheirOwnFiles() {
+        val first = "Household budget for the whole family 2025 edition"
+        val second = "Household budget for the whole family 2026 edition"
+        val firstName = AutomaticBackups.fileName(first, "budget-a", "2026-11-24-0930", sealed = false)
+        val secondName = AutomaticBackups.fileName(second, "budget-b", "2026-11-25-0930", sealed = false)
+        assertEquals(firstName, AutomaticBackups.fileName(first, "budget-a", "2026-11-24-0930", sealed = false))
+        val names = listOf(firstName, secondName)
+        assertEquals(listOf(firstName), AutomaticBackups.toDelete(names, first, "budget-a", keep = 0))
+        assertEquals(listOf(secondName), AutomaticBackups.toDelete(names, second, "budget-b", keep = 0))
+    }
+
+    @Test
+    fun neverCountsPartialCopiesAndCleansThemUp() {
+        val names =
+            listOf(
+                "tandem-backup-home-2026-11-20-0900.zip",
+                "tandem-backup-home-2026-11-22-0900.zip",
+                "tandem-backup-home-2026-11-26-0900.zip.partial",
+                "tandem-backup-home-2026-11-26-0910.zip.partial",
+                "tandem-backup-home-office-2026-11-26-0900.zip.partial",
+            )
+        assertEquals(
+            listOf("tandem-backup-home-2026-11-26-0900.zip.partial", "tandem-backup-home-2026-11-26-0910.zip.partial"),
+            AutomaticBackups.toDelete(names, "Home", "a", keep = 2),
+        )
+    }
+
+    @Test
+    fun savesUnderAPartialNameAndRemovesItWhenTheWriteFails(): Unit =
+        runBlocking {
+            val folder = mutableMapOf<String, ByteArray>()
+            val rename: suspend (String, String) -> Unit = { from, to -> folder[to] = folder.remove(from)!! }
+            val delete: suspend (String) -> Unit = { folder.remove(it) }
+            AutomaticBackups.saveCompletely("b.zip", { folder[it] = byteArrayOf(1) }, rename, delete)
+            assertEquals(setOf("b.zip"), folder.keys)
+            assertFailsWith<IllegalStateException> {
+                AutomaticBackups.saveCompletely(
+                    "c.zip",
+                    {
+                        folder[it] = byteArrayOf(2)
+                        error("disk full")
+                    },
+                    rename,
+                    delete,
+                )
+            }
+            assertFailsWith<IllegalStateException> {
+                AutomaticBackups.saveCompletely("d.zip", { folder[it] = byteArrayOf(3) }, { _, _ -> error("rename failed") }, delete)
+            }
+            assertEquals(setOf("b.zip"), folder.keys)
+        }
 
     @Test
     fun savesTheChoicesWithTheAppSettings() {

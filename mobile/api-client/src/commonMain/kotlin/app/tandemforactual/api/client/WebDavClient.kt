@@ -60,6 +60,19 @@ class WebDavClient(
         if (!response.status.isSuccess()) fail(response, "Couldn’t upload the backup.")
     }
 
+    /** Renames [from] to [to], replacing any file already called [to]. */
+    suspend fun move(
+        from: String,
+        to: String,
+    ) {
+        val response =
+            send(MOVE, file(from)) {
+                header("Destination", file(to))
+                header("Overwrite", "T")
+            }
+        if (!response.status.isSuccess()) fail(response, "Couldn’t upload the backup.")
+    }
+
     /** The names of the files directly inside the folder. */
     suspend fun list(): List<String> {
         val response = send(PROPFIND, folder) { header("Depth", "1") }
@@ -112,6 +125,7 @@ class WebDavClient(
 
         private val PROPFIND = HttpMethod("PROPFIND")
         private val MKCOL = HttpMethod("MKCOL")
+        private val MOVE = HttpMethod("MOVE")
 
         private fun hrefs(xml: String): List<String> =
             Regex("<(?:[A-Za-z0-9]+:)?href>([^<]*)</(?:[A-Za-z0-9]+:)?href>", RegexOption.IGNORE_CASE)

@@ -69,7 +69,7 @@ class AutomaticBackupWorker(
             progress.show(25)
             val bytes = backup(database, client, budgetId, budget.name, password)
             progress.show(70)
-            deliver(store, settings, budget.name, bytes, now, progress)
+            deliver(store, settings, budgetId, budget.name, bytes, now, progress)
             progress.show(100)
             Result.success()
         } catch (error: CancellationException) {
@@ -109,23 +109,24 @@ class AutomaticBackupWorker(
     private suspend fun deliver(
         store: AppPreferencesStore,
         settings: AutomaticBackupSettings,
+        budgetId: String,
         budgetName: String,
         bytes: ByteArray,
         now: Long,
         progress: BackupProgress,
     ) {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))
-        val name = AutomaticBackups.fileName(budgetName, stamp, BudgetBackupFile.isSealed(bytes))
+        val name = AutomaticBackups.fileName(budgetName, budgetId, stamp, BudgetBackupFile.isSealed(bytes))
         settings.folder?.let { folder ->
             BackupFolder(applicationContext, Uri.parse(folder)).apply {
-                write(name, bytes)
-                AutomaticBackups.toDelete(names(), budgetName, settings.keep).forEach(::delete)
+                save(name, bytes)
+                AutomaticBackups.toDelete(names(), budgetName, budgetId, settings.keep).forEach(::delete)
             }
             store.putValue(AutomaticBackupSettings.LAST_RUN, now.toString())
         }
         progress.show(85)
         try {
-            uploadToWebDav(settings, name, bytes, budgetName)
+            uploadToWebDav(settings, name, bytes, budgetId, budgetName)
         } catch (error: WebDavException) {
             if (settings.folder == null) throw error
         }
@@ -136,14 +137,15 @@ class AutomaticBackupWorker(
         settings: AutomaticBackupSettings,
         name: String,
         bytes: ByteArray,
+        budgetId: String,
         budgetName: String,
     ) {
         val url = settings.webDavUrl ?: return
         val password = runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE).read() }.getOrNull() ?: return
         val dav = WebDavClient.connect(url, settings.webDavUser.orEmpty(), password)
         dav.check()
-        dav.upload(name, bytes)
-        AutomaticBackups.toDelete(dav.list(), budgetName, settings.keep).forEach { dav.delete(it) }
+        AutomaticBackups.saveCompletely(name, { dav.upload(it, bytes) }, dav::move, dav::delete)
+        AutomaticBackups.toDelete(dav.list(), budgetName, budgetId, settings.keep).forEach { dav.delete(it) }
     }
 
     private fun networkAllows(network: SyncNetwork): Boolean {
@@ -174,12 +176,38 @@ private class BackupFolder(
     private val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
     private val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
 
-    fun write(
+    suspend fun save(
         name: String,
         bytes: ByteArray,
     ) {
+        var partial: Uri? = null
+        AutomaticBackups.saveCompletely(
+            name,
+            write = { partial = create(it, bytes) },
+            rename = { _, to ->
+                val document = checkNotNull(partial)
+                val renamed = runCatching { DocumentsContract.renameDocument(resolver, document, to) }.getOrNull()
+                if (renamed == null) {
+                    create(to, bytes)
+                    DocumentsContract.deleteDocument(resolver, document)
+                }
+            },
+            delete = { partial?.let { DocumentsContract.deleteDocument(resolver, it) } },
+        )
+    }
+
+    private fun create(
+        name: String,
+        bytes: ByteArray,
+    ): Uri {
         val document = checkNotNull(DocumentsContract.createDocument(resolver, parent, "application/octet-stream", name))
-        checkNotNull(resolver.openOutputStream(document)).use { it.write(bytes) }
+        try {
+            checkNotNull(resolver.openOutputStream(document)).use { it.write(bytes) }
+        } catch (error: Exception) {
+            runCatching { DocumentsContract.deleteDocument(resolver, document) }
+            throw error
+        }
+        return document
     }
 
     private fun entries(): Map<String, Uri> =
