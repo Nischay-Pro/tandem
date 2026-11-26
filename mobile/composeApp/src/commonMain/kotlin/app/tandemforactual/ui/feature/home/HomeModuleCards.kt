@@ -4,6 +4,7 @@ package app.tandemforactual.ui.feature.home
 
 import androidx.compose.runtime.Composable
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -97,9 +98,11 @@ internal fun MonthSummaryCard(
 internal fun homeAccountRows(
     module: HomeModule,
     open: List<LiveAccountSummary>,
+    converter: BudgetCurrencyConverter,
 ): Pair<List<LiveAccountSummary>, Long> {
     val shown = if (module == HomeModule.NET_WORTH) emptyList() else open.filterNot { it.offBudget }
-    return shown to (if (module == HomeModule.NET_WORTH) open else shown).sumOf { it.balanceMinor ?: 0 }
+    val counted = if (module == HomeModule.NET_WORTH) open else shown
+    return shown to converter.total(counted.map { it.id to it.balanceMinor }).totalMinor
 }
 
 /** Every open on-budget account and their total, or the net worth total alone. */
@@ -109,9 +112,10 @@ internal fun AccountsSummaryCard(
     state: AppState,
     navigation: AppNavigation,
     open: List<LiveAccountSummary>,
+    converter: BudgetCurrencyConverter,
     money: @Composable (Long) -> Unit,
 ) {
-    val (shown, total) = homeAccountRows(module, open)
+    val (shown, total) = homeAccountRows(module, open, converter)
     SectionCard(stringResource(module.title()), stringResource(module.detail()), "Accounts", onClick = {
         navigation.selectTab(AppRoute.ACCOUNTS)
     }) {

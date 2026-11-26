@@ -2,7 +2,6 @@ package app.tandemforactual.ui.core.format
 
 import app.tandemforactual.data.planning.ConvertedTotal
 import app.tandemforactual.data.planning.convertMinor
-import app.tandemforactual.data.planning.convertedTotal
 import app.tandemforactual.data.planning.rateBetween
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
@@ -31,14 +30,7 @@ internal fun AppState.formatConverted(total: ConvertedTotal): String =
 internal fun TandemMobileSession.convertedBalance(
     state: AppState,
     accounts: List<Pair<String, Long?>>,
-): ConvertedTotal =
-    convertedTotal(
-        accounts.map { (id, balance) ->
-            (balance ?: 0L) to planning.accountCurrencies[id]
-        },
-        state.budgetCurrencyCode,
-        planning.exchangeRates,
-    )
+): ConvertedTotal = budgetCurrencyConverter(state).total(accounts)
 
 /** "≈ $1,234 in USD" for an account in another currency, or null when it's in the budget's currency or has no rate. */
 internal fun TandemMobileSession.approximateInBudgetCurrency(

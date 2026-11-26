@@ -3,6 +3,7 @@ import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
+import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.format.ReportMonth
 import app.tandemforactual.ui.core.format.formatMonth
 import app.tandemforactual.ui.core.format.formatReportPercentage
@@ -266,6 +267,7 @@ internal fun netWorthPoints(
     accounts: List<LiveAccountSummary>,
     monthIds: List<String>,
     todayIsoDate: String,
+    converter: BudgetCurrencyConverter,
 ): List<NetWorthPoint> {
     val todayMonthId = todayIsoDate.take(7)
     val targetMonths = monthIds.filter { it <= todayMonthId }.sortedDescending()
@@ -296,22 +298,17 @@ internal fun netWorthPoints(
             }
             activityIndex += 1
         }
+        val converted = balances.mapNotNull { (id, balance) -> converter.convert(id, balance)?.let { id to it } }
+        val onBudget = converted.filter { it.first in onBudgetIds }.map { it.second }
+        val all = converted.map { it.second }
         pointsDescending +=
             NetWorthPoint(
                 monthId,
                 formatMonth(month.year, month.month),
-                balances.values.filter { it > 0 }.sum(),
-                balances.values.filter { it < 0 }.sumOf { -it },
-                balances
-                    .filterKeys { it in onBudgetIds }
-                    .values
-                    .filter { it > 0 }
-                    .sum(),
-                balances
-                    .filterKeys { it in onBudgetIds }
-                    .values
-                    .filter { it < 0 }
-                    .sumOf { -it },
+                all.filter { it > 0 }.sum(),
+                all.filter { it < 0 }.sumOf { -it },
+                onBudget.filter { it > 0 }.sum(),
+                onBudget.filter { it < 0 }.sumOf { -it },
             )
     }
     return pointsDescending.asReversed()
