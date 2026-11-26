@@ -1,9 +1,10 @@
 package app.tandemforactual.ui.design.icons
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -27,8 +28,8 @@ class MerchantArtworkTest {
     fun logoFollowsTheRowWhenItsMerchantChanges() {
         val first = DrawableResource("drawable:test_first", emptySet())
         val second = DrawableResource("drawable:test_second", emptySet())
-        val firstBitmap = ImageBitmap(1, 1)
-        val secondBitmap = ImageBitmap(2, 2)
+        val firstBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
+        val secondBitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).asImageBitmap()
         MerchantArtworkCache.put(first, firstBitmap)
         MerchantArtworkCache.put(second, secondBitmap)
         var resource by mutableStateOf(first)
