@@ -135,11 +135,12 @@ private fun parseCsv(
     val generatedIds = mutableMapOf<String, Int>()
     val usedIds = mutableSetOf<String>()
     val duplicateSourceIds = duplicateCsvSourceIds(rows, columns.id)
+    val fileDateOrder = statementDateOrderFor(rows.drop(1).map { it.cell(columns.date) }, dateOrder)
     val transactions =
         rows.drop(1).mapIndexedNotNull { index, row ->
             val rowNumber = index + 2
             try {
-                val date = parseStatementDate(row.cell(columns.date), dateOrder)
+                val date = parseStatementDate(row.cell(columns.date), fileDateOrder)
                 val amount = csvRowAmount(row, columns, currencyFractionDigits, numberFormat)
                 if (amount == 0L) {
                     skipped++

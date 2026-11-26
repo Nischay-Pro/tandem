@@ -206,7 +206,7 @@ internal class ActivitySearchEvaluationState(
         val displaySettings = state.budgetDisplaySettings
         val evaluation =
             withContext(Dispatchers.Default) {
-                val preparedSearch = prepareActivitySearch(search, filters, displaySettings?.currencyCode)
+                val preparedSearch = prepareActivitySearch(search, filters, displaySettings?.currencyCode, displaySettings?.numberFormat)
                 val matchedIndices =
                     if (search.isBlank() && filters.isEmpty()) {
                         searchableRecords.indices.toList()
@@ -219,7 +219,7 @@ internal class ActivitySearchEvaluationState(
                     if (search.isBlank()) {
                         quickFilters
                     } else {
-                        activitySearchSuggestions(search, searchableRecords, displaySettings?.currencyCode) {
+                        activitySearchSuggestions(search, searchableRecords, displaySettings?.currencyCode, displaySettings?.numberFormat) {
                             formatCurrency(it, displaySettings)
                         }
                     }

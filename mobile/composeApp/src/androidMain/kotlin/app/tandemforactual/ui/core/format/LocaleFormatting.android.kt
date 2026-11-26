@@ -55,11 +55,12 @@ internal actual fun platformFormatCurrency(
                 if (currency != null) this.currency = currency
                 minimumFractionDigits = fractionDigits
                 maximumFractionDigits = fractionDigits
-            }.format(BigDecimal.valueOf(minorUnits).movePointLeft(STORED_AMOUNT_DIGITS))
+            }.format(BigDecimal.valueOf(roundForDisplay(minorUnits, fractionDigits)).movePointLeft(STORED_AMOUNT_DIGITS))
     }
 
     val fractionDigits = displaySettings.currencyFractionDigits
-    val amount = formatBudgetNumber(BigDecimal.valueOf(minorUnits).abs(), displaySettings, fractionDigits)
+    val shown = roundForDisplay(minorUnits, if (displaySettings.hideFraction) 0 else fractionDigits)
+    val amount = formatBudgetNumber(BigDecimal.valueOf(shown).abs(), displaySettings, fractionDigits)
     val symbol = displaySettings.currencySymbol
     val separator = if (displaySettings.currencySpaceBetweenAmountAndSymbol) "\u202F" else ""
     val formatted =
@@ -68,7 +69,7 @@ internal actual fun platformFormatCurrency(
         } else {
             "$symbol$separator$amount"
         }
-    return if (minorUnits < 0) "-$formatted" else formatted
+    return if (shown < 0) "-$formatted" else formatted
 }
 
 internal actual fun platformFormatReportCurrency(
@@ -85,7 +86,7 @@ internal actual fun platformFormatReportCurrency(
             if (currency != null) this.currency = currency
             minimumFractionDigits = digits
             maximumFractionDigits = digits
-        }.format(BigDecimal.valueOf(minorUnits).movePointLeft(STORED_AMOUNT_DIGITS))
+        }.format(BigDecimal.valueOf(roundForDisplay(minorUnits, digits)).movePointLeft(STORED_AMOUNT_DIGITS))
 }
 
 internal actual fun platformFormatDecimal(
@@ -119,7 +120,10 @@ private fun formatBudgetNumber(
     displaySettings: BudgetDisplaySettings?,
     fractionDigits: Int,
     hideFraction: Boolean = displaySettings?.hideFraction == true,
-): String = formatBudgetNumber(BigDecimal.valueOf(minorUnits), displaySettings, fractionDigits, hideFraction)
+): String {
+    val visibleDigits = if (hideFraction) 0 else fractionDigits
+    return formatBudgetNumber(BigDecimal.valueOf(roundForDisplay(minorUnits, visibleDigits)), displaySettings, fractionDigits, hideFraction)
+}
 
 private fun formatBudgetNumber(
     minorUnits: BigDecimal,

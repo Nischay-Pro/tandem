@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -16,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.BudgetAssignmentKind
 import app.tandemforactual.ui.core.state.BudgetAssignmentPresentation
@@ -179,7 +178,7 @@ private fun BudgetStillToSpendRow(
     isLiveBudget: Boolean,
     billsDueMinor: Long,
 ) {
-    val today = remember { platformTodayIsoDate() }
+    val today = rememberTodayIsoDate()
     val left =
         if (isLiveBudget && state.selectedMonthId == today.take(7)) {
             stillToSpend(

@@ -121,6 +121,7 @@ internal fun prepareActivitySearch(
     query: String,
     filters: List<ActivitySearchFilter>,
     currencyCode: String? = null,
+    numberFormat: String? = null,
 ): PreparedActivitySearch =
     PreparedActivitySearch(
         normalizedQuery =
@@ -134,7 +135,7 @@ internal fun prepareActivitySearch(
                 query.trim().lowercase()
             },
         queryTag = parseExplicitActivitySearchTag(query),
-        queryAmount = parseActivitySearchAmount(query, currencyCode),
+        queryAmount = parseActivitySearchAmount(query, currencyCode, numberFormat),
         queryDatePrefixes = parseActivitySearchDatePrefixes(query),
         queryDate = parseActivitySearchDateQuery(query),
         hasExplicitDatePrefix = hasExplicitActivitySearchDatePrefix(query),
@@ -145,7 +146,7 @@ internal fun prepareActivitySearch(
                     expectedAmount = filter.value.toLongOrNull(),
                     textAmount =
                         if (filter.field == ActivitySearchField.ANY_CONTAINS) {
-                            parseActivitySearchAmount(filter.value, currencyCode)
+                            parseActivitySearchAmount(filter.value, currencyCode, numberFormat)
                         } else {
                             null
                         },
@@ -181,9 +182,11 @@ internal fun matchesActivitySearch(
     return prepared.filters.all { filter -> matchesFilter(record, filter) }
 }
 
+/** A typed amount in the hundredths Actual stores for every currency, reading the budget's own decimal mark first. */
 internal fun parseActivitySearchAmount(
     value: String,
     currencyCode: String? = null,
+    numberFormat: String? = null,
 ): Long? {
     val code = currencyCode?.uppercase()?.takeIf { it.matches(Regex("[A-Z]{3}")) }
     val codePattern =
@@ -192,27 +195,42 @@ internal fun parseActivitySearchAmount(
         }
     val ungrouped =
         (codePattern?.replace(value.trim(), "") ?: value.trim())
-            .replace(Regex("[$€£¥]"), "")
-            .replace(Regex("\\s"), "")
+            .replace(Regex("R\\$|[$€£¥₹₩]"), "")
+            .replace(Regex("[\\s'’]"), "")
             .trim()
-    val decimalSeparator =
-        when {
-            ungrouped.lastIndexOf('.') > ungrouped.lastIndexOf(',') -> '.'
-            ungrouped.lastIndexOf(',') > ungrouped.lastIndexOf('.') -> {
-                if (ungrouped.substringAfterLast(',').length in 1..2) ',' else null
-            }
-            else -> null
-        }
     val normalized =
-        when (decimalSeparator) {
+        when (activitySearchDecimalMark(ungrouped, budgetDecimalMark(numberFormat))) {
             '.' -> ungrouped.replace(",", "")
             ',' -> ungrouped.replace(".", "").replace(',', '.')
             else -> ungrouped.replace(",", "").replace(".", "")
         }
     if (!normalized.matches(Regex("[+-]?(?:\\d+(?:\\.\\d{0,2})?|\\.\\d{1,2})"))) return null
-    val amount = normalized.toDoubleOrNull() ?: return null
-    if (!amount.isFinite() || kotlin.math.abs(amount) > Long.MAX_VALUE / 100.0) return null
-    return kotlin.math.round(kotlin.math.abs(amount) * 100.0).toLong()
+    val whole = normalized.substringBefore('.').trimStart('+', '-').ifEmpty { "0" }.toLongOrNull() ?: return null
+    val cents = normalized.substringAfter('.', "").padEnd(2, '0').toLong()
+    if (whole > (Long.MAX_VALUE - cents) / 100) return null
+    return whole * 100 + cents
+}
+
+private fun budgetDecimalMark(numberFormat: String?): Char? =
+    when (numberFormat) {
+        "dot-comma", "space-comma" -> ','
+        "comma-dot", "apostrophe-dot", "comma-dot-in" -> '.'
+        else -> null
+    }
+
+/** Which mark is the decimal one: the last of two different marks, or a lone mark not followed by a group of three digits. */
+private fun activitySearchDecimalMark(
+    text: String,
+    budgetMark: Char?,
+): Char? {
+    val lastDot = text.lastIndexOf('.')
+    val lastComma = text.lastIndexOf(',')
+    if (lastDot < 0 && lastComma < 0) return null
+    val mark = if (lastDot > lastComma) '.' else ','
+    if (lastDot >= 0 && lastComma >= 0) return mark
+    if (text.count { it == mark } > 1) return null
+    val groupOfThree = text.length - text.lastIndexOf(mark) - 1 == 3
+    return if (groupOfThree && mark != budgetMark) null else mark
 }
 
 private fun matchesAnyText(
