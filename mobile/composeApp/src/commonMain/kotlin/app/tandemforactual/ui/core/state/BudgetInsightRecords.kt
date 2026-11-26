@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import app.tandemforactual.data.database.SearchableBudgetTransaction
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 
@@ -74,6 +75,7 @@ internal fun monthMoneyIn(
         transactions.filter {
             it.dateIso.startsWith(state.selectedMonthId) &&
                 !it.isTransfer &&
+                !it.isSplitParent &&
                 it.categoryId !in startingBalances &&
                 it.payee != "Starting Balance"
         }
@@ -82,3 +84,46 @@ internal fun monthMoneyIn(
             monthTransactions.filter { it.amountMinorUnits > 0 && it.categoryId.isNullOrBlank() }.sumOf { it.amountMinorUnits }
     return income to monthTransactions
 }
+
+/** The selected month's on-budget transactions from the whole local history, not just the latest page. */
+@Composable
+internal fun rememberMonthTransactions(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+): List<TransactionItem> {
+    val records = rememberBudgetTransactions(state, mobileSession)
+    val names = mobileSession.rememberRecordNames()
+    val accountRecords = mobileSession.accountRecords
+    return remember(records, names, accountRecords, state.selectedMonthId) {
+        val offBudget = accountRecords.filter { it.recordBody().isOffBudgetAccount() }.mapTo(mutableSetOf()) { it.recordId }
+        monthTransactionItems(records.orEmpty(), state.selectedMonthId, names, offBudget)
+    }
+}
+
+internal fun monthTransactionItems(
+    records: List<SearchableBudgetTransaction>,
+    monthId: String,
+    names: RecordNames,
+    offBudgetAccountIds: Set<String>,
+    todayIso: String = platformTodayIsoDate(),
+): List<TransactionItem> =
+    records
+        .filter { !it.isParent && it.accountId !in offBudgetAccountIds && it.recordDate.orEmpty().startsWith(monthId) }
+        .mapNotNull { record ->
+            val amount = record.amountMinor ?: return@mapNotNull null
+            val payee = record.payeeId?.let(names.payees::get) ?: record.payeeId ?: "No payee"
+            TransactionItem(
+                payee = payee,
+                category = names.category(record.categoryId),
+                dateLabel = formatTransactionListDate(record.recordDate, todayIso),
+                amountMinorUnits = amount,
+                icon = payee.take(1).uppercase(),
+                account = record.accountId?.let(names.accounts::get) ?: record.accountId ?: "No account",
+                accountId = record.accountId,
+                recordId = record.recordId,
+                dateIso = record.recordDate.orEmpty(),
+                payeeId = record.payeeId,
+                categoryId = record.categoryId,
+                isTransfer = record.transfer == true,
+            )
+        }
