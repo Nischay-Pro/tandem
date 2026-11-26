@@ -140,7 +140,10 @@ suspend fun upcomingBillsAlert(
     return LocalAlert(AlertKind.UPCOMING_BILLS, "Upcoming bills", message)
 }
 
-/** Spending of at least [NotificationPolicy.largeTransactionMinor] in the last few days, announced once each. */
+/**
+ * Spending of at least [NotificationPolicy.largeTransactionMinor] in the last few days, announced once each. A split
+ * counts by its total, transfers between accounts never count, and the first check only notes what is already there.
+ */
 suspend fun largeTransactionAlert(
     repository: LocalBudgetRepository,
     preferences: AppPreferencesStore,
@@ -152,16 +155,16 @@ suspend fun largeTransactionAlert(
     val large =
         repository
             .findRecords(budgetId, "transaction", fromDate = ActualDates.addDays(today, -LARGE_TRANSACTION_WINDOW_DAYS))
-            .filter { (it.amountMinor ?: 0) <= -policy.largeTransactionMinor && !it.isParent }
+            .filter { (it.amountMinor ?: 0) <= -policy.largeTransactionMinor && it.transfer != true && !it.isSplitLine() }
     val key = "internal:announced-large:$budgetId"
     val announced =
         preferences
             .read()[key]
-            .orEmpty()
-            .split(',')
-            .filter(String::isNotEmpty)
-            .toSet()
+            ?.split(',')
+            ?.filter(String::isNotEmpty)
+            ?.toSet()
     preferences.putValue(key, large.joinToString(",") { it.recordId })
+    if (announced == null) return null
     val fresh = large.filterNot { it.recordId in announced }
     if (fresh.isEmpty()) return null
     val first = fresh.first()
@@ -258,3 +261,9 @@ private const val UNCATEGORIZED_WINDOW_DAYS = 14
 
 private fun app.tandemforactual.data.database.BudgetRecordEntity.body(): JsonObject? =
     runCatching { Json.parseToJsonElement(localJson ?: remoteJson ?: "") as? JsonObject }.getOrNull()
+
+private fun app.tandemforactual.data.database.BudgetRecordEntity.isSplitLine(): Boolean {
+    val body = body() ?: return false
+    return listOf("isChild", "is_child").any { (body[it] as? JsonPrimitive)?.booleanOrNull == true } ||
+        listOf("parentId", "parent_id").any { (body[it] as? JsonPrimitive)?.contentOrNull != null }
+}

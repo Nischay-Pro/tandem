@@ -11,6 +11,7 @@ import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.unlockSecret
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.unsentWrites
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -26,7 +27,7 @@ internal fun SecurityScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
 ) {
-    val hasPendingWrites = mobileSession.pendingWrites.isNotEmpty()
+    val hasPendingWrites = mobileSession.pendingWrites.unsentWrites().isNotEmpty()
     val canChangeReadOnly = state.readOnlyMode || !hasPendingWrites
     PageColumn {
         SectionCard("App access") {

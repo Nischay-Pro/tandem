@@ -1,6 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.core.state
+import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.ui.core.format.formatMomentAtEpochMilliseconds
 
 internal fun budgetDisplayNameForHeader(name: String): String {
@@ -139,6 +140,14 @@ internal fun headerSyncCaption(
 }
 
 internal val UNSYNCED_TRANSACTION_WRITE_STATUSES = setOf("queued", "sending", "uncertain", "conflict", "rejected")
+
+/** Edits Actual hasn't accepted yet, without the committed, discarded and superseded history. */
+internal fun List<OutboxOperationEntity>.unsentWrites(): List<OutboxOperationEntity> =
+    filter { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
+
+/** Transaction conflicts, the only kind the conflict review screen can resolve. */
+internal fun List<OutboxOperationEntity>.transactionConflicts(): List<OutboxOperationEntity> =
+    filter { it.recordType == "transaction" && it.status == "conflict" }
 
 internal fun writeStatusLabel(status: String): String =
     when (status) {

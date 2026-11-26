@@ -24,6 +24,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.decodeCachedBudgetCatalog
 import app.tandemforactual.ui.core.state.encodeCachedBudgetCatalog
+import app.tandemforactual.ui.core.state.unsentWrites
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -101,7 +102,7 @@ internal fun LocalDataScreen(
             removeError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
         AnimatedPreviewNote(mobileSession.syncError)
-        if (mobileSession.pendingWrites.isNotEmpty()) InfoBubble("Pending edits stay on this device.")
+        if (mobileSession.pendingWrites.unsentWrites().isNotEmpty()) InfoBubble("Pending edits stay on this device.")
     }
     if (confirmRemove) {
         RemoveBudgetFromDeviceDialog(
