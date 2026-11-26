@@ -10,6 +10,7 @@ import app.tandemforactual.ui.core.platform.IosCrashReports
 import app.tandemforactual.ui.core.platform.IosDeviceAuthenticator
 import app.tandemforactual.ui.core.platform.IosDeviceCredentialStore
 import app.tandemforactual.ui.core.platform.IosEncryptedBudgetVault
+import app.tandemforactual.ui.core.platform.IosPrivacyCover
 import app.tandemforactual.ui.core.platform.IosSyncEventSource
 import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
@@ -50,51 +51,56 @@ private fun createTandemViewController(
     onOpenNotificationSettings: (() -> Unit)?,
 ): UIViewController {
     val syncEvents = IosSyncEventSource()
-    return ComposeUIViewController {
-        DisposableEffect(database, syncEvents) {
-            onDispose {
-                syncEvents.close()
+    var privacyCover: IosPrivacyCover? = null
+    val controller =
+        ComposeUIViewController {
+            DisposableEffect(database, syncEvents) {
+                onDispose {
+                    syncEvents.close()
+                    privacyCover?.close()
+                }
+            }
+            val bankIcons =
+                remember {
+                    NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
+                        .firstOrNull()
+                        ?.let { bankIcons("$it/bank-icons") { Clock.System.now().toEpochMilliseconds() } }
+                }
+            CompositionLocalProvider(LocalBankIcons provides bankIcons) {
+                TandemApp(
+                    actualBudgetFiles =
+                        remember {
+                            app.tandemforactual.data.database
+                                .IosActualBudgetFiles()
+                        },
+                    planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
+                    deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
+                    database = database,
+                    deviceCredentialStore = remember { IosDeviceCredentialStore() },
+                    deviceAuthenticator = remember { IosDeviceAuthenticator() },
+                    encryptedBudgetVault = remember { IosEncryptedBudgetVault() },
+                    crashReports = remember { IosCrashReports().also(IosCrashReports::install) },
+                    onShareText = ::shareTextOnIos,
+                    nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
+                    allowInsecurePrivateNetwork = true,
+                    onBackgroundSyncSettingsChanged =
+                        onBackgroundSyncSettingsChanged?.let { changed ->
+                            { enabled, network, budgetId -> changed(enabled, network == SyncNetwork.WIFI, budgetId) }
+                        },
+                    onSystemAppearanceChanged = onSystemAppearanceChanged,
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
+                    appInForeground = syncEvents.appInForeground,
+                    appResumeEvents = syncEvents.appResumeEvents,
+                    networkRestoredEvents = syncEvents.networkRestoredEvents,
+                    screenshotScript = remember { iosScreenshotScript() },
+                    postLocalAlert = ::postIosLocalAlert,
+                    openSignInPage = ::openSignInPageOnIos,
+                )
             }
         }
-        val bankIcons =
-            remember {
-                NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
-                    .firstOrNull()
-                    ?.let { bankIcons("$it/bank-icons") { Clock.System.now().toEpochMilliseconds() } }
-            }
-        CompositionLocalProvider(LocalBankIcons provides bankIcons) {
-            TandemApp(
-                actualBudgetFiles =
-                    remember {
-                        app.tandemforactual.data.database
-                            .IosActualBudgetFiles()
-                    },
-                planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
-                deviceName = UIDevice.currentDevice.name.ifBlank { "iPhone" },
-                database = database,
-                deviceCredentialStore = remember { IosDeviceCredentialStore() },
-                deviceAuthenticator = remember { IosDeviceAuthenticator() },
-                encryptedBudgetVault = remember { IosEncryptedBudgetVault() },
-                crashReports = remember { IosCrashReports().also(IosCrashReports::install) },
-                onShareText = ::shareTextOnIos,
-                nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
-                allowInsecurePrivateNetwork = true,
-                onBackgroundSyncSettingsChanged =
-                    onBackgroundSyncSettingsChanged?.let { changed ->
-                        { enabled, network, budgetId -> changed(enabled, network == SyncNetwork.WIFI, budgetId) }
-                    },
-                onSystemAppearanceChanged = onSystemAppearanceChanged,
-                onRequestNotificationPermission = onRequestNotificationPermission,
-                onOpenNotificationSettings = onOpenNotificationSettings,
-                appInForeground = syncEvents.appInForeground,
-                appResumeEvents = syncEvents.appResumeEvents,
-                networkRestoredEvents = syncEvents.networkRestoredEvents,
-                screenshotScript = remember { iosScreenshotScript() },
-                postLocalAlert = ::postIosLocalAlert,
-                openSignInPage = ::openSignInPageOnIos,
-            )
-        }
-    }
+    privacyCover = IosPrivacyCover(controller)
+    return controller
 }
 
 @OptIn(kotlin.experimental.ExperimentalNativeApi::class)

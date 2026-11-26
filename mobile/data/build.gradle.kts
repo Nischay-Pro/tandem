@@ -76,6 +76,7 @@ kotlin {
         implementation(kotlin("test"))
         implementation(libs.androidxTestRunner)
         implementation(libs.androidxTestExtJunit)
+        implementation(libs.sqlcipher)
       }
     }
     getByName("iosSimulatorArm64Test") {

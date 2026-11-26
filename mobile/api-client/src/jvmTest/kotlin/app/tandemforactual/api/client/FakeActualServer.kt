@@ -218,3 +218,49 @@ internal class TempBudgetFiles : ActualBudgetFiles {
         return copy.readBytes().also { copy.delete() }
     }
 }
+
+/** Keeps encrypted budgets' copies apart under the key they were sealed with, checking it on every open as SQLCipher would. */
+internal class SealingBudgetFiles(
+    private val plain: TempBudgetFiles = TempBudgetFiles(),
+) : ActualBudgetFiles by plain {
+    val keys = mutableMapOf<String, ByteArray>()
+    private val keyInfo = mutableMapOf<String, String>()
+
+    private fun sealed(budgetId: String) = plain.directory.resolve("$budgetId.sealed")
+
+    override val canSeal = true
+
+    override fun sealedKeyInfo(budgetId: String): String? = keyInfo[budgetId]?.takeIf { sealed(budgetId).isFile }
+
+    override fun openSealed(
+        budgetId: String,
+        key: ByteArray,
+    ): ActualDatabase? {
+        val file = sealed(budgetId).takeIf { it.isFile } ?: return null
+        check(keys[budgetId].contentEquals(key)) { "Wrong key for the sealed copy" }
+        return ActualDatabase(BundledSQLiteDriver().open(file.path))
+    }
+
+    override fun installSealed(
+        budgetId: String,
+        bytes: ByteArray,
+        key: ByteArray,
+        keyInfo: String,
+    ): ActualDatabase {
+        plain.remove(budgetId)
+        sealed(budgetId).writeBytes(bytes)
+        keys[budgetId] = key.copyOf()
+        this.keyInfo[budgetId] = keyInfo
+        return checkNotNull(openSealed(budgetId, key))
+    }
+
+    override fun sealBudget(
+        budgetId: String,
+        key: ByteArray,
+        keyInfo: String,
+    ) {
+        check(plain.directory.resolve("$budgetId.sqlite").renameTo(sealed(budgetId)))
+        keys[budgetId] = key.copyOf()
+        this.keyInfo[budgetId] = keyInfo
+    }
+}

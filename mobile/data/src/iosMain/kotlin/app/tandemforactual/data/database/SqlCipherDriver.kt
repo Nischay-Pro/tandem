@@ -49,7 +49,7 @@ private const val SQLITE_RANGE = 25
 private const val SQLITE_ROW = 100
 private const val SQLITE_DONE = 101
 
-/** Opens SQLCipher databases keyed with [rawKey], an `x'…'` hex key, so each connection skips key derivation. */
+/** Opens SQLCipher databases keyed with [rawKey], an `x'…'` hex key, so each connection skips key derivation; an empty key opens a plaintext database. */
 @OptIn(ExperimentalForeignApi::class)
 class SqlCipherDriver(
     private val rawKey: String,
@@ -65,10 +65,12 @@ class SqlCipherDriver(
                 throwSQLiteException(openCode, message)
             }
             val keyBytes = rawKey.encodeToByteArray()
-            val keyCode = keyBytes.usePinned { tandem_key(db, it.addressOf(0), keyBytes.size) }
-            if (keyCode != SQLITE_OK) {
-                tandem_close(db)
-                throwSQLiteException(keyCode, "Couldn’t apply the database key")
+            if (keyBytes.isNotEmpty()) {
+                val keyCode = keyBytes.usePinned { tandem_key(db, it.addressOf(0), keyBytes.size) }
+                if (keyCode != SQLITE_OK) {
+                    tandem_close(db)
+                    throwSQLiteException(keyCode, "Couldn’t apply the database key")
+                }
             }
             SqlCipherConnection(db)
         }

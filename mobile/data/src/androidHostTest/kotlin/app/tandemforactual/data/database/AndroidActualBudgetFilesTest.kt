@@ -66,6 +66,16 @@ class AndroidActualBudgetFilesTest {
         assertEquals(5L, restored.first("SELECT v FROM t")!!["v"])
         restored.close()
         assertFailsWith<IllegalStateException> { files.snapshot("budget-5") { error("disk full") } }
+
+        files.install("budget-7", sqlite(7)).close()
+        files.retire("budget-7", "reset-1")
+        files.install("budget-7", sqlite(8)).close()
+        files.retire("budget-7", "reset-2")
+        assertEquals(false, java.io.File(context.noBackupFilesDir, "actual/backups/budget-7-reset-1.sqlite").exists())
+        assertTrue(java.io.File(context.noBackupFilesDir, "actual/backups/budget-7-reset-2.sqlite").isFile)
+        files.remove("budget-7")
+        assertEquals(false, java.io.File(context.noBackupFilesDir, "actual/backups/budget-7-reset-2.sqlite").exists())
+        assertEquals(false, files.canSeal)
         assertEquals(false, context.noBackupFilesDir.resolve("actual/budget-5.sqlite.snapshot").exists())
     }
 }

@@ -72,10 +72,10 @@ internal fun TandemTaskSheet(
                 ) {
                     if (fullScreen) {
                         Box(Modifier.fillMaxSize().background(tandemPalette.background).safeDrawingPadding()) {
-                            content()
+                            SecureSheetContent(secure, content)
                         }
                     } else {
-                        content()
+                        SecureSheetContent(secure, content)
                     }
                 }
             }
@@ -91,3 +91,10 @@ internal expect fun edgeToEdgeDialogProperties(
     dismissOnBackPress: Boolean,
     secure: Boolean = false,
 ): DialogProperties
+
+/** Where the platform can't keep a [secure] sheet out of captures itself, it covers the sheet while the screen is captured. */
+@Composable
+internal expect fun SecureSheetContent(
+    secure: Boolean,
+    content: @Composable () -> Unit,
+)
