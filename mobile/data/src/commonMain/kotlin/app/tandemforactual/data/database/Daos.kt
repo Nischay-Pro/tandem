@@ -86,28 +86,28 @@ interface BudgetRecordDao {
         """
     SELECT substr(tx.recordDate, 1, 7) AS monthId, tx.categoryId, SUM(-tx.amountMinor) AS spendingMinor
     FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
     WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
       AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
       AND tx.categoryId IS NOT NULL AND tx.amountMinor IS NOT NULL AND tx.transfer = 0
       AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
       AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
       AND tx.isParent = 0
-      AND COALESCE(
-        CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-          THEN COALESCE(
-            json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-            json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-          )
-          ELSE 0
-        END,
-        0
-      ) = 0
+      AND tx.categoryId NOT IN (
+        SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'category'
+          AND localDeleted = 0 AND remoteDeleted = 0
+          AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+          AND NOT (COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(
+                json_extract(COALESCE(localJson, remoteJson), '$.is_income'),
+                json_extract(COALESCE(localJson, remoteJson), '$.isIncome')
+              )
+              ELSE 0
+            END,
+            0
+          ) = 0)
+      )
       AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
       AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)
     GROUP BY substr(tx.recordDate, 1, 7), tx.categoryId
@@ -124,40 +124,46 @@ interface BudgetRecordDao {
         """
     SELECT substr(tx.recordDate, 1, 7) AS monthId,
            SUM(CASE
-             WHEN COALESCE(
-               CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-                 THEN COALESCE(
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-                 )
-                 ELSE 0
-               END,
-               0
-             ) = 1 THEN tx.amountMinor
+             WHEN tx.categoryId IN (
+        SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'category'
+          AND localDeleted = 0 AND remoteDeleted = 0
+          AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+          AND COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(
+                json_extract(COALESCE(localJson, remoteJson), '$.is_income'),
+                json_extract(COALESCE(localJson, remoteJson), '$.isIncome')
+              )
+              ELSE 0
+            END,
+            0
+          ) = 1
+      ) THEN tx.amountMinor
              WHEN tx.categoryId IS NULL AND tx.amountMinor > 0 THEN tx.amountMinor
              ELSE 0
            END) AS incomeMinor,
            SUM(CASE
              WHEN tx.categoryId IS NULL AND tx.amountMinor > 0 THEN 0
-             WHEN COALESCE(
-               CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-                 THEN COALESCE(
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-                 )
-                 ELSE 0
-               END,
-               0
-             ) = 0 THEN -tx.amountMinor
+             WHEN tx.categoryId IS NULL OR tx.categoryId NOT IN (
+        SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'category'
+          AND localDeleted = 0 AND remoteDeleted = 0
+          AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)
+          AND NOT (COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(
+                json_extract(COALESCE(localJson, remoteJson), '$.is_income'),
+                json_extract(COALESCE(localJson, remoteJson), '$.isIncome')
+              )
+              ELSE 0
+            END,
+            0
+          ) = 0)
+      ) THEN -tx.amountMinor
              ELSE 0
            END) AS spendingMinor
     FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
     WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
       AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
       AND tx.amountMinor IS NOT NULL AND tx.transfer = 0
@@ -294,6 +300,38 @@ interface BudgetRecordDao {
         categoryId: String?,
         payeeId: String?,
         fromDate: String?,
+        throughDate: String?,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findAllVisible(
+        budgetId: String,
+        recordType: String,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND recordDate >= :fromDate
+      AND (:throughDate IS NULL OR recordDate <= :throughDate)
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findVisibleFrom(
+        budgetId: String,
+        recordType: String,
+        fromDate: String,
         throughDate: String?,
     ): List<BudgetRecordEntity>
 

@@ -129,6 +129,55 @@ class ActualRuleEngine(
 
     private fun Any?.asDouble(): Double = (this as Number).toDouble()
 
+    private class Batch(
+        val rules: List<Rule>,
+        val schedules: List<Row>,
+    ) {
+        var payees: HashMap<String, String>? = null
+    }
+
+    private var depth = 0
+    private var batch: Batch? = null
+
+    /** Runs [block] with the budget's rules, schedules and payee names loaded once instead of for every transaction. */
+    fun <T> batch(block: () -> T): T {
+        depth++
+        try {
+            return block()
+        } finally {
+            if (--depth == 0) batch = null
+        }
+    }
+
+    private fun current(): Batch =
+        batch ?: Batch(rank(loadRules()), db.query("SELECT id, rule, completed, tombstone FROM schedules")).also {
+            if (depth > 0) batch = it
+        }
+
+    /** The first live payee named [name], ignoring case, as Actual's `getPayeeByName` finds it. */
+    fun payeeByName(name: String): String? {
+        val key = name.lowercase()
+        if (depth == 0) return payeeRows().firstOrNull { (it["name"] as String?)?.lowercase() == key }?.get("id") as String?
+        val index =
+            current().let { context ->
+                context.payees ?: HashMap<String, String>().also { map ->
+                    payeeRows().forEach { row -> (row["name"] as String?)?.let { map.getOrPut(it.lowercase()) { row["id"] as String } } }
+                    context.payees = map
+                }
+            }
+        return index[key]
+    }
+
+    /** Keeps [payeeByName] current after a payee is inserted inside [batch]. */
+    fun payeeAdded(
+        name: String,
+        id: String,
+    ) {
+        batch?.payees?.getOrPut(name.lowercase()) { id }
+    }
+
+    private fun payeeRows() = db.query("SELECT id, name FROM payees WHERE tombstone = 0")
+
     private fun loadRules(): List<Rule> {
         val mappings =
             (
@@ -490,14 +539,22 @@ class ActualRuleEngine(
         val missing = listOf("payee", "category").filter { !transaction.containsKey(it) }
         var current: Map<String, Any?> = LinkedHashMap(transaction).apply { missing.forEach { this[it] = null } }.let(::prepare)
         var lastCategory = current["category"] as String?
+        val context = current()
         val scheduleRule =
-            (transaction["schedule"] as String?)?.let {
-                db.first("SELECT rule FROM schedules WHERE id = ?", it)?.get("rule") as String?
+            (transaction["schedule"] as String?)?.let { id ->
+                context.schedules.firstOrNull { it["id"] == id }?.get("rule") as String?
             }
-        val scheduleRules = db.query("SELECT rule FROM schedules").mapNotNull { it["rule"] as String? }.filter { it != scheduleRule }
+        val scheduleRules =
+            context.schedules
+                .mapNotNull { it["rule"] as String? }
+                .filter { it != scheduleRule }
+                .toSet()
         val completedRules =
-            db.query("SELECT rule FROM schedules WHERE completed = 1 AND tombstone = 0").mapNotNull { it["rule"] as String? }.toSet()
-        for (rule in rank(loadRules())) {
+            context.schedules
+                .filter { (it["completed"] as Number?)?.toDouble() == 1.0 && (it["tombstone"] as Number?)?.toDouble() == 0.0 }
+                .mapNotNull { it["rule"] as String? }
+                .toSet()
+        for (rule in context.rules) {
             val run =
                 when {
                     scheduleRule != null && rule.id == scheduleRule -> true
@@ -568,17 +625,7 @@ class ActualRuleEngine(
         if (!transaction.containsKey("payee_name") || transaction["payee"] != "new") return transaction
         val name = transaction["payee_name"] as String?
         val payee =
-            if (name.isNullOrEmpty()) {
-                null
-            } else {
-                db
-                    .query("SELECT id, name FROM payees WHERE tombstone = 0")
-                    .firstOrNull {
-                        (it["name"] as String?)?.lowercase() ==
-                            name.lowercase()
-                    }?.get("id")
-                    ?: insertPayee(name)
-            }
+            if (name.isNullOrEmpty()) null else payeeByName(name) ?: insertPayee(name)
         return LinkedHashMap(transaction).apply { this["payee"] = payee }
     }
 }

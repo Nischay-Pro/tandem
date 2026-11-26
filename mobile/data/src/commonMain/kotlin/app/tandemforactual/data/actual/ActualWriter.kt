@@ -10,6 +10,8 @@ class ActualWriter(
     val db: ActualDatabase get() = store.db
 
     private var moment: Long? = null
+    private var batchDepth = 0
+    private var clockUnsaved = false
 
     fun uuid(): String = newId()
 
@@ -39,11 +41,22 @@ class ActualWriter(
         val timestamp = clock.clock.timestamp
         val merkle = clock.merkle
         return try {
-            atOneMoment { db.transaction(block) }
+            atOneMoment { db.transaction { savingClockOnce(block) } }
         } catch (error: Throwable) {
             clock.clock.timestamp = timestamp
             clock.merkle = merkle
             throw error
+        }
+    }
+
+    private fun <T> savingClockOnce(block: () -> T): T {
+        batchDepth++
+        try {
+            val result = block()
+            if (batchDepth == 1 && clockUnsaved) store.saveClock(clock)
+            return result
+        } finally {
+            if (--batchDepth == 0) clockUnsaved = false
         }
     }
 
@@ -82,7 +95,8 @@ class ActualWriter(
             fields.map { (column, value) ->
                 CrdtMessage(clock.clock.send(nextMillis()), table, id, column, CrdtValue.of(value))
             }
-        store.apply(messages, clock, deferUnknownSchema = false)
+        store.apply(messages, clock, deferUnknownSchema = false, save = batchDepth == 0)
+        if (batchDepth > 0) clockUnsaved = true
     }
 }
 

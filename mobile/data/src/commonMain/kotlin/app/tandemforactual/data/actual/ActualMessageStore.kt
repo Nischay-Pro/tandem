@@ -80,6 +80,7 @@ class ActualMessageStore(
         messages: List<CrdtMessage>,
         clock: StoredClock,
         deferUnknownSchema: Boolean,
+        save: Boolean = true,
     ): List<CrdtMessage> =
         db.transaction {
             val fresh = compare(messages).sortedBy { it.first.timestamp.toString() }
@@ -98,7 +99,7 @@ class ActualMessageStore(
                 merkle = merkle.insert(message.timestamp)
             }
             clock.merkle = merkle.prune()
-            saveClock(clock)
+            if (save) saveClock(clock)
             applied
         }
 
