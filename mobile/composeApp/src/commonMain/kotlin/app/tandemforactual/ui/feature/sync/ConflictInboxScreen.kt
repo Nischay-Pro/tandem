@@ -17,6 +17,7 @@ import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
+import app.tandemforactual.ui.core.state.transactionConflicts
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -101,7 +102,7 @@ private fun conflictInboxItems(
     liveTransactions: List<TransactionItem>,
 ): List<ConflictInboxItemUi> =
     mobileSession.pendingWrites
-        .filter { it.status == "conflict" }
+        .transactionConflicts()
         .map { operation ->
             val transaction = liveTransactions.firstOrNull { it.recordId == operation.recordId }
             val snapshot = conflictSnapshot(operation)

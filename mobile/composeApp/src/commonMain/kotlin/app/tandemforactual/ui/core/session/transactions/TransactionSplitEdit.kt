@@ -10,6 +10,7 @@ import app.tandemforactual.ui.core.session.localStorageFailureMessage
 import app.tandemforactual.ui.core.session.pendingTransactionEditMessage
 import app.tandemforactual.ui.core.session.toProjection
 import app.tandemforactual.ui.core.state.SplitEditLine
+import app.tandemforactual.ui.core.state.unsentWrites
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
@@ -49,7 +50,7 @@ internal suspend fun TransactionController.updateSplit(
         host.reportTransactionWriteMessage("This split isn’t up to date. Sync the budget before editing.")
         return false
     }
-    if (localRepository.readPendingWrites(budgetId).any { it.recordType == "transaction" && it.recordId == edit.parentId }) {
+    if (localRepository.readPendingWrites(budgetId).unsentWrites().any { it.recordType == "transaction" && it.recordId == edit.parentId }) {
         host.reportTransactionWriteMessage(pendingTransactionEditMessage())
         return false
     }

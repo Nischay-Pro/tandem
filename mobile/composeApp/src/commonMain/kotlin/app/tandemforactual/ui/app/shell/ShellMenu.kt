@@ -12,6 +12,7 @@ import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
+import app.tandemforactual.ui.core.state.transactionConflicts
 
 /** The full-screen app menu with its counts, shortcuts and budget links. */
 @Composable
@@ -43,7 +44,7 @@ internal fun ShellMenu(chrome: ShellChromeState) {
                 ruleCount = mobileSession.ruleRecords.size,
                 scheduleCount = ctx.shell.liveSchedules.size,
                 payeeCount = payeeCount,
-                conflictCount = mobileSession.pendingWrites.count { it.status == "conflict" },
+                conflictCount = mobileSession.pendingWrites.transactionConflicts().size,
                 reimbursementsOwedMinor =
                     mobileSession.planning.reimbursements
                         .filterNot { it.received }

@@ -154,6 +154,10 @@ class NotificationPolicyTest {
             )
             val policy = NotificationPolicy.read(emptyMap())
             val format = { minor: Long -> "$$minor" }
+            assertNull(largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy, format))
+            assertEquals("big", preferences.read()["internal:announced-large:budget"])
+
+            preferences.putValue("internal:announced-large:budget", "")
             assertEquals(
                 "$80000 at Costco came in.",
                 largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy, format)?.message,
@@ -220,6 +224,7 @@ class NotificationPolicyTest {
         withRepository { repository, preferences ->
             repository.load(listOf(record("transaction", "big", """{"date":"2026-11-20","amount":-80000}""")))
             val policy = NotificationPolicy.read(emptyMap())
+            preferences.putValue("internal:announced-large:budget", "")
             assertEquals(
                 "$80000 came in.",
                 largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy) { "$$it" }?.message,
@@ -230,6 +235,35 @@ class NotificationPolicyTest {
                 largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy.copy(hideAmounts = true)) { "$$it" }
                     ?.message,
             )
+        }
+
+    @Test
+    fun largeSpendingCountsSplitsByTotalAndSkipsTransfers() =
+        withRepository { repository, preferences ->
+            repository.load(
+                listOf(
+                    record("payee", "shop", """{"name":"Costco"}"""),
+                    record("transaction", "move", """{"date":"2026-11-20","amount":-90000,"transferId":"other"}"""),
+                    record("transaction", "costco", """{"date":"2026-11-20","amount":-60000,"payee":"shop","isParent":true}"""),
+                    record(
+                        "transaction",
+                        "line-1",
+                        """{"date":"2026-11-20","amount":-55000,"payee":"shop","isChild":true,"parentId":"costco"}""",
+                    ),
+                    record(
+                        "transaction",
+                        "line-2",
+                        """{"date":"2026-11-20","amount":-5000,"payee":"shop","isChild":true,"parentId":"costco"}""",
+                    ),
+                ),
+            )
+            val policy = NotificationPolicy.read(emptyMap())
+            preferences.putValue("internal:announced-large:budget", "")
+            assertEquals(
+                "$60000 at Costco came in.",
+                largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy) { "$$it" }?.message,
+            )
+            assertEquals("costco", preferences.read()["internal:announced-large:budget"])
         }
 
     @Test

@@ -19,6 +19,7 @@ import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.formatSignedCurrency
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
+import app.tandemforactual.ui.core.state.transactionConflicts
 import app.tandemforactual.ui.design.feedback.BodyText
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -48,9 +49,7 @@ internal fun ConflictReviewScreen(
         return
     }
     val operation =
-        mobileSession.pendingWrites.firstOrNull {
-            it.operationId == state.selectedConflictOperationId && it.status == "conflict"
-        }
+        mobileSession.pendingWrites.transactionConflicts().firstOrNull { it.operationId == state.selectedConflictOperationId }
     val review = rememberConflictReviewState(state, operation)
     val serverConfirmed = operation != null && mobileSession.conflicts.serverConfirmedConflictOperationId == operation.operationId
     val record =
@@ -59,7 +58,7 @@ internal fun ConflictReviewScreen(
                 ?: mobileSession.transactionRecords.firstOrNull { it.recordId == item.recordId }
         }
     ConflictReviewEffects(review, operation, record, serverConfirmed, state, mobileSession)
-    val openConflicts = mobileSession.pendingWrites.filter { it.status == "conflict" }
+    val openConflicts = mobileSession.pendingWrites.transactionConflicts()
     PageColumn {
         if (operation == null) {
             ConflictChoiceSaved(openConflicts, state, mobileSession, navigation, liveTransactions)
