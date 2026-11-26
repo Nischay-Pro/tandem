@@ -32,8 +32,8 @@ sealed interface BudgetBackupContents {
 
 /**
  * A whole-budget backup: a zip holding Actual's `db.sqlite` and `metadata.json`, which Actual can import as is, plus
- * Tandem's planning records. With a passphrase the zip is sealed like a planning backup: PBKDF2-HMAC-SHA512 derives the
- * key and AES-256-GCM seals the bytes behind a short header.
+ * Tandem's planning records. Without a passphrase it stays a plain zip; with one the zip is sealed like a planning backup:
+ * PBKDF2-HMAC-SHA512 derives the key and AES-256-GCM seals the bytes behind a short header.
  */
 object BudgetBackupFile {
     const val DATABASE = "db.sqlite"
@@ -44,6 +44,7 @@ object BudgetBackupFile {
     private const val SALT_BYTES = 16
     private const val IV_BYTES = 12
     private const val ITERATIONS = 210_000
+    private const val MAX_ITERATIONS = ITERATIONS * 5
 
     fun build(
         database: ByteArray,
@@ -51,6 +52,7 @@ object BudgetBackupFile {
         planningJson: String?,
         passphrase: String?,
     ): ByteArray {
+        require(passphrase == null || passphrase.isNotEmpty()) { "An empty passphrase can't seal a backup." }
         val zip =
             ZipArchive.write(
                 buildMap {
@@ -59,7 +61,7 @@ object BudgetBackupFile {
                     planningJson?.let { put(PLANNING, it.encodeToByteArray()) }
                 },
             )
-        if (passphrase.isNullOrEmpty()) return zip
+        if (passphrase == null) return zip
         val salt = CryptographyRandom.nextBytes(SALT_BYTES)
         val (iv, sealed) = PlanningCipher(key(passphrase, salt, ITERATIONS)).seal(zip, IDENTITY)
         return MAGIC + intBytes(ITERATIONS) + salt + iv + sealed
@@ -90,6 +92,7 @@ object BudgetBackupFile {
         runCatching {
             var at = MAGIC.size
             val iterations = readInt(bytes, at).also { at += 4 }
+            require(iterations in ITERATIONS..MAX_ITERATIONS)
             val salt = bytes.copyOfRange(at, at + SALT_BYTES).also { at += SALT_BYTES }
             val iv = bytes.copyOfRange(at, at + IV_BYTES).also { at += IV_BYTES }
             PlanningCipher(key(passphrase, salt, iterations)).open(iv, bytes.copyOfRange(at, bytes.size), IDENTITY)

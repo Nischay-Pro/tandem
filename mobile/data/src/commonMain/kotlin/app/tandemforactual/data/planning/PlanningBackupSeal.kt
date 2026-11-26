@@ -21,6 +21,7 @@ object PlanningBackupSeal {
     private const val IDENTITY = "tandem-planning-backup/v1"
     private const val SALT_BYTES = 16
     private const val ITERATIONS = 210_000
+    private const val MAX_ITERATIONS = ITERATIONS * 5
 
     fun seal(
         contents: String,
@@ -48,6 +49,7 @@ object PlanningBackupSeal {
         val root = root(contents)?.takeIf { it.text("format") == FORMAT } ?: return null
         return runCatching {
             val iterations = root.text("iterations")!!.toInt()
+            require(iterations in ITERATIONS..MAX_ITERATIONS)
             val cipher = PlanningCipher(key(passphrase, Base64.decode(root.text("salt")!!), iterations))
             cipher.open(Base64.decode(root.text("iv")!!), Base64.decode(root.text("data")!!), IDENTITY).decodeToString()
         }.getOrNull()
