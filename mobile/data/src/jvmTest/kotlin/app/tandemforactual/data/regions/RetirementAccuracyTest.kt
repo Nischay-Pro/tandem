@@ -106,6 +106,7 @@ class RetirementAccuracyTest {
 
     @Test
     fun matchUsesPayOnlyUpTo401a17() {
+        assertEquals((2015..2027).toList(), K401.compensationLimits.map { it.year })
         assertEquals(36_000_000, K401.matchablePay(2026, 50_000_000))
         assertEquals(37_500_000, K401.matchablePay(2027, 50_000_000))
         assertEquals(35_000_000, K401.matchablePay(2025, 50_000_000))
