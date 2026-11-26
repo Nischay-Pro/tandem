@@ -4,6 +4,8 @@ import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
+import app.tandemforactual.data.planning.ExchangeRate
+import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
@@ -33,6 +35,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ReportsPresentationTest {
+    private val sameCurrency = BudgetCurrencyConverter(emptyMap(), "USD", emptyList())
+
     @Test
     fun reportWindowIncludesLeapDayAndCrossesYearBoundaries() {
         val leapYearWindow = createReportWindow("2024-03", ReportPeriodMode.RANGE, 3)
@@ -265,6 +269,7 @@ class ReportsPresentationTest {
                 accounts,
                 listOf("2024-01", "2024-02", "2024-03", "2024-04"),
                 "2024-03-15",
+                sameCurrency,
             )
 
         assertEquals(listOf("2024-01", "2024-02", "2024-03"), points.map(NetWorthPoint::monthId))
@@ -277,6 +282,35 @@ class ReportsPresentationTest {
     }
 
     @Test
+    fun netWorthConvertsForeignAccountsAndLeavesOutOnesWithoutARate() {
+        val accounts =
+            listOf(
+                LiveAccountSummary("checking", "Checking", 10_000, "checking", offBudget = false),
+                LiveAccountSummary("euro", "Euro savings", 20_000, "savings", offBudget = false),
+                LiveAccountSummary("yen", "Yen card", -50_000, "credit", offBudget = false),
+            )
+        val converter =
+            BudgetCurrencyConverter(
+                mapOf("euro" to "EUR", "yen" to "JPY"),
+                "USD",
+                listOf(ExchangeRate("USD", "EUR", "0.5", "2025-01-01")),
+            )
+
+        val points =
+            netWorthPoints(
+                listOf(AccountDayAggregate("euro", "2025-02-10", 2_000)),
+                accounts,
+                listOf("2025-01", "2025-02"),
+                "2025-02-15",
+                converter,
+            )
+
+        assertEquals(listOf(46_000L, 50_000L), points.map(NetWorthPoint::allAccountsMinor))
+        assertEquals(listOf(0L, 0L), points.map(NetWorthPoint::allAccountsDebtsMinor))
+        assertEquals(converter.total(accounts.map { it.id to it.balanceMinor }).totalMinor, points.last().allAccountsMinor)
+    }
+
+    @Test
     fun netWorthCanBeNegativeWhenDebtsExceedAssets() {
         val points =
             netWorthPoints(
@@ -284,6 +318,7 @@ class ReportsPresentationTest {
                 listOf(LiveAccountSummary("credit", "Credit card", -25_000, "credit", offBudget = false)),
                 listOf("2025-01"),
                 "2025-01-31",
+                sameCurrency,
             )
 
         assertEquals(-25_000L, points.single().allAccountsMinor)
@@ -310,13 +345,14 @@ class ReportsPresentationTest {
 
     @Test
     fun netWorthIsEmptyWhenNoCurrentBalancesAreAvailable() {
-        assertTrue(netWorthPoints(emptyList(), emptyList(), listOf("2025-01"), "2025-01-31").isEmpty())
+        assertTrue(netWorthPoints(emptyList(), emptyList(), listOf("2025-01"), "2025-01-31", sameCurrency).isEmpty())
         assertTrue(
             netWorthPoints(
                 emptyList(),
                 listOf(LiveAccountSummary("checking", "Checking", null, "checking", offBudget = false)),
                 listOf("2025-01"),
                 "2025-01-31",
+                sameCurrency,
             ).isEmpty(),
         )
     }

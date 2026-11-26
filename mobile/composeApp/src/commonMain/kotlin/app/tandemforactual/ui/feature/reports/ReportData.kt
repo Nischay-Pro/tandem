@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.core.format.budgetCurrencyConverter
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
@@ -92,17 +93,18 @@ internal fun rememberReportData(
             }
         }
     val today = platformTodayIsoDate()
+    val converter = mobileSession.budgetCurrencyConverter(state)
     val netWorthFlow =
-        remember(reportViewModels, budgetId, netWorthWindow, today, accounts) {
+        remember(reportViewModels, budgetId, netWorthWindow, today, accounts, converter) {
             if (budgetId.isNotBlank() && reportViewModels != null) {
-                reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts)
+                reportViewModels.netWorth.observe(budgetId, netWorthWindow.monthIds, today, accounts, converter)
             } else {
                 flowOf(emptyList())
             }
         }
     val cacheKey =
         "$budgetId|${window.startDate}|${window.throughDate}|${window.allDates}|" +
-            "${netWorthWindow.monthIds}|${categoryNames.hashCode()}|${accounts.hashCode()}"
+            "${netWorthWindow.monthIds}|${categoryNames.hashCode()}|${accounts.hashCode()}|${converter.hashCode()}"
     val cachedData = reportsDataCache.get(cacheKey)
     val categoryInitial = emptyList<CategorySpendingPoint>()
     val monthlyInitial = emptyList<MonthlyMoneyPoint>()

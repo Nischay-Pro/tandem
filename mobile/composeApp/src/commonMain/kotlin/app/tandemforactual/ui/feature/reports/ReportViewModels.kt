@@ -5,6 +5,7 @@ import app.tandemforactual.data.store.observeAccountDailyActivity
 import app.tandemforactual.data.store.observeCategoryMonthAggregates
 import app.tandemforactual.data.store.observeMonthlyIncomeAndSpending
 import app.tandemforactual.data.store.observeRecords
+import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -86,9 +87,10 @@ internal class NetWorthReportViewModel(
         monthIds: List<String>,
         todayIsoDate: String,
         accounts: List<LiveAccountSummary>,
+        converter: BudgetCurrencyConverter,
     ): Flow<List<NetWorthPoint>> =
         repository
             .observeAccountDailyActivity(budgetId, todayIsoDate)
-            .map { netWorthPoints(it, accounts, monthIds, todayIsoDate) }
+            .map { netWorthPoints(it, accounts, monthIds, todayIsoDate, converter) }
             .flowOn(Dispatchers.Default)
 }

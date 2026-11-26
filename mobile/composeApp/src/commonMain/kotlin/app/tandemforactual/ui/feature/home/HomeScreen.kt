@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import app.tandemforactual.data.store.BudgetDisplaySettings
+import app.tandemforactual.ui.core.format.budgetCurrencyConverter
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
@@ -251,7 +252,15 @@ private fun HomeEntryCard(
                 state.privacyModeEnabled,
                 money,
             ) { editors.debtAccount = it }
-        HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> AccountsSummaryCard(module, state, navigation, open, money)
+        HomeModule.ACCOUNTS, HomeModule.NET_WORTH ->
+            AccountsSummaryCard(
+                module,
+                state,
+                navigation,
+                open,
+                mobileSession.budgetCurrencyConverter(state),
+                money,
+            )
         HomeModule.RECENT_ACTIVITY -> RecentActivityCard(module, state, navigation, transactions, money)
         HomeModule.SHARED_BILLS -> SharedBillsHomeCard(module, state, mobileSession, navigation)
         HomeModule.SAVINGS_GOALS ->
