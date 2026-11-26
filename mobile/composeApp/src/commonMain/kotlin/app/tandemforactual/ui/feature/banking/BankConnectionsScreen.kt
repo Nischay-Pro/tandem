@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
-import app.tandemforactual.ui.core.format.bankFailureLabel
+import app.tandemforactual.ui.core.format.bankFailureMessage
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
@@ -185,12 +185,7 @@ private fun ManageBankLinkDialog(
                 managed?.failure?.let {
                     val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
                     Text(
-                        "Last sync failed because ${bankFailureLabel(it)}. " +
-                            if (browser) {
-                                "Sign in at the bank again to reconnect it."
-                            } else {
-                                "Reconnect it in Actual’s web app, or link a different account."
-                            },
+                        bankFailureMessage(it, browser),
                         color = palette.negative,
                         fontSize = TandemTypography.compactBody,
                     )

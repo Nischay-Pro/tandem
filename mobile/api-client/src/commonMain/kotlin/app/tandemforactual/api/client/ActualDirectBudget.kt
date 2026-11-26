@@ -26,6 +26,7 @@ import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
@@ -159,6 +160,10 @@ class ActualDirectBudget private constructor(
                     changed += result.added.size + result.updated.size
                 } catch (error: UnsupportedRuleException) {
                     ruleFailure = ruleFailure ?: error
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    bankFailures[account.id] = account.providerAccountId to UNREADABLE_TRANSACTION
+                    firstFailure = firstFailure ?: ActualServerException("bank-sync-$UNREADABLE_TRANSACTION", cause = error)
                 }
             }
         }
@@ -317,6 +322,7 @@ class ActualDirectBudget private constructor(
 
     companion object {
         private const val UNDO_SEARCH_LIMIT = 200
+        private const val UNREADABLE_TRANSACTION = "unreadable_transaction"
 
         /**
          * [install] opens a new local database from the downloaded SQLite bytes. Keep it separate from any existing

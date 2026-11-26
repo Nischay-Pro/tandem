@@ -184,6 +184,53 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun anUnreadableBankDownloadOnlyFailsItsOwnAccount(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val client = client(server, TempBudgetFiles())
+            client.signInWithPassword(url, "test", "Phone")
+            val budget = client.budget("group")
+            budget.sync()
+            val checking =
+                budget
+                    .snapshot("2026-11-21")
+                    .records
+                    .first { it.type == "account" && it.body["name"] == JsonPrimitive("Checking") }
+                    .id
+            val savings = client.createBudgetAccount("group", "Savings", false, null, null)
+            client.edit("group") {
+                it.linkBankAccount(checking, "simpleFin", "SF-1", "org", "Credit Union")
+                it.linkBankAccount(savings, "goCardless", "GC-1", "gc-bank", "Big Bank")
+            }
+            server.bankDownload =
+                """{"status":"ok","data":{"transactions":[{"transactionId":"sf-1","booked":true,"payeeName":"Gym","amount":"-45.50"}]}}"""
+            server.bankRoutes["/gocardless/transactions"] =
+                """{"status":"ok","data":{"transactions":{"all":[{"transactionId":"gc-1","booked":true,""" +
+                """"date":"2026-11-19","payeeName":"Shop","transactionAmount":{"amount":"-12.00"}}]},"startingBalance":5000}}"""
+
+            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+
+            assertEquals(
+                setOf("gc-1"),
+                client.previewBudgetAccountStatementImport("group", savings, listOf("gc-1"), null).existingImportedIds,
+            )
+            val linked = client.budgetLinkedAccounts("group", null).associateBy { it.id }
+            assertEquals("unreadable_transaction", linked.getValue(checking).failure)
+            assertEquals(null, linked.getValue(savings).failure)
+
+            server.bankRoutes["/gocardless/transactions"] =
+                """{"status":"ok","data":{"transactions":[{"transactionId":"gc-2","booked":true,"date":"2026-11-20","amount":"-1.00"}]}}"""
+            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.runBudgetBankSync("group", null) }.errorCode)
+            assertTrue(client.budgetLinkedAccounts("group", null).all { it.failure == "unreadable_transaction" })
+
+            server.bankDownload =
+                """{"status":"ok","data":{"transactions":[{"transactionId":"sf-1","booked":true,"date":"2026-11-19","payeeName":"Gym","amount":"-45.50"}]}}"""
+            server.bankRoutes["/gocardless/transactions"] = """{"status":"ok","data":{"transactions":[]}}"""
+            client.runBudgetBankSync("group", null)
+            assertTrue(client.budgetLinkedAccounts("group", null).all { it.failure == null })
+        }
+
+    @Test
     fun opensBudgetsAndEditsThem(): Unit =
         runBlocking {
             val server = FakeActualServer()
