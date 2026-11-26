@@ -123,6 +123,7 @@ internal data class TandemPalette(
     val syncing: Color,
     val warning: Color,
     val negative: Color,
+    val negativeContent: Color,
 )
 
 internal val LocalTandemPalette =
@@ -141,6 +142,7 @@ internal val LocalTandemPalette =
             syncing = Color(0xFF73B7FF),
             warning = Color(0xFFFFD18A),
             negative = Color(0xFFFF9CA5),
+            negativeContent = Color(0xFF111827),
         )
     }
 
@@ -168,14 +170,7 @@ internal fun tandemPaletteFor(
     val black = mode == ThemeMode.PURE_BLACK
     val surfaces = tandemSurfaceColors(accent, dark)
     val selectedAccent = accent.colorFor(dark)
-    val darkContent = Color(0xFF111827)
-    val lightContent = Color.White
-    val accentContent =
-        if (wcagContrastRatio(darkContent, selectedAccent) >= wcagContrastRatio(lightContent, selectedAccent)) {
-            darkContent
-        } else {
-            lightContent
-        }
+    val accentContent = readableContentOn(selectedAccent)
 
     return if (dark) {
         val background = if (black) Color.Black else surfaces.background
@@ -194,6 +189,7 @@ internal fun tandemPaletteFor(
             syncing = Color(0xFF73B7FF),
             warning = Color(0xFFFFD18A),
             negative = Color(0xFFFF9CA5),
+            negativeContent = readableContentOn(Color(0xFFFF9CA5)),
         )
     } else {
         TandemPalette(
@@ -210,8 +206,15 @@ internal fun tandemPaletteFor(
             syncing = Color(0xFF174EA6),
             warning = Color(0xFF7A4B00),
             negative = Color(0xFFB3261E),
+            negativeContent = readableContentOn(Color(0xFFB3261E)),
         )
     }
+}
+
+private fun readableContentOn(background: Color): Color {
+    val darkContent = Color(0xFF111827)
+    val lightContent = Color.White
+    return if (wcagContrastRatio(darkContent, background) >= wcagContrastRatio(lightContent, background)) darkContent else lightContent
 }
 
 private data class TandemSurfaceColors(

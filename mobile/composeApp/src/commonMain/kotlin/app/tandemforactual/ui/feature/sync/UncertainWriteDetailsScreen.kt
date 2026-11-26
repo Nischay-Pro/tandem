@@ -98,6 +98,7 @@ internal fun UncertainWriteDetailsScreen(
             confirmLabel = "Remove edit",
             dismissLabel = "Keep edit",
             enabled = !state.readOnlyMode && !isSyncing,
+            dismissEnabled = !isSyncing,
             onDismissRequest = { if (!isSyncing) confirmDiscard = false },
             onConfirm = {
                 confirmDiscard = false

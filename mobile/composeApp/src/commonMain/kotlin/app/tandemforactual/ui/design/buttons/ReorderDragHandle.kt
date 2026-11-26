@@ -80,7 +80,7 @@ internal fun ReorderDragHandle(
         }
     val handleModifier =
         Modifier
-            .size(44.dp)
+            .size(MIN_TOUCH_TARGET)
             .clip(RoundedCornerShape(TandemShapes.medium))
             .then(reorderSemantics)
             .draggable(
@@ -96,7 +96,7 @@ internal fun ReorderDragHandle(
                     latestOnDragStopped?.invoke()
                 },
             )
-    androidx.compose.foundation.layout.Box(
+    Box(
         modifier = handleModifier,
         contentAlignment = Alignment.Center,
     ) {

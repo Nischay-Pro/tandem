@@ -236,6 +236,7 @@ private fun ServerDeviceConfirmation(
                 confirmLabel = "Unlink and erase",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isSigningOut,
+                dismissEnabled = !mobileSession.isSigningOut,
                 onDismissRequest = { if (!mobileSession.isSigningOut) onDismiss() },
                 onConfirm = {
                     onDismiss()
@@ -250,6 +251,7 @@ private fun ServerDeviceConfirmation(
                 confirmLabel = "Unlink",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
+                dismissEnabled = !mobileSession.isRevokingDevice,
                 onDismissRequest = { if (!mobileSession.isRevokingDevice) onDismiss() },
                 onConfirm = {
                     onDismiss()

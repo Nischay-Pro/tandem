@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -72,8 +71,8 @@ internal fun SwipeToDeleteBox(
                 horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
-                Text("Delete", color = Color.White, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
+                Icon(Lucide.Trash2, contentDescription = null, modifier = Modifier.size(20.dp), tint = palette.negativeContent)
+                Text("Delete", color = palette.negativeContent, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.SemiBold)
             }
         }
         Box(

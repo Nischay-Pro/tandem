@@ -22,7 +22,7 @@ internal fun DestructiveConfirmationDialog(
     confirmLabel: String,
     dismissLabel: String,
     enabled: Boolean = true,
-    dismissEnabled: Boolean = enabled,
+    dismissEnabled: Boolean = true,
     messageKind: InlineMessageKind? = null,
     messageActionLabel: String? = null,
     onMessageAction: (() -> Unit)? = null,
@@ -30,14 +30,15 @@ internal fun DestructiveConfirmationDialog(
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val dismiss: () -> Unit = { if (dismissEnabled) onDismissRequest() }
     AlertDialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = dismiss,
         title = {
             TandemModalHeader(
                 title = title,
                 titleSize = TandemTypography.cardTitle,
                 enabled = dismissEnabled,
-                onClose = onDismissRequest,
+                onClose = dismiss,
             )
         },
         text = {
@@ -56,8 +57,8 @@ internal fun DestructiveConfirmationDialog(
             }
         },
         dismissButton = {
-            TextButton(enabled = dismissEnabled, onClick = onDismissRequest) {
-                Text(dismissLabel, color = tandemPalette.accent)
+            TextButton(enabled = dismissEnabled, onClick = dismiss) {
+                Text(dismissLabel, color = if (dismissEnabled) tandemPalette.accent else tandemPalette.muted)
             }
         },
         backgroundColor = tandemPalette.surface,

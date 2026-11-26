@@ -51,14 +51,16 @@ internal val MerchantArtworkCache = RecentCache<DrawableResource, ImageBitmap>(2
 @Composable
 internal fun rememberMerchantArtwork(resource: DrawableResource?): Painter? {
     val environment = rememberResourceEnvironment()
-    val bitmap by produceState(resource?.let(MerchantArtworkCache::get), resource, environment) {
-        if (resource == null || value != null) return@produceState
-        val decoded =
+    val cached = remember(resource) { resource?.let(MerchantArtworkCache::get) }
+    val decoded by produceState<Pair<DrawableResource, ImageBitmap>?>(null, resource, environment) {
+        if (resource == null || cached != null) return@produceState
+        val bitmap =
             withContext(Dispatchers.Default) {
                 runCatching { getDrawableResourceBytes(environment, resource).decodeToImageBitmap() }.getOrNull()
-            }
-        decoded?.let { MerchantArtworkCache.put(resource, it) }
-        value = decoded
+            } ?: return@produceState
+        MerchantArtworkCache.put(resource, bitmap)
+        value = resource to bitmap
     }
+    val bitmap = cached ?: decoded?.takeIf { it.first == resource }?.second
     return bitmap?.let { remember(it) { BitmapPainter(it) } }
 }

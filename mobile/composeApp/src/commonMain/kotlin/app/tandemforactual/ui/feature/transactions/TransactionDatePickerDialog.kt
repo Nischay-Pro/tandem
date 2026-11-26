@@ -36,6 +36,7 @@ import app.tandemforactual.ui.core.format.platformFirstWeekday
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.platformWeekday
 import app.tandemforactual.ui.core.format.transactionIsoDate
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.PeriodStepper
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SelectableTile
@@ -142,12 +143,12 @@ private fun DatePickerDayGrid(
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             week.forEach { day ->
                 if (day == null) {
-                    Spacer(Modifier.weight(1f).height(44.dp))
+                    Spacer(Modifier.weight(1f).height(MIN_TOUCH_TARGET))
                 } else {
-                    DatePickerDayCell(year, month, day, selectedDate, onSelect, Modifier.weight(1f).heightIn(min = 44.dp))
+                    DatePickerDayCell(year, month, day, selectedDate, onSelect, Modifier.weight(1f).heightIn(min = MIN_TOUCH_TARGET))
                 }
             }
-            repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
+            repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(MIN_TOUCH_TARGET)) }
         }
     }
 }

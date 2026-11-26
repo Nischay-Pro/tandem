@@ -57,6 +57,10 @@ class TandemThemeContrastTest {
                     wcagContrastRatio(palette.accentContent, palette.accent) >= 4.5f,
                     "Accent button text contrast is below 4.5:1 in $mode with ${accent.label}",
                 )
+                assertTrue(
+                    wcagContrastRatio(palette.negativeContent, palette.negative) >= 4.5f,
+                    "Text on the negative color is below 4.5:1 in $mode with ${accent.label}",
+                )
             }
         }
     }

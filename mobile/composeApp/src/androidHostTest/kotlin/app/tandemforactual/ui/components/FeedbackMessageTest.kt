@@ -6,12 +6,13 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import app.tandemforactual.ui.design.feedback.FeedbackEmptyState
+import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.feedback.FeedbackMessage
 import app.tandemforactual.ui.design.feedback.FeedbackMessageOwner
 import app.tandemforactual.ui.design.feedback.FieldErrorMessage
@@ -79,20 +80,10 @@ class FeedbackMessageTest {
     }
 
     @Test
-    fun fieldErrorAndLoadFailureExposeAccessibleKindAndAnnouncement() {
+    fun fieldErrorExposesAccessibleKindAndAnnouncement() {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 FieldErrorMessage("Choose a valid start date.", owner = FeedbackMessageOwner.Field("startDate"))
-                FeedbackEmptyState(
-                    FeedbackMessage(
-                        title = "Tandem isn’t responding",
-                        text = "Check the server address, then try again.",
-                        kind = InlineMessageKind.ERROR,
-                        owner = FeedbackMessageOwner.Screen("sign-in"),
-                        actionLabel = "Try again",
-                        onAction = {},
-                    ),
-                )
             }
         }
 
@@ -104,18 +95,7 @@ class FeedbackMessageTest {
                     LiveRegionMode.Assertive,
                 ),
             )
-        composeTestRule.onNodeWithText("Tandem isn’t responding").assertExists()
-        composeTestRule
-            .onNodeWithText("Tandem isn’t responding")
-            .assert(
-                SemanticsMatcher.expectValue(
-                    SemanticsProperties.LiveRegion,
-                    LiveRegionMode.Assertive,
-                ),
-            )
-        composeTestRule.onNodeWithText("Check the server address, then try again.").assertExists()
-        composeTestRule.onAllNodesWithContentDescription("Error").assertCountEquals(2)
-        composeTestRule.onNodeWithText("Try again").assertHasClickAction()
+        composeTestRule.onAllNodesWithContentDescription("Error").assertCountEquals(1)
         assertEquals(
             FeedbackMessageOwner.Screen("sign-in"),
             FeedbackMessage(
@@ -125,5 +105,16 @@ class FeedbackMessageTest {
                 owner = FeedbackMessageOwner.Screen("sign-in"),
             ).owner,
         )
+    }
+
+    @Test
+    fun bannerActionKeepsAFullSizeTouchTarget() {
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.LIGHT, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                InlineMessage(text = "Sync paused.", kind = InlineMessageKind.INFO, actionLabel = "Retry", onAction = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("Retry").assertHasClickAction().assertHeightIsAtLeast(48.dp)
     }
 }

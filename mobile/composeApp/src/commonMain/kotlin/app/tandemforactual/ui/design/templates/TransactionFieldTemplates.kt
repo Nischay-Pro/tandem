@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +44,6 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Trash2
@@ -217,26 +215,6 @@ internal fun FloatingTransactionDeleteAction(
             contentDescription = null,
             modifier = Modifier.size(23.dp),
             tint = if (enabled) palette.negative else palette.muted,
-        )
-    }
-}
-
-@Composable
-internal fun ReadOnlyField(
-    label: String,
-    value: String,
-    leadingVector: ImageVector,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    FieldFrame(label, onClickLabel = "$label, $value", onClick = onClick) {
-        Icon(leadingVector, contentDescription = null, modifier = Modifier.size(30.dp), tint = palette.accent)
-        Text(value, color = palette.text, fontSize = TandemTypography.body, modifier = Modifier.weight(1f))
-        Icon(
-            Lucide.ChevronRight,
-            contentDescription = null,
-            modifier = Modifier.size(22.dp).clearAndSetSemantics {},
-            tint = palette.muted,
         )
     }
 }

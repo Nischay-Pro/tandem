@@ -279,7 +279,7 @@ private fun TandemButton(
                     } else {
                         Modifier.background(palette.surface).border(1.dp, borderColor, shape)
                     },
-                ).clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+                ).clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {
@@ -330,7 +330,7 @@ internal fun SegmentedSelector(
                 selected = selected,
                 contentDescription = label,
                 onSelect = { onSelect(index) },
-                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                modifier = Modifier.weight(1f).heightIn(min = MIN_TOUCH_TARGET),
                 shape = RoundedCornerShape(TandemShapes.pill),
                 selectedBackground = tandemPalette.accentSurface,
                 unselectedBackground = tandemPalette.raised,
