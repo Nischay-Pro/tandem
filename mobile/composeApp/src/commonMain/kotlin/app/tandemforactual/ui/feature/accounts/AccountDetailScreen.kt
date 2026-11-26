@@ -154,7 +154,7 @@ private fun AccountRecentActivity(
         ) {
             shownAccountActivity.take(6).forEachIndexed { index, item ->
                 if (index > 0) DividerLine()
-                TransactionRow(item) {
+                TransactionRow(item, state.privacyModeEnabled) {
                     onOpenTransaction()
                     openTransaction(state, navigation, item, isLive = true)
                 }

@@ -1,11 +1,15 @@
 package app.tandemforactual.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
@@ -35,6 +39,7 @@ class ActivityTransactionRowTest {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                 TransactionRow(
                     transaction = transaction(amountMinorUnits = 1_245),
+                    privacyModeEnabled = false,
                     activityStyle = true,
                     showAccount = true,
                     onClick = {},
@@ -64,6 +69,7 @@ class ActivityTransactionRowTest {
                     Box(Modifier.width(720.dp)) {
                         TransactionRow(
                             transaction = transaction(amountMinorUnits = 1_245),
+                            privacyModeEnabled = false,
                             activityStyle = true,
                             showAccount = true,
                             onClick = {},
@@ -76,6 +82,36 @@ class ActivityTransactionRowTest {
         composeTestRule.onNodeWithText("Costco Gas").assertExists()
         composeTestRule.onNodeWithText("Weekly shop · Groceries · Checking").assertExists()
         composeTestRule.onNodeWithContentDescription("Income, +$12.45").assertExists()
+    }
+
+    @Test
+    fun hideAmountsMasksTheAmountInEveryRowStyle() {
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                Column {
+                    TransactionRow(transaction(amountMinorUnits = -4_210), privacyModeEnabled = true, onClick = {})
+                    TransactionRow(
+                        transaction(amountMinorUnits = 1_245),
+                        privacyModeEnabled = true,
+                        activityStyle = true,
+                        onClick = {},
+                    )
+                    TransactionRow(
+                        transaction(amountMinorUnits = -990),
+                        privacyModeEnabled = true,
+                        activityStyle = true,
+                        syncStatus = "queued",
+                        onClick = {},
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onAllNodesWithContentDescription("Amount hidden").assertCountEquals(3)
+        listOf("-$42.10", "+$12.45", "-$9.90").forEach { amount ->
+            composeTestRule.onAllNodesWithText(amount, substring = true, useUnmergedTree = true).assertCountEquals(0)
+            composeTestRule.onAllNodesWithContentDescription(amount, substring = true, useUnmergedTree = true).assertCountEquals(0)
+        }
     }
 
     private fun transaction(amountMinorUnits: Long) =

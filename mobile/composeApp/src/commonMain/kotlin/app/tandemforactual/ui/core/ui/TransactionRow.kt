@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatSignedCurrency
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -43,6 +44,7 @@ import com.composables.icons.lucide.Square
 @Composable
 internal fun TransactionRow(
     transaction: TransactionItem,
+    privacyModeEnabled: Boolean,
     activityStyle: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false,
@@ -71,6 +73,7 @@ internal fun TransactionRow(
             TransactionRowContent(
                 transaction,
                 amountText,
+                privacyModeEnabled,
                 activityStyle,
                 selectionMode,
                 selected,
@@ -99,6 +102,7 @@ internal fun TransactionRow(
 private fun TransactionRowContent(
     transaction: TransactionItem,
     amountText: String,
+    privacyModeEnabled: Boolean,
     activityStyle: Boolean,
     selectionMode: Boolean,
     selected: Boolean,
@@ -110,6 +114,7 @@ private fun TransactionRowContent(
 ) {
     val palette = tandemPalette
     val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
+    val customTrailing = activityStyle || syncStatus != null || privacyModeEnabled
     Box(
         Modifier
             .padding(horizontal = if (highlighted) TandemSpacing.extraSmall else 0.dp)
@@ -119,7 +124,7 @@ private fun TransactionRowContent(
         ListRow(
             transaction.payee,
             secondaryLabel,
-            amountText.takeUnless { activityStyle || syncStatus != null },
+            amountText.takeUnless { customTrailing },
             leading =
                 when {
                     selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
@@ -135,8 +140,8 @@ private fun TransactionRowContent(
             onClick = onClick,
             onLongClick = onLongClick,
             trailingContent =
-                if (activityStyle || syncStatus != null) {
-                    { TransactionRowTrailing(transaction, amountText, syncStatus) }
+                if (customTrailing) {
+                    { TransactionRowTrailing(transaction, amountText, privacyModeEnabled, syncStatus) }
                 } else {
                     null
                 },
@@ -149,6 +154,7 @@ private fun TransactionRowContent(
 private fun TransactionRowTrailing(
     transaction: TransactionItem,
     amountText: String,
+    privacyModeEnabled: Boolean,
     syncStatus: String?,
 ) {
     Column(
@@ -158,6 +164,7 @@ private fun TransactionRowTrailing(
         ActivityTransactionAmount(
             amountText,
             amountMinorUnits = transaction.amountMinorUnits,
+            privacyModeEnabled = privacyModeEnabled,
             fractionDigits =
                 transaction.displaySettings
                     ?.takeUnless { it.hideFraction }
@@ -218,15 +225,29 @@ internal fun activityAmountAnnotatedString(
 private fun ActivityTransactionAmount(
     value: String,
     amountMinorUnits: Long,
+    privacyModeEnabled: Boolean,
     fractionDigits: Int,
 ) {
+    val color = if (amountMinorUnits > 0) tandemPalette.positive else tandemPalette.text
+    if (privacyModeEnabled) {
+        PrivacyAmountText(
+            value,
+            privacyModeEnabled = true,
+            color = color,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            fractionDigits = fractionDigits,
+        )
+        return
+    }
     Text(
         amountAnnotatedString(value, fractionDigits),
         modifier =
             Modifier.semantics {
                 contentDescription = activityAmountAccessibilityDescription(value, amountMinorUnits)
             },
-        color = if (amountMinorUnits > 0) tandemPalette.positive else tandemPalette.text,
+        color = color,
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.SemiBold,
         maxLines = 2,
