@@ -127,4 +127,20 @@ class ConcurrencyStressTest {
             other.sync()
             assertEquals(budget.transactions().map { it.id to it.body }.toSet(), other.transactions().map { it.id to it.body }.toSet())
         }
+
+    @Test
+    fun foregroundAndBackgroundClientsDownloadASharedBudgetOnce(): Unit =
+        runBlocking(Dispatchers.Default) {
+            val server = FakeActualServer()
+            val files = TempBudgetFiles()
+            val clients =
+                List(2) {
+                    TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" }).also {
+                        it.signInWithPassword("https://budget.example", "test", "Phone")
+                    }
+                }
+            val budgets = clients.map { client -> async { client.budget("group") } }.awaitAll()
+            assertEquals(1, server.downloads.get())
+            budgets.forEach { it.close() }
+        }
 }

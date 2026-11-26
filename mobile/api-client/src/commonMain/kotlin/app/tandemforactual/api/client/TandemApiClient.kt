@@ -67,7 +67,7 @@ class TandemApiClient(
     private val newId: () -> String = { Uuid.random().toString() },
 ) {
     internal val sessionMutex = Mutex()
-    private val budgetMutex = Mutex()
+    private val budgetMutex = processBudgetMutex
     private var server: ActualServerClient? = null
     private var serverUrl: String? = null
     private var device: AuthenticatedDevice? = null
@@ -653,6 +653,9 @@ class TandemApiClient(
             else -> if (reason.startsWith("bank-sync-")) "bank_sync_failed" else reason.replace('-', '_')
         }
 }
+
+/** Foreground and background clients download, replace and retire the same budget files, so they share one lock. */
+private val processBudgetMutex = Mutex()
 
 private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")
 

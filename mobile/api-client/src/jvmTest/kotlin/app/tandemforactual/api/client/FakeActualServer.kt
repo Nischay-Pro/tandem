@@ -16,6 +16,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.createTempDirectory
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -40,6 +41,7 @@ internal class FakeActualServer {
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
     var syncCalls = 0
+    val downloads = AtomicInteger()
     var extension = false
     val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
     private val sealedArchive = budgetKey.encrypt(archive)
@@ -108,7 +110,8 @@ internal class FakeActualServer {
                         } else {
                             respond("""{"status":"ok","data":{"fileId":"file","groupId":"group","name":"Direct"}}""")
                         }
-                    "/sync/download-user-file" ->
+                    "/sync/download-user-file" -> {
+                        downloads.incrementAndGet()
                         respond(
                             if (request.headers["x-actual-file-id"] ==
                                 "encrypted"
@@ -118,6 +121,7 @@ internal class FakeActualServer {
                                 archive
                             },
                         )
+                    }
                     "/sync/user-get-key" ->
                         respond(
                             buildJsonObject {
