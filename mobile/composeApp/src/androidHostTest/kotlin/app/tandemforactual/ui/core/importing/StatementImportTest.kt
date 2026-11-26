@@ -533,6 +533,20 @@ class StatementImportTest {
         }
     }
 
+    @Test
+    fun paymentTypeKeepsTheAmountSignSoCardPaymentsStayIncoming() {
+        val parsed =
+            parseStatementImport(
+                "card.csv",
+                "Date,Payee,Type,Amount\n" +
+                    "11/01/2026,Thank you,Payment,500.00\n" +
+                    "11/02/2026,Utility,Payment,-40.00\n" +
+                    "11/03/2026,Market,Purchase,12.00\n",
+            )
+
+        assertEquals(listOf(50_000L, -4_000L, -1_200L), parsed.transactions.map { it.amountMinor })
+    }
+
     private fun displaySettings(
         currencyCode: String,
         currencySymbol: String,

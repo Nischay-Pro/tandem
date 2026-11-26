@@ -246,7 +246,7 @@ private fun csvRowAmount(
     if (debit != null || credit != null) return kotlin.math.abs(credit ?: 0L) - kotlin.math.abs(debit ?: 0L)
     val rawAmount = parseMoney(row.cell(columns.amount), currencyFractionDigits, numberFormat)
     val type = row.cell(columns.type).lowercase()
-    return if (type.containsAny("debit", "purchase", "withdrawal", "payment", "outflow")) {
+    return if (type.containsAny("debit", "purchase", "withdrawal", "outflow")) {
         -kotlin.math.abs(rawAmount)
     } else {
         rawAmount
