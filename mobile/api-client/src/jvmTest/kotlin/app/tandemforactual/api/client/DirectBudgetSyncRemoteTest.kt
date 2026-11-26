@@ -519,18 +519,20 @@ class DirectBudgetSyncRemoteTest {
             val client = TandemApiClient(http = server.http, budgetFiles = TempBudgetFiles(), today = { "2026-11-21" })
             client.signInWithPassword("https://budget.example", "test", "Phone")
             client.budget("group").sync()
-            val plain = client.budgetBackup("group", null, "Household", """{"records":[]}""", passphrase = null)
+            val planning = """{"format":"tandem-planning-backup","version":1,"records":[]}"""
+            val plain = client.budgetBackup("group", null, "Household", planning, passphrase = null)
             val opened =
-                app.tandemforactual.data.planning.BudgetBackupFile
-                    .read(plain, null)
-            opened as app.tandemforactual.data.planning.BudgetBackupContents.Opened
-            assertEquals("""{"records":[]}""", opened.planningJson)
+                app.tandemforactual.data.planning.BackupArchive
+                    .open(plain, null)
+            opened as app.tandemforactual.data.planning.OpenedBackup.Contents
+            assertEquals(emptyList(), opened.planningRecords)
+            assertEquals("group" to "Household", opened.budgetId to opened.budgetName)
             assertTrue(opened.metadataJson!!.contains("\"budgetName\":\"Household\""))
             val copy =
                 kotlin.io.path
                     .createTempFile(suffix = ".sqlite")
                     .toFile()
-                    .apply { writeBytes(opened.database) }
+                    .apply { writeBytes(opened.database!!) }
             val restored =
                 app.tandemforactual.data.actual.ActualDatabase(
                     androidx.sqlite.driver.bundled
@@ -549,10 +551,15 @@ class DirectBudgetSyncRemoteTest {
 
             val sealed = client.budgetBackup("group", null, "Household", null, passphrase = "secret")
             assertEquals(
-                app.tandemforactual.data.planning.BudgetBackupContents.WrongPassphrase,
-                app.tandemforactual.data.planning.BudgetBackupFile
-                    .read(sealed, "nope"),
+                app.tandemforactual.data.planning.OpenedBackup.WrongPassphrase,
+                app.tandemforactual.data.planning.BackupArchive
+                    .open(sealed, "nope"),
             )
+            val unsealed =
+                app.tandemforactual.data.planning.BackupArchive
+                    .open(sealed, "secret") as app.tandemforactual.data.planning.OpenedBackup.Contents
+            assertNull(unsealed.planningRecords)
+            assertEquals("Household", unsealed.budgetName)
             assertEquals(
                 "not_supported",
                 assertFailsWith<TandemApiException> {
