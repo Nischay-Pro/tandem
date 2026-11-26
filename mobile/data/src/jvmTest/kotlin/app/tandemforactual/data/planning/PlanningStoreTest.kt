@@ -222,7 +222,7 @@ class PlanningStoreTest {
                     records.map { it.second },
                 )
                 assertEquals(
-                    setOf("fx:EUR:USD", "rate-from-an-older-version"),
+                    setOf("fx:EUR:USD:2026-11-01", "rate-from-an-older-version"),
                     records.filter { it.second == ExchangeRate.TYPE }.map { it.first }.toSet(),
                 )
                 assertEquals(period.toJson(), records.last().third)
