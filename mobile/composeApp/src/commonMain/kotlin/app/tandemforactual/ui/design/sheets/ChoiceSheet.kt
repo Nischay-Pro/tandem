@@ -1,7 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.design.sheets
-import androidx.compose.foundation.clickable
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -58,12 +60,13 @@ internal fun ChoiceSheet(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable(role = Role.Checkbox) { chosen = if (selected) chosen - id else chosen + id }
+                                .heightIn(min = MIN_TOUCH_TARGET)
+                                .toggleable(value = selected, role = Role.Checkbox) { chosen = if (it) chosen + id else chosen - id }
                                 .padding(vertical = TandemSpacing.medium),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(label, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
-                            if (selected) Icon(Lucide.Check, "Selected", Modifier.size(18.dp), tint = palette.accent)
+                            if (selected) Icon(Lucide.Check, null, Modifier.size(18.dp), tint = palette.accent)
                         }
                     }
                 }

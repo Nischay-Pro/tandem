@@ -155,6 +155,7 @@ private fun ReplaceAmountsDialog(
         confirmLabel = if (mobileSession.isPerformingBudgetAction) "Applying…" else "Replace amounts",
         dismissLabel = "Keep amounts",
         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+        dismissEnabled = !mobileSession.isPerformingBudgetAction,
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
         onConfirm = onConfirm,
     )

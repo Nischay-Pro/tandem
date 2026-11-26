@@ -294,6 +294,7 @@ private fun DeleteRuleDialog(
         confirmLabel = "Delete",
         dismissLabel = "Keep rule",
         enabled = !busy,
+        dismissEnabled = !busy,
         onDismissRequest = onDismiss,
         onConfirm = onConfirm,
     )

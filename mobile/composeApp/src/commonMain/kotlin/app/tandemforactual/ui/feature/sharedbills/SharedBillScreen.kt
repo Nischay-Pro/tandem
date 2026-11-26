@@ -99,6 +99,7 @@ internal fun SharedBillScreen(
             confirmLabel = "Remove",
             dismissLabel = "Cancel",
             enabled = !mobileSession.isSavingTransaction,
+            dismissEnabled = !mobileSession.isSavingTransaction,
             onDismissRequest = { removing = null },
         ) {
             scope.launch {

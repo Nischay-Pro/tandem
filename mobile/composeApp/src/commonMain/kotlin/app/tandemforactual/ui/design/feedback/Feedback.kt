@@ -88,7 +88,6 @@ internal data class FeedbackMessage(
 internal enum class FeedbackPresentation {
     FIELD,
     BANNER,
-    EMPTY_STATE,
 }
 
 internal fun inlineMessageLiveRegion(kind: InlineMessageKind): LiveRegionMode =
@@ -132,14 +131,6 @@ internal fun FieldErrorMessage(
             modifier = modifier,
         )
     }
-}
-
-@Composable
-internal fun FeedbackEmptyState(
-    message: FeedbackMessage,
-    modifier: Modifier = Modifier,
-) {
-    FeedbackMessageView(message, FeedbackPresentation.EMPTY_STATE, modifier)
 }
 
 @Composable

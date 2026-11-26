@@ -3,16 +3,21 @@
 package app.tandemforactual.ui.design.inputs
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -79,7 +85,7 @@ internal fun <T> PillGrid(
     columns: Int,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+    Column(modifier) {
         options.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 row.forEach { (value, label) ->
@@ -110,18 +116,33 @@ private fun FilterPill(
         tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
         label = "filter-pill-text",
     )
-    Text(
-        label,
+    val interactions = remember { MutableInteractionSource() }
+    Box(
         modifier
-            .clip(RoundedCornerShape(TandemShapes.control))
-            .background(background)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .heightIn(min = 40.dp)
-            .padding(horizontal = if (compact) TandemSpacing.extraSmall else TandemSpacing.large, vertical = 10.dp),
-        color = content,
-        textAlign = TextAlign.Center,
-        fontSize = TandemTypography.compactBody,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        maxLines = 1,
-    )
+            .heightIn(min = MIN_TOUCH_TARGET)
+            .selectable(
+                selected = selected,
+                interactionSource = interactions,
+                indication = null,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            (if (compact) Modifier.fillMaxWidth() else Modifier)
+                .clip(RoundedCornerShape(TandemShapes.control))
+                .background(background)
+                .indication(interactions, LocalIndication.current)
+                .heightIn(min = 40.dp)
+                .padding(horizontal = if (compact) TandemSpacing.extraSmall else TandemSpacing.large, vertical = 10.dp)
+                .wrapContentHeight(),
+            color = content,
+            textAlign = TextAlign.Center,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+        )
+    }
 }

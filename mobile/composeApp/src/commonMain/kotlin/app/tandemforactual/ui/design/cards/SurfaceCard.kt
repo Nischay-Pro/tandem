@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.theme.TandemMotion
@@ -29,6 +30,7 @@ internal fun SurfaceCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
+    val shape = RoundedCornerShape(TandemShapes.large)
     Surface(
         modifier =
             modifier
@@ -42,12 +44,12 @@ internal fun SurfaceCard(
                     },
                 ).then(
                     if (onClick != null) {
-                        Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+                        Modifier.clip(shape).clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
                     } else {
                         Modifier
                     },
                 ),
-        shape = RoundedCornerShape(TandemShapes.large),
+        shape = shape,
         color = if (highlighted) palette.accentSurface else palette.surface,
         border = if (highlighted) BorderStroke(1.5.dp, palette.accent) else BorderStroke(1.dp, palette.border),
     ) {

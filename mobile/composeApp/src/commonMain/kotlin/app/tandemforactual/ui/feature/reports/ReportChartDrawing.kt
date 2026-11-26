@@ -50,7 +50,7 @@ internal fun DrawScope.drawReport(
         ReportKind.SPENDING_BY_CATEGORY -> drawCategoryRing(chartCategories, selection, frame, palette)
         ReportKind.SPENDING_OVER_TIME -> drawSpendingBars(monthly, selection, axisValues, frame, palette)
         ReportKind.INCOME_AND_SPENDING -> drawIncomeAndSpendingBars(monthly, selection, axisValues, frame, palette)
-        ReportKind.BUDGETED_AND_SPENT -> drawBudgetedSpentBars(data, frame, palette)
+        ReportKind.BUDGETED_AND_SPENT -> Unit
         ReportKind.NET_WORTH -> drawNetWorthLine(data, selection, axisValues, frame, palette)
     }
 }
@@ -166,36 +166,6 @@ private fun DrawScope.drawIncomeAndSpendingBars(
             if (spendingSelected) palette.negative else palette.muted.copy(alpha = 0.48f),
             Offset(left + barWidth + slot * 0.08f, chartBottom - spendingHeight),
             Size(barWidth, spendingHeight.coerceAtLeast(2f)),
-            CornerRadius(TandemShapes.small.toPx()),
-        )
-    }
-}
-
-private fun DrawScope.drawBudgetedSpentBars(
-    data: ReportDataBundle,
-    frame: ReportChartFrame,
-    palette: TandemPalette,
-) {
-    val inset = frame.inset
-    val values = data.budgetedSpent.take(8)
-    val maxValue = values.maxOfOrNull { maxOf(it.budgetedMinor, it.spentMinor) }?.coerceAtLeast(1L)?.toDouble() ?: 1.0
-    val rowHeight = frame.chartHeight / values.size.coerceAtLeast(1)
-    val labelInset = inset + rowHeight * 0.24f
-    val trackWidth = size.width - inset * 2
-    values.forEachIndexed { index, value ->
-        val y = frame.chartTop + index * rowHeight + labelInset
-        val budgetWidth = trackWidth * (value.budgetedMinor.toDouble() / maxValue).toFloat()
-        val spentWidth = trackWidth * (value.spentMinor.toDouble() / maxValue).toFloat()
-        drawRoundRect(
-            palette.positive,
-            Offset(inset, y),
-            Size(budgetWidth.coerceAtLeast(1f), 5.dp.toPx()),
-            CornerRadius(TandemShapes.small.toPx()),
-        )
-        drawRoundRect(
-            palette.negative,
-            Offset(inset, y + 8.dp.toPx()),
-            Size(spentWidth.coerceAtLeast(1f), 7.dp.toPx()),
             CornerRadius(TandemShapes.small.toPx()),
         )
     }

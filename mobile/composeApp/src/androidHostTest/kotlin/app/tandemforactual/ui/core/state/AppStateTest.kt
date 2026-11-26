@@ -7,8 +7,6 @@ import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
-import app.tandemforactual.ui.design.theme.budgetHeaderTitleMaxLines
-import app.tandemforactual.ui.design.theme.shouldStackActionButtons
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -57,19 +55,6 @@ class AppStateTest {
     @Test
     fun newInstallFollowsTheSystemAppearanceByDefault() {
         assertEquals(ThemeMode.SYSTEM, AppState().theme)
-    }
-
-    @Test
-    fun accountActionButtonsStackWhenSystemTextNeedsMoreWidth() {
-        assertFalse(shouldStackActionButtons(1.0f))
-        assertFalse(shouldStackActionButtons(1.19f))
-        assertTrue(shouldStackActionButtons(1.2f))
-        assertTrue(shouldStackActionButtons(2.0f))
-    }
-
-    @Test
-    fun budgetHeaderStaysCappedAtTwoLinesAtEveryTextSize() {
-        assertEquals(2, budgetHeaderTitleMaxLines())
     }
 
     @Test

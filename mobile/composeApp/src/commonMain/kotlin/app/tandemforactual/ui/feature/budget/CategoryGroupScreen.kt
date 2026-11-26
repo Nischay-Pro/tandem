@@ -263,6 +263,7 @@ private fun DeleteCategoryGroupDialog(
             !state.readOnlyMode &&
                 !mobileSession.isPerformingBudgetAction &&
                 (!groupHasCategories || screen.deleteGroupDestinationId != UNSELECTED_GROUP_DELETE_DESTINATION),
+        dismissEnabled = !mobileSession.isPerformingBudgetAction,
         content = {
             if (groupHasCategories) {
                 GroupDeleteDestinationPicker(screen, groupDeleteDestinations)

@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -286,11 +287,10 @@ private fun SectionCollapseChevron(
         contentDescription = if (!collapse.expanded) "Expand $title" else "Collapse $title",
         modifier =
             Modifier
-                .padding(start = TandemSpacing.extraSmall)
-                .size(36.dp)
+                .size(MIN_TOUCH_TARGET)
                 .clip(CircleShape)
                 .clickable(role = Role.Button, onClick = collapse.onToggle)
-                .padding(TandemSpacing.small)
+                .padding(14.dp)
                 .graphicsLayer { rotationZ = arrowRotation },
         tint = palette.muted,
     )

@@ -81,6 +81,7 @@ private fun animatedTandemPalette(
         syncing = animateColorAsState(palette.syncing, colorSpec, label = "theme-syncing").value,
         warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
         negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
+        negativeContent = animateColorAsState(palette.negativeContent, colorSpec, label = "theme-negative-content").value,
     )
 
 private fun tandemMaterialColors(
@@ -100,7 +101,7 @@ private fun tandemMaterialColors(
             onSecondary = animatedPalette.accentContent,
             onBackground = animatedPalette.text,
             onSurface = animatedPalette.text,
-            onError = Color.White,
+            onError = animatedPalette.negativeContent,
         )
     } else {
         lightColors(
@@ -115,6 +116,6 @@ private fun tandemMaterialColors(
             onSecondary = animatedPalette.accentContent,
             onBackground = animatedPalette.text,
             onSurface = animatedPalette.text,
-            onError = Color.White,
+            onError = animatedPalette.negativeContent,
         )
     }

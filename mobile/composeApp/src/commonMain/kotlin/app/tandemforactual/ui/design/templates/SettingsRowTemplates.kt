@@ -2,10 +2,6 @@
 
 package app.tandemforactual.ui.design.templates
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContentScope
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -39,17 +35,13 @@ import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
 import app.tandemforactual.ui.design.feedback.LabelText
-import app.tandemforactual.ui.design.feedback.crossfadeTransitions
 import app.tandemforactual.ui.design.icons.labelWords
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.rows.ListRow
-import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
-import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BriefcaseBusiness
 import com.composables.icons.lucide.CalendarDays
@@ -316,31 +308,6 @@ internal fun AmountHero(
             }
         }
     }
-}
-
-@Composable
-internal fun AnimatedAttentionContent(
-    showingAttention: Boolean,
-    animateSizeChanges: Boolean = false,
-    content: @Composable AnimatedContentScope.(Boolean) -> Unit,
-) {
-    val reduceMotion = tandemReduceMotion
-    AnimatedContent(
-        targetState = showingAttention,
-        modifier =
-            if (animateSizeChanges) {
-                Modifier.animateContentSize(tandemMotionSpec(reduceMotion, TandemMotion.CONTENT_SIZE_MILLIS))
-            } else {
-                Modifier
-            },
-        transitionSpec = {
-            val (enter, exit) = crossfadeTransitions(reduceMotion, TandemMotion.STATUS_CHANGE_MILLIS)
-            enter togetherWith exit using null
-        },
-        contentAlignment = Alignment.TopStart,
-        label = "attention-content-transition",
-        content = content,
-    )
 }
 
 @Composable

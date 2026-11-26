@@ -11,7 +11,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
 
 @Composable
 internal fun TransactionAmountField(
@@ -53,13 +56,7 @@ internal fun TransactionAmountField(
     val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
     val display = amount.ifBlank { "0.00" }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val cursorAlpha by
-        rememberInfiniteTransition(label = "amount-cursor").animateFloat(
-            initialValue = 1f,
-            targetValue = 0.45f,
-            animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
-            label = "amount-cursor-alpha",
-        )
+    val cursorAlpha by rememberCursorAlpha(blinking = showCursor && !tandemReduceMotion)
     AmountFieldShell(
         fill = fill,
         outline = outline,
@@ -95,3 +92,16 @@ internal fun TransactionAmountField(
         )
     }
 }
+
+@Composable
+private fun rememberCursorAlpha(blinking: Boolean): State<Float> =
+    if (blinking) {
+        rememberInfiniteTransition(label = "amount-cursor").animateFloat(
+            initialValue = 1f,
+            targetValue = 0.45f,
+            animationSpec = infiniteRepeatable(tween(520), repeatMode = RepeatMode.Reverse),
+            label = "amount-cursor-alpha",
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }

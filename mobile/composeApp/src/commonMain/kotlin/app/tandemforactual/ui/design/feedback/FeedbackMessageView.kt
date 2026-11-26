@@ -2,9 +2,12 @@
 
 package app.tandemforactual.ui.design.feedback
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,7 +34,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.design.buttons.SecondaryButton
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -70,7 +74,6 @@ internal fun FeedbackMessageView(
     when (presentation) {
         FeedbackPresentation.FIELD -> FieldFeedback(message, icon, color, kindDescription, textModifier, modifier)
         FeedbackPresentation.BANNER -> BannerFeedback(message, icon, color, kindDescription, textModifier, modifier)
-        FeedbackPresentation.EMPTY_STATE -> EmptyStateFeedback(message, icon, color, kindDescription, textModifier, modifier)
     }
 }
 
@@ -179,56 +182,26 @@ private fun RowScope.BannerFeedbackText(
             Text(amountAnnotatedString(it), color = palette.muted, fontSize = TandemTypography.caption)
         }
         if (hasAction) {
-            Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
+            val actionInteractions = remember { MutableInteractionSource() }
+            Box(
+                Modifier
+                    .heightIn(min = MIN_TOUCH_TARGET)
+                    .clickable(actionInteractions, indication = null, role = Role.Button, onClick = message.onAction!!),
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 Text(
                     message.actionLabel!!,
                     modifier =
                         Modifier
                             .clip(RoundedCornerShape(TandemShapes.capsule))
                             .background(tone.copy(alpha = 0.16f))
-                            .clickable(role = Role.Button, onClick = message.onAction!!)
+                            .indication(actionInteractions, LocalIndication.current)
                             .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
                     color = tone,
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-        }
-    }
-}
-
-/** Empty-state message with an optional secondary action. */
-@Composable
-private fun EmptyStateFeedback(
-    message: FeedbackMessage,
-    icon: ImageVector,
-    color: Color,
-    kindDescription: String,
-    textModifier: Modifier,
-    modifier: Modifier,
-) {
-    val palette = tandemPalette
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = kindDescription, modifier = Modifier.size(20.dp), tint = color)
-            Text(
-                amountAnnotatedString(message.title ?: message.text),
-                modifier = textModifier.weight(1f),
-                color = palette.text,
-                fontSize = TandemTypography.action,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        if (message.title != null) BodyText(message.text)
-        message.detail?.let { BodyText(it) }
-        if (message.actionLabel != null && message.onAction != null) {
-            SecondaryButton(message.actionLabel, onClick = message.onAction)
         }
     }
 }

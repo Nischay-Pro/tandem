@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -41,14 +43,13 @@ internal fun SkeletonRows(
     val palette = tandemPalette
     val pulse =
         if (tandemReduceMotion) {
-            0.6f
+            remember { mutableFloatStateOf(0.6f) }
         } else {
             rememberInfiniteTransition(label = "skeleton")
                 .animateFloat(0.45f, 0.85f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "skeleton-alpha")
-                .value
         }
     val shape = RoundedCornerShape(TandemShapes.small)
-    Column(modifier.fillMaxWidth().alpha(pulse).semantics { contentDescription = "Loading" }) {
+    Column(modifier.fillMaxWidth().graphicsLayer { alpha = pulse.value }.semantics { contentDescription = "Loading" }) {
         repeat(count) { index ->
             Row(
                 Modifier

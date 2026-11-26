@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,15 +27,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.LabelText
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
-import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 
@@ -118,32 +115,6 @@ internal fun Heading(
 }
 
 @Composable
-internal fun MonthSelectorCard(
-    month: String,
-    onClick: () -> Unit,
-) {
-    val palette = tandemPalette
-    SurfaceCard(onClick = onClick) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                LabelText("Planning period")
-                Spacer(Modifier.height(TandemSpacing.extraSmall))
-                Text(month, color = palette.text, fontSize = TandemTypography.action, fontWeight = FontWeight.SemiBold)
-            }
-            Icon(
-                Lucide.ChevronDown,
-                contentDescription = "Choose month",
-                modifier = Modifier.size(22.dp),
-                tint = palette.accent,
-            )
-        }
-    }
-}
-
-@Composable
 internal fun CompactActionButton(
     label: String,
     modifier: Modifier = Modifier,
@@ -152,7 +123,7 @@ internal fun CompactActionButton(
     val palette = tandemPalette
     Box(
         modifier
-            .heightIn(min = 44.dp)
+            .heightIn(min = MIN_TOUCH_TARGET)
             .clip(RoundedCornerShape(TandemShapes.control))
             .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.control))
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)

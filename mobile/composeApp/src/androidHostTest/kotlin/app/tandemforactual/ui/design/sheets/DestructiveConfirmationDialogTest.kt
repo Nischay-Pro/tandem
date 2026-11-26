@@ -71,4 +71,50 @@ class DestructiveConfirmationDialogTest {
 
         assertEquals(1, dismissCount)
     }
+
+    @Test
+    fun cancelStaysAvailableWhenOnlyConfirmIsDisabled() {
+        var dismissCount = 0
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.LIGHT, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                DestructiveConfirmationDialog(
+                    title = "Delete category?",
+                    message = "This budget is read-only.",
+                    confirmLabel = "Delete",
+                    dismissLabel = "Keep it",
+                    enabled = false,
+                    onDismissRequest = { dismissCount += 1 },
+                    onConfirm = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Keep it").assertIsEnabled().performClick()
+
+        assertEquals(1, dismissCount)
+    }
+
+    @Test
+    fun runningActionCannotBeDismissed() {
+        var dismissCount = 0
+        composeTestRule.setContent {
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                DestructiveConfirmationDialog(
+                    title = "Unlink this device?",
+                    message = "Unlinking…",
+                    confirmLabel = "Unlink",
+                    dismissLabel = "Cancel",
+                    enabled = false,
+                    dismissEnabled = false,
+                    onDismissRequest = { dismissCount += 1 },
+                    onConfirm = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Cancel").assertIsNotEnabled().performClick()
+        composeTestRule.onNodeWithContentDescription("Close").assertIsNotEnabled().performClick()
+
+        assertEquals(0, dismissCount)
+    }
 }

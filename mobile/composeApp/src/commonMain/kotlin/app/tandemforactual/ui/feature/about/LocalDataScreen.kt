@@ -179,6 +179,7 @@ private fun RemoveBudgetFromDeviceDialog(
         confirmLabel = "Remove",
         dismissLabel = "Cancel",
         enabled = !removing,
+        dismissEnabled = !removing,
         onDismissRequest = { if (!removing) onDismiss() },
         onConfirm = {
             onRemovingChange(true)
