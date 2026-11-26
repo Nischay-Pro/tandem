@@ -39,7 +39,12 @@ data class ExchangeRateFetching(
     ): ExchangeRateFetching {
         if (!enabled || checked == key) return this
         return try {
-            source(server).use { planning.fetchExchangeRates(budgetId, budgetCurrency, it, today, historyStart) }
+            val rates = source(server)
+            try {
+                planning.fetchExchangeRates(budgetId, budgetCurrency, rates, today, historyStart)
+            } finally {
+                (rates as? AutoCloseable)?.close()
+            }
             copy(checked = key, fetchedOn = today, error = "")
         } catch (error: CancellationException) {
             throw error
