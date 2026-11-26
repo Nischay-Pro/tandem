@@ -116,46 +116,29 @@ private fun categoryDetailModel(
     liveBudgetMonth: LiveBudgetMonthSummary?,
     mobileSession: TandemMobileSession,
 ): CategoryDetailModel {
-    val category =
-        liveBudgetMonth
-            ?.groups
-            ?.asSequence()
-            ?.flatMap { it.categories.asSequence() }
-            ?.firstOrNull { it.id == state.selectedCategoryId }
-    val currentIncomeType =
-        mobileSession.categoryRecords
-            .firstOrNull { it.recordId == state.selectedCategoryId }
-            ?.recordBody()
-            ?.booleanValue("is_income") ?: false
-    val deleteDestinations =
-        liveBudgetMonth?.groups.orEmpty().flatMap { it.categories }.filter { candidate ->
-            candidate.id != state.selectedCategoryId &&
-                (
-                    mobileSession.categoryRecords
-                        .firstOrNull { it.recordId == candidate.id }
-                        ?.recordBody()
-                        ?.booleanValue("is_income") ?: false
-                ) == currentIncomeType
-        }
-    val moveMoneyCategories =
-        remember(liveBudgetMonth, mobileSession.categoryRecords, currentIncomeType) {
-            liveBudgetMonth?.groups.orEmpty().flatMap { group ->
-                group.categories
-                    .filter { candidate ->
-                        (
-                            mobileSession.categoryRecords
-                                .firstOrNull { it.recordId == candidate.id }
-                                ?.recordBody()
-                                ?.booleanValue("is_income") ?: false
-                        ) == currentIncomeType
-                    }.map { group.name to it }
+    val categoryRecords = mobileSession.categoryRecords
+    val incomeById =
+        remember(categoryRecords) {
+            HashMap<String, Boolean>().apply {
+                categoryRecords.forEach { record ->
+                    getOrPut(record.recordId) { record.recordBody()?.booleanValue("is_income") ?: false }
+                }
             }
         }
-    val selectedGroup =
-        liveBudgetMonth?.groups?.firstOrNull { group ->
-            group.categories.any { it.id == state.selectedCategoryId }
-        }
-    return CategoryDetailModel(category, currentIncomeType, deleteDestinations, moveMoneyCategories, selectedGroup)
+    val selectedCategoryId = state.selectedCategoryId
+    return remember(liveBudgetMonth, incomeById, selectedCategoryId) {
+        val groups = liveBudgetMonth?.groups.orEmpty()
+        val currentIncomeType = incomeById[selectedCategoryId] ?: false
+
+        fun sameType(candidate: LiveCategorySummary) = (incomeById[candidate.id] ?: false) == currentIncomeType
+        CategoryDetailModel(
+            category = groups.asSequence().flatMap { it.categories.asSequence() }.firstOrNull { it.id == selectedCategoryId },
+            currentIncomeType = currentIncomeType,
+            deleteDestinations = groups.flatMap { it.categories }.filter { it.id != selectedCategoryId && sameType(it) },
+            moveMoneyCategories = groups.flatMap { group -> group.categories.filter(::sameType).map { group.name to it } },
+            selectedGroup = groups.firstOrNull { group -> group.categories.any { it.id == selectedCategoryId } },
+        )
+    }
 }
 
 private fun showCategoryEditor(
