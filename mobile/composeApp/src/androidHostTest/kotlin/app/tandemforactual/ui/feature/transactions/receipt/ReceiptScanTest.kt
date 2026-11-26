@@ -1,11 +1,26 @@
 package app.tandemforactual.ui.feature.transactions.receipt
 
+import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.ui.core.format.TransactionDateValidationStatus
+import app.tandemforactual.ui.core.format.validateTransactionDate
+import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class ReceiptScanTest {
+    @Test
+    fun aScannedDateFillsTheFormInTheFormatSaveAccepts() =
+        runBlocking {
+            val state = AppState()
+            fillNewTransaction(state, TandemMobileSession(TandemApiClient(), null, { 0L }), 1_234, null, date = "2026-11-20")
+            assertEquals("2026-11-20", state.transactionDate)
+            assertEquals(TransactionDateValidationStatus.VALID, validateTransactionDate(state.transactionDate, "2026-11-25").status)
+        }
+
     @Test
     fun readsTheTotalMerchantAndDateFromAGroceryReceipt() {
         val receipt =
