@@ -12,6 +12,7 @@ object Eps : RetirementPlan() {
     override val currency = "INR"
     override val description = "Employees’ Pension Scheme, the pension part of your employer’s PF share"
     override val accountKeywords = listOf("EPS", "Pension Scheme")
+    override val yearStartMonth = 4
     override val source = "Employees’ Pension Scheme, 1995 (epfindia.gov.in)"
     override val advanced = true
 

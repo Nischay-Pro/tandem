@@ -43,6 +43,7 @@ import app.tandemforactual.data.regions.Region
 import app.tandemforactual.data.regions.global.retirement.RetirementPlan
 import app.tandemforactual.data.regions.global.retirement.RetirementPlans
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -101,10 +102,11 @@ internal fun RetirementSetupScreen(
                 }
             }
         }
-    var age by remember {
+    val thisYear = platformTodayIsoDate().take(4).toInt()
+    var birthYear by remember {
         mutableStateOf(
             existing.values
-                .firstNotNullOfOrNull { it.age }
+                .firstNotNullOfOrNull { it.estimatedBirthYear(thisYear) }
                 ?.toString()
                 .orEmpty(),
         )
@@ -132,8 +134,8 @@ internal fun RetirementSetupScreen(
                         is SetupStep.Country -> CountryStep(current.region, accounts, chosen, navigation)
                         SetupStep.AboutYou ->
                             AboutYouStep(
-                                age = age,
-                                onAgeChange = { age = it },
+                                birthYear = birthYear,
+                                onBirthYearChange = { birthYear = it },
                                 family = family,
                                 onFamilyChange = { family = it },
                                 showFamily = needsFamilyCoverage(chosen.keys),
@@ -150,7 +152,7 @@ internal fun RetirementSetupScreen(
                 onContinue = { stepIndex++ },
                 onBack = { stepIndex-- },
             ) {
-                val profiles = setupProfiles(chosen, regions, existing, age.toIntOrNull(), family)
+                val profiles = setupProfiles(chosen, regions, existing, birthYear.toIntOrNull()?.takeIf { it in 1900..thisYear }, family)
                 scope.launch {
                     mobileSession.planning.saveRetirementSetup(state.selectedBudgetId, regions.map { it.name }, profiles)
                     navigation.back()
@@ -189,12 +191,16 @@ private fun setupProfiles(
     chosen: Map<String, String?>,
     regions: List<Region>,
     existing: Map<String, RetirementProfile>,
-    age: Int?,
+    birthYear: Int?,
     family: Boolean,
 ): List<RetirementProfile> {
     val inRegions = chosen.filterKeys { id -> RetirementPlans.byId(id)?.region in regions }
     return inRegions.map { (id, accountId) ->
-        (existing[id] ?: RetirementProfile(id)).copy(accountId = accountId, age = age, family = family)
+        (
+            existing[id] ?: RetirementProfile(
+                id,
+            )
+        ).copy(accountId = accountId, birthYear = birthYear, legacyAge = null, legacyAgeYear = null, family = family)
     }
 }
 
@@ -366,22 +372,22 @@ private fun TrackedAccountPicker(
     }
 }
 
-/** Asks for the person's age and, when a plan needs it, their health coverage. */
+/** Asks for the person's birth year and, when a plan needs it, their health coverage. */
 @Composable
 private fun AboutYouStep(
-    age: String,
-    onAgeChange: (String) -> Unit,
+    birthYear: String,
+    onBirthYearChange: (String) -> Unit,
     family: Boolean,
     onFamilyChange: (Boolean) -> Unit,
     showFamily: Boolean,
 ) {
     val palette = tandemPalette
     Heading("A little about you")
-    BodyText("Your age sets catch-up limits. It stays in this budget’s encrypted planning data.")
+    BodyText("The year you were born sets catch-up limits as you get older. It stays in this budget’s encrypted planning data.")
     TextFieldCard(
-        "Your age this year",
-        age,
-        { onAgeChange(it.filter(Char::isDigit).take(3)) },
+        "Year you were born",
+        birthYear,
+        { onBirthYearChange(it.filter(Char::isDigit).take(4)) },
         TextFieldOptions(
             placeholder = "Optional",
             keyboardOptions =

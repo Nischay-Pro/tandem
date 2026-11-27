@@ -107,8 +107,8 @@ class RetirementPlansTest {
         val safeHarbor = EmployerMatch.presets[1].second
         assertEquals(400_000, safeHarbor.on(500_000, 10_000_000))
         assertEquals(4, EmployerMatch.presets.size)
-        assertEquals(500_000L to 400_000L, K401.splitDeposits(900_000, 10_000_000, safeHarbor))
-        assertEquals(0L to 0L, K401.splitDeposits(0, 10_000_000, safeHarbor))
+        assertEquals(500_000L to 400_000L, K401.splitDeposits(2026, 900_000, 10_000_000, safeHarbor))
+        assertEquals(0L to 0L, K401.splitDeposits(2026, 0, 10_000_000, safeHarbor))
     }
 
     @Test
@@ -132,7 +132,7 @@ class RetirementPlansTest {
 
     @Test
     fun aLimitEnteredByHandWinsForItsYear() {
-        val profile = RetirementProfile("us-ira", age = 50, limitOverrides = mapOf(2027 to 900_000L))
+        val profile = RetirementProfile("us-ira", birthYear = 1976, limitOverrides = mapOf(2027 to 900_000L))
         assertEquals(900_000, profile.allowance(Ira, 2027))
         assertEquals(860_000, profile.allowance(Ira, 2026))
         val body =
@@ -161,18 +161,18 @@ class RetirementPlansTest {
         assertEquals(0, Vesting.IMMEDIATE.fullYears)
         assertEquals(null, Vesting(listOf(VestingStep(1, 5_000))).fullYears)
         val match = EmployerMatch.simple(5_000, 600)
-        assertEquals(10_000, match.vestedBasisPoints(2026))
-        assertEquals(null, match.fullyVestedYear)
+        assertEquals(10_000, match.vestedBasisPoints("2026-06"))
+        assertEquals(null, match.fullyVestedMonth)
         val cliff = match.copy(vesting = Vesting.cliff(3))
-        assertEquals(null, cliff.vestedBasisPoints(2026))
-        assertEquals(null, cliff.fullyVestedYear)
-        val joined = cliff.copy(joinedYear = 2024)
-        assertEquals(0, joined.vestedBasisPoints(2026))
-        assertEquals(10_000, joined.vestedBasisPoints(2027))
-        assertEquals(0, joined.vestedBasisPoints(2020))
-        assertEquals(2027, joined.fullyVestedYear)
-        assertEquals(null, match.copy(vesting = Vesting(listOf(VestingStep(1, 5_000))), joinedYear = 2024).fullyVestedYear)
-        assertEquals(2026, match.copy(vesting = halfThenAll, joinedYear = 2024).fullyVestedYear)
+        assertEquals(null, cliff.vestedBasisPoints("2026-06"))
+        assertEquals(null, cliff.fullyVestedMonth)
+        val joined = cliff.copy(joinedYear = 2024, joinedMonth = 1)
+        assertEquals(0, joined.vestedBasisPoints("2026-12"))
+        assertEquals(10_000, joined.vestedBasisPoints("2027-01"))
+        assertEquals(0, joined.vestedBasisPoints("2020-01"))
+        assertEquals("2027-01", joined.fullyVestedMonth)
+        assertEquals(null, match.copy(vesting = Vesting(listOf(VestingStep(1, 5_000))), joinedYear = 2024).fullyVestedMonth)
+        assertEquals("2026-12", match.copy(vesting = halfThenAll, joinedYear = 2024).fullyVestedMonth)
         val plain =
             app.tandemforactual.data.planning
                 .RetirementProfile("us-401k", match = match)

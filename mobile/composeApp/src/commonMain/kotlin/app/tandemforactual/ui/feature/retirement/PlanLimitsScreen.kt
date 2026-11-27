@@ -57,7 +57,7 @@ internal fun PlanLimitsScreen(
         profiles.forEach { profile ->
             val plan = RetirementPlans.byId(profile.planId)!!
             val lookup = plan.limitFor(year)
-            val published = planMoney(plan.allowance(year, profile.age, profile.family), plan.currency)
+            val published = planMoney(plan.allowance(year, profile.ageIn(year), profile.family), plan.currency)
             TextFieldCard(
                 "${plan.displayName} limit for $year",
                 drafts[plan.id] ?: profile.limitOverrides[year]?.let { (it / 100).toString() }.orEmpty(),

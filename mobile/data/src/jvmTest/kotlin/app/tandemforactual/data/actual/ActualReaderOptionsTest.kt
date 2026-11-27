@@ -38,8 +38,21 @@ class ActualReaderOptionsTest {
                 .first(
                     "SELECT account FROM v_transactions WHERE amount > 0 AND starting_balance_flag = 0",
                 )?.get("account") as String?
-        if (account != null) assertTrue(ActualBudgetReader(db).inflowsByYear(account).values.all { it > 0 })
-        assertEquals(emptyMap(), ActualBudgetReader(db).inflowsByYear("missing"))
+        if (account != null) {
+            val movements = ActualBudgetReader(db).accountMovements(account)
+            assertTrue(movements.isNotEmpty() && movements.all { it.amountMinor != 0L && Regex("""\d{4}-\d{2}-\d{2}""").matches(it.date) })
+            assertEquals(movements.sortedBy { it.date }, movements)
+        }
+        val transfer =
+            db.first(
+                "SELECT t.account, p.transfer_acct AS other FROM v_transactions t JOIN payees p ON p.id = t.payee WHERE p.transfer_acct IS NOT NULL",
+            )
+        if (transfer != null) {
+            assertTrue(
+                ActualBudgetReader(db).accountMovements(transfer["account"] as String).any { it.otherAccountId == transfer["other"] },
+            )
+        }
+        assertEquals(emptyList(), ActualBudgetReader(db).accountMovements("missing"))
         val id = db.first("SELECT id FROM transactions WHERE isParent = 0 AND tombstone = 0")!!["id"] as String
         db.execute("UPDATE transactions SET notes = 'Lunch, with \"Sam\"', reconciled = 1, cleared = 1 WHERE id = ?", id)
         val other = db.first("SELECT id FROM transactions WHERE isParent = 0 AND tombstone = 0 AND id != ?", id)?.get("id")

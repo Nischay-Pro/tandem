@@ -47,6 +47,15 @@ abstract class RetirementPlan {
     /** Another plan whose yearly room this one uses, as a group RRSP uses the RRSP's. */
     open val sharesRoomWith: String? = null
 
+    /** The month a plan year starts; India's run April to March and are named by the calendar year they start in. */
+    open val yearStartMonth: Int = 1
+
+    /** The plan year an ISO date falls in. */
+    fun planYear(isoDate: String): Int {
+        val year = isoDate.take(4).toInt()
+        return if (isoDate.substring(5, 7).toInt() < yearStartMonth) year - 1 else year
+    }
+
     open val catchUpAge: Int? = null
     open val superCatchUpAges: IntRange? = null
 

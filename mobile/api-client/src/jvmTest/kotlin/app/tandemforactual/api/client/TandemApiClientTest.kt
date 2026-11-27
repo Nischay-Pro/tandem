@@ -498,10 +498,9 @@ class TandemApiClientTest {
             assertTrue(client.exportBudgetTransactions("group", "2000-01-01", "2099-12-31", null).startsWith("Date,Account"))
             assertTrue(
                 client
-                    .budgetAccountInflows("group", listOf(checking), null)
+                    .budgetAccountMovements("group", listOf(checking), null)
                     .getValue(checking)
-                    .values
-                    .all { it > 0 },
+                    .all { it.amountMinor != 0L },
             )
             val history = client.budgetChangeHistory("group", null)
             val latest = history.changes.first()
