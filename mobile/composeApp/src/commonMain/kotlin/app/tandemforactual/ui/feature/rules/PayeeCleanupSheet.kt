@@ -36,6 +36,7 @@ import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Merge
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.X
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -50,6 +51,10 @@ internal sealed interface PayeeCleanupStep {
     data class Rename(
         val payeeId: String,
         val name: String,
+    ) : PayeeCleanupStep
+
+    data class Delete(
+        val payeeId: String,
     ) : PayeeCleanupStep
 }
 
@@ -78,6 +83,7 @@ private fun notDuplicatesKey(budgetId: String): String = "internal:payee-not-dup
 internal fun PayeeCleanupSheet(
     visible: Boolean,
     payees: List<Pair<String, String>>,
+    inRules: Set<String>,
     state: AppState,
     mobileSession: TandemMobileSession,
     scope: CoroutineScope,
@@ -130,10 +136,49 @@ internal fun PayeeCleanupSheet(
                     }
                 }
             }
+            counts?.let { used -> UnusedPayeesCard(unusedPayees(payees, used, inRules), enabled, state, mobileSession, scope) }
             budgetActionFeedbackMessage(mobileSession)
         }
     }
 }
+
+/** Payees with no transactions that no rule or schedule mentions. */
+internal fun unusedPayees(
+    payees: List<Pair<String, String>>,
+    counts: Map<String, Long>,
+    inRules: Set<String>,
+): List<Pair<String, String>> = payees.filter { (id, _) -> (counts[id] ?: 0L) == 0L && id !in inRules }
+
+@Composable
+private fun UnusedPayeesCard(
+    unused: List<Pair<String, String>>,
+    enabled: Boolean,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    scope: CoroutineScope,
+) {
+    if (unused.isEmpty()) return
+    var confirming by remember(unused) { mutableStateOf(false) }
+    val names = unused.take(MAX_UNUSED_SHOWN).joinToString(", ") { it.second }
+    val more = if (unused.size > MAX_UNUSED_SHOWN) " and ${unused.size - MAX_UNUSED_SHOWN} more" else ""
+    SectionCard("No transactions", detail = "$names$more") {
+        TandemActionButton(
+            if (confirming) "Remove ${unused.size} for good?" else "Remove ${payeeCount(unused.size)} with no transactions",
+            TandemActionButtonTone.DESTRUCTIVE,
+            icon = Lucide.Trash2,
+            enabled = enabled,
+        ) {
+            if (!confirming) {
+                confirming = true
+            } else {
+                confirming = false
+                runSteps(unused.map { PayeeCleanupStep.Delete(it.first) }, state, mobileSession, scope)
+            }
+        }
+    }
+}
+
+private fun payeeCount(count: Int): String = if (count == 1) "1 payee" else "$count payees"
 
 @Composable
 private fun PayeeGroupCard(
@@ -180,12 +225,19 @@ private fun merge(
     state: AppState,
     mobileSession: TandemMobileSession,
     scope: CoroutineScope,
+) = runSteps(groups.flatMap(::payeeCleanupSteps), state, mobileSession, scope)
+
+private fun runSteps(
+    steps: List<PayeeCleanupStep>,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    scope: CoroutineScope,
 ) {
     val budgetId = state.selectedBudgetId
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     val edits = mobileSession.budgetEdits
     scope.launch {
-        for (step in groups.flatMap(::payeeCleanupSteps)) {
+        for (step in steps) {
             if (!edits.apply(step, budgetId, password)) break
         }
     }
@@ -199,8 +251,11 @@ private suspend fun BudgetEdits.apply(
     when (step) {
         is PayeeCleanupStep.Merge -> manageBudgetPayee(budgetId, step.payeeId, "merge", null, step.intoId, password)
         is PayeeCleanupStep.Rename -> manageBudgetPayee(budgetId, step.payeeId, "rename", step.name, null, password)
+        is PayeeCleanupStep.Delete -> manageBudgetPayee(budgetId, step.payeeId, "delete", null, null, password)
     }
 
 private fun transactionCount(count: Int): String = if (count == 1) "1 transaction" else "$count transactions"
 
 private const val MAX_STRIPPED_SHOWN = 4
+
+private const val MAX_UNUSED_SHOWN = 5
