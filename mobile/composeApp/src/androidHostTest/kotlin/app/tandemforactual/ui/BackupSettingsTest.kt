@@ -102,7 +102,7 @@ class BackupSettingsTest {
         assertTrue(state.automaticBackup.enabled)
         assertNull(store.value)
         composeTestRule.onNodeWithText("Save to").assertExists()
-        composeTestRule.onNodeWithText("Wi-Fi only").assertExists()
+        composeTestRule.onNodeWithText("Wi-Fi only for WebDAV uploads").assertExists()
 
         chooseSchedule("Off")
         assertFalse(state.automaticBackup.enabled)

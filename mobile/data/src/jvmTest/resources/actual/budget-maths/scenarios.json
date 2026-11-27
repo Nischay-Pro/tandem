@@ -1,0 +1,798 @@
+[
+  {
+    "name": "envelope-overspending-rollover",
+    "type": "envelope",
+    "months": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06"
+    ],
+    "accounts": [
+      { "name": "Checking", "offbudget": false },
+      { "name": "Card", "offbudget": false }
+    ],
+    "groups": [
+      {
+        "name": "Income",
+        "income": true,
+        "categories": [{ "name": "Salary" }]
+      },
+      {
+        "name": "Bills",
+        "categories": [{ "name": "Rent" }, { "name": "Power" }]
+      },
+      {
+        "name": "Everyday",
+        "categories": [{ "name": "Groceries" }, { "name": "Dining" }]
+      }
+    ],
+    "transactions": [
+      {
+        "account": "Checking",
+        "date": "2025-01-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-06-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-06-03",
+        "amount": -120000,
+        "category": "Rent"
+      },
+      {
+        "account": "Card",
+        "date": "2025-01-10",
+        "amount": -45000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-02-11",
+        "amount": -30000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-03-12",
+        "amount": -52000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-04-10",
+        "amount": -41000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-05-09",
+        "amount": -39000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-06-08",
+        "amount": -60000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Card",
+        "date": "2025-01-15",
+        "amount": -8000,
+        "category": "Dining"
+      },
+      {
+        "account": "Card",
+        "date": "2025-02-15",
+        "amount": -9000,
+        "category": "Dining"
+      },
+      {
+        "account": "Card",
+        "date": "2025-03-15",
+        "amount": -2000,
+        "category": "Dining"
+      },
+      {
+        "account": "Card",
+        "date": "2025-04-15",
+        "amount": -12000,
+        "category": "Dining"
+      },
+      {
+        "account": "Card",
+        "date": "2025-05-15",
+        "amount": -3000,
+        "category": "Dining"
+      },
+      {
+        "account": "Card",
+        "date": "2025-06-15",
+        "amount": -1000,
+        "category": "Dining"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-20",
+        "amount": -7500,
+        "category": "Power"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-20",
+        "amount": -9100,
+        "category": "Power"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-20",
+        "amount": 1500,
+        "category": "Power"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-20",
+        "amount": -8000,
+        "category": "Power"
+      }
+    ],
+    "budgets": [
+      { "month": "2025-01", "category": "Rent", "amount": 120000 },
+      { "month": "2025-02", "category": "Rent", "amount": 120000 },
+      { "month": "2025-03", "category": "Rent", "amount": 120000 },
+      { "month": "2025-04", "category": "Rent", "amount": 120000 },
+      { "month": "2025-05", "category": "Rent", "amount": 120000 },
+      { "month": "2025-06", "category": "Rent", "amount": 120000 },
+      { "month": "2025-01", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-02", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-03", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-04", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-05", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-06", "category": "Groceries", "amount": 40000 },
+      { "month": "2025-01", "category": "Dining", "amount": 10000 },
+      { "month": "2025-02", "category": "Dining", "amount": 10000 },
+      { "month": "2025-03", "category": "Dining", "amount": 5000 },
+      { "month": "2025-04", "category": "Dining", "amount": 5000 },
+      { "month": "2025-05", "category": "Dining", "amount": 5000 },
+      { "month": "2025-06", "category": "Dining", "amount": 5000 },
+      { "month": "2025-01", "category": "Power", "amount": 8000 },
+      { "month": "2025-02", "category": "Power", "amount": 8000 },
+      { "month": "2025-03", "category": "Power", "amount": 8000 },
+      { "month": "2025-04", "category": "Power", "amount": -2000 },
+      { "month": "2025-05", "category": "Power", "amount": 8000 }
+    ],
+    "carryover": [
+      { "from": "2025-02", "category": "Dining", "flag": true },
+      { "from": "2025-03", "category": "Groceries", "flag": true },
+      { "from": "2025-05", "category": "Dining", "flag": false }
+    ],
+    "holds": []
+  },
+  {
+    "name": "envelope-holds-and-income-rollover",
+    "type": "envelope",
+    "months": ["2025-03", "2025-04", "2025-05", "2025-06", "2025-07"],
+    "accounts": [{ "name": "Checking", "offbudget": false }],
+    "groups": [
+      {
+        "name": "Income",
+        "income": true,
+        "categories": [{ "name": "Salary" }, { "name": "Bonus" }]
+      },
+      { "name": "Home", "categories": [{ "name": "Rent" }] },
+      { "name": "Savings", "categories": [{ "name": "Emergency" }] }
+    ],
+    "transactions": [
+      {
+        "account": "Checking",
+        "date": "2025-03-01",
+        "amount": 250000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-01",
+        "amount": 250000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-01",
+        "amount": 250000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-06-01",
+        "amount": 250000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-07-01",
+        "amount": 250000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-05",
+        "amount": 40000,
+        "category": "Bonus"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-06-05",
+        "amount": 30000,
+        "category": "Bonus"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-07-05",
+        "amount": 10000,
+        "category": "Bonus"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-06-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-07-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-20",
+        "amount": -65000,
+        "category": "Emergency"
+      }
+    ],
+    "budgets": [
+      { "month": "2025-03", "category": "Rent", "amount": 100000 },
+      { "month": "2025-04", "category": "Rent", "amount": 100000 },
+      { "month": "2025-05", "category": "Rent", "amount": 100000 },
+      { "month": "2025-06", "category": "Rent", "amount": 100000 },
+      { "month": "2025-07", "category": "Rent", "amount": 100000 },
+      { "month": "2025-03", "category": "Emergency", "amount": 50000 },
+      { "month": "2025-04", "category": "Emergency", "amount": 50000 },
+      { "month": "2025-05", "category": "Emergency", "amount": 50000 },
+      { "month": "2025-06", "category": "Emergency", "amount": 50000 },
+      { "month": "2025-07", "category": "Emergency", "amount": 50000 }
+    ],
+    "carryover": [
+      { "from": "2025-04", "category": "Bonus", "flag": true },
+      { "from": "2025-07", "category": "Bonus", "flag": false }
+    ],
+    "holds": [
+      { "month": "2025-03", "amount": 60000 },
+      { "month": "2025-05", "amount": 25000 },
+      { "month": "2025-06", "amount": 15000 }
+    ]
+  },
+  {
+    "name": "envelope-accounts-splits-transfers",
+    "type": "envelope",
+    "months": ["2025-01", "2025-02", "2025-03", "2025-04"],
+    "accounts": [
+      { "name": "Checking", "offbudget": false },
+      { "name": "Savings", "offbudget": false },
+      { "name": "Brokerage", "offbudget": true }
+    ],
+    "groups": [
+      {
+        "name": "Income",
+        "income": true,
+        "categories": [{ "name": "Salary" }]
+      },
+      {
+        "name": "Everyday",
+        "categories": [{ "name": "Groceries" }, { "name": "Dining" }]
+      },
+      { "name": "Future", "categories": [{ "name": "Investing" }] }
+    ],
+    "transactions": [
+      {
+        "account": "Checking",
+        "date": "2025-01-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-05",
+        "amount": -15000,
+        "splits": [
+          { "amount": -10000, "category": "Groceries" },
+          { "amount": -5000, "category": "Dining" }
+        ]
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-06",
+        "amount": 20000,
+        "splits": [
+          { "amount": 25000, "category": "Salary" },
+          { "amount": -5000, "category": "Groceries" }
+        ]
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-07",
+        "amount": -50000,
+        "category": "Groceries",
+        "transferTo": "Savings"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-08",
+        "amount": -30000,
+        "category": "Investing",
+        "transferTo": "Brokerage"
+      },
+      {
+        "account": "Brokerage",
+        "date": "2025-01-09",
+        "amount": 12000,
+        "category": "Salary"
+      },
+      { "account": "Checking", "date": "2025-01-10", "amount": -7000 },
+      {
+        "account": "Checking",
+        "date": "2025-01-11",
+        "amount": -9999,
+        "category": "Dining",
+        "deleted": true
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-03",
+        "amount": -22000,
+        "splits": [
+          { "amount": -12000, "category": "Groceries" },
+          { "amount": -6000, "category": "Dining" },
+          { "amount": -4000 }
+        ]
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-04",
+        "amount": -8000,
+        "deleted": true,
+        "splits": [
+          { "amount": -3000, "category": "Groceries" },
+          { "amount": -5000, "category": "Dining" }
+        ]
+      },
+      {
+        "account": "Savings",
+        "date": "2025-02-12",
+        "amount": 3000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-15",
+        "amount": -10000,
+        "category": "Investing",
+        "transferTo": "Brokerage"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-20",
+        "amount": -4000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Brokerage",
+        "date": "2025-04-02",
+        "amount": -500,
+        "category": "Dining"
+      }
+    ],
+    "budgets": [
+      { "month": "2025-01", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-02", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-03", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-04", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-01", "category": "Dining", "amount": 6000 },
+      { "month": "2025-02", "category": "Dining", "amount": 6000 },
+      { "month": "2025-03", "category": "Dining", "amount": 6000 },
+      { "month": "2025-04", "category": "Dining", "amount": 6000 },
+      { "month": "2025-01", "category": "Investing", "amount": 30000 },
+      { "month": "2025-03", "category": "Investing", "amount": 10000 }
+    ],
+    "carryover": [],
+    "holds": []
+  },
+  {
+    "name": "tracking-carryover-hidden",
+    "type": "tracking",
+    "months": ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05"],
+    "accounts": [{ "name": "Checking", "offbudget": false }],
+    "groups": [
+      {
+        "name": "Income",
+        "income": true,
+        "categories": [
+          { "name": "Salary" },
+          { "name": "Interest", "hidden": true }
+        ]
+      },
+      { "name": "Bills", "categories": [{ "name": "Rent" }] },
+      {
+        "name": "Fun",
+        "categories": [
+          { "name": "Dining" },
+          { "name": "Hobbies", "hidden": true }
+        ]
+      },
+      { "name": "Archive", "hidden": true, "categories": [{ "name": "Old" }] }
+    ],
+    "transactions": [
+      {
+        "account": "Checking",
+        "date": "2025-01-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-01",
+        "amount": 280000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-01",
+        "amount": 300000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-28",
+        "amount": 1200,
+        "category": "Interest"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-28",
+        "amount": 1200,
+        "category": "Interest"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-28",
+        "amount": 1200,
+        "category": "Interest"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-04-02",
+        "amount": -105000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-02",
+        "amount": -100000,
+        "category": "Rent"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-12",
+        "amount": -18000,
+        "category": "Dining"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-12",
+        "amount": -9000,
+        "category": "Dining"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-12",
+        "amount": -21000,
+        "category": "Dining"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-05-12",
+        "amount": -4000,
+        "category": "Dining"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-14",
+        "amount": -2000,
+        "category": "Hobbies"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-14",
+        "amount": -2000,
+        "category": "Hobbies"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-16",
+        "amount": -5000,
+        "category": "Old"
+      }
+    ],
+    "budgets": [
+      { "month": "2025-01", "category": "Salary", "amount": 300000 },
+      { "month": "2025-02", "category": "Salary", "amount": 300000 },
+      { "month": "2025-03", "category": "Salary", "amount": 300000 },
+      { "month": "2025-04", "category": "Salary", "amount": 300000 },
+      { "month": "2025-05", "category": "Salary", "amount": 300000 },
+      { "month": "2025-01", "category": "Interest", "amount": 1000 },
+      { "month": "2025-02", "category": "Interest", "amount": 1000 },
+      { "month": "2025-03", "category": "Interest", "amount": 1000 },
+      { "month": "2025-01", "category": "Rent", "amount": 100000 },
+      { "month": "2025-02", "category": "Rent", "amount": 100000 },
+      { "month": "2025-03", "category": "Rent", "amount": 100000 },
+      { "month": "2025-04", "category": "Rent", "amount": 100000 },
+      { "month": "2025-05", "category": "Rent", "amount": 100000 },
+      { "month": "2025-01", "category": "Dining", "amount": 15000 },
+      { "month": "2025-02", "category": "Dining", "amount": 15000 },
+      { "month": "2025-03", "category": "Dining", "amount": 15000 },
+      { "month": "2025-04", "category": "Dining", "amount": 15000 },
+      { "month": "2025-05", "category": "Dining", "amount": 15000 },
+      { "month": "2025-01", "category": "Hobbies", "amount": 3000 },
+      { "month": "2025-02", "category": "Hobbies", "amount": 3000 },
+      { "month": "2025-03", "category": "Hobbies", "amount": 3000 },
+      { "month": "2025-02", "category": "Old", "amount": 4000 }
+    ],
+    "carryover": [
+      { "from": "2025-01", "category": "Hobbies", "flag": true },
+      { "from": "2025-02", "category": "Dining", "flag": true },
+      { "from": "2025-02", "category": "Old", "flag": true },
+      { "from": "2025-03", "category": "Salary", "flag": true }
+    ],
+    "holds": []
+  },
+  {
+    "name": "tracking-accounts-splits-transfers",
+    "type": "tracking",
+    "months": ["2025-01", "2025-02", "2025-03"],
+    "accounts": [
+      { "name": "Checking", "offbudget": false },
+      { "name": "Savings", "offbudget": false },
+      { "name": "Brokerage", "offbudget": true }
+    ],
+    "groups": [
+      {
+        "name": "Income",
+        "income": true,
+        "categories": [{ "name": "Salary" }]
+      },
+      {
+        "name": "Everyday",
+        "categories": [{ "name": "Groceries" }, { "name": "Dining" }]
+      },
+      { "name": "Future", "categories": [{ "name": "Investing" }] }
+    ],
+    "transactions": [
+      {
+        "account": "Checking",
+        "date": "2025-01-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-05",
+        "amount": 10000,
+        "splits": [
+          { "amount": 25000, "category": "Salary" },
+          { "amount": -10000, "category": "Groceries" },
+          { "amount": -5000 }
+        ]
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-07",
+        "amount": -50000,
+        "category": "Dining",
+        "transferTo": "Savings"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-01-08",
+        "amount": -30000,
+        "category": "Investing",
+        "transferTo": "Brokerage"
+      },
+      {
+        "account": "Brokerage",
+        "date": "2025-01-09",
+        "amount": 12000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-01",
+        "amount": 200000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-10",
+        "amount": -6000,
+        "category": "Dining",
+        "deleted": true
+      },
+      {
+        "account": "Checking",
+        "date": "2025-02-11",
+        "amount": -8000,
+        "deleted": true,
+        "splits": [
+          { "amount": -3000, "category": "Groceries" },
+          { "amount": -5000, "category": "Dining" }
+        ]
+      },
+      {
+        "account": "Savings",
+        "date": "2025-02-12",
+        "amount": -3000,
+        "category": "Groceries"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-01",
+        "amount": 190000,
+        "category": "Salary"
+      },
+      {
+        "account": "Checking",
+        "date": "2025-03-05",
+        "amount": -26000,
+        "category": "Groceries"
+      }
+    ],
+    "budgets": [
+      { "month": "2025-01", "category": "Salary", "amount": 200000 },
+      { "month": "2025-02", "category": "Salary", "amount": 200000 },
+      { "month": "2025-01", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-02", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-03", "category": "Groceries", "amount": 20000 },
+      { "month": "2025-01", "category": "Investing", "amount": 30000 }
+    ],
+    "carryover": [{ "from": "2025-02", "category": "Groceries", "flag": true }],
+    "holds": []
+  }
+]
