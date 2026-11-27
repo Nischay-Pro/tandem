@@ -1,11 +1,12 @@
 package app.tandemforactual.ui.reports
 
-import androidx.compose.ui.graphics.Color
 import app.tandemforactual.ui.design.charts.areaChartIndexAt
 import app.tandemforactual.ui.design.charts.areaChartRange
 import app.tandemforactual.ui.design.charts.areaChartX
 import app.tandemforactual.ui.design.charts.areaChartY
-import app.tandemforactual.ui.design.theme.TandemPalette
+import app.tandemforactual.ui.design.theme.AccentChoice
+import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.tandemPaletteFor
 import app.tandemforactual.ui.feature.reports.CategorySpendingPoint
 import app.tandemforactual.ui.feature.reports.CustomReportShareColumn
 import app.tandemforactual.ui.feature.reports.categoryChartPoints
@@ -65,28 +66,24 @@ class ReportChartGeometryTest {
 
     @Test
     fun categoryRingGivesEverySliceItsOwnColourAndMutesOther() {
-        val palette =
-            TandemPalette(
-                background = Color(0xFF000000),
-                surface = Color(0xFF111111),
-                raised = Color(0xFF222222),
-                border = Color(0xFF333333),
-                text = Color(0xFFFFFFFF),
-                muted = Color(0xFF888888),
-                accent = Color(0xFFC9B1FF),
-                accentContent = Color(0xFF111827),
-                accentSurface = Color(0xFF384B6C),
-                positive = Color(0xFF73D9A4),
-                syncing = Color(0xFF73B7FF),
-                warning = Color(0xFFFFD18A),
-                negative = Color(0xFFFF9CA5),
-                negativeContent = Color(0xFF111827),
-            )
+        val palette = tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.ACTUAL_PURPLE)
         val colors = (0 until 8).map { categorySliceColor(it, isOther = false, palette = palette) }
 
         assertEquals(8, colors.toSet().size)
         assertTrue(palette.muted !in colors)
         assertEquals(palette.muted, categorySliceColor(3, isOther = true, palette = palette))
+    }
+
+    @Test
+    fun categoryRingColoursDoNotFollowTheAccent() {
+        listOf(false, true).forEach { dark ->
+            val rings =
+                AccentChoice.entries.map { accent ->
+                    val palette = tandemPaletteFor(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, dark, accent)
+                    (0 until 8).map { categorySliceColor(it, isOther = false, palette = palette) }
+                }
+            assertEquals(1, rings.toSet().size)
+        }
     }
 
     @Test

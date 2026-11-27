@@ -2,10 +2,8 @@
 
 package app.tandemforactual.ui.feature.reports
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -99,7 +99,7 @@ internal fun BudgetedSpentValueBar(
     label: String,
     valueMinor: Long,
     maxValueMinor: Long,
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     displaySettings: BudgetDisplaySettings?,
 ) {
     val trackColor = tandemPalette.raised
@@ -126,36 +126,54 @@ internal fun BudgetedSpentValueBar(
     }
 }
 
+private class ReportLegendItem(
+    val label: String,
+    val color: Color,
+    val hatched: Boolean = false,
+)
+
 @Composable
 internal fun ReportLegend(
     kind: ReportKind,
     data: ReportDataBundle,
 ) {
+    val palette = tandemPalette
     val items =
         when (kind) {
             ReportKind.SPENDING_BY_CATEGORY -> emptyList()
             ReportKind.SPENDING_OVER_TIME ->
                 listOfNotNull(
-                    "Spending" to tandemPalette.negative,
+                    ReportLegendItem("Spending", palette.negative),
                     monthlySpendingAverage(data.monthly)?.let { average ->
-                        "Average ${formatReportCurrency(average.averageMinor, data.displaySettings)}" to tandemPalette.syncing
+                        ReportLegendItem("Average ${formatReportCurrency(average.averageMinor, data.displaySettings)}", palette.syncing)
                     },
                 )
-            ReportKind.INCOME_AND_SPENDING -> listOf("Income" to tandemPalette.positive, "Spending" to tandemPalette.negative)
-            ReportKind.BUDGETED_AND_SPENT -> listOf("Budgeted" to tandemPalette.positive, "Spent" to tandemPalette.negative)
-            ReportKind.NET_WORTH -> listOf("Net worth" to tandemPalette.accent)
+            ReportKind.INCOME_AND_SPENDING ->
+                listOf(ReportLegendItem("Income", palette.positive), ReportLegendItem("Spending", palette.negative, hatched = true))
+            ReportKind.BUDGETED_AND_SPENT ->
+                listOf(
+                    ReportLegendItem("Budgeted", palette.positive),
+                    ReportLegendItem("Spent", palette.negative),
+                )
+            ReportKind.NET_WORTH -> listOf(ReportLegendItem("Net worth", palette.accent))
         }
     if (items.isNotEmpty()) {
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
-            items.forEach { (label, color) ->
+            items.forEach { item ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                 ) {
-                    Box(Modifier.size(10.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+                    Canvas(Modifier.size(10.dp)) {
+                        if (item.hatched) {
+                            drawHatchedRoundRect(item.color, Offset.Zero, size, CornerRadius(TandemShapes.small.toPx() / 2f))
+                        } else {
+                            drawCircle(item.color)
+                        }
+                    }
                     Text(
-                        amountAnnotatedString(label, data.displaySettings?.currencyFractionDigits ?: 2),
-                        color = tandemPalette.muted,
+                        amountAnnotatedString(item.label, data.displaySettings?.currencyFractionDigits ?: 2),
+                        color = palette.muted,
                         fontSize = TandemTypography.caption,
                     )
                 }

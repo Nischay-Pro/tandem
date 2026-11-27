@@ -4,13 +4,14 @@
     <item name="windowSplashScreenAnimatedIcon">@drawable/tandem_splash_mark</item>
     <item name="postSplashScreenTheme">@style/Theme.Tandem.App</item>
   </style>
-  <style name="Theme.Tandem.App" parent="android:style/Theme.Material.Light.NoActionBar">
+  <style name="Theme.Tandem.AppBase" parent="android:style/Theme.Material.Light.NoActionBar">
     <item name="android:fontFamily">sans</item>
     <item name="android:colorAccent">#31D4C7</item>
     <item name="android:windowBackground">@color/tandem_splash_background</item>
     <item name="android:statusBarColor">@color/tandem_splash_background</item>
-    <item name="android:navigationBarColor">@color/tandem_splash_background</item>
-    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:navigationBarColor">@color/tandem_navigation_bar</item>
+    <item name="android:windowLightStatusBar">@bool/tandem_light_system_bars</item>
     <item name="android:windowActionModeOverlay">true</item>
   </style>
+  <style name="Theme.Tandem.App" parent="Theme.Tandem.AppBase" />
 </resources>

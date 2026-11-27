@@ -7,13 +7,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.painter.Painter
 import app.tandemforactual.api.client.BankIcon
 import app.tandemforactual.api.client.BankIconFetcher
 import app.tandemforactual.api.client.BankIconFormat
 import app.tandemforactual.api.client.BankIcons
 import app.tandemforactual.api.client.FileBankIconStore
+import app.tandemforactual.ui.design.icons.LogoPainter
+import app.tandemforactual.ui.design.icons.logoArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.ExperimentalResourceApi
@@ -36,9 +36,9 @@ fun bankIcons(
 internal fun rememberBankIcon(
     bankId: String?,
     download: Boolean,
-): Painter? {
+): LogoPainter? {
     val icons = LocalBankIcons.current
-    val painter by produceState<Painter?>(null, icons, bankId, download) {
+    val painter by produceState<LogoPainter?>(null, icons, bankId, download) {
         if (icons == null || bankId == null || !download) {
             value = null
             return@produceState
@@ -61,4 +61,11 @@ internal fun ForgetBankIconsWhenOff(enabled: Boolean) {
 }
 
 @OptIn(ExperimentalResourceApi::class)
-private fun BankIcon.painter(): Painter? = if (format == BankIconFormat.SVG) null else BitmapPainter(bytes.decodeToImageBitmap())
+private fun BankIcon.painter(): LogoPainter? =
+    if (format ==
+        BankIconFormat.SVG
+    ) {
+        null
+    } else {
+        LogoPainter(bytes.decodeToImageBitmap().logoArtwork())
+    }

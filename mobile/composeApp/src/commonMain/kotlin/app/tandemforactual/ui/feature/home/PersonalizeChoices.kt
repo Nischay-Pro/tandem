@@ -134,7 +134,7 @@ internal fun SelectionMark(
     )
     val shape = if (multiSelect) RoundedCornerShape(TandemShapes.small) else CircleShape
     Box(
-        Modifier.size(24.dp).clip(shape).border(1.5.dp, if (selected) palette.accent else palette.border, shape),
+        Modifier.size(24.dp).clip(shape).border(1.5.dp, if (selected) palette.accent else palette.outline, shape),
         contentAlignment = Alignment.Center,
     ) {
         Box(

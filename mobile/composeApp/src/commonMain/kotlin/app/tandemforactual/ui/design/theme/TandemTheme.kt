@@ -11,28 +11,25 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal enum class ThemeMode(
-    val label: String,
-) {
-    SYSTEM("System"),
-    LIGHT("Light"),
-    DARK("Dark"),
-    PURE_BLACK("Pure black"),
+internal enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
+    PURE_BLACK,
 }
 
 internal enum class AccentChoice(
-    val label: String,
     val lightColor: Color,
     val darkColor: Color,
 ) {
-    ACTUAL_PURPLE("Tandem violet", Color(0xFF7047E8), Color(0xFFB9A8FF)),
-    CLARITY("Clarity green", Color(0xFF176B4B), Color(0xFF76DDA6)),
-    WARM("Warm terracotta", Color(0xFFA84D2A), Color(0xFFFFB98B)),
-    TEAL("Lagoon", Color(0xFF006C70), Color(0xFF54D7CE)),
-    BLUE("Cobalt", Color(0xFF0055A4), Color(0xFF85C1FF)),
-    VIOLET("Orchid", Color(0xFF6941A5), Color(0xFFC6AAFF)),
-    AMBER("Saffron", Color(0xFF8A4C00), Color(0xFFFFD08A)),
-    ROSE("Rose", Color(0xFFB22650), Color(0xFFFFABC1)),
+    ACTUAL_PURPLE(Color(0xFF7047E8), Color(0xFFB9A8FF)),
+    CLARITY(Color(0xFF176B4B), Color(0xFF76DDA6)),
+    WARM(Color(0xFFA84D2A), Color(0xFFFFB98B)),
+    TEAL(Color(0xFF006C70), Color(0xFF54D7CE)),
+    BLUE(Color(0xFF0055A4), Color(0xFF85C1FF)),
+    VIOLET(Color(0xFF6941A5), Color(0xFFC6AAFF)),
+    AMBER(Color(0xFF8A4C00), Color(0xFFFFD08A)),
+    ROSE(Color(0xFFB22650), Color(0xFFFFABC1)),
 }
 
 internal fun AccentChoice.colorFor(isDark: Boolean): Color = if (isDark) darkColor else lightColor
@@ -119,6 +116,7 @@ internal data class TandemPalette(
     val surface: Color,
     val raised: Color,
     val border: Color,
+    val outline: Color,
     val text: Color,
     val muted: Color,
     val accent: Color,
@@ -129,27 +127,58 @@ internal data class TandemPalette(
     val warning: Color,
     val negative: Color,
     val negativeContent: Color,
+    val categories: List<Color>,
 )
 
 internal val LocalTandemPalette =
-    staticCompositionLocalOf {
-        TandemPalette(
-            background = Color(0xFF102A43),
-            surface = Color(0xFF18344C),
-            raised = Color(0xFF23435C),
-            border = Color(0xFF36536B),
-            text = Color(0xFFF7FAFC),
-            muted = Color(0xFFB0C4D6),
-            accent = Color(0xFFC9B1FF),
-            accentContent = Color(0xFF111827),
-            accentSurface = Color(0xFF384B6C),
-            positive = Color(0xFF73D9A4),
-            syncing = Color(0xFF73B7FF),
-            warning = Color(0xFFFFD18A),
-            negative = Color(0xFFFF9CA5),
-            negativeContent = Color(0xFF111827),
-        )
-    }
+    staticCompositionLocalOf { tandemPaletteFor(ThemeMode.DARK, systemIsDark = true, accent = AccentChoice.ACTUAL_PURPLE) }
+
+private data class TandemStatusColors(
+    val positive: Color,
+    val syncing: Color,
+    val warning: Color,
+    val negative: Color,
+)
+
+private val darkStatusColors =
+    TandemStatusColors(
+        positive = Color(0xFF4FD1C5),
+        syncing = Color(0xFF8AB4F8),
+        warning = Color(0xFFF5CE6E),
+        negative = Color(0xFFFF8A65),
+    )
+
+private val lightStatusColors =
+    TandemStatusColors(
+        positive = Color(0xFF00696E),
+        syncing = Color(0xFF2F57C4),
+        warning = Color(0xFF704800),
+        negative = Color(0xFFC42B1C),
+    )
+
+private val darkCategoryColors =
+    listOf(
+        Color(0xFFA491FE),
+        Color(0xFF7CC24A),
+        Color(0xFFF16BCA),
+        Color(0xFFE0A02E),
+        Color(0xFF519EFD),
+        Color(0xFFC9A77C),
+        Color(0xFFD178F7),
+        Color(0xFF6EB3B2),
+    )
+
+private val lightCategoryColors =
+    listOf(
+        Color(0xFF7853E1),
+        Color(0xFF478809),
+        Color(0xFFBC3099),
+        Color(0xFF9E6A00),
+        Color(0xFF2474CF),
+        Color(0xFF8A6A4A),
+        Color(0xFFA041C5),
+        Color(0xFF3F8F8F),
+    )
 
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
 
@@ -173,47 +202,27 @@ internal fun tandemPaletteFor(
 ): TandemPalette {
     val dark = isDarkTheme(mode, systemIsDark)
     val black = mode == ThemeMode.PURE_BLACK
-    val surfaces = tandemSurfaceColors(accent, dark)
+    val surfaces = tandemSurfaceColors(accent, dark).let { if (black) it.onPureBlack() else it }
     val selectedAccent = accent.colorFor(dark)
-    val accentContent = readableContentOn(selectedAccent)
-
-    return if (dark) {
-        val background = if (black) Color.Black else surfaces.background
-        val surface = if (black) Color(0xFF101116) else surfaces.surface
-        TandemPalette(
-            background = background,
-            surface = surface,
-            raised = if (black) Color(0xFF1B1D25) else surfaces.raised,
-            border = if (black) Color(0xFF30313C) else surfaces.border,
-            text = surfaces.text,
-            muted = surfaces.muted,
-            accent = selectedAccent,
-            accentContent = accentContent,
-            accentSurface = selectedAccent.copy(alpha = 0.16f).compositeOver(surface),
-            positive = Color(0xFF73D9A4),
-            syncing = Color(0xFF73B7FF),
-            warning = Color(0xFFFFD18A),
-            negative = Color(0xFFFF9CA5),
-            negativeContent = readableContentOn(Color(0xFFFF9CA5)),
-        )
-    } else {
-        TandemPalette(
-            background = surfaces.background,
-            surface = surfaces.surface,
-            raised = surfaces.raised,
-            border = surfaces.border,
-            text = surfaces.text,
-            muted = surfaces.muted,
-            accent = selectedAccent,
-            accentContent = accentContent,
-            accentSurface = selectedAccent.copy(alpha = 0.10f).compositeOver(surfaces.surface),
-            positive = Color(0xFF0E6F4F),
-            syncing = Color(0xFF174EA6),
-            warning = Color(0xFF7A4B00),
-            negative = Color(0xFFB3261E),
-            negativeContent = readableContentOn(Color(0xFFB3261E)),
-        )
-    }
+    val status = if (dark) darkStatusColors else lightStatusColors
+    return TandemPalette(
+        background = surfaces.background,
+        surface = surfaces.surface,
+        raised = surfaces.raised,
+        border = surfaces.border,
+        outline = surfaces.outline,
+        text = surfaces.text,
+        muted = surfaces.muted,
+        accent = selectedAccent,
+        accentContent = readableContentOn(selectedAccent),
+        accentSurface = selectedAccent.copy(alpha = if (dark) 0.16f else 0.10f).compositeOver(surfaces.surface),
+        positive = status.positive,
+        syncing = status.syncing,
+        warning = status.warning,
+        negative = status.negative,
+        negativeContent = readableContentOn(status.negative),
+        categories = if (dark) darkCategoryColors else lightCategoryColors,
+    )
 }
 
 private fun readableContentOn(background: Color): Color {
@@ -227,9 +236,19 @@ private data class TandemSurfaceColors(
     val surface: Color,
     val raised: Color,
     val border: Color,
+    val outline: Color,
     val text: Color,
     val muted: Color,
 )
+
+private fun TandemSurfaceColors.onPureBlack(): TandemSurfaceColors =
+    copy(
+        background = Color.Black,
+        surface = Color(0xFF101116),
+        raised = Color(0xFF1B1D25),
+        border = Color(0xFF30313C),
+        outline = Color(0xFF6A6978),
+    )
 
 private fun tandemSurfaceColors(
     accent: AccentChoice,
@@ -242,6 +261,7 @@ private fun tandemSurfaceColors(
                 surface = Color(0xFF11251A),
                 raised = Color(0xFF1A3324),
                 border = Color(0xFF2D4A38),
+                outline = Color(0xFF657F6D),
                 text = Color(0xFFEEF8F0),
                 muted = Color(0xFFB6CCBA),
             )
@@ -251,6 +271,7 @@ private fun tandemSurfaceColors(
                 surface = Color.White,
                 raised = Color(0xFFF7FBF8),
                 border = Color(0xFFDCE8DF),
+                outline = Color(0xFF819086),
                 text = Color(0xFF19251D),
                 muted = Color(0xFF526358),
             )
@@ -260,6 +281,7 @@ private fun tandemSurfaceColors(
                 surface = Color(0xFF291A12),
                 raised = Color(0xFF39251B),
                 border = Color(0xFF543A2B),
+                outline = Color(0xFF8A6F5E),
                 text = Color(0xFFFFF3EA),
                 muted = Color(0xFFE3C6B0),
             )
@@ -269,6 +291,7 @@ private fun tandemSurfaceColors(
                 surface = Color.White,
                 raised = Color(0xFFFFF9F5),
                 border = Color(0xFFEBDDD2),
+                outline = Color(0xFF9A897E),
                 text = Color(0xFF2E251F),
                 muted = Color(0xFF69564B),
             )
@@ -278,6 +301,7 @@ private fun tandemSurfaceColors(
                 surface = Color(0xFF171622),
                 raised = Color(0xFF211F31),
                 border = Color(0xFF39364E),
+                outline = Color(0xFF6E6B81),
                 text = Color(0xFFF6F3FF),
                 muted = Color(0xFFC2BDD2),
             )
@@ -287,6 +311,7 @@ private fun tandemSurfaceColors(
                 surface = Color.White,
                 raised = Color(0xFFFAF9FF),
                 border = Color(0xFFE2DFF0),
+                outline = Color(0xFF8D899D),
                 text = Color(0xFF1E1B2B),
                 muted = Color(0xFF5B576D),
             )

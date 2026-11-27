@@ -153,10 +153,11 @@ internal fun LazyItemScope.tandemListItemModifier(reduceMotion: Boolean): Modifi
 internal fun appBackgroundBrush(
     style: String,
     palette: TandemPalette,
+    pureBlack: Boolean,
 ): Brush =
-    when (style) {
-        "Solid surface" -> Brush.verticalGradient(listOf(palette.background, palette.background))
-        "Low-motion glow" -> Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
+    when {
+        pureBlack || style == "Solid surface" -> Brush.verticalGradient(listOf(palette.background, palette.background))
+        style == "Low-motion glow" -> Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
         else ->
             Brush.verticalGradient(
                 colorStops =

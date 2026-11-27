@@ -46,6 +46,21 @@ import app.tandemforactual.ui.design.theme.colorFor
 import app.tandemforactual.ui.design.theme.isDarkTheme
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemPaletteFor
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.accent_clarity_green
+import app.tandemforactual.ui.generated.resources.accent_cobalt
+import app.tandemforactual.ui.generated.resources.accent_lagoon
+import app.tandemforactual.ui.generated.resources.accent_orchid
+import app.tandemforactual.ui.generated.resources.accent_rose
+import app.tandemforactual.ui.generated.resources.accent_saffron
+import app.tandemforactual.ui.generated.resources.accent_tandem_violet
+import app.tandemforactual.ui.generated.resources.accent_warm_terracotta
+import app.tandemforactual.ui.generated.resources.theme_mode_dark
+import app.tandemforactual.ui.generated.resources.theme_mode_light
+import app.tandemforactual.ui.generated.resources.theme_mode_pure_black
+import app.tandemforactual.ui.generated.resources.theme_mode_system
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun AppearanceScreen(state: AppState) {
@@ -55,7 +70,7 @@ internal fun AppearanceScreen(state: AppState) {
             ThemeMode.entries.forEachIndexed { index, mode ->
                 if (index > 0) DividerLine()
                 AppearanceChoiceRow(
-                    mode.label,
+                    stringResource(mode.labelRes),
                     selected = state.theme == mode,
                     onClick = { state.theme = mode },
                 )
@@ -79,7 +94,7 @@ internal fun AppearanceScreen(state: AppState) {
             additionalAccents.forEachIndexed { index, accent ->
                 if (index > 0) DividerLine()
                 AccentChoiceRow(
-                    title = accent.label,
+                    title = stringResource(accent.labelRes),
                     description = null,
                     accent = accent,
                     isDark = isDark,
@@ -122,6 +137,28 @@ internal fun AppearanceScreen(state: AppState) {
         }
     }
 }
+
+private val ThemeMode.labelRes: StringResource
+    get() =
+        when (this) {
+            ThemeMode.SYSTEM -> Res.string.theme_mode_system
+            ThemeMode.LIGHT -> Res.string.theme_mode_light
+            ThemeMode.DARK -> Res.string.theme_mode_dark
+            ThemeMode.PURE_BLACK -> Res.string.theme_mode_pure_black
+        }
+
+private val AccentChoice.labelRes: StringResource
+    get() =
+        when (this) {
+            AccentChoice.ACTUAL_PURPLE -> Res.string.accent_tandem_violet
+            AccentChoice.CLARITY -> Res.string.accent_clarity_green
+            AccentChoice.WARM -> Res.string.accent_warm_terracotta
+            AccentChoice.TEAL -> Res.string.accent_lagoon
+            AccentChoice.BLUE -> Res.string.accent_cobalt
+            AccentChoice.VIOLET -> Res.string.accent_orchid
+            AccentChoice.AMBER -> Res.string.accent_saffron
+            AccentChoice.ROSE -> Res.string.accent_rose
+        }
 
 private data class AppearancePalettePreset(
     val title: String,

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.AccountIconTile
+import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -151,7 +152,16 @@ private fun ReviewCardFace(
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             rememberMerchantArtwork(item.merchantIcon)?.let { logo ->
-                Image(logo, contentDescription = null, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(TandemShapes.small)))
+                Image(
+                    logo,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(TandemShapes.small))
+                            .background(logoTileColor(logo, palette.raised))
+                            .padding(TandemSpacing.xxSmall),
+                )
             }
             Text(item.payee, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 2)
         }

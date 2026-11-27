@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -37,6 +36,8 @@ import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.ReorderDragHandle
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.icons.LogoPainter
+import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.rows.RowBadge
@@ -54,7 +55,7 @@ import org.jetbrains.compose.resources.DrawableResource
 internal fun AccountSummaryCard(
     account: AccountListItemUi,
     merchantArtwork: DrawableResource?,
-    bankIcon: Painter? = null,
+    bankIcon: LogoPainter? = null,
     privacyModeEnabled: Boolean = false,
     fractionDigits: Int = 2,
     modifier: Modifier = Modifier,
@@ -142,7 +143,7 @@ private fun accountBalanceColor(account: AccountListItemUi): Color {
 @Composable
 private fun AccountSummaryIcon(
     account: AccountListItemUi,
-    artwork: Painter?,
+    artwork: LogoPainter?,
     bankBadge: RowBadge?,
 ) {
     val palette = tandemPalette
@@ -151,7 +152,7 @@ private fun AccountSummaryIcon(
             Modifier
                 .size(TandemLayout.listRowLeadingSize)
                 .clip(RoundedCornerShape(TandemShapes.medium))
-                .background(if (account.closed) palette.surface else palette.raised),
+                .background(logoTileColor(artwork, if (account.closed) palette.surface else palette.raised, account.closed)),
             contentAlignment = Alignment.Center,
         ) {
             if (artwork != null) {

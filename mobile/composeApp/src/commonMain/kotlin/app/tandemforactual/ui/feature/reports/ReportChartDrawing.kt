@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -15,7 +17,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.design.theme.TandemPalette
@@ -100,20 +102,26 @@ internal fun categorySliceColor(
     index: Int,
     isOther: Boolean,
     palette: TandemPalette,
-): Color {
-    if (isOther) return palette.muted
-    val colors =
-        listOf(
-            palette.accent,
-            palette.syncing,
-            palette.positive,
-            palette.warning,
-            palette.negative,
-            lerp(palette.syncing, palette.positive, 0.5f),
-            lerp(palette.warning, palette.negative, 0.5f),
-            lerp(palette.accent, palette.text, 0.5f),
-        )
-    return colors[index.mod(colors.size)]
+): Color = if (isOther) palette.muted else palette.categories[index.mod(palette.categories.size)]
+
+/** Spending bars are striped so they stay apart from income bars without relying on colour. */
+internal fun DrawScope.drawHatchedRoundRect(
+    color: Color,
+    topLeft: Offset,
+    size: Size,
+    cornerRadius: CornerRadius,
+) {
+    drawRoundRect(color.copy(alpha = 0.3f), topLeft, size, cornerRadius)
+    val outline = Path().apply { addRoundRect(RoundRect(Rect(topLeft, size), cornerRadius)) }
+    val step = 5.dp.toPx()
+    clipPath(outline) {
+        var x = topLeft.x - size.height
+        while (x < topLeft.x + size.width) {
+            drawLine(color, Offset(x, topLeft.y + size.height), Offset(x + size.height, topLeft.y), 1.5.dp.toPx())
+            x += step
+        }
+    }
+    drawRoundRect(color, topLeft, size, cornerRadius, style = Stroke(1.dp.toPx()))
 }
 
 private fun DrawScope.drawSpendingBars(
@@ -135,7 +143,7 @@ private fun DrawScope.drawSpendingBars(
             if (selection?.let { it.index == index && !it.income } != false) {
                 palette.negative
             } else {
-                palette.muted.copy(alpha = 0.48f)
+                palette.outline
             }
         drawRoundRect(
             barColor,
@@ -173,13 +181,13 @@ private fun DrawScope.drawIncomeAndSpendingBars(
         val incomeSelected = selection?.let { it.index == index && it.income } != false
         val spendingSelected = selection?.let { it.index == index && !it.income } != false
         drawRoundRect(
-            if (incomeSelected) palette.positive else palette.muted.copy(alpha = 0.48f),
+            if (incomeSelected) palette.positive else palette.outline,
             Offset(left, chartBottom - incomeHeight),
             Size(barWidth, incomeHeight.coerceAtLeast(2f)),
             CornerRadius(TandemShapes.small.toPx()),
         )
-        drawRoundRect(
-            if (spendingSelected) palette.negative else palette.muted.copy(alpha = 0.48f),
+        drawHatchedRoundRect(
+            if (spendingSelected) palette.negative else palette.outline,
             Offset(left + barWidth + slot * 0.08f, chartBottom - spendingHeight),
             Size(barWidth, spendingHeight.coerceAtLeast(2f)),
             CornerRadius(TandemShapes.small.toPx()),

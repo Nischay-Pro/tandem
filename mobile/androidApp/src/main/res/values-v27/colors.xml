@@ -1,0 +1,3 @@
+<resources>
+  <color name="tandem_navigation_bar">@color/tandem_splash_background</color>
+</resources>

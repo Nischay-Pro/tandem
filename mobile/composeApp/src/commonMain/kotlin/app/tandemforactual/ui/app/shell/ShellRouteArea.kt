@@ -39,6 +39,7 @@ import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
 import app.tandemforactual.ui.design.theme.TandemMotion
+import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemEdgeBackGesture
 import app.tandemforactual.ui.design.theme.tandemPalette
 
@@ -122,7 +123,7 @@ private fun ShellRouteTransitions(
 ) {
     val ctx = chrome.ctx
     val shell = ctx.shell
-    val routeBackground = appBackgroundBrush(ctx.state.backgroundStyle, tandemPalette)
+    val routeBackground = appBackgroundBrush(ctx.state.backgroundStyle, tandemPalette, ctx.state.theme == ThemeMode.PURE_BLACK)
     if (!ctx.transactionSheetActive &&
         shell.backGestureProgress > 0f &&
         shell.backPreviewRoute != null &&

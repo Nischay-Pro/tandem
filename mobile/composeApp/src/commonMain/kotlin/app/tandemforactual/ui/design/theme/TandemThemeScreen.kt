@@ -72,6 +72,7 @@ private fun animatedTandemPalette(
         surface = animateColorAsState(palette.surface, colorSpec, label = "theme-surface").value,
         raised = animateColorAsState(palette.raised, colorSpec, label = "theme-raised").value,
         border = animateColorAsState(palette.border, colorSpec, label = "theme-border").value,
+        outline = animateColorAsState(palette.outline, colorSpec, label = "theme-outline").value,
         text = animateColorAsState(palette.text, colorSpec, label = "theme-text").value,
         muted = animateColorAsState(palette.muted, colorSpec, label = "theme-muted").value,
         accent = animateColorAsState(palette.accent, colorSpec, label = "theme-accent").value,
@@ -82,6 +83,7 @@ private fun animatedTandemPalette(
         warning = animateColorAsState(palette.warning, colorSpec, label = "theme-warning").value,
         negative = animateColorAsState(palette.negative, colorSpec, label = "theme-negative").value,
         negativeContent = animateColorAsState(palette.negativeContent, colorSpec, label = "theme-negative-content").value,
+        categories = palette.categories,
     )
 
 private fun tandemMaterialColors(
