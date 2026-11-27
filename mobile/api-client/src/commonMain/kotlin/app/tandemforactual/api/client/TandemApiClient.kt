@@ -236,7 +236,7 @@ class TandemApiClient(
             val files = budgetFiles ?: throw TandemApiException("not_supported")
             val budget =
                 reopenStored(client, files, budgetId) ?: run {
-                    val file = call { fileFor(client, budgetId) }
+                    val file = call { client.budgetFile(budgetId) }
                     call {
                         ActualDirectBudget.download(
                             client,
@@ -688,12 +688,6 @@ class TandemApiClient(
     }
 
     internal fun requireServer(): ActualServerClient = server?.takeIf { it.token != null } ?: throw TandemApiException("sign_in_required")
-
-    private suspend fun fileFor(
-        client: ActualServerClient,
-        budgetId: String,
-    ): ActualRemoteFile =
-        client.listFiles().firstOrNull { !it.deleted && it.groupId == budgetId } ?: throw ActualServerException("budget-unavailable")
 
     private suspend fun closeBudgets() = budgetMutex.withLock { closeBudgetsNow() }
 

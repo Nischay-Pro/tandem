@@ -453,7 +453,7 @@ class TandemApiClientTest {
                 assertEquals("item_login_required", linked.failure)
                 kotlin.test.assertNotNull(linked.lastSyncMillis)
             }
-            val providers = client.bankProviderAccounts(SimpleFin)!!
+            val providers = client.bankProviderAccounts(SimpleFin, "group").accounts!!
             assertEquals(BankProviderAccount("SF-9", "Rewards Card", "Credit Union", "cu.example", "-42.10"), providers.first())
             assertEquals("org-1", providers[1].bankId)
             assertEquals("", providers[2].bankId)
@@ -472,9 +472,12 @@ class TandemApiClientTest {
             client.unlinkBudgetBankAccount("group", card, null)
             assertTrue(client.budgetLinkedAccounts("group", null).none { it.id == checking })
             server.simpleFinAccounts = """{"status":"ok","data":{"error_code":"INVALID_ACCESS_TOKEN"}}"""
-            assertEquals("bank_sync_failed", assertFailsWith<TandemApiException> { client.bankProviderAccounts(SimpleFin) }.errorCode)
+            assertEquals(
+                "bank_sync_failed",
+                assertFailsWith<TandemApiException> { client.bankProviderAccounts(SimpleFin, "group") }.errorCode,
+            )
             server.simpleFinConfigured = false
-            assertNull(client.bankProviderAccounts(SimpleFin))
+            assertEquals(BankProviderAccess(null, null), client.bankProviderAccounts(SimpleFin, "group"))
             val statement = listOf(StatementImportItem("2026-11-20", -1_234, "corner shop", "first", "stmt-1"))
             assertEquals(0, client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1"), null).existingImportedIds.size)
             assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
