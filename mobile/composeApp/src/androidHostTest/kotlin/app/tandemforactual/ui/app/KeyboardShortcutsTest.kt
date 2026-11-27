@@ -33,8 +33,9 @@ class KeyboardShortcutsTest {
     fun theCheatSheetGroupsRowsByWhereTheyWork() {
         val sections = shortcutSections(table)
         assertEquals(listOf("Anywhere", "Lists and screens", "Forms"), sections.map { it.first })
-        assertEquals(listOf("Save", "Confirm", "Close"), sections.last().second.map { it.first })
-        assertEquals(listOf("Ctrl S", "Ctrl Enter"), sections.last().second.first().second)
+        val forms = sections.last().second
+        assertEquals(listOf("Save", "Confirm", "Close"), forms.map { it.first })
+        assertEquals(listOf("Ctrl S", "Ctrl Enter"), forms.first().second)
         assertEquals("?", shortcutKeyText(table.first { it.id == "shortcuts-list" }.keys.single()))
     }
 
