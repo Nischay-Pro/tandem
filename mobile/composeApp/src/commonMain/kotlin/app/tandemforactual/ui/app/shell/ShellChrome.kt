@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.app.AppHeader
 import app.tandemforactual.ui.app.windowControlsPadding
+import app.tandemforactual.ui.core.keyboard.TypingState
 import app.tandemforactual.ui.core.security.hidesContentInAppSwitcher
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
@@ -81,9 +82,12 @@ internal fun ShellFrame(
     val chrome = ShellChromeState(ctx, window, mainCloudStatus(ctx), headerClockMs)
     val tabletopFold by ctx.env.tabletopFold.collectAsState()
     val noticeClearance = remember { NoticeClearance() }
+    val typing = remember { TypingState() }
     CompositionLocalProvider(LocalTabletopFold provides tabletopFold, LocalNoticeClearance provides noticeClearance) {
-        ShellScaffold(chrome)
-        ShellOverlays(chrome, isAppInForeground)
+        typing.TrackTyping {
+            ShellScaffold(chrome, typing)
+            ShellOverlays(chrome, isAppInForeground)
+        }
     }
 }
 
