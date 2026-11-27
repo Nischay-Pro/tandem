@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
 
 plugins {
@@ -149,6 +150,7 @@ val prepareRobolectricSdk by tasks.registering(Sync::class) {
 
 tasks.withType<Test>().configureEach {
   jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+  testLogging { exceptionFormat = TestExceptionFormat.FULL }
   dependsOn(prepareRobolectricSdk)
   val sdkDirectory = prepareRobolectricSdk.map { it.destinationDir.absolutePath }
   jvmArgumentProviders.add(
