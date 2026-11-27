@@ -241,8 +241,6 @@ internal class ActualScheduleDiscovery(
         val month = index.mod(12L) + 1
         return Day.of(year, month, minOf(day.dayOfMonth, daysInMonth(year, month)))
     }
-
-    private companion object {
-        val WEEKDAYS = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")
-    }
 }
+
+private val WEEKDAYS = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")
