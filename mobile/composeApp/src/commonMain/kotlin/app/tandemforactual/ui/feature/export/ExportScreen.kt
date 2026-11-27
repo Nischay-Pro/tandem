@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.tandemforactual.api.client.BudgetCatalogItem
 import app.tandemforactual.data.actual.ActualDates
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.platform.rememberFileSharer
@@ -27,7 +28,6 @@ import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -51,12 +51,13 @@ internal enum class ExportRange(
 internal fun ExportScreen(
     state: AppState,
     mobileSession: TandemMobileSession,
+    openBudget: (BudgetCatalogItem) -> Unit,
 ) {
     val share = rememberFileSharer()
     var message by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
     var exporting by remember { mutableStateOf(false) }
     val encryption = rememberBackupEncryption(LocalBackupSecrets.current, state.selectedBudgetEncrypted)
-    val backup = rememberBackupFlow(state, mobileSession, encryption, share) { message = it }
+    val backup = rememberBackupFlow(state, mobileSession, encryption, share, { message = it }, openBudget)
     PageColumn(verticalSpacing = TandemSpacing.large) {
         BodyText("Backups contain your Actual budget and Tandem extras, such as goals, debt details, reimbursements and saved reports.")
         message?.let { (text, kind) -> InlineMessage(text, kind, onDismiss = { message = null }) }
@@ -82,16 +83,7 @@ internal fun ExportScreen(
     }
     ExportCsvDialog(exporting, state, mobileSession, share, onDone = { exporting = false }) { message = it }
     BackupPassphraseDialog(backup.askingPassphrase, backup.error, backup::dismiss, backup::submit)
-    backup.pendingRestore?.let { pending ->
-        DestructiveConfirmationDialog(
-            title = "Restore Tandem extras?",
-            message = backup.restoreMessage(pending),
-            confirmLabel = "Restore",
-            dismissLabel = "Cancel",
-            onDismissRequest = backup::cancelRestore,
-            onConfirm = backup::confirmRestore,
-        )
-    }
+    RestoreBackupSheet(backup, state.selectedBudget)
 }
 
 /** Picks a period and shares its transactions as a CSV file. */

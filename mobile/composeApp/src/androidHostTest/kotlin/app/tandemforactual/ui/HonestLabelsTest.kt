@@ -1,10 +1,11 @@
 package app.tandemforactual.ui
 
 import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.ui.core.importing.StatementApplySummary
+import app.tandemforactual.ui.core.importing.statementApplyLabel
 import app.tandemforactual.ui.core.session.ConflictResolutionFeedback
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.feature.accounts.accountBalanceLabel
-import app.tandemforactual.ui.feature.accounts.statementImportButtonLabel
 import app.tandemforactual.ui.feature.sync.conflictDoneCopy
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,12 +27,11 @@ class HonestLabelsTest {
     }
 
     @Test
-    fun importButtonCountsOnlyRowsActualDoesNotHave() {
-        assertEquals("Import 3 transactions", statementImportButtonLabel(3, newRows = null, busy = false))
-        assertEquals("Import 1 new transaction", statementImportButtonLabel(3, newRows = 1, busy = false))
-        assertEquals("Import 2 new transactions", statementImportButtonLabel(3, newRows = 2, busy = false))
-        assertEquals("No new transactions", statementImportButtonLabel(3, newRows = 0, busy = false))
-        assertEquals("Importing…", statementImportButtonLabel(3, newRows = 2, busy = true))
+    fun applyButtonCountsOnlyRowsThatChangeActual() {
+        assertEquals("Apply 1 change", statementApplyLabel(StatementApplySummary(1, 0, 3, 2), busy = false))
+        assertEquals("Apply 3 changes", statementApplyLabel(StatementApplySummary(1, 2, 0, 0), busy = false))
+        assertEquals("Nothing to apply", statementApplyLabel(StatementApplySummary(0, 0, 4, 1), busy = false))
+        assertEquals("Applying…", statementApplyLabel(StatementApplySummary(1, 0, 0, 0), busy = true))
     }
 
     @Test

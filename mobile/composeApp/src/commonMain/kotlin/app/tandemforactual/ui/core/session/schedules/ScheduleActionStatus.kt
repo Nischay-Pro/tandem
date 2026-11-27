@@ -9,6 +9,7 @@ internal fun scheduleActionStatusText(operation: OutboxOperationEntity): String 
             "skip" -> "Skip"
             "post" -> "Post"
             "edit" -> "Edit"
+            "create" -> "New schedule"
             "delete" -> "Delete"
             else -> "Schedule change"
         }

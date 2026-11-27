@@ -54,11 +54,15 @@ import app.tandemforactual.ui.design.theme.tandemFloatingEnter
 import app.tandemforactual.ui.design.theme.tandemFloatingExit
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.feature.activity.components.ActivityBulkActions
+import app.tandemforactual.ui.feature.activity.components.ActivityBulkItem
 import app.tandemforactual.ui.feature.activity.components.ActivityPagingEffects
 import app.tandemforactual.ui.feature.activity.components.ActivitySelectionState
+import app.tandemforactual.ui.feature.activity.components.activityBulkItems
 import app.tandemforactual.ui.feature.activity.components.activityEmptyItem
 import app.tandemforactual.ui.feature.activity.components.activityPageStatusItem
 import app.tandemforactual.ui.feature.activity.components.activitySearchEntryItem
+import app.tandemforactual.ui.feature.activity.components.activitySelectionMenuActions
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TriangleAlert
@@ -86,8 +90,7 @@ internal fun ActivityScreen(
     ActivityPagingEffects(mobileSession, state.selectedBudgetId, isLiveBudget, activityListState, state.activitySortOrder)
     val selection = remember(state.selectedBudgetId) { ActivitySelectionState() }
     LaunchedEffect(mobileSession.activity.activityTransactionPageGeneration) {
-        selection.selectionMode = false
-        selection.selectedTransactionIds = emptySet()
+        selection.clear()
         selection.askingToDelete = false
         selection.confirmBulkDelete = false
     }
@@ -142,7 +145,10 @@ internal fun ActivityScreen(
         ActivitySelectionBar(state, mobileSession, scope, isLiveBudget, selection, sortedTransactions)
     }
     mobileSession.transactionWriteMessage?.takeIf { selection.selectionMode }?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-    ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection)
+    val selectedIds = selection.selectedTransactionIds
+    val bulkItems = remember(selectedIds, sortedTransactions) { activityBulkItems(selectedIds, sortedTransactions) }
+    ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection, bulkItems.count(ActivityBulkItem::reconciled))
+    ActivityBulkActions(state, mobileSession, selection, bulkItems)
 }
 
 /** Asks before deleting the selected transactions, then deletes them once confirmed. */
@@ -151,12 +157,19 @@ internal fun ActivityBulkDeleteEffect(
     mobileSession: TandemMobileSession,
     budgetId: String,
     selection: ActivitySelectionState,
+    reconciledCount: Int = 0,
 ) {
     if (selection.askingToDelete) {
         val count = selection.selectedTransactionIds.size
+        val reconciled =
+            when (reconciledCount) {
+                0 -> ""
+                1 -> " 1 of them is reconciled."
+                else -> " ${formatInteger(reconciledCount)} of them are reconciled."
+            }
         DestructiveConfirmationDialog(
             title = if (count == 1) "Delete 1 transaction?" else "Delete ${formatInteger(count)} transactions?",
-            message = "They’ll be removed from Actual. You can undo until the budget syncs.",
+            message = "They’ll be removed from Actual. You can undo until the budget syncs.$reconciled",
             confirmLabel = "Delete",
             dismissLabel = "Keep them",
             onDismissRequest = { selection.askingToDelete = false },
@@ -309,6 +322,7 @@ private fun LazyListScope.activityTransactionItems(
                     null
                 },
             highlighted = context.detailInPane && transactionId != null && transactionId == state.selectedTransactionRecordId,
+            selectionMenuActions = activitySelectionMenuActions(selection),
             onSwipeDelete =
                 if (isLiveBudget && !state.readOnlyMode && !selection.selectionMode && transactionId != null) {
                     {
@@ -353,7 +367,7 @@ private fun BoxScope.ActivitySelectionBar(
         TransactionSelectionFloatingBar(
             allSelected = allSelected,
             canDelete = selection.selectedTransactionIds.isNotEmpty() && !selection.isDeletingSelection,
-            isWorking = selection.isSelectingAll,
+            isWorking = selection.isSelectingAll || selection.runningBulkAction != null,
             onToggleAll = {
                 if (!selection.isSelectingAll) {
                     if (allSelected) {
@@ -368,6 +382,7 @@ private fun BoxScope.ActivitySelectionBar(
             modifier =
                 Modifier
                     .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            onEdit = { selection.bulkMenuOpen = true },
         )
     }
 }

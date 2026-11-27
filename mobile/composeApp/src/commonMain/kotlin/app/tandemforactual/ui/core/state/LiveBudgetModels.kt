@@ -463,6 +463,9 @@ internal fun liveScheduleSummaries(
             .associateBy(LiveScheduleSummary::id)
     val projectedSchedules = baseSchedules.toMutableMap()
     pendingActions
+        .filter { it.action == "create" && it.status in setOf("queued", "sending", "uncertain") && it.recordId !in baseSchedules }
+        .forEach { action -> queuedScheduleSummary(action, payees, accounts)?.let { projectedSchedules[action.recordId] = it } }
+    pendingActions
         .filter { it.action == "edit" && it.recordId in projectedSchedules }
         .sortedWith(compareBy(OutboxOperationEntity::createdAtEpochMs, OutboxOperationEntity::operationId))
         .forEach { action ->
@@ -502,6 +505,7 @@ internal fun liveScheduleSummaries(
                     amountRangeMinor = if (isAmountRange) amountRange else null,
                     amountOp = fields.stringValue("amountOp") ?: previous.amountOp,
                     canSkip = dateObject?.stringValue("frequency") != null,
+                    postsTransaction = fields.booleanValue("postsTransaction") ?: previous.postsTransaction,
                 )
         }
     val locallyDeletedScheduleIds =
@@ -544,5 +548,7 @@ private fun baseScheduleSummary(
         amountRangeMinor = amountRange,
         amountOp = body.stringValue("amountOp") ?: "is",
         canSkip = dateObject?.stringValue("frequency") != null,
+        ruleId = body.stringValue("rule"),
+        postsTransaction = body.booleanValue("posts_transaction") == true,
     )
 }

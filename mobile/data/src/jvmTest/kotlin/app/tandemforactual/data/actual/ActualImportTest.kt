@@ -257,6 +257,45 @@ class ActualImportTest {
     }
 
     @Test
+    fun reviewedRowsOnlyPairWithTheChosenTransactionOrAddNew() {
+        val (db, writer) = fixture()
+        val account = db.first("SELECT id FROM accounts WHERE name = 'Checking'")!!["id"] as String
+        val transactions = ActualTransactions(writer)
+        transactions.addTransactions(
+            account,
+            listOf(
+                mapOf("date" to "2026-10-02", "amount" to -1_200L, "payee_name" to "Uber", "imported_id" to "bank-sync-uber"),
+                mapOf("date" to "2026-10-02", "amount" to -1_200L, "payee_name" to "Uber"),
+            ),
+            runTransfers = false,
+        )
+        val ledger = ActualImport(writer).ledger(account, "2026-10-01", "2026-10-03").filter { it.amount == -1_200L }
+        assertEquals(2, ledger.size)
+        assertEquals(listOf("Uber", "Uber"), ledger.map { it.payeeName })
+        val synced = ledger.first { it.importedId == "bank-sync-uber" }
+
+        val result =
+            ActualImport(writer).reconcile(
+                account,
+                listOf(
+                    ImportRow("2026-10-02", -1_200, "UBER TRIP", importedId = "tandem-import-a-1", cleared = true, matchId = synced.id),
+                    ImportRow("2026-10-02", -1_200, "UBER TRIP", importedId = "tandem-import-a-2"),
+                    ImportRow("2026-10-02", -1_200, "UBER TRIP", importedId = "tandem-import-a-3", matchId = "deleted-meanwhile"),
+                ),
+                reviewed = true,
+            )
+
+        assertEquals(listOf(ImportOutcome.UPDATE, ImportOutcome.ADD, ImportOutcome.UNCHANGED), result.outcomes)
+        val after = ActualImport(writer).ledger(account, "2026-10-02", "2026-10-02").filter { it.amount == -1_200L }
+        assertEquals(3, after.size)
+        assertEquals("bank-sync-uber", after.first { it.id == synced.id }.importedId)
+        assertEquals(true, after.first { it.id == synced.id }.cleared)
+        assertEquals("Uber Trip", after.first { it.id == synced.id }.importedPayee)
+        assertEquals(false, after.first { it.id == synced.id }.reconciled)
+        assertEquals(1, after.count { it.importedId == "tandem-import-a-2" })
+    }
+
+    @Test
     fun titleCasesLikeActual() {
         assertEquals("The Lord of the Rings Shop", ActualImport.titleCase("the lord of the rings shop"))
         assertEquals("Acme Payroll (API)", ActualImport.titleCase("ACME PAYROLL (API)"))
