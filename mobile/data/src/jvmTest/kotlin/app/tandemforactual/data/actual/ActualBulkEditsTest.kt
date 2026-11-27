@@ -187,7 +187,7 @@ class ActualBulkEditsTest {
             assertTrue(planBulkEdit(listOf(target(transfer)), BulkTransactionEdit.MoveToAccount(savings), context).changes.isEmpty())
             assertTrue(planBulkEdit(listOf(target(transfer)), BulkTransactionEdit.SetCategory(groceries), context).changes.isEmpty())
 
-            val card = account("Card")
+            val card = account("Credit card")
             apply(planBulkEdit(listOf(target(transfer)), BulkTransactionEdit.MoveToAccount(card), context).changes)
             val cardPayee = db.first("SELECT id FROM payees WHERE transfer_acct = ?", card)?.get("id") as String
             assertEquals(JsonPrimitive(cardPayee), reader.transaction(counterpart)?.get("payee"))

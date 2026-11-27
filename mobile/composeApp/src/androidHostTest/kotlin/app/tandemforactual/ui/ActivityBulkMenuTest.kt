@@ -1,6 +1,7 @@
 package app.tandemforactual.ui
 
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -57,7 +58,7 @@ class ActivityBulkMenuTest {
         composeTestRule.onNodeWithText("Edit 2 transactions").assertExists()
         composeTestRule.onNodeWithText("−$12.00").assertExists()
         composeTestRule.onNodeWithText("Only transactions with the same amount merge").assertExists()
-        composeTestRule.onNode(hasText("Merge") and hasClickAction()).assertDoesNotExist()
+        composeTestRule.onNode(hasText("Merge") and hasClickAction() and !hasScrollAction()).assertDoesNotExist()
         composeTestRule.onNodeWithText("Remove tag").assertExists()
         composeTestRule.onNodeWithText("Set category").performClick()
         assertEquals(ActivityBulkChoice.Pick(ActivityBulkPicker.CATEGORY), chosen)

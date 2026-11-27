@@ -65,7 +65,7 @@ class BulkTransactionEditsTest {
     private fun records() =
         listOf(
             record("t1", """"amount":-1000,"notes":"lunch","cleared":false"""),
-            record("t2", """"amount":-1000,"notes":null,"cleared":false,"importedId":"bank-1"""),
+            record("t2", """"amount":-1000,"notes":null,"cleared":false,"importedId":"bank-1""""),
             record("t3", """"amount":-500,"notes":null,"cleared":true,"reconciled":true"""),
             record(
                 "p1",
@@ -88,7 +88,13 @@ class BulkTransactionEditsTest {
         generation = "generation-1",
         recordDate = "2026-11-01",
         accountId = "checking",
-        amountMinor = Json.parseToJsonElement("{$fields}").jsonObject["amount"]?.jsonPrimitive?.content?.toLong(),
+        amountMinor =
+            Json
+                .parseToJsonElement("{$fields}")
+                .jsonObject["amount"]
+                ?.jsonPrimitive
+                ?.content
+                ?.toLong(),
         budgetMonth = "2026-11",
     )
 
@@ -101,7 +107,14 @@ class BulkTransactionEditsTest {
             val writes = queued()
             assertEquals(setOf("p1", "t1"), writes.map { it.recordId }.toSet())
             assertEquals(1, writes.mapNotNull { bulkGroupOf(it.idempotencyKey) }.distinct().size)
-            assertEquals("true", writes.first().patch()["cleared"]?.jsonPrimitive?.content)
+            assertEquals(
+                "true",
+                writes
+                    .first()
+                    .patch()["cleared"]
+                    ?.jsonPrimitive
+                    ?.content,
+            )
             assertEquals("Marked cleared · 2 transactions, 1 unchanged", session.transactions.undoNotice?.message)
 
             undo()
@@ -119,7 +132,14 @@ class BulkTransactionEditsTest {
             assertEquals("first #work", joined.patch()["notes"]?.jsonPrimitive?.content)
 
             undo()
-            assertEquals("first", queued().single().patch()["notes"]?.jsonPrimitive?.content)
+            assertEquals(
+                "first",
+                queued()
+                    .single()
+                    .patch()["notes"]
+                    ?.jsonPrimitive
+                    ?.content,
+            )
         }
 
     @Test
@@ -150,7 +170,14 @@ class BulkTransactionEditsTest {
             assertTrue(session.transactions.mergeTransactions(BUDGET, listOf("t1", "t2")))
             val writes = queued().associateBy { it.recordId }
             assertEquals("UPDATE", writes.getValue("t2").action)
-            assertEquals("lunch", writes.getValue("t2").patch()["notes"]?.jsonPrimitive?.content)
+            assertEquals(
+                "lunch",
+                writes
+                    .getValue("t2")
+                    .patch()["notes"]
+                    ?.jsonPrimitive
+                    ?.content,
+            )
             assertEquals("DELETE", writes.getValue("t1").action)
             assertEquals(bulkGroupOf(writes.getValue("t1").idempotencyKey), bulkGroupOf(writes.getValue("t2").idempotencyKey))
 
