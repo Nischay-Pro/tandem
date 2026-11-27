@@ -30,8 +30,7 @@ private val NUMPAD_DIGITS =
     )
 
 /** The digit a [GRID_DIGITS] or number pad key types. */
-internal fun gridDigit(key: Key): Int? =
-    GRID_DIGITS.indexOf(key).takeIf { it >= 0 } ?: NUMPAD_DIGITS.indexOf(key).takeIf { it >= 0 }
+internal fun gridDigit(key: Key): Int? = GRID_DIGITS.indexOf(key).takeIf { it >= 0 } ?: NUMPAD_DIGITS.indexOf(key).takeIf { it >= 0 }
 
 private fun grid(
     id: String,

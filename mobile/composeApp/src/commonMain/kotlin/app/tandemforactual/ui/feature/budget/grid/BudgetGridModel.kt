@@ -100,7 +100,12 @@ internal fun pasteTsv(
     parse: (String) -> Long?,
     budgeted: (GridCell) -> Long?,
 ): List<GridChange> {
-    val lines = text.replace("\r\n", "\n").trimEnd('\n').split('\n').map { it.split('\t') }
+    val lines =
+        text
+            .replace("\r\n", "\n")
+            .trimEnd('\n')
+            .split('\n')
+            .map { it.split('\t') }
     val values = lines.map { line -> line.map { parse(it.trim()) ?: return emptyList() } }
     if (values.size == 1 && values.single().size == 1) return range.setTo({ values.single().single() }, budgeted)
     val top = GridCell(range.rows.first, range.columns.first)

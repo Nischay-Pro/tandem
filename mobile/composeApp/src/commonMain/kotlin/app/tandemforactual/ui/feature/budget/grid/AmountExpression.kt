@@ -38,6 +38,7 @@ private fun tokenize(
 ): List<Token>? {
     val tokens = mutableListOf<Token>()
     val number = StringBuilder()
+
     fun flush(): Boolean {
         val digits = number.toString().trim()
         number.clear()

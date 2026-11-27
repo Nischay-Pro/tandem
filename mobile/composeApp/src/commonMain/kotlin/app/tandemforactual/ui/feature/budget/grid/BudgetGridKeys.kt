@@ -76,7 +76,12 @@ private fun BudgetGridState.move(
 ) {
     val (rows, columns) = GRID_ARROWS[press?.key] ?: return
     val edge = from.column + columns
-    val slideTo = if (edge < 0) data.earlierMonth else if (edge >= data.size.columns) data.laterMonth else null
+    val slideTo =
+        when {
+            edge < 0 -> data.earlierMonth
+            edge >= data.size.columns -> data.laterMonth
+            else -> null
+        }
     val target = data.key(from.moved(rows, columns, data.size)) ?: return
     if (slideTo != null && !extend) {
         focusOn(target.copy(monthId = slideTo))
