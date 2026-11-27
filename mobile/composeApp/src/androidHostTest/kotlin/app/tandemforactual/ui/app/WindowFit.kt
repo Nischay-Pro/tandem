@@ -9,9 +9,12 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 
 private const val EDGE_DP = 0.5f
+
+private const val WEEK_LENGTH = 7
 
 private val anyNode = SemanticsMatcher("any node") { true }
 
@@ -20,7 +23,8 @@ private val tappableRoles = setOf(Role.Button, Role.Tab, Role.Checkbox, Role.Swi
 /**
  * Everything on screen that doesn't fit a narrow window: windows and dialogs wider than the app's window, controls and
  * text pushed past its edge or cut off by their container, text that doesn't fit its line, and tappable controls
- * smaller than a touch target. Content inside a horizontally scrolling row is allowed to run past the edge.
+ * smaller than a touch target. Content inside a horizontally scrolling row may run past the edge, and calendar days
+ * may be narrower than a touch target.
  */
 internal fun SemanticsNodeInteractionsProvider.windowFitProblems(where: String): List<String> {
     val problems = mutableListOf<String>()
@@ -35,8 +39,10 @@ internal fun SemanticsNodeInteractionsProvider.windowFitProblems(where: String):
         problems += node.edgeProblems(where)
         problems += node.textProblems(where)
     }
-    onAllNodes(anyNode).fetchSemanticsNodes().forEach { node ->
-        if (node.size.width == 0 || node.hidden() || !node.isTappable()) return@forEach
+    val tappable = onAllNodes(anyNode).fetchSemanticsNodes().filter { it.size.width > 0 && !it.hidden() && it.isTappable() }
+    val days = tappable.groupBy { it.rowKey() }.values.filter { it.size >= WEEK_LENGTH }.flatten().map { it.cellKey() }.toSet()
+    tappable.forEach { node ->
+        if (node.cellKey() in days) return@forEach
         val density = node.density()
         val width = node.size.width / density
         val height = node.size.height / density
@@ -70,7 +76,12 @@ private fun SemanticsNode.textProblems(where: String): List<String> {
     getLayout(layouts)
     val widest = layouts.maxOfOrNull { layout -> (0 until layout.lineCount).maxOf { layout.getLineRight(it) - layout.getLineLeft(it) } }
     val fits = widest == null || widest <= size.width + EDGE_DP * density()
-    return if (fits) emptyList() else listOf("$where: text '${label()}' doesn't fit its line and is clipped")
+    val cut = layouts.any { it.multiParagraph.didExceedMaxLines && it.layoutInput.overflow == TextOverflow.Clip }
+    return when {
+        !fits -> listOf("$where: text '${label()}' doesn't fit its line and is clipped")
+        cut -> listOf("$where: text '${label()}' runs out of lines and is cut off without an ellipsis")
+        else -> emptyList()
+    }
 }
 
 private fun SemanticsNode.isContent(): Boolean =
@@ -89,6 +100,11 @@ private fun SemanticsNode.hidden(): Boolean =
 
 private fun SemanticsNode.insideHorizontalScroll(): Boolean =
     generateSequence(parent) { it.parent }.any { SemanticsProperties.HorizontalScrollAxisRange in it.config }
+
+/** Calendar days share a row seven to a week, so in a narrow window they're narrower than a touch target by design. */
+private fun SemanticsNode.rowKey(): Triple<Int, Int, Int> = Triple(rootNode().id, positionInRoot.y.toInt(), size.height)
+
+private fun SemanticsNode.cellKey(): Triple<Int, Int, Int> = Triple(rootNode().id, size.width, size.height)
 
 private fun SemanticsNode.rootNode(): SemanticsNode = generateSequence(this) { it.parent }.last()
 

@@ -32,6 +32,7 @@ import app.tandemforactual.ui.core.format.reportMonthLabel
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MainCloudStatus
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -143,11 +144,13 @@ private fun BudgetMonthSwitcher(state: AppState) {
     val palette = tandemPalette
     Row(verticalAlignment = Alignment.CenterVertically) {
         Row(
-            Modifier.clickable(
-                role = Role.Button,
-                onClickLabel = "Choose month",
-                onClick = { state.isBudgetMonthPickerOpen = true },
-            ),
+            Modifier
+                .heightIn(min = MIN_TOUCH_TARGET)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = "Choose month",
+                    onClick = { state.isBudgetMonthPickerOpen = true },
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
         ) {

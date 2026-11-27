@@ -10,6 +10,7 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -85,17 +86,24 @@ internal fun <T> PillGrid(
     columns: Int,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier) {
-        options.chunked(columns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                row.forEach { (value, label) ->
-                    FilterPill(label, value == selected, Modifier.weight(1f), compact = true) { onSelect(value) }
+    BoxWithConstraints(modifier) {
+        val gap = TandemSpacing.small
+        val fit = ((maxWidth + gap) / (PILL_GRID_MIN_CELL + gap)).toInt().coerceAtLeast(1)
+        val shown = columns.coerceAtMost(fit)
+        Column {
+            options.chunked(shown).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEach { (value, label) ->
+                        FilterPill(label, value == selected, Modifier.weight(1f), compact = true) { onSelect(value) }
+                    }
+                    repeat(shown - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
+
+private val PILL_GRID_MIN_CELL = 52.dp
 
 @Composable
 private fun FilterPill(

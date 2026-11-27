@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.LanguageButton
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.SetupPrimaryButton
 import app.tandemforactual.ui.design.templates.InfoBubble
 import app.tandemforactual.ui.design.templates.OnboardingLayout
@@ -85,11 +88,13 @@ internal fun WelcomeScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .heightIn(min = MIN_TOUCH_TARGET)
                         .clickable(
                             role = Role.Button,
                             onClickLabel = stringResource(Res.string.setup_open_api_gateway_setup_guide),
                             onClick = onOpenSetupGuide,
-                        ).padding(vertical = TandemSpacing.extraSmall),
+                        ).wrapContentHeight()
+                        .padding(vertical = TandemSpacing.extraSmall),
                 color = tandemPalette.accent,
                 fontSize = TandemTypography.caption,
                 fontWeight = FontWeight.Medium,

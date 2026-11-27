@@ -4,10 +4,13 @@ package app.tandemforactual.ui.design.sheets
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -52,12 +55,12 @@ internal fun DestructiveConfirmationDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = enabled, onClick = onConfirm) {
+            TextButton(enabled = enabled, onClick = onConfirm, modifier = Modifier.heightIn(min = MIN_TOUCH_TARGET)) {
                 Text(confirmLabel, color = if (enabled) tandemPalette.negative else tandemPalette.muted)
             }
         },
         dismissButton = {
-            TextButton(enabled = dismissEnabled, onClick = dismiss) {
+            TextButton(enabled = dismissEnabled, onClick = dismiss, modifier = Modifier.heightIn(min = MIN_TOUCH_TARGET)) {
                 Text(dismissLabel, color = if (dismissEnabled) tandemPalette.accent else tandemPalette.muted)
             }
         },
