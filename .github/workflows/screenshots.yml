@@ -133,6 +133,7 @@ jobs:
         with:
           gradle_cache_encryption_key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           setup_android: "true"
+          setup_node: "true"
 
       - name: Build the debug app
         working-directory: mobile
