@@ -32,6 +32,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
+import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
@@ -40,6 +41,7 @@ import app.tandemforactual.ui.app.WindowHinge
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
@@ -98,6 +100,7 @@ class MainActivity : FragmentActivity() {
     private val crashReports by lazy { AndroidCrashReports(this) }
     private val windowHinge = MutableStateFlow<WindowHinge?>(null)
     private val signInBrowser = AndroidSignInBrowser(this)
+    private val lanAccess = AndroidLanAccess(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen: SplashScreen = installSplashScreen()
@@ -122,6 +125,10 @@ class MainActivity : FragmentActivity() {
         BudgetSystemNotifications.initialize(applicationContext)
         AutomaticBackupScheduler.ensureScheduled(applicationContext)
         val database = TandemProcess.database(applicationContext)
+        showApp(database)
+    }
+
+    private fun showApp(database: TandemDatabase) {
         setContent {
             val onBackgroundSyncSettingsChanged: (Boolean, SyncNetwork, String) -> Unit =
                 remember(applicationContext) {
@@ -138,7 +145,11 @@ class MainActivity : FragmentActivity() {
                 }
             val bankIcons =
                 remember { bankIcons(applicationContext.filesDir.resolve("bank-icons").path) { System.currentTimeMillis() } }
-            CompositionLocalProvider(LocalBackupSecrets provides backupSecrets, LocalBankIcons provides bankIcons) {
+            CompositionLocalProvider(
+                LocalBackupSecrets provides backupSecrets,
+                LocalBankIcons provides bankIcons,
+                LocalLanAccess provides lanAccess,
+            ) {
                 TandemApp(
                     actualBudgetFiles =
                         remember { sealedBudgetFiles(applicationContext) },
