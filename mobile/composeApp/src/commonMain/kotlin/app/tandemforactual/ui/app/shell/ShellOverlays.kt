@@ -27,8 +27,9 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.restoreTransactionFormBaseline
 import app.tandemforactual.ui.design.cards.SurfaceCard
-import app.tandemforactual.ui.design.feedback.InlineMessage
-import app.tandemforactual.ui.design.feedback.InlineMessageKind
+import app.tandemforactual.ui.design.feedback.FeedbackMessage
+import app.tandemforactual.ui.design.feedback.FeedbackMessageView
+import app.tandemforactual.ui.design.feedback.FeedbackPresentation
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
@@ -103,22 +104,27 @@ private fun UndoNotice(ctx: ShellContext) {
         ) {
             val notice = undoNotice ?: return@AnimatedVisibility
             SurfaceCard(Modifier.widthIn(max = 560.dp)) {
-                InlineMessage(
-                    notice.message,
-                    InlineMessageKind.INFO,
-                    actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() || notice.undo != null },
-                    onAction = {
-                        ctx.coroutineScope.launch {
-                            val undo = notice.undo
-                            if (undo == null) {
-                                mobileSession.transactions.undoTransactionDeletes(notice)
-                            } else {
-                                mobileSession.transactions.dismissUndoNotice(notice.id)
-                                undo()
+                FeedbackMessageView(
+                    FeedbackMessage(
+                        text = notice.message,
+                        kind = notice.kind,
+                        title = notice.title,
+                        detail = notice.detail,
+                        actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() || notice.undo != null },
+                        onAction = {
+                            ctx.coroutineScope.launch {
+                                val undo = notice.undo
+                                if (undo == null) {
+                                    mobileSession.transactions.undoTransactionDeletes(notice)
+                                } else {
+                                    mobileSession.transactions.dismissUndoNotice(notice.id)
+                                    undo()
+                                }
                             }
-                        }
-                    },
-                    onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
+                        },
+                        onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
+                    ),
+                    FeedbackPresentation.BANNER,
                 )
             }
         }

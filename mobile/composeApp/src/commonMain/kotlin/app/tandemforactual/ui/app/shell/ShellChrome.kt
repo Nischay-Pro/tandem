@@ -5,9 +5,12 @@ package app.tandemforactual.ui.app.shell
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -22,6 +25,7 @@ import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
+import app.tandemforactual.ui.design.theme.LocalTabletopFold
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSystemBars
 import app.tandemforactual.ui.design.theme.ThemeMode
@@ -71,8 +75,11 @@ internal fun ShellFrame(
     )
     val headerClockMs = rememberHeaderClock(ctx, isAppInForeground)
     val chrome = ShellChromeState(ctx, window, mainCloudStatus(ctx), headerClockMs)
-    ShellScaffold(chrome)
-    ShellOverlays(chrome, isAppInForeground)
+    val tabletopFold by ctx.env.tabletopFold.collectAsState()
+    CompositionLocalProvider(LocalTabletopFold provides tabletopFold) {
+        ShellScaffold(chrome)
+        ShellOverlays(chrome, isAppInForeground)
+    }
 }
 
 @Composable

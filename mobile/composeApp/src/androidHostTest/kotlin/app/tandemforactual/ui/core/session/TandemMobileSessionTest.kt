@@ -38,6 +38,7 @@ import app.tandemforactual.ui.core.format.signedAmount
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
 import app.tandemforactual.ui.core.session.budget.applyBudgetTemplate
 import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
+import app.tandemforactual.ui.core.session.budget.categoryNoteOverridesFor
 import app.tandemforactual.ui.core.session.budget.closeBudgetAccount
 import app.tandemforactual.ui.core.session.budget.copyBudgetMonth
 import app.tandemforactual.ui.core.session.budget.correctRejectedCategoryRename
@@ -58,6 +59,7 @@ import app.tandemforactual.ui.core.session.budget.resetBudgetHold
 import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryNote
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.session.transactions.createTransaction
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
@@ -614,6 +616,7 @@ class TandemMobileSessionTest {
                 assertTrue(session.budgetEdits.closeBudgetAccount("budget-1", "account-1", null, null, null))
                 assertTrue(session.budgetEdits.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
                 assertTrue(session.budgetEdits.reopenBudgetAccount("budget-1", "account-1", null))
+                assertTrue(session.budgetEdits.setBudgetCategoryNote("budget-1", "category-1", " Weekly shop ", null))
                 assertTrue(
                     session.budgetEdits.moveBudgetAccount(
                         "budget-1",
@@ -638,7 +641,7 @@ class TandemMobileSessionTest {
 
                 val queued = repository.readBudgetMutationQueue().items
                 val operations = queued.flatMap { decodeBudgetReorderQueue(it.patchJson).moves }
-                assertEquals(17, operations.size)
+                assertEquals(18, operations.size)
                 assertEquals(
                     setOf(
                         BudgetReorderKind.SET_CATEGORY_AMOUNT,
@@ -658,9 +661,11 @@ class TandemMobileSessionTest {
                         BudgetReorderKind.DELETE_PAYEE,
                         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
                         BudgetReorderKind.IMPORT_STATEMENT,
+                        BudgetReorderKind.SET_CATEGORY_NOTE,
                     ),
                     operations.map { it.kind }.toSet(),
                 )
+                assertEquals("Weekly shop", session.budgetQueue.categoryNoteOverridesFor("budget-1")["category-1"])
                 assertTrue(queued.all { it.status == "queued" })
                 assertEquals(9_000L, session.budgetQueue.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
                 assertEquals(

@@ -68,9 +68,11 @@ object QuickActionEvents {
     private var sharedReceiptPhoto: String? = null
     private var sharedStatement: PickedStatementFile? = null
     private var receiptScan = false
+    private var quickAddDraft: QuickAddDraft? = null
 
     fun requestAddTransaction() {
         receiptScan = false
+        quickAddDraft = null
         mutableAddTransaction.value = true
     }
 
@@ -79,6 +81,7 @@ object QuickActionEvents {
             QuickAction.ADD_TRANSACTION -> requestAddTransaction()
             QuickAction.SCAN_RECEIPT -> {
                 receiptScan = true
+                quickAddDraft = null
                 mutableAddTransaction.value = true
             }
             QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> mutableDestination.value = action
@@ -89,6 +92,7 @@ object QuickActionEvents {
     fun openLink(link: String): Boolean {
         val action = QuickAction.fromLink(link) ?: return false
         open(action)
+        if (action == QuickAction.ADD_TRANSACTION) quickAddDraft = QuickAddDraft.fromLink(link)
         return true
     }
 
@@ -96,6 +100,7 @@ object QuickActionEvents {
     fun shareText(text: String) {
         sharedText = text
         receiptScan = false
+        quickAddDraft = null
         mutableAddTransaction.value = true
     }
 
@@ -103,6 +108,7 @@ object QuickActionEvents {
     fun shareReceiptPhoto(reference: String) {
         sharedReceiptPhoto = reference
         receiptScan = false
+        quickAddDraft = null
         mutableAddTransaction.value = true
     }
 
@@ -117,6 +123,8 @@ object QuickActionEvents {
     internal fun consumeSharedReceiptPhoto(): String? = sharedReceiptPhoto.also { sharedReceiptPhoto = null }
 
     internal fun consumeSharedStatement(): PickedStatementFile? = sharedStatement.also { sharedStatement = null }
+
+    internal fun consumeQuickAddDraft(): QuickAddDraft? = quickAddDraft.also { quickAddDraft = null }
 
     internal fun consumeReceiptScan(): Boolean = receiptScan.also { receiptScan = false }
 

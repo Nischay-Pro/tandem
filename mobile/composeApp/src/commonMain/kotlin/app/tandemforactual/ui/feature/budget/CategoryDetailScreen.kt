@@ -35,6 +35,7 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.budget.components.AssignedAmountSheet
 import app.tandemforactual.ui.feature.budget.components.CategoryDetailSheetState
 import app.tandemforactual.ui.feature.budget.components.CategoryInsightsSection
+import app.tandemforactual.ui.feature.budget.components.CategoryNoteSection
 import app.tandemforactual.ui.feature.budget.components.CategoryThisMonthSection
 import app.tandemforactual.ui.feature.budget.components.DeleteCategoryConfirmation
 import app.tandemforactual.ui.feature.budget.components.DeleteCategorySheet
@@ -202,6 +203,7 @@ private fun CategoryDetailContent(
         isTrackingBudget,
         scope,
     )
+    if (isLiveBudget) CategoryNoteSection(state, mobileSession, category, scope)
     if (isLiveBudget) {
         SecondaryButton(
             if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",

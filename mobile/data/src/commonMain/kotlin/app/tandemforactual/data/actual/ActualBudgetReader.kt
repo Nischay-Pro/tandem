@@ -41,7 +41,11 @@ class ActualBudgetReader(
         val categories = categories()
         val groups = categoryGroups(categories)
         groups.forEach { records += record("category-group", JsonObject(it.external())) }
-        categories.forEach { records += record("category", JsonObject(it.external())) }
+        val notes = categoryNotes()
+        categories.forEach { category ->
+            val fields = category.external()
+            records += record("category", JsonObject(notes[category.id]?.let { fields + ("note" to JsonPrimitive(it)) } ?: fields))
+        }
         readPayees(records)
         val rules = rules()
         refreshScheduleJsonPaths(rules)
@@ -182,6 +186,11 @@ class ActualBudgetReader(
                 it["cat_group"] as String,
             )
         }
+
+    private fun categoryNotes(): Map<String, String> =
+        db
+            .query("SELECT id, note FROM notes WHERE note IS NOT NULL AND note != ''")
+            .associate { it["id"] as String to it["note"] as String }
 
     private fun categoryGroups(categories: List<BudgetCategory>): List<BudgetGroup> {
         val byGroup = categories.groupBy { it.groupId }

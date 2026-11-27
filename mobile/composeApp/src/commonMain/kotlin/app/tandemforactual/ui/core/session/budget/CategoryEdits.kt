@@ -2,8 +2,11 @@ package app.tandemforactual.ui.core.session.budget
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 internal suspend fun BudgetEdits.renameBudgetCategory(
     budgetId: String,
@@ -111,3 +114,19 @@ internal suspend fun BudgetEdits.deleteBudgetCategory(
     host.feedback.performBudgetAction(budgetId, encryptionPassword, "Couldn’t delete this category. Try again.") {
         host.apiClient.deleteBudgetCategory(budgetId, categoryId, transferCategoryId, encryptionPassword, idempotencyKey)
     }
+
+/** Queues a category's note; Actual keeps it in its notes table under the category's id, and an empty note clears it. */
+internal suspend fun BudgetEdits.setBudgetCategoryNote(
+    budgetId: String,
+    categoryId: String,
+    note: String,
+    encryptionPassword: String?,
+): Boolean =
+    queue.enqueueOfflineBudgetMutation(
+        budgetId,
+        BudgetReorderKind.SET_CATEGORY_NOTE,
+        categoryId,
+        "categories",
+        buildJsonObject { put("note", note.trim()) },
+        encryptionPassword,
+    )

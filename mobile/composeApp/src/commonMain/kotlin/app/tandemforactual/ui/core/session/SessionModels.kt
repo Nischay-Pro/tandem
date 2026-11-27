@@ -44,6 +44,9 @@ internal data class UndoNotice(
     val transactionIds: Set<String>,
     /** Undoes an action other than a transaction delete; deletes are undone by [transactionIds]. */
     val undo: (suspend () -> Unit)? = null,
+    val title: String? = null,
+    val kind: InlineMessageKind = InlineMessageKind.INFO,
+    val detail: String? = null,
 )
 
 internal data class BudgetActionFeedback(

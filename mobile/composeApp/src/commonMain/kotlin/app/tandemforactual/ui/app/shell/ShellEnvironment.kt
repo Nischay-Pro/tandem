@@ -11,7 +11,9 @@ import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
+import app.tandemforactual.ui.design.theme.TabletopFold
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** The platform hooks and storage the host passes to the app shell. */
@@ -45,4 +47,5 @@ internal class ShellEnvironment(
     /** Opens an OpenID provider's page in the platform's sign-in browser, which hands the callback only to Tandem. */
     val openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
     val onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
+    val tabletopFold: StateFlow<TabletopFold?> = MutableStateFlow(null),
 )

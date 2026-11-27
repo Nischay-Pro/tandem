@@ -15,6 +15,8 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
@@ -82,6 +84,23 @@ internal fun tandemSheetEnter(reduceMotion: Boolean): EnterTransition =
 
 internal fun tandemSheetExit(reduceMotion: Boolean): ExitTransition =
     slideOutVertically(tandemMotionSpec(reduceMotion, TandemMotion.SHEET_MILLIS)) { it }
+
+/** A floating editor settles in from slightly smaller, the way a dialog appears, instead of rising like a sheet. */
+internal fun tandemDialogEnter(reduceMotion: Boolean): EnterTransition =
+    if (reduceMotion) {
+        fadeIn(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        scaleIn(tween(TandemMotion.SHEET_MILLIS, easing = TandemMotion.emphasizedEasing), initialScale = 0.94f) +
+            fadeIn(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.enterEasing))
+    }
+
+internal fun tandemDialogExit(reduceMotion: Boolean): ExitTransition =
+    if (reduceMotion) {
+        fadeOut(tween(TandemMotion.CONTROL_MILLIS))
+    } else {
+        scaleOut(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.exitEasing), targetScale = 0.96f) +
+            fadeOut(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.exitEasing))
+    }
 
 internal fun tandemBottomBarEnter(reduceMotion: Boolean): EnterTransition =
     slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +

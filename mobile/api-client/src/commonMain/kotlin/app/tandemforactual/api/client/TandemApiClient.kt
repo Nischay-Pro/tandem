@@ -29,6 +29,7 @@ import app.tandemforactual.data.actual.reopenAccount
 import app.tandemforactual.data.actual.resetBudgetHold
 import app.tandemforactual.data.actual.setBudgetAmount
 import app.tandemforactual.data.actual.setBudgetCarryover
+import app.tandemforactual.data.actual.setCategoryNote
 import app.tandemforactual.data.actual.setOrders
 import app.tandemforactual.data.actual.setPayeeDefaultCategory
 import app.tandemforactual.data.actual.updateRule
@@ -439,6 +440,15 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKey: String? = null,
     ) = edit(budgetId, encryptionPassword) { it.renameCategory(categoryId, name) }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setBudgetCategoryNote(
+        budgetId: String,
+        categoryId: String,
+        note: String,
+        encryptionPassword: String?,
+        idempotencyKey: String? = null,
+    ) = edit(budgetId, encryptionPassword) { it.setCategoryNote(categoryId, note) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategory(

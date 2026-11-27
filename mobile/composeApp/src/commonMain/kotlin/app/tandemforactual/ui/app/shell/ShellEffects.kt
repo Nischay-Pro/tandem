@@ -126,6 +126,10 @@ internal fun NavigationEffects(ctx: ShellContext) {
                     unmatchedNote = shared.original,
                 )
             }
+            QuickActionEvents.consumeQuickAddDraft()?.let { draft ->
+                val fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2
+                fillNewTransaction(state, mobileSession, draft.amountMinor(fractionDigits), draft.payee)
+            }
         }
     }
     QuickDestinationEffect(ctx)
