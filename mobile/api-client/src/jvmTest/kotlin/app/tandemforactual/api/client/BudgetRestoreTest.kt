@@ -20,12 +20,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 class BudgetRestoreTest {
-    private val today = "2026-11-21"
+    private val date = "2026-11-21"
 
     private suspend fun signedIn(
         server: FakeActualServer,
         files: ActualBudgetFiles,
-    ) = TandemApiClient(http = server.http, budgetFiles = files, today = { today }).also {
+    ) = TandemApiClient(http = server.http, budgetFiles = files, today = { date }).also {
         it.signInWithPassword("https://budget.example", "test", "Phone")
     }
 
@@ -39,7 +39,7 @@ class BudgetRestoreTest {
         budgetId: String,
         password: String? = null,
     ) = budget(budgetId, password)
-        .snapshot(today)
+        .snapshot(date)
         .records
         .filter { it.type == "payee" }
         .map { (it.body["name"] as JsonPrimitive).content }
