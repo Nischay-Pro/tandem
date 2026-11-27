@@ -60,8 +60,9 @@ class SpendingInsightsTest {
                 spend("phone", "2026-10-03", 1_020),
                 spend("phone", "2026-11-03", 1_000),
             )
-        val last = SpendingInsights.trends(entries, "2026-11", TrendBaseline.LAST_MONTH)
+        val last = SpendingInsights.trends(entries, "2026-11", TrendBaseline.LAST_MONTH, "2026-12-05")
         assertEquals(1, last.baselineMonths)
+        assertNull(last.throughDay)
         val byId = last.categories.associateBy { it.categoryId }
         assertEquals(CategoryTrend("food", 300, 200, TrendDirection.UP, 5_000), byId["food"])
         assertEquals(TrendDirection.FLAT, byId.getValue("rent").direction)
@@ -73,12 +74,12 @@ class SpendingInsightsTest {
         assertEquals(100, byId.getValue("food").changeMinor)
         assertEquals(CategoryTrend("", 2_390, 2_320, TrendDirection.FLAT, 301), last.total)
 
-        val average = SpendingInsights.trends(entries, "2026-11", TrendBaseline.AVERAGE_6)
+        val average = SpendingInsights.trends(entries, "2026-11", TrendBaseline.AVERAGE_6, "2026-12-05")
         assertEquals(3, average.baselineMonths)
         assertEquals(100, average.categories.first { it.categoryId == "food" }.baselineMinor)
         assertEquals(3, TrendBaseline.AVERAGE_3.months)
 
-        val empty = SpendingInsights.trends(emptyList(), "2026-11", TrendBaseline.AVERAGE_3)
+        val empty = SpendingInsights.trends(emptyList(), "2026-11", TrendBaseline.AVERAGE_3, "2026-11-20")
         assertEquals(0, empty.baselineMonths)
         assertEquals(TrendDirection.FLAT, empty.total.direction)
     }
@@ -125,6 +126,61 @@ class SpendingInsightsTest {
         assertEquals(forecast.categories.sumOf { it.spentMinor }, forecast.spentMinor)
         assertEquals(1_700, forecast.limitMinor)
         assertEquals(forecast.categories.sumOf { it.projectedMinor }, forecast.projectedMinor)
+        assertEquals(forecast.projectedMinor - 500 - 10, forecast.budgetedProjectedMinor)
+        assertEquals(
+            CategoryForecast("dining", 300, 900, 200, ForecastBasis.PACE, 0, ForecastStatus.OVER, null),
+            byId["dining"],
+        )
+    }
+
+    @Test
+    fun comparesAnUnfinishedMonthWithTheSameDaysOfEarlierMonths() {
+        val entries =
+            listOf(
+                spend("food", "2026-09-04", 80),
+                spend("food", "2026-09-25", 400),
+                spend("food", "2026-10-05", 100),
+                spend("food", "2026-10-20", 500),
+                spend("food", "2026-11-03", 120),
+                spend("food", "2026-11-28", 999),
+                spend("rent", "2026-10-01", 1_000),
+                spend("rent", "2026-11-01", 1_000),
+            )
+        val report = SpendingInsights.trends(entries, "2026-11", TrendBaseline.LAST_MONTH, "2026-11-10")
+        assertEquals(10, report.throughDay)
+        val food = report.categories.first { it.categoryId == "food" }
+        assertEquals(CategoryTrend("food", 120, 100, TrendDirection.UP, 2_000), food)
+        assertEquals(CategoryTrend("", 1_120, 1_100, TrendDirection.FLAT, 181), report.total)
+
+        val average = SpendingInsights.trends(entries, "2026-11", TrendBaseline.AVERAGE_3, "2026-11-10")
+        assertEquals(2, average.baselineMonths)
+        assertEquals(90, average.categories.first { it.categoryId == "food" }.baselineMinor)
+
+        val endOfMonth = SpendingInsights.trends(listOf(spend("food", "2026-02-28", 70)), "2026-03", TrendBaseline.LAST_MONTH, "2026-03-31")
+        assertEquals(70, endOfMonth.total.baselineMinor)
+    }
+
+    @Test
+    fun projectsANewCategoryFromItsPaceAndUsesOnlyMonthsSinceItStarted() {
+        val entries =
+            listOf(
+                spend("rent", "2026-06-01", 1_000),
+                spend("rent", "2026-11-01", 1_000),
+                spend("gym", "2026-10-02", 30),
+                spend("gym", "2026-10-25", 30),
+                spend("gym", "2026-11-02", 30),
+                spend("pet", "2026-11-05", 50),
+            )
+        val forecast = SpendingInsights.forecast(entries, "2026-11", "2026-11-10", mapOf("pet" to 100, "gym" to 100))
+        val byId = forecast.categories.associateBy { it.categoryId }
+        assertEquals(ForecastBasis.PACE, byId.getValue("pet").basis)
+        assertEquals(150, byId.getValue("pet").projectedMinor)
+        assertEquals(ForecastStatus.AT_RISK, byId.getValue("pet").status)
+        assertEquals(ForecastBasis.HISTORY, byId.getValue("gym").basis)
+        assertEquals(1, byId.getValue("gym").historyMonths)
+        assertEquals(60, byId.getValue("gym").projectedMinor)
+        assertEquals(5, byId.getValue("rent").historyMonths)
+        assertEquals(210, forecast.budgetedProjectedMinor)
     }
 
     @Test

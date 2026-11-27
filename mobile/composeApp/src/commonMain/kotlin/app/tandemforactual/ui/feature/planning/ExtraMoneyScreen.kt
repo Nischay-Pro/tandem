@@ -53,7 +53,7 @@ internal fun ExtraMoneyScreen(
         return
     }
     val settings = state.budgetDisplaySettings
-    val spending = (-month.groups.filterNot { it.isIncome }.sumOf { it.activityMinor }).coerceAtLeast(0)
+    val spending = rememberTypicalMonth(state, mobileSession, month).money.spendingMinor
     var draft by rememberSaveable(state.selectedBudgetId) {
         mutableStateOf(formatAmount(WhatIfStart.of(spending, settings?.currencyFractionDigits ?: 2), settings))
     }
