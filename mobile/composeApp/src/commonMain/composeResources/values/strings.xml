@@ -229,6 +229,12 @@
     <string name="connections_rate_server_invalid">Use an https:// address, or http:// on your local network, ending in /v2.</string>
     <string name="connections_rate_server_save">Use this server</string>
     <string name="connections_rate_server_saved">Server saved</string>
+    <string name="automation_title">Automation</string>
+    <string name="automation_detail">Let apps such as Tasker work with the open budget. Each stays off until you turn it on. An encrypted budget works only while Schedule background sync keeps its password on this device.</string>
+    <string name="automation_writes">Allow automation apps to add transactions</string>
+    <string name="automation_writes_detail">Apps can add a transaction to the open budget with an amount, payee, category, account, date, notes and cleared state. Actual’s rules run on it, a notification offers Undo, and Change History names the app. Apps can’t change or delete anything.</string>
+    <string name="automation_reads">Allow automation apps to read balances</string>
+    <string name="automation_reads_detail">Apps can read a month’s left to spend, budgeted, spent and ready to assign amounts, for the whole budget or one category, and an account’s balance. They can’t see transactions, payees or notes, and get nothing while app lock or Hide budget amounts is on.</string>
     <string name="theme_mode_system">System</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>

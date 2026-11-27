@@ -101,6 +101,7 @@ dependencies {
   implementation(libs.fragment)
   implementation(libs.sqlcipher)
   implementation(libs.profileInstaller)
+  implementation(libs.taskerPluginLibrary)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
   implementation(libs.composeFoundationAndroid)

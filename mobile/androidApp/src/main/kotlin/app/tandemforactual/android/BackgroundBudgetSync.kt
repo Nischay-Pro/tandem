@@ -6,10 +6,13 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ListenableWorker
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
@@ -64,17 +67,28 @@ internal object BackgroundBudgetSyncScheduler {
 
     internal fun periodicRequest(network: SyncNetwork): PeriodicWorkRequest =
         PeriodicWorkRequestBuilder<BackgroundBudgetSyncWorker>(INTERVAL_HOURS, TimeUnit.HOURS)
-            .setConstraints(
-                Constraints
-                    .Builder()
-                    .setRequiredNetworkType(
-                        when (network) {
-                            SyncNetwork.WIFI -> NetworkType.UNMETERED
-                            SyncNetwork.MOBILE_DATA -> NetworkType.METERED
-                            SyncNetwork.ANY -> NetworkType.CONNECTED
-                        },
-                    ).build(),
+            .setConstraints(constraints(network))
+            .build()
+
+    /** One sync after an automation app adds a transaction; it runs even when scheduled sync is off. */
+    internal fun afterAutomationRequest(network: SyncNetwork): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<BackgroundBudgetSyncWorker>()
+            .setConstraints(constraints(network))
+            .setInputData(workDataOf(AFTER_AUTOMATION to true))
+            .build()
+
+    private fun constraints(network: SyncNetwork): Constraints =
+        Constraints
+            .Builder()
+            .setRequiredNetworkType(
+                when (network) {
+                    SyncNetwork.WIFI -> NetworkType.UNMETERED
+                    SyncNetwork.MOBILE_DATA -> NetworkType.METERED
+                    SyncNetwork.ANY -> NetworkType.CONNECTED
+                },
             ).build()
+
+    internal const val AFTER_AUTOMATION = "afterAutomation"
 }
 
 class BackgroundBudgetSyncWorker(
@@ -95,7 +109,8 @@ class BackgroundBudgetSyncWorker(
         return try {
             val preferences = AppPreferencesStore(database).read()
             notificationPreferences = preferences
-            if (preferences["backgroundSyncEnabled"] != "true") return Result.success()
+            val requested = inputData.getBoolean(BackgroundBudgetSyncScheduler.AFTER_AUTOMATION, false)
+            if (preferences["backgroundSyncEnabled"] != "true" && !requested) return Result.success()
             val budgetId = preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() } ?: return Result.success()
             val storedSession = credentialStore.read() ?: return Result.success()
             val sessionClient =

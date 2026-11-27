@@ -33,6 +33,7 @@ sqlcipher = "4.20.0"
 baselineProfile = "1.5.0"
 macrobenchmark = "1.5.0"
 profileInstaller = "1.4.1"
+taskerPluginLibrary = "0.4.10"
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -81,6 +82,7 @@ windowManager = { module = "androidx.window:window", version.ref = "windowManage
 windowTesting = { module = "androidx.window:window-testing", version.ref = "windowManager" }
 desugarJdkLibs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
+taskerPluginLibrary = { module = "com.joaomgcd:taskerpluginlibrary", version.ref = "taskerPluginLibrary" }
 junit = { module = "junit:junit", version.ref = "junit" }
 composeRuntimeAndroid = { module = "androidx.compose.runtime:runtime", version.ref = "jetpackCompose" }
 composeUiAndroid = { module = "androidx.compose.ui:ui", version.ref = "jetpackCompose" }

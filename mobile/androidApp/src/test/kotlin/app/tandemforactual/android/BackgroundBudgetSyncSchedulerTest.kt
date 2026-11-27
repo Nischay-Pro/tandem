@@ -28,4 +28,13 @@ class BackgroundBudgetSyncSchedulerTest {
 
         assertEquals(NetworkType.METERED, request.workSpec.constraints.requiredNetworkType)
     }
+
+    @Test
+    fun anAutomatedEntrySyncsOnceOverTheChosenNetworkEvenWithScheduledSyncOff() {
+        val request = BackgroundBudgetSyncScheduler.afterAutomationRequest(SyncNetwork.WIFI)
+
+        assertEquals(NetworkType.UNMETERED, request.workSpec.constraints.requiredNetworkType)
+        assertEquals(true, request.workSpec.input.getBoolean(BackgroundBudgetSyncScheduler.AFTER_AUTOMATION, false))
+        assertEquals(false, request.workSpec.isPeriodic)
+    }
 }

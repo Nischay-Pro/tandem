@@ -545,6 +545,22 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun createsOrReusesAPayeeNamedOnACreate() =
+        withBudget {
+            val named = JsonObject(create + ("payee_name" to JsonPrimitive("Corner Bakery")))
+            val first = id()
+            assertEquals(OperationStatus.COMMITTED, submit(first, "create", named).status)
+            val payee = (checkNotNull(reader.transaction(first))["payee"] as JsonPrimitive).content
+            assertEquals("Corner Bakery", db.first("SELECT name FROM payees WHERE id = ?", payee)?.get("name"))
+            assertEquals(OperationStatus.COMMITTED, submit(first, "create", named).status)
+            val second = id()
+            assertEquals(OperationStatus.COMMITTED, submit(second, "create", named).status)
+            assertEquals(JsonPrimitive(payee), reader.transaction(second)?.get("payee"))
+            val chosen = JsonObject(named + ("payee" to JsonPrimitive(payee)))
+            assertEquals(OperationStatus.COMMITTED, submit(id(), "create", chosen).status)
+        }
+
+    @Test
     fun readsDecimalAndStructuredJsonValues() {
         assertEquals(1.5, scalar(JsonPrimitive(1.5)))
         val values = JsonArray(listOf(JsonPrimitive("field")))
