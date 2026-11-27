@@ -68,7 +68,9 @@ private fun SemanticsNode.textProblems(where: String): List<String> {
     if (SemanticsProperties.EditableText in config || insideHorizontalScroll()) return emptyList()
     val layouts = mutableListOf<TextLayoutResult>()
     getLayout(layouts)
-    return if (layouts.any { it.didOverflowWidth }) listOf("$where: text '${label()}' doesn't fit its line and is clipped") else emptyList()
+    val widest = layouts.maxOfOrNull { layout -> (0 until layout.lineCount).maxOf { layout.getLineRight(it) - layout.getLineLeft(it) } }
+    val fits = widest == null || widest <= size.width + EDGE_DP * density()
+    return if (fits) emptyList() else listOf("$where: text '${label()}' doesn't fit its line and is clipped")
 }
 
 private fun SemanticsNode.isContent(): Boolean =
@@ -78,7 +80,9 @@ private fun SemanticsNode.isContent(): Boolean =
         SemanticsActions.OnClick in config
 
 private fun SemanticsNode.isTappable(): Boolean =
-    SemanticsActions.OnClick in config && (config.getOrNull(SemanticsProperties.Role)?.let { it in tappableRoles } ?: true)
+    SemanticsActions.OnClick in config &&
+        SemanticsProperties.Disabled !in config &&
+        config.getOrNull(SemanticsProperties.Role) in tappableRoles
 
 private fun SemanticsNode.hidden(): Boolean =
     generateSequence(this) { it.parent }.any { SemanticsProperties.HideFromAccessibility in it.config }

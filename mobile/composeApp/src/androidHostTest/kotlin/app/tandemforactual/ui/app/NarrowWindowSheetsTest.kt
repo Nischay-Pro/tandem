@@ -42,9 +42,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /** Sheets, dialogs, pickers and the amount keypad keep every control inside narrow and floating windows. */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NarrowWindowSheetsTest {
     @get:Rule
     val composeTestRule = createComposeRule()

@@ -37,9 +37,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /** Every screen stays whole in split-screen thirds and halves, floating windows and the narrowest pop-up. */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NarrowWindowSweepTest {
     @get:Rule
     val composeTestRule = createComposeRule()
