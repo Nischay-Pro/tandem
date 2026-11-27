@@ -3,6 +3,7 @@
 package app.tandemforactual.ui.feature.insights
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -171,7 +172,7 @@ private fun DayCell(
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
-    val description = if (events.isEmpty()) "$day" else "$day, ${events.size} scheduled"
+    val description = billDayDescription(day, events)
     Column(
         modifier
             .aspectRatio(1f)
@@ -190,10 +191,29 @@ private fun DayCell(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             events.take(3).forEach { event ->
-                Box(Modifier.size(5.dp).clip(CircleShape).background(if (event.amountMinor < 0) palette.negative else palette.positive))
+                val dot = Modifier.size(6.dp).clip(CircleShape)
+                if (event.amountMinor < 0) {
+                    Box(dot.background(palette.negative))
+                } else {
+                    Box(dot.border(1.25.dp, palette.positive, CircleShape))
+                }
             }
         }
     }
+}
+
+private fun billDayDescription(
+    day: Int,
+    events: List<BillEvent>,
+): String {
+    val bills = events.count { it.amountMinor < 0 }
+    val income = events.size - bills
+    val parts =
+        listOfNotNull(
+            bills.takeIf { it > 0 }?.let { if (it == 1) "1 bill" else "$it bills" },
+            income.takeIf { it > 0 }?.let { if (it == 1) "1 deposit" else "$it deposits" },
+        )
+    return if (parts.isEmpty()) "$day" else "$day, ${parts.joinToString(", ")}"
 }
 
 @Composable

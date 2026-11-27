@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -52,7 +51,7 @@ internal fun TransactionAmountField(
         } else {
             transactionTypeColor(transactionType, palette)
         }
-    val outline = if (entered && !neutralDisplay) amountColor else palette.border
+    val outline = if (entered && !neutralDisplay) amountColor else palette.outline
     val fill = if (entered && !neutralDisplay) amountColor.copy(alpha = 0.08f) else palette.surface
     val display = amount.ifBlank { "0.00" }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }

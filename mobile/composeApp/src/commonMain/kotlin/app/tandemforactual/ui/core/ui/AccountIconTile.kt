@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -37,7 +38,7 @@ internal fun AccountIconTile(
         modifier
             .size(TandemLayout.listRowLeadingSize)
             .clip(RoundedCornerShape(TandemShapes.medium))
-            .background(tandemPalette.raised),
+            .background(logoTileColor(artwork, tandemPalette.raised)),
         contentAlignment = Alignment.Center,
     ) {
         if (artwork != null) {

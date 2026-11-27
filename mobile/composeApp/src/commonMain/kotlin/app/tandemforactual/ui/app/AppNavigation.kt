@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.Icon
+import androidx.compose.material.LocalElevationOverlay
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -98,16 +100,17 @@ internal fun TandemHeaderMenu(
             surface = palette.surface,
             background = palette.surface,
             onSurface = palette.text,
-            isLight = true,
         )
     val shapes = MaterialTheme.shapes.copy(small = RoundedCornerShape(TandemShapes.large))
     MaterialTheme(colors = colors, shapes = shapes) {
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
-        ) {
-            Column(Modifier.padding(vertical = TandemSpacing.extraSmall), content = content)
+        CompositionLocalProvider(LocalElevationOverlay provides null) {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = onDismiss,
+                modifier = Modifier.widthIn(min = 200.dp, max = 280.dp),
+            ) {
+                Column(Modifier.padding(vertical = TandemSpacing.extraSmall), content = content)
+            }
         }
     }
 }

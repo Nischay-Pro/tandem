@@ -2,7 +2,7 @@ package app.tandemforactual.ui.design.rows
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.painter.Painter
+import app.tandemforactual.ui.design.icons.LogoPainter
 import org.jetbrains.compose.resources.DrawableResource
 
 /**
@@ -12,7 +12,7 @@ import org.jetbrains.compose.resources.DrawableResource
 internal class RowLogos(
     val payee: (String) -> DrawableResource?,
     val account: (String) -> DrawableResource?,
-    val bankIcon: @Composable (accountName: String) -> Painter? = { null },
+    val bankIcon: @Composable (accountName: String) -> LogoPainter? = { null },
 )
 
 internal val LocalRowLogos = staticCompositionLocalOf<RowLogos?> { null }

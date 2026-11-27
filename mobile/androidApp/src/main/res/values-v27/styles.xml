@@ -1,0 +1,5 @@
+<resources>
+  <style name="Theme.Tandem.App" parent="Theme.Tandem.AppBase">
+    <item name="android:windowLightNavigationBar">@bool/tandem_light_system_bars</item>
+  </style>
+</resources>

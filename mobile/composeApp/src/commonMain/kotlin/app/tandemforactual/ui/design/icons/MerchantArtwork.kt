@@ -4,9 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.painter.Painter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.DrawableResource
@@ -40,7 +37,7 @@ internal class RecentCache<K, V>(
 }
 
 /** The most recently drawn merchant and bank logos, so scrolling back doesn't decode them again. Main thread only. */
-internal val MerchantArtworkCache = RecentCache<DrawableResource, ImageBitmap>(256)
+internal val MerchantArtworkCache = RecentCache<DrawableResource, LogoArtwork>(256)
 
 /**
  * A logo from the icon pack, read and decoded off the main thread the first time it is drawn, so lists of
@@ -49,18 +46,18 @@ internal val MerchantArtworkCache = RecentCache<DrawableResource, ImageBitmap>(2
  */
 @OptIn(ExperimentalResourceApi::class)
 @Composable
-internal fun rememberMerchantArtwork(resource: DrawableResource?): Painter? {
+internal fun rememberMerchantArtwork(resource: DrawableResource?): LogoPainter? {
     val environment = rememberResourceEnvironment()
     val cached = remember(resource) { resource?.let(MerchantArtworkCache::get) }
-    val decoded by produceState<Pair<DrawableResource, ImageBitmap>?>(null, resource, environment) {
+    val decoded by produceState<Pair<DrawableResource, LogoArtwork>?>(null, resource, environment) {
         if (resource == null || cached != null) return@produceState
-        val bitmap =
+        val artwork =
             withContext(Dispatchers.Default) {
-                runCatching { getDrawableResourceBytes(environment, resource).decodeToImageBitmap() }.getOrNull()
+                runCatching { getDrawableResourceBytes(environment, resource).decodeToImageBitmap().logoArtwork() }.getOrNull()
             } ?: return@produceState
-        MerchantArtworkCache.put(resource, bitmap)
-        value = resource to bitmap
+        MerchantArtworkCache.put(resource, artwork)
+        value = resource to artwork
     }
-    val bitmap = cached ?: decoded?.takeIf { it.first == resource }?.second
-    return bitmap?.let { remember(it) { BitmapPainter(it) } }
+    val artwork = cached ?: decoded?.takeIf { it.first == resource }?.second
+    return artwork?.let { remember(it) { LogoPainter(it) } }
 }

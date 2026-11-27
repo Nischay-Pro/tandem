@@ -229,4 +229,16 @@
     <string name="connections_rate_server_invalid">Use an https:// address, or http:// on your local network, ending in /v2.</string>
     <string name="connections_rate_server_save">Use this server</string>
     <string name="connections_rate_server_saved">Server saved</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_mode_pure_black">Pure black</string>
+    <string name="accent_tandem_violet">Tandem violet</string>
+    <string name="accent_clarity_green">Clarity green</string>
+    <string name="accent_warm_terracotta">Warm terracotta</string>
+    <string name="accent_lagoon">Lagoon</string>
+    <string name="accent_cobalt">Cobalt</string>
+    <string name="accent_orchid">Orchid</string>
+    <string name="accent_saffron">Saffron</string>
+    <string name="accent_rose">Rose</string>
 </resources>

@@ -24,6 +24,7 @@ import app.tandemforactual.ui.design.theme.TandemSystemBars
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.WindowSizeInfo
 import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
+import app.tandemforactual.ui.design.theme.isDarkTheme
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.sync.conflictPayeeTitle
 import kotlinx.coroutines.delay
@@ -55,10 +56,7 @@ internal fun ShellFrame(
     val state = ctx.state
     val palette = tandemPalette
     val window = currentWindowSizeInfo()
-    val isDark =
-        state.theme == ThemeMode.DARK ||
-            state.theme == ThemeMode.PURE_BLACK ||
-            (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
+    val isDark = isDarkTheme(state.theme, isSystemInDarkTheme())
     val hideInAppSwitcher = hidesContentInAppSwitcher(state.biometricLockEnabled, state.privacyModeEnabled, state.selectedBudgetEncrypted)
     SideEffect {
         ctx.env.onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
+import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.templates.financeIcon
@@ -141,7 +142,7 @@ private fun ListRowLeadingTile(
                     .size(
                         if (options.dense) TandemLayout.compactListRowLeadingSize else TandemLayout.listRowLeadingSize,
                     ).clip(RoundedCornerShape(TandemShapes.medium))
-                    .background(if (options.muted) palette.surface else palette.raised),
+                    .background(logoTileColor(resolvedPainter, if (options.muted) palette.surface else palette.raised, options.muted)),
             contentAlignment = Alignment.Center,
         ) {
             when {

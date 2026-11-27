@@ -46,7 +46,7 @@ internal fun FieldFrame(
                     .defaultMinSize(minHeight = if (large) 82.dp else 52.dp)
                     .clip(shape)
                     .background(palette.surface)
-                    .border(1.dp, palette.border, shape)
+                    .border(1.dp, palette.outline, shape)
                     .then(
                         if (onClick != null) {
                             Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)

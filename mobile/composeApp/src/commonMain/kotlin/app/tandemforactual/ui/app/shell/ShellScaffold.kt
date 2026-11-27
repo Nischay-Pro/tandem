@@ -46,6 +46,7 @@ import app.tandemforactual.ui.core.state.shouldRenderRouteHeader
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemMotion
+import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemBottomBarEnter
 import app.tandemforactual.ui.design.theme.tandemBottomBarExit
 import app.tandemforactual.ui.design.theme.tandemFadeEnter
@@ -84,7 +85,7 @@ internal fun ShellScaffold(chrome: ShellChromeState) {
                 .shellKeyboard(ctx, shortcutsEnabled, navigationRoutes(state.interfaceMode))
                 .focusRequester(rootFocus)
                 .focusable()
-                .background(appBackgroundBrush(state.backgroundStyle, tandemPalette))
+                .background(appBackgroundBrush(state.backgroundStyle, tandemPalette, state.theme == ThemeMode.PURE_BLACK))
                 .safeDrawingPadding(),
     ) {
         val railInset by animateDpAsState(

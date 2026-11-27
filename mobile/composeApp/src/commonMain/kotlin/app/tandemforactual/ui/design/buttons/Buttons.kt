@@ -254,7 +254,7 @@ private fun TandemButton(
         )
     val borderColor by
         animateColorAsState(
-            targetValue = if (enabled) palette.border else palette.raised,
+            targetValue = if (enabled) palette.outline else palette.raised,
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
             label = "tandem-button-border",
         )
