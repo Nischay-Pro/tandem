@@ -268,6 +268,35 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun aPendingAmountGrowsAnEnvelopeTotalStoredAsANegativeNumber() {
+        val month =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json =
+                    """{"month":"2026-11","toBudget":6000,"totalBudgeted":-5000,"categoryGroups":[{"id":"home",""" +
+                        """"categories":[{"id":"groceries","budgeted":1500,"activity":-800,"balance":700}]}]}""",
+            )
+        val raise =
+            queuedBudgetMutation(
+                BudgetReorderKind.SET_CATEGORY_AMOUNT,
+                itemId = "groceries",
+                payload = """{"month":"2026-11","amountMinor":2400}""",
+            )
+
+        val summary =
+            liveBudgetMonthSummary(
+                monthRecord = month,
+                categoryRecords = listOf(record(type = "category", id = "groceries", name = "Groceries")),
+                categoryGroupRecords = listOf(record(type = "category-group", id = "home", name = "Home")),
+                pendingBudgetMutations = BudgetReorderQueueState().enqueue(raise).moves,
+            )
+
+        assertEquals(-5_900L, summary?.totalBudgetedMinor)
+        assertEquals(5_100L, summary?.toBudgetMinor)
+    }
+
+    @Test
     fun projectsQueuedOfflineBudgetChangesAndClearsPendingMarksAfterSync() {
         val originalMonth =
             record(
