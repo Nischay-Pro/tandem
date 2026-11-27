@@ -142,7 +142,7 @@ class PlanningBackupRestoreTest {
                 flow.confirmRestore()
                 flow.settle()
 
-                assertEquals(listOf("Home (restored)" to null), uploads)
+                assertEquals(listOf<Pair<String, String?>>("Home (restored)" to null), uploads)
                 assertEquals(listOf(BudgetCatalogItem("b9", "Home (restored)", false)), opened)
                 assertEquals("Restored “Home (restored)” as a new budget." to InlineMessageKind.SUCCESS, reports.single())
                 assertEquals(listOf("g1"), session.planning.backupRecords("b9")?.map { it.first })

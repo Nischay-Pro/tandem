@@ -32,8 +32,10 @@ class BudgetRestoreTest {
     private suspend fun TandemApiClient.backupOf(
         budgetId: String,
         password: String?,
-    ): OpenedBackup.Contents =
-        BackupArchive.open(budgetBackup(budgetId, password, "Household", null, null), null) as OpenedBackup.Contents
+    ): OpenedBackup.Contents {
+        val file = budgetBackup(budgetId, password, "Household", null, null)
+        return BackupArchive.open(file, null) as OpenedBackup.Contents
+    }
 
     private suspend fun TandemApiClient.payees(
         budgetId: String,
