@@ -193,7 +193,12 @@ private fun FakeActualServer.simpleFinStatus(fileId: String?): String {
     simpleFinFileIds += fileId
     val own = budgetCredentials(fileId)
     val configured = if (own != null) "simplefin_token:$own" in secrets else simpleFinConfigured || "simplefin_token" in secrets
-    val source = if (own != null) "\"per-budget-file\"" else if (configured) "\"global\"" else "null"
+    val source =
+        when {
+            own != null -> "\"per-budget-file\""
+            configured -> "\"global\""
+            else -> "null"
+        }
     return """{"status":"ok","data":{"configured":$configured,"source":$source}}"""
 }
 

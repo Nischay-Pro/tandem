@@ -42,7 +42,8 @@ class BankCredentialsTest {
             assertEquals(listOf("SF-B"), own.accounts!!.map { it.id })
             client.removeSimpleFinBudgetToken("group")
             assertTrue(server.secrets.isEmpty())
-            assertEquals("SF-9", client.bankProviderAccounts(SimpleFin, "group").accounts!!.first().id)
+            val fallback = client.bankProviderAccounts(SimpleFin, "group").accounts!!
+            assertEquals("SF-9", fallback.first().id)
             assertTrue(server.simpleFinFileIds.all { it == "file" })
         }
 
