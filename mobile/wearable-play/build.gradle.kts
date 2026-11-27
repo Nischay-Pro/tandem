@@ -14,7 +14,7 @@ android {
 
 dependencies {
   api(project(":watch-protocol"))
-  implementation(libs.playServicesWearable)
+  api(libs.playServicesWearable)
   implementation(libs.coroutinesPlayServices)
   implementation(libs.coroutinesCore)
 }
