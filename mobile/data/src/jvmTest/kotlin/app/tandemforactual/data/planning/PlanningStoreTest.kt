@@ -266,7 +266,13 @@ class PlanningStoreTest {
         assertContentEquals("secret".encodeToByteArray(), cipher.open(iv, sealed, "a"))
         assertFailsWith<Exception> { cipher.open(iv, sealed, "b") }
         assertFailsWith<IllegalArgumentException> { PlanningCipher(ByteArray(16)) }
-        assertEquals("tandem-planning/v1|b|r|1|2", PlanningCipher.identity("b", "r", 1, 2))
+        assertEquals("tandem-planning/v1|b|r|goal|1|2|0", PlanningCipher.identity("b", "r", "goal", 1, 2, false))
+        val live = PlanningCipher.identity("b", "r", "goal", 1, 2, false)
+        val (liveIv, liveSealed) = cipher.seal("{}".encodeToByteArray(), live)
+        assertFailsWith<Exception> { cipher.open(liveIv, liveSealed, PlanningCipher.identity("b", "r", "debt", 1, 2, false)) }
+        val tombstone = PlanningCipher.identity("b", "r", "goal", 1, 2, true)
+        val (deadIv, deadSealed) = cipher.seal(ByteArray(0), tombstone)
+        assertFailsWith<Exception> { cipher.open(deadIv, deadSealed, live) }
     }
 
     @Test
