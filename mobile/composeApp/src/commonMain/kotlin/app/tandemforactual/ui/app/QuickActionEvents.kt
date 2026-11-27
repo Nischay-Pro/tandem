@@ -65,9 +65,11 @@ object QuickActionEvents {
 
     private var sharedText: String? = null
     private var receiptScan = false
+    private var quickAddDraft: QuickAddDraft? = null
 
     fun requestAddTransaction() {
         receiptScan = false
+        quickAddDraft = null
         mutableAddTransaction.value = true
     }
 
@@ -76,6 +78,7 @@ object QuickActionEvents {
             QuickAction.ADD_TRANSACTION -> requestAddTransaction()
             QuickAction.SCAN_RECEIPT -> {
                 receiptScan = true
+                quickAddDraft = null
                 mutableAddTransaction.value = true
             }
             QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> mutableDestination.value = action
@@ -86,6 +89,7 @@ object QuickActionEvents {
     fun openLink(link: String): Boolean {
         val action = QuickAction.fromLink(link) ?: return false
         open(action)
+        if (action == QuickAction.ADD_TRANSACTION) quickAddDraft = QuickAddDraft.fromLink(link)
         return true
     }
 
@@ -93,10 +97,13 @@ object QuickActionEvents {
     fun shareText(text: String) {
         sharedText = text
         receiptScan = false
+        quickAddDraft = null
         mutableAddTransaction.value = true
     }
 
     internal fun consumeSharedText(): String? = sharedText.also { sharedText = null }
+
+    internal fun consumeQuickAddDraft(): QuickAddDraft? = quickAddDraft.also { quickAddDraft = null }
 
     internal fun consumeReceiptScan(): Boolean = receiptScan.also { receiptScan = false }
 
