@@ -218,6 +218,62 @@ class AutomationTest {
             assertEquals(listOf("Corner Café"), choices.payees)
         }
 
+    @Test
+    fun plainAmountsFromShortcutsUseADotAndTheCurrencysDecimals() {
+        assertEquals(-1240L, automationPlainAmount("-12.4", null))
+        assertEquals(500L, automationPlainAmount("+5", null))
+        assertEquals(-1240L, automationPlainAmount("−12.40", null))
+        assertEquals(-1240L, automationPlainAmount("-12.400000", null))
+        listOf(null, "", "12.4", "-12,40", "-1.234", "-0", "-1 000", "-99999999999").forEach { text ->
+            assertEquals(AutomationErrorCode.AMOUNT, code { automationPlainAmount(text, null) }, "for $text")
+        }
+    }
+
+    @Test
+    fun addsPlainAmountsByIdThroughTheOutbox() =
+        withBudget { database ->
+            val input =
+                AutomationTransactionInput(
+                    "-3.5",
+                    category = "groceries",
+                    account = "checking",
+                    amountFormat = AutomationAmountFormat.PLAIN,
+                )
+            val added = addAutomatedTransaction(database, BUDGET, input, "Shortcuts", TODAY, NOW)
+            val patch = Json.parseToJsonElement(repository(database).readPendingWrites(BUDGET).single().patchJson).jsonObject
+            assertEquals(JsonPrimitive(-350), patch["amount"])
+            assertEquals(JsonPrimitive("groceries"), patch["category"])
+            assertEquals(mapOf(added.transactionId to "Shortcuts"), automatedTransactionSources(database, BUDGET))
+        }
+
+    @Test
+    fun namesAreOfferedOnlyOnceAnOptInIsOnAndNeverForEncryptedBudgets() =
+        withBudget { database ->
+            val open = mapOf("selectedBudgetId" to BUDGET)
+            assertNull(automationNamesTarget(open))
+            assertEquals(BUDGET, automationNamesTarget(open + (AutomationAccess.READS to "true"))?.budgetId)
+            assertEquals(BUDGET, automationNamesTarget(open + (AutomationAccess.WRITES to "true"))?.budgetId)
+            assertNull(automationNamesTarget(open + (AutomationAccess.WRITES to "true") + ("selectedBudgetEncrypted" to "true")))
+            val records = automationRecords(database, BUDGET)
+            assertEquals(listOf(AutomationRecord("checking", "Checking"), AutomationRecord("savings", "Savings")), records.accounts)
+            assertEquals(listOf(AutomationRecord("groceries", "Groceries")), records.categories)
+        }
+
+    @Test
+    fun leftToSpendIsSaidAndShownTheWayTandemFormatsIt() =
+        withBudget { database ->
+            val month = readAutomationBudget(database, BUDGET, AutomationReadInput(), TODAY).leftToSpend(null)
+            assertTrue(month.sentence.endsWith("320.00 left to spend this month."), month.sentence)
+            assertFalse(month.overspent)
+            assertEquals("320.00", month.value)
+            val groceries = readAutomationBudget(database, BUDGET, AutomationReadInput("groceries"), TODAY).leftToSpend("Groceries")
+            assertTrue(groceries.overspent)
+            assertTrue(groceries.sentence.startsWith("Groceries is "), groceries.sentence)
+            assertTrue(groceries.sentence.endsWith("20.00 over budget."), groceries.sentence)
+            assertEquals("-20.00", groceries.value)
+            assertTrue(groceries.detail.contains("100.00 budgeted · ") && groceries.detail.endsWith("120.00 spent"), groceries.detail)
+        }
+
     private fun AutomationBudgetNumbers.texts() =
         listOf(leftToSpendMinor, budgetedMinor, spentMinor, accountBalanceMinor, toBudgetMinor).map(::text)
 

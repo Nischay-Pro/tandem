@@ -231,6 +231,7 @@
     <string name="connections_rate_server_saved">Server saved</string>
     <string name="automation_title">Automation</string>
     <string name="automation_detail">Let apps such as Tasker work with the open budget. Each stays off until you turn it on. An encrypted budget works only while Schedule background sync keeps its password on this device.</string>
+    <string name="automation_detail_shortcuts">Let Shortcuts and Siri work with the open budget. Each stays off until you turn it on. Encrypted budgets can’t be used from Shortcuts.</string>
     <string name="automation_writes">Allow automation apps to add transactions</string>
     <string name="automation_writes_detail">Apps can add a transaction to the open budget with an amount, payee, category, account, date, notes and cleared state. Actual’s rules run on it, a notification offers Undo, and Change History names the app. Apps can’t change or delete anything.</string>
     <string name="automation_reads">Allow automation apps to read balances</string>

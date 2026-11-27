@@ -9,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import app.tandemforactual.ui.core.automation.automationAppsSupported
 import app.tandemforactual.ui.core.format.APP_LANGUAGES
 import app.tandemforactual.ui.core.format.LanguagePickerSheet
 import app.tandemforactual.ui.core.format.LocalAppLanguage
@@ -114,7 +113,7 @@ internal fun SettingsScreen(
             DashboardCard("settings-connection") { ConnectionSection(navigation) },
             DashboardCard("settings-privacy") { PrivacySection(state, navigation, mobileSession) },
             DashboardCard("settings-external") { ExternalConnectionsSection(state, showAdvanced = true) },
-            DashboardCard("settings-automation") { AutomationSection(state) }.takeIf { automationAppsSupported },
+            DashboardCard("settings-automation") { AutomationSection(state) },
             DashboardCard("settings-data") { YourDataSection(navigation) },
             DashboardCard("settings-support") { SupportSection(state, navigation) },
         ),
