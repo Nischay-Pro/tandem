@@ -3,16 +3,21 @@ package app.tandemforactual.ui.core.session.banking
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.BankCredentialSource
+import app.tandemforactual.api.client.BankProviderAccess
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.bankInstitutions
 import app.tandemforactual.api.client.bankLinkStatus
 import app.tandemforactual.api.client.bankProviderAccounts
 import app.tandemforactual.api.client.budgetBankSyncInterval
 import app.tandemforactual.api.client.budgetLinkedAccounts
+import app.tandemforactual.api.client.canManageServerBankCredentials
 import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.linkBudgetBankAccount
 import app.tandemforactual.api.client.linkBudgetBankAccountToNewAccount
+import app.tandemforactual.api.client.removeSimpleFinBudgetToken
 import app.tandemforactual.api.client.runBudgetBankSync
+import app.tandemforactual.api.client.saveSimpleFinToken
 import app.tandemforactual.api.client.setBudgetBankSyncInterval
 import app.tandemforactual.api.client.startBankLink
 import app.tandemforactual.api.client.unlinkBudgetBankAccount
@@ -35,7 +40,21 @@ internal class BankingController(
     private val preferences: () -> AppPreferencesStore?,
     private val performBudgetAction: suspend (String, String?, String, suspend () -> Unit) -> Boolean,
 ) {
-    suspend fun loadBankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? = apiClient.bankProviderAccounts(provider)
+    suspend fun loadBankProviderAccounts(
+        provider: BankProvider,
+        budgetId: String,
+    ): BankProviderAccess = apiClient.bankProviderAccounts(provider, budgetId)
+
+    suspend fun canManageServerBankCredentials(): Boolean = apiClient.canManageServerBankCredentials()
+
+    /** Hands the token to the Actual server, which keeps it; nothing is stored on the device. */
+    suspend fun saveSimpleFinToken(
+        budgetId: String,
+        token: String,
+        scope: BankCredentialSource,
+    ) = apiClient.saveSimpleFinToken(budgetId, token, scope)
+
+    suspend fun removeSimpleFinBudgetToken(budgetId: String) = apiClient.removeSimpleFinBudgetToken(budgetId)
 
     suspend fun loadBankInstitutions(
         provider: BrowserBankProvider,

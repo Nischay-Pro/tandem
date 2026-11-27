@@ -8,6 +8,7 @@ import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.budgetAccountMovements
 import app.tandemforactual.api.client.budgetChangeHistory
 import app.tandemforactual.api.client.budgetDataHealth
+import app.tandemforactual.api.client.budgetRuleDiagnostics
 import app.tandemforactual.api.client.budgetTaggedPayments
 import app.tandemforactual.api.client.exportBudgetTransactions
 import app.tandemforactual.api.client.previewBudgetRule
@@ -15,6 +16,7 @@ import app.tandemforactual.api.client.undoBudgetChange
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
@@ -30,6 +32,15 @@ internal class InsightsController(
     /** The last budget checkup, kept so returning to the screen shows it at once while it checks again. */
     var dataHealthCache by mutableStateOf<Pair<String, List<HealthIssue>>?>(null)
         private set
+
+    /** The last rule checks, kept alongside [dataHealthCache]. */
+    var ruleFindingsCache by mutableStateOf<Pair<String, List<RuleFinding>>?>(null)
+        private set
+
+    /** Takes fixed rule findings out of the cache right away, before the checks run again. */
+    fun dropRuleFindings(keys: Set<String>) {
+        ruleFindingsCache = ruleFindingsCache?.let { (budget, list) -> budget to list.filterNot { it.key in keys } }
+    }
 
     /** Takes fixed findings out of the cached checkup right away, before it runs again. */
     fun dropHealthRows(
@@ -114,6 +125,18 @@ internal class InsightsController(
     ): List<HealthIssue>? =
         try {
             apiClient.budgetDataHealth(budgetId, encryptionPassword).also { dataHealthCache = budgetId to it }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    suspend fun loadRuleFindings(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<RuleFinding>? =
+        try {
+            apiClient.budgetRuleDiagnostics(budgetId, encryptionPassword).also { ruleFindingsCache = budgetId to it }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

@@ -2,6 +2,7 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
@@ -53,6 +54,12 @@ suspend fun TandemApiClient.budgetDataHealth(
     budgetId: String,
     encryptionPassword: String?,
 ): List<HealthIssue> = call { budget(budgetId, encryptionPassword).dataHealth(today()) }
+
+/** Rule checks run against the copy already synced by [budgetDataHealth]. */
+suspend fun TandemApiClient.budgetRuleDiagnostics(
+    budgetId: String,
+    encryptionPassword: String?,
+): List<RuleFinding> = call { budget(budgetId, encryptionPassword).ruleDiagnostics() }
 
 suspend fun TandemApiClient.undoBudgetChange(
     budgetId: String,
