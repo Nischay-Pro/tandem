@@ -137,6 +137,11 @@ kover {
         )
       }
     }
+    total {
+      log {
+        groupBy = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.CLASS
+      }
+    }
     verify {
       rule {
         minBound(100)
@@ -166,3 +171,5 @@ tasks.withType<Test>().configureEach {
     },
   )
 }
+
+tasks.matching { it.name == "koverVerify" }.configureEach { dependsOn("koverLog") }
