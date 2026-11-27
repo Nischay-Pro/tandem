@@ -40,11 +40,11 @@ class WatchSummaryTest {
     fun quickAddIsOfferedOnlyWhenThePhoneWouldTakeIt() {
         assertTrue(watchQuickAddOpen(open, WatchState.READY))
         assertTrue(watchQuickAddOpen(open + ("biometricLockEnabled" to "true"), WatchState.LOCKED))
-        assertFalse(watchQuickAddOpen(open + ("selectedBudgetEncrypted" to "true"), WatchState.LOCKED))
+        assertTrue(watchQuickAddOpen(open + ("selectedBudgetEncrypted" to "true"), WatchState.LOCKED))
         assertFalse(watchQuickAddOpen(open + ("readOnlyMode" to "true"), WatchState.READY))
         assertFalse(watchQuickAddOpen(open + WatchSettings(quickAddEnabled = false).toPreferences(), WatchState.READY))
         assertFalse(watchQuickAddOpen(emptyMap(), WatchState.NONE))
-        assertTrue(watchQuickAddRefusal(open + ("selectedBudgetEncrypted" to "true")).orEmpty().startsWith("Open Tandem to unlock"))
+        assertNull(watchQuickAddRefusal(open + ("selectedBudgetEncrypted" to "true")))
     }
 
     @Test

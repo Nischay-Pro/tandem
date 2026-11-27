@@ -43,16 +43,12 @@ fun watchQuickAddOpen(
     state: WatchState,
 ): Boolean = state != WatchState.NONE && watchQuickAddRefusal(preferences) == null
 
-/** Turned on once a quick add for a locked encrypted budget can wait sealed until the budget is unlocked. */
-const val LOCKED_BUDGET_QUICK_ADD = false
-
 /** Why the phone won't take a watch entry right now, or null when it will. */
 fun watchQuickAddRefusal(preferences: Map<String, String>): String? =
     when {
         !WatchSettings.from(preferences).quickAddEnabled -> "Quick add is off. Turn it on in Tandem under Settings › Watch."
         preferences["selectedBudgetId"].isNullOrBlank() -> "No budget is open. Open a budget in Tandem first."
         preferences["readOnlyMode"] == "true" -> "Lock editing is on in Tandem. Turn it off to add from your watch."
-        preferences["selectedBudgetEncrypted"] == "true" && !LOCKED_BUDGET_QUICK_ADD -> "Open Tandem to unlock this budget, then try again."
         else -> null
     }
 
