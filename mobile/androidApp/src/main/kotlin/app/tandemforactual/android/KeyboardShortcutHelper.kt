@@ -21,5 +21,4 @@ internal fun keyboardShortcutGroups(commands: List<KeyboardCommand>): List<Keybo
             )
         }
 
-private fun KeyboardCommand.metaState(): Int =
-    (if (command) KeyEvent.META_CTRL_ON else 0) or (if (shift) KeyEvent.META_SHIFT_ON else 0)
+private fun KeyboardCommand.metaState(): Int = (if (command) KeyEvent.META_CTRL_ON else 0) or (if (shift) KeyEvent.META_SHIFT_ON else 0)
