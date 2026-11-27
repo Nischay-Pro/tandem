@@ -4,6 +4,9 @@ package app.tandemforactual.ui.app.shell
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.structuralEqualityPolicy
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.session.budget.accountClosedOverridesFor
@@ -44,11 +47,29 @@ internal fun LiveDataEffects(ctx: ShellContext) {
                 mobileSession.budgetDisplaySettingsBudgetId == state.selectedBudgetId
             }
     }
-    val accountRecords = mobileSession.budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
+    val budgetQueue = mobileSession.budgetQueue
+    val accountRecords =
+        rememberDerived(
+            mobileSession,
+            state,
+        ) { budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords) }
     LiveTransactionEffects(ctx, accountRecords)
     UncategorizedEffect(ctx, accountRecords)
-    val accountNameOverrides = mobileSession.budgetQueue.accountNameOverridesFor(state.selectedBudgetId)
-    val accountClosedOverrides = mobileSession.budgetQueue.accountClosedOverridesFor(state.selectedBudgetId)
+    AccountAndScheduleEffects(ctx, accountRecords)
+}
+
+/** Rebuilds the account and schedule lists with the queued account edits applied. */
+@Composable
+private fun AccountAndScheduleEffects(
+    ctx: ShellContext,
+    accountRecords: List<BudgetRecordEntity>,
+) {
+    val state = ctx.state
+    val shell = ctx.shell
+    val mobileSession = ctx.mobileSession
+    val budgetQueue = mobileSession.budgetQueue
+    val accountNameOverrides = rememberDerived(mobileSession, state) { budgetQueue.accountNameOverridesFor(state.selectedBudgetId) }
+    val accountClosedOverrides = rememberDerived(mobileSession, state) { budgetQueue.accountClosedOverridesFor(state.selectedBudgetId) }
     LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides) {
         shell.liveAccounts =
             withContext(Dispatchers.Default) {
@@ -139,17 +160,25 @@ internal fun LiveBudgetMonthEffect(ctx: ShellContext) {
     val state = ctx.state
     val mobileSession = ctx.mobileSession
     val budgetQueue = mobileSession.budgetQueue
-    val categoryVisibilityOverrides = budgetQueue.categoryVisibilityOverridesFor(state.selectedBudgetId)
-    val categoryGroupNameOverrides = budgetQueue.categoryGroupNameOverridesFor(state.selectedBudgetId)
-    val categoryNameOverrides = budgetQueue.categoryNameOverridesFor(state.selectedBudgetId)
-    val categoryGroupIdOverrides = budgetQueue.categoryGroupIdOverridesFor(state.selectedBudgetId)
-    val categoryGroupVisibilityOverrides = budgetQueue.categoryGroupVisibilityOverridesFor(state.selectedBudgetId)
-    val deletedCategoryIds = budgetQueue.deletedCategoryIdsFor(state.selectedBudgetId)
-    val pendingCategoryGroups = budgetQueue.pendingCategoryGroupCreatesFor(state.selectedBudgetId)
-    val pendingCategories = budgetQueue.pendingCategoryCreatesFor(state.selectedBudgetId)
-    val pendingBudgetMutations = budgetQueue.pendingBudgetMutationsFor(state.selectedBudgetId)
-    val categoryBudgetOverrides = budgetQueue.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId)
-    val categoryCarryoverOverrides = budgetQueue.pendingCategoryCarryoverOverrides(state.selectedBudgetId, state.selectedMonthId)
+    val categoryVisibilityOverrides =
+        rememberDerived(mobileSession, state) { budgetQueue.categoryVisibilityOverridesFor(state.selectedBudgetId) }
+    val categoryGroupNameOverrides =
+        rememberDerived(mobileSession, state) { budgetQueue.categoryGroupNameOverridesFor(state.selectedBudgetId) }
+    val categoryNameOverrides = rememberDerived(mobileSession, state) { budgetQueue.categoryNameOverridesFor(state.selectedBudgetId) }
+    val categoryGroupIdOverrides = rememberDerived(mobileSession, state) { budgetQueue.categoryGroupIdOverridesFor(state.selectedBudgetId) }
+    val categoryGroupVisibilityOverrides =
+        rememberDerived(mobileSession, state) { budgetQueue.categoryGroupVisibilityOverridesFor(state.selectedBudgetId) }
+    val deletedCategoryIds = rememberDerived(mobileSession, state) { budgetQueue.deletedCategoryIdsFor(state.selectedBudgetId) }
+    val pendingCategoryGroups = rememberDerived(mobileSession, state) { budgetQueue.pendingCategoryGroupCreatesFor(state.selectedBudgetId) }
+    val pendingCategories = rememberDerived(mobileSession, state) { budgetQueue.pendingCategoryCreatesFor(state.selectedBudgetId) }
+    val pendingBudgetMutations = rememberDerived(mobileSession, state) { budgetQueue.pendingBudgetMutationsFor(state.selectedBudgetId) }
+    val categoryBudgetOverrides =
+        rememberDerived(mobileSession, state) { budgetQueue.pendingCategoryBudgetOverrides(state.selectedBudgetId, state.selectedMonthId) }
+    val categoryCarryoverOverrides =
+        rememberDerived(
+            mobileSession,
+            state,
+        ) { budgetQueue.pendingCategoryCarryoverOverrides(state.selectedBudgetId, state.selectedMonthId) }
     LaunchedEffect(
         mobileSession.selectedBudgetMonthRecord,
         mobileSession.categoryRecords,
@@ -223,3 +252,10 @@ private fun UncategorizedEffect(
             }
     }
 }
+
+/** [calculation] re-run only when the snapshot state it reads changes, not on every recomposition of the shell. */
+@Composable
+internal fun <T> rememberDerived(
+    vararg keys: Any?,
+    calculation: () -> T,
+): T = remember(*keys) { derivedStateOf(structuralEqualityPolicy(), calculation) }.value
