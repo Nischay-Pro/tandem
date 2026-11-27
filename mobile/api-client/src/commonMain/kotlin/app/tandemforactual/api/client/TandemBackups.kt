@@ -7,7 +7,8 @@ import kotlinx.serialization.json.put
 
 /**
  * A whole-budget backup of the device's copy: Actual's database and metadata, which Actual can import, plus
- * [planningJson] when given, sealed with [passphrase] when one is set.
+ * [planningJson] when given, sealed with [passphrase] when one is set. With [download] false it never reaches Actual
+ * and fails with `no_device_copy` when the device has no copy yet.
  */
 suspend fun TandemApiClient.budgetBackup(
     budgetId: String,
@@ -15,9 +16,10 @@ suspend fun TandemApiClient.budgetBackup(
     budgetName: String,
     planningJson: String?,
     passphrase: String?,
+    download: Boolean = true,
 ): ByteArray {
     val files = budgetFiles ?: throw TandemApiException("not_supported")
-    val database = call { budget(budgetId, encryptionPassword).snapshot(files, budgetId) }
+    val database = call { budget(budgetId, encryptionPassword, download).snapshot(files, budgetId) }
     val metadata =
         buildJsonObject {
             put("id", budgetId)
