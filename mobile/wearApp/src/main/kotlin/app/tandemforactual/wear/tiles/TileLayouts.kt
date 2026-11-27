@@ -48,7 +48,7 @@ fun leftToSpendLayout(
                     text(message.orEmpty().layoutString, maxLines = 3, typography = Typography.BODY_MEDIUM)
                 } else {
                     rings(summary, summary.categories.take(RINGS)) {
-                        text(summary.money(summary.leftToSpendMinor).layoutString, typography = Typography.DISPLAY_SMALL)
+                        text(summary.money(summary.leftToSpendMinor).layoutString, typography = Typography.TITLE_LARGE)
                     }
                 }
             },
