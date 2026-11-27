@@ -141,6 +141,8 @@ class TaskerReadBudgetActivity : TaskerSettingsActivity<TaskerReadBudgetInput, T
         notice =
             if (!AutomationAccess.readsAllowed(preferences)) {
                 "Reading budget numbers is off. Turn it on in Tandem under Settings → Automation, or this action fails."
+            } else if (preferences["biometricLockEnabled"] == "true" || preferences["privacyModeEnabled"] == "true") {
+                "App lock or Hide budget amounts is on in Tandem, so this action returns an error instead of numbers."
             } else {
                 lockedNotice(choices)
             },

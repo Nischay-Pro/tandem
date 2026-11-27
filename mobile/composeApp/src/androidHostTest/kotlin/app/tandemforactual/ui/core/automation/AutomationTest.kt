@@ -46,6 +46,20 @@ class AutomationTest {
     }
 
     @Test
+    fun readsStayClosedWhileAppLockOrHiddenAmountsAreOn() {
+        val open = mapOf("selectedBudgetId" to BUDGET, AutomationAccess.READS to "true", AutomationAccess.WRITES to "true")
+        val appLock = open + ("biometricLockEnabled" to "true")
+        val appLockError = assertFailsWith<AutomationException> { automationTarget(appLock, AutomationKind.READ) }
+        assertEquals(AutomationErrorCode.APP_LOCKED, appLockError.code)
+        assertTrue(appLockError.message.orEmpty().startsWith("Tandem is locked"))
+        val hidden = open + ("privacyModeEnabled" to "true")
+        val hiddenError = assertFailsWith<AutomationException> { automationTarget(hidden, AutomationKind.READ) }
+        assertEquals(AutomationErrorCode.AMOUNTS_HIDDEN, hiddenError.code)
+        assertTrue(hiddenError.message.orEmpty().startsWith("Amounts are hidden in Tandem"))
+        assertEquals(BUDGET, automationTarget(appLock + hidden, AutomationKind.WRITE).budgetId)
+    }
+
+    @Test
     fun aLockedEncryptedBudgetFailsInsteadOfAsking() =
         withDatabase { database ->
             val encrypted = AutomationTarget(BUDGET, encrypted = true)

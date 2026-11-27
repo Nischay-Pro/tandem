@@ -81,6 +81,16 @@
       android:name=".tasker.AutomationUndoReceiver"
       android:exported="false" />
     <service
+      android:name="com.joaomgcd.taskerpluginlibrary.action.IntentServiceAction"
+      android:exported="true"
+      android:foregroundServiceType="specialUse"
+      tools:ignore="ExportedService">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="@string/tasker_special_use"
+        tools:replace="android:value" />
+    </service>
+    <service
       android:name="com.joaomgcd.taskerpluginlibrary.condition.IntentServiceCondition"
       tools:node="remove" />
     <receiver

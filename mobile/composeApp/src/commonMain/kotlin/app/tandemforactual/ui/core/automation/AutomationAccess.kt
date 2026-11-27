@@ -34,6 +34,8 @@ object AutomationErrorCode {
     const val CATEGORY = 12
     const val NOT_ON_DEVICE = 13
     const val SAVE_FAILED = 14
+    const val APP_LOCKED = 15
+    const val AMOUNTS_HIDDEN = 16
 }
 
 enum class AutomationKind { WRITE, READ }
@@ -74,7 +76,21 @@ fun automationTarget(
             "Lock editing is on in Tandem. Turn it off under Settings → Security and privacy to add transactions.",
         )
     }
+    if (kind == AutomationKind.READ) requireAmountsVisible(preferences)
     return AutomationTarget(budgetId, preferences["selectedBudgetEncrypted"] == "true")
+}
+
+/** Reads stay closed whenever the home-screen widget would hide amounts too. */
+private fun requireAmountsVisible(preferences: Map<String, String>) {
+    if (preferences["biometricLockEnabled"] == "true") {
+        throw AutomationException(AutomationErrorCode.APP_LOCKED, "Tandem is locked. Turn off app lock in Tandem to read budget numbers.")
+    }
+    if (preferences["privacyModeEnabled"] == "true") {
+        throw AutomationException(
+            AutomationErrorCode.AMOUNTS_HIDDEN,
+            "Amounts are hidden in Tandem. Turn off Hide budget amounts to read them.",
+        )
+    }
 }
 
 /**

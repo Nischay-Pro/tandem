@@ -1,15 +1,12 @@
 package app.tandemforactual.android.tasker
 
 import android.content.Context
-import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import app.tandemforactual.android.AndroidDeviceCredentialStore
 import app.tandemforactual.android.AndroidEncryptedBudgetVault
 import app.tandemforactual.android.BACKGROUND_KEY_STORE
-import app.tandemforactual.android.BackgroundBudgetSyncWorker
+import app.tandemforactual.android.BackgroundBudgetSyncScheduler
 import app.tandemforactual.android.TandemProcess
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
@@ -27,6 +24,7 @@ import app.tandemforactual.ui.core.automation.automationDatabase
 import app.tandemforactual.ui.core.automation.automationTarget
 import app.tandemforactual.ui.core.automation.readAutomationBudget
 import app.tandemforactual.ui.core.automation.undoAutomatedTransaction
+import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
 
 /** Every automation call opens the budget the same way: Settings → Automation first, then the budget, never a prompt. */
@@ -95,12 +93,16 @@ internal object AutomationCalls {
         }
     }
 
-    /** The same background sync Tandem schedules, run once soon so the new entry reaches Actual. */
-    private fun requestSync(context: Context) {
-        val request =
-            OneTimeWorkRequestBuilder<BackgroundBudgetSyncWorker>()
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(SYNC_WORK, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    /** The same sync Tandem schedules, run once over the user's chosen network; the worker holds the sync lock. */
+    private suspend fun requestSync(context: Context) {
+        val preferences = preferences(context)
+        val network = SyncNetwork.restore(preferences["syncNetwork"], preferences["syncOnWifi"]?.toBooleanStrictOrNull()) ?: SyncNetwork.ANY
+        WorkManager
+            .getInstance(context.applicationContext)
+            .enqueueUniqueWork(
+                SYNC_WORK,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                BackgroundBudgetSyncScheduler.afterAutomationRequest(network),
+            )
     }
 }
