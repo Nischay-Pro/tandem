@@ -60,6 +60,57 @@ class ReportAggregateQueryTest {
         }
 
     @Test
+    fun aggregatesCountOnBudgetAccountsOnlyAndAgreeOnSpending() =
+        runBlocking {
+            val database =
+                openTandemDatabase(
+                    Room
+                        .inMemoryDatabaseBuilder<TandemDatabase>()
+                        .setQueryCoroutineContext(Dispatchers.IO),
+                )
+            try {
+                database.budgetRecordDao().putAll(
+                    listOf(
+                        category("groceries", isIncome = false),
+                        category("savings", isIncome = false),
+                        category("salary", isIncome = true),
+                        account("checking", """{"offbudget":false}"""),
+                        account("brokerage", """{"offbudget":true}"""),
+                        account("house", """{"offBudget":true}"""),
+                        account("broken", "not-json"),
+                        transaction("purchase", "2026-02-02", "checking", "groceries", -10_000),
+                        transaction("paycheck", "2026-02-03", "checking", "salary", 60_000),
+                        transaction("to-brokerage", "2026-02-04", "checking", "savings", -25_000, transfer = true),
+                        transaction("from-checking", "2026-02-04", "brokerage", null, 25_000, transfer = true),
+                        transaction("dividend", "2026-02-05", "brokerage", "salary", 4_000),
+                        transaction("brokerage-fee", "2026-02-06", "brokerage", "groceries", -1_500),
+                        transaction("house-upkeep", "2026-02-07", "house", "groceries", -9_000),
+                        transaction("uncategorized-spend", "2026-02-08", "checking", null, -7_000),
+                        transaction("to-savings", "2026-02-09", "checking", null, -3_000, transfer = true),
+                        transaction("from-checking-on-budget", "2026-02-09", "savings-account", null, 3_000, transfer = true),
+                        transaction("broken-account", "2026-02-10", "broken", "groceries", -500),
+                        transaction("no-account", "2026-02-11", null, "groceries", -200),
+                    ),
+                )
+
+                val categories = database.budgetRecordDao().observeCategoryMonthAggregates(BUDGET, null, null).first()
+                assertEquals(
+                    listOf(
+                        CategoryMonthAggregate("2026-02", "groceries", 10_700),
+                        CategoryMonthAggregate("2026-02", "savings", 25_000),
+                    ),
+                    categories,
+                )
+                assertEquals(
+                    listOf(MonthlyIncomeSpendingAggregate("2026-02", 60_000, categories.sumOf { it.spendingMinor })),
+                    database.budgetRecordDao().observeMonthlyIncomeAndSpending(BUDGET, null, null).first(),
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun categoryMonthMonthlyAndAccountDayAggregatesExcludeTransfersAndDeletedRows() =
         runBlocking {
             val database =
@@ -204,6 +255,27 @@ class ReportAggregateQueryTest {
         budgetMonth = date.take(7),
         transfer = transfer,
         isParent = isParent,
+    )
+
+    private fun account(
+        recordId: String,
+        json: String,
+    ) = BudgetRecordEntity(
+        budgetId = BUDGET,
+        recordType = "account",
+        recordId = recordId,
+        remoteJson = json,
+        remoteRevision = "revision-$recordId",
+        localJson = null,
+        localDeleted = false,
+        remoteDeleted = false,
+        syncGeneration = "generation",
+        recordDate = null,
+        accountId = null,
+        categoryId = null,
+        payeeId = null,
+        amountMinor = null,
+        budgetMonth = null,
     )
 
     private fun category(

@@ -56,7 +56,8 @@ internal fun SpendingTrendsScreen(
     val income = remember(mobileSession.categoryRecords, mobileSession.categoryGroupRecords) { mobileSession.incomeCategoryIds() }
     val entries = remember(transactions, income) { transactions?.let { SpendingInsights.entries(it, income) } }
     val monthId = state.selectedMonthId
-    val report = remember(entries, monthId, baseline) { entries?.let { SpendingInsights.trends(it, monthId, baseline) } }
+    val today = platformTodayIsoDate()
+    val report = remember(entries, monthId, baseline, today) { entries?.let { SpendingInsights.trends(it, monthId, baseline, today) } }
     val comparedWith =
         when (baseline) {
             TrendBaseline.LAST_MONTH -> "last month"
@@ -77,8 +78,11 @@ internal fun SpendingTrendsScreen(
             baseline,
             { baseline = it },
         )
-        if (monthId == platformTodayIsoDate().take(7)) {
-            InlineMessage("${state.selectedMonth} isn’t over yet, so it’s compared with full months.", InlineMessageKind.INFO)
+        report.throughDay?.let { day ->
+            InlineMessage(
+                "${state.selectedMonth} isn’t over yet, so each month is counted up to day $day.",
+                InlineMessageKind.INFO,
+            )
         }
         when {
             report.baselineMonths == 0 ->

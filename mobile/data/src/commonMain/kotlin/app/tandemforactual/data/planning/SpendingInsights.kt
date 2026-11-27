@@ -37,6 +37,8 @@ data class TrendReport(
     val total: CategoryTrend,
     /** How many earlier months the baseline actually covers; fewer than asked when the history is shorter. */
     val baselineMonths: Int,
+    /** The day of the month both sides are counted up to while the month isn't over, or null for whole months. */
+    val throughDay: Int?,
 )
 
 /** How a category's month-end spending was estimated. */
@@ -73,6 +75,8 @@ data class SpendingForecast(
     val spentMinor: Long,
     val projectedMinor: Long,
     val limitMinor: Long,
+    /** The projection for categories with a budget only, to set against [limitMinor]. */
+    val budgetedProjectedMinor: Long,
 )
 
 /** Month-over-month spending trends and month-end spending estimates, worked out on the device from recorded transactions. */
@@ -101,13 +105,21 @@ object SpendingInsights {
             }
         }
 
-    /** Spending per category in [monthId] against [baseline], biggest change first. */
+    /**
+     * Spending per category in [monthId] against [baseline], biggest change first. While [today] is inside [monthId], both
+     * sides only count spending up to today's day of the month.
+     */
     fun trends(
         entries: List<SpendingEntry>,
         monthId: String,
         baseline: TrendBaseline,
+        today: String,
     ): TrendReport {
-        val byMonth = entries.groupBy { it.date.take(7) }
+        val throughDay = today.takeIf { it.take(7) == monthId }?.substring(8, 10)?.toInt()
+        val byMonth =
+            entries
+                .filter { throughDay == null || it.date.substring(8, 10).toInt() <= throughDay }
+                .groupBy { it.date.take(7) }
         val earlier = historyMonths(entries, monthId, baseline.months)
         val current = totals(byMonth[monthId].orEmpty())
         val history = earlier.map { totals(byMonth[it].orEmpty()) }
@@ -118,7 +130,7 @@ object SpendingInsights {
                 .filterNot { it.currentMinor == 0L && it.baselineMinor == 0L }
                 .sortedWith(compareByDescending<CategoryTrend> { kotlin.math.abs(it.changeMinor) }.thenBy { it.categoryId })
         val total = trend("", current.values.sum(), average(history.map { it.values.sum() }))
-        return TrendReport(trends, total, earlier.size)
+        return TrendReport(trends, total, earlier.size, throughDay)
     }
 
     /**
@@ -140,14 +152,24 @@ object SpendingInsights {
                 else -> today.substring(8, 10).toInt()
             }
         val byMonth = entries.groupBy { it.date.take(7) }
-        val earlier = historyMonths(entries, monthId, historyMonths).map { byMonth[it].orEmpty() }
+        val earlierMonths = historyMonths(entries, monthId, historyMonths)
+        val earlier = earlierMonths.map { byMonth[it].orEmpty() }
+        val firstMonths =
+            entries
+                .filter { it.date.take(7) < monthId }
+                .groupBy { it.categoryId }
+                .mapValues { (_, list) -> list.minOf { it.date.take(7) } }
         val current = byMonth[monthId].orEmpty().filter { it.date.substring(8, 10).toInt() <= day }
         val spent = totals(current)
         val ids = (spent.keys + limits.keys + earlier.flatMap { month -> month.map { it.categoryId } }).toSet().sorted()
         val categories =
             ids
                 .map { id ->
-                    val history = earlier.map { month -> month.filter { it.categoryId == id } }
+                    val first = firstMonths[id]
+                    val history =
+                        earlierMonths.indices
+                            .filter { first != null && earlierMonths[it] >= first }
+                            .map { index -> earlier[index].filter { it.categoryId == id } }
                     categoryForecast(id, spent[id] ?: 0, limits[id], history, monthId, day, length)
                 }.filterNot { it.spentMinor == 0L && it.projectedMinor == 0L && it.limitMinor == null }
         return SpendingForecast(
@@ -158,6 +180,7 @@ object SpendingInsights {
             categories.sumOf { it.spentMinor },
             categories.sumOf { it.projectedMinor },
             categories.sumOf { (it.limitMinor ?: 0).coerceAtLeast(0) },
+            categories.filter { it.limitMinor != null }.sumOf { it.projectedMinor },
         )
     }
 

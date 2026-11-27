@@ -7,6 +7,48 @@ import androidx.room3.Query
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
+private const val REPORT_CATEGORY_JSON = "COALESCE(category.localJson, category.remoteJson)"
+private const val REPORT_ACCOUNT_JSON = "COALESCE(account.localJson, account.remoteJson)"
+
+private const val REPORT_CATEGORY_IS_INCOME = """COALESCE(
+        CASE WHEN json_valid($REPORT_CATEGORY_JSON) = 1
+          THEN COALESCE(json_extract($REPORT_CATEGORY_JSON, '$.is_income'), json_extract($REPORT_CATEGORY_JSON, '$.isIncome'))
+          ELSE 0
+        END,
+        0
+      )"""
+
+private const val REPORT_ACCOUNT_OFF_BUDGET = """COALESCE(
+        CASE WHEN json_valid($REPORT_ACCOUNT_JSON) = 1
+          THEN COALESCE(json_extract($REPORT_ACCOUNT_JSON, '$.offbudget'), json_extract($REPORT_ACCOUNT_JSON, '$.offBudget'))
+          ELSE 0
+        END,
+        0
+      )"""
+
+private const val REPORT_TRANSACTIONS = """FROM budget_records AS tx
+    LEFT JOIN budget_records AS category
+      ON category.budgetId = tx.budgetId
+      AND category.recordType = 'category'
+      AND category.recordId = tx.categoryId
+      AND category.localDeleted = 0 AND category.remoteDeleted = 0
+      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
+    LEFT JOIN budget_records AS account
+      ON account.budgetId = tx.budgetId
+      AND account.recordType = 'account'
+      AND account.recordId = tx.accountId
+      AND account.localDeleted = 0 AND account.remoteDeleted = 0
+      AND (account.localJson IS NOT NULL OR account.remoteJson IS NOT NULL)
+    WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
+      AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
+      AND tx.amountMinor IS NOT NULL
+      AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
+      AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
+      AND tx.isParent = 0
+      AND $REPORT_ACCOUNT_OFF_BUDGET = 0
+      AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
+      AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)"""
+
 @Dao
 interface BudgetRecordDao {
     @Query("DELETE FROM budget_records WHERE budgetId = :budgetId")
@@ -85,31 +127,8 @@ interface BudgetRecordDao {
     @Query(
         """
     SELECT substr(tx.recordDate, 1, 7) AS monthId, tx.categoryId, SUM(-tx.amountMinor) AS spendingMinor
-    FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
-    WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
-      AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
-      AND tx.categoryId IS NOT NULL AND tx.amountMinor IS NOT NULL AND tx.transfer = 0
-      AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
-      AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
-      AND tx.isParent = 0
-      AND COALESCE(
-        CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-          THEN COALESCE(
-            json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-            json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-          )
-          ELSE 0
-        END,
-        0
-      ) = 0
-      AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
-      AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)
+    $REPORT_TRANSACTIONS
+      AND tx.categoryId IS NOT NULL AND $REPORT_CATEGORY_IS_INCOME = 0
     GROUP BY substr(tx.recordDate, 1, 7), tx.categoryId
     ORDER BY monthId ASC, tx.categoryId ASC
     """,
@@ -124,48 +143,15 @@ interface BudgetRecordDao {
         """
     SELECT substr(tx.recordDate, 1, 7) AS monthId,
            SUM(CASE
-             WHEN COALESCE(
-               CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-                 THEN COALESCE(
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-                 )
-                 ELSE 0
-               END,
-               0
-             ) = 1 THEN tx.amountMinor
-             WHEN tx.categoryId IS NULL AND tx.amountMinor > 0 THEN tx.amountMinor
+             WHEN tx.categoryId IS NOT NULL AND $REPORT_CATEGORY_IS_INCOME = 1 THEN tx.amountMinor
+             WHEN tx.categoryId IS NULL AND COALESCE(tx.transfer, 0) = 0 AND tx.amountMinor > 0 THEN tx.amountMinor
              ELSE 0
            END) AS incomeMinor,
            SUM(CASE
-             WHEN tx.categoryId IS NULL AND tx.amountMinor > 0 THEN 0
-             WHEN COALESCE(
-               CASE WHEN json_valid(COALESCE(category.localJson, category.remoteJson)) = 1
-                 THEN COALESCE(
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.is_income'),
-                   json_extract(COALESCE(category.localJson, category.remoteJson), '$.isIncome')
-                 )
-                 ELSE 0
-               END,
-               0
-             ) = 0 THEN -tx.amountMinor
+             WHEN tx.categoryId IS NOT NULL AND $REPORT_CATEGORY_IS_INCOME = 0 THEN -tx.amountMinor
              ELSE 0
            END) AS spendingMinor
-    FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
-    WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
-      AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
-      AND tx.amountMinor IS NOT NULL AND tx.transfer = 0
-      AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
-      AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
-      AND tx.isParent = 0
-      AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
-      AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)
+    $REPORT_TRANSACTIONS
     GROUP BY substr(tx.recordDate, 1, 7)
     ORDER BY monthId ASC
     """,

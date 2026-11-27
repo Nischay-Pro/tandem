@@ -121,11 +121,12 @@ private fun ForecastHeadline(
 ) {
     val palette = tandemPalette
     val daysLeft = forecast.daysInMonth - forecast.dayOfMonth
+    val overBudget = forecast.limitMinor > 0 && forecast.budgetedProjectedMinor > forecast.limitMinor
     Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
         Text("On pace to spend", color = palette.muted, fontSize = TandemTypography.body)
         Text(
             state.formatCurrency(forecast.projectedMinor),
-            color = if (forecast.limitMinor > 0 && forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.text,
+            color = if (overBudget) palette.negative else palette.text,
             fontSize = TandemTypography.heroTitle,
             fontWeight = FontWeight.SemiBold,
             fontFamily = tandemAlloFamily(),
@@ -139,14 +140,19 @@ private fun ForecastHeadline(
     }
     if (forecast.limitMinor > 0) {
         Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            val scale = maxOf(forecast.projectedMinor, forecast.limitMinor).toFloat()
+            val scale = maxOf(forecast.budgetedProjectedMinor, forecast.limitMinor).toFloat()
             ProgressBar(
-                forecast.projectedMinor / scale,
-                if (forecast.projectedMinor > forecast.limitMinor) palette.negative else palette.accent,
+                forecast.budgetedProjectedMinor / scale,
+                if (overBudget) palette.negative else palette.accent,
                 marker = forecast.limitMinor / scale,
             )
             Row {
-                Text("Projected", Modifier.weight(1f), color = palette.muted, fontSize = TandemTypography.caption)
+                Text(
+                    "${state.formatCurrency(forecast.budgetedProjectedMinor)} projected in budgeted categories",
+                    Modifier.weight(1f),
+                    color = palette.muted,
+                    fontSize = TandemTypography.caption,
+                )
                 Text(
                     "${state.formatCurrency(forecast.limitMinor)} budgeted",
                     color = palette.muted,
