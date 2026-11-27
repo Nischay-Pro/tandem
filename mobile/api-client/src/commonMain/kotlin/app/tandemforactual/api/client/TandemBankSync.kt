@@ -12,13 +12,6 @@ import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import app.tandemforactual.data.store.AppPreferencesStore
 import kotlinx.coroutines.sync.withLock
 
-/** The provider's accounts, or null when the provider isn't set up on the Actual server. */
-suspend fun TandemApiClient.bankProviderAccounts(provider: BankProvider): List<BankProviderAccount>? =
-    sessionMutex.withLock {
-        val client = requireServer()
-        call { if (client.bankConfigured(provider)) client.bankAccounts(provider) else null }
-    }
-
 suspend fun TandemApiClient.bankInstitutions(
     provider: BrowserBankProvider,
     country: String,

@@ -1,0 +1,8 @@
+Statement period: 01/11/2026 to 30/11/2026
+Account,12345678
+
+Transaction Date,Narrative,Debit Amount,Credit Amount,Balance
+01/11/2026,WOOLWORTHS 1182,54.10,,945.90
+02/11/2026,SALARY ACME PTY,,3100.00,4045.90
+15/11/2026,PAYMENT,20.00,,4025.90
+Total,,74.10,3100.00,
