@@ -42,6 +42,9 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.budget.BudgetItemReorderActions
+import app.tandemforactual.ui.feature.budget.categoryFundsMinor
+import app.tandemforactual.ui.feature.budget.categoryProgress
+import app.tandemforactual.ui.feature.budget.categorySpentMinor
 
 /** Reorder callbacks shared by both budget category card styles. */
 internal class BudgetCategoryReorder(
@@ -224,13 +227,8 @@ private fun RowScope.CategoryProgressDetails(
     overspent: Boolean,
 ) {
     val palette = tandemPalette
-    val spentMinor = kotlin.math.abs(category.activityMinor)
-    val progress =
-        when {
-            category.assignedMinor > 0L -> (spentMinor.toDouble() / category.assignedMinor.toDouble()).toFloat().coerceIn(0f, 1f)
-            spentMinor > 0L -> 1f
-            else -> 0f
-        }
+    val spentMinor = categorySpentMinor(category.activityMinor)
+    val progress = categoryProgress(category.balanceMinor, category.activityMinor)
     Column(
         Modifier.weight(1f),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
@@ -260,7 +258,7 @@ private fun RowScope.CategoryProgressDetails(
             )
             Text("spent of", color = palette.muted, fontSize = TandemTypography.caption)
             PrivacyAmountText(
-                state.formatCurrency(category.assignedMinor),
+                state.formatCurrency(categoryFundsMinor(category.balanceMinor, category.activityMinor)),
                 privacyModeEnabled = state.privacyModeEnabled,
                 fractionDigits = state.currencyFractionDigitsForDisplay,
                 color = palette.muted,

@@ -7,6 +7,7 @@ import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.BackRequestDisposition
 import app.tandemforactual.ui.core.state.backRequestDisposition
+import app.tandemforactual.ui.core.state.defaultNewTransactionAccount
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.restorePendingBudgetSelectionOrigin
 import app.tandemforactual.ui.core.state.selectAppTabNavigation
@@ -52,15 +53,7 @@ internal class ShellNavigator(
             shell.transactionSheetClosing = false
             // A new transaction clears the selected one, so a transaction's details underneath close along with the form.
             shell.transactionSheetPopCount = if (backStack.lastOrNull()?.route == AppRoute.TRANSACTION_DETAIL) 2 else 1
-            val eligibleAccounts = shell.liveAccounts.filterNot { it.offBudget }
-            val defaultAccount =
-                if (state.selectedBudgetId.isNotBlank()) {
-                    eligibleAccounts.firstOrNull { it.id == requestedAccountId }
-                        ?: eligibleAccounts.firstOrNull { it.id == state.lastTransactionAccountId }
-                        ?: eligibleAccounts.firstOrNull()
-                } else {
-                    null
-                }
+            val defaultAccount = defaultNewTransactionAccount(shell.liveAccounts, requestedAccountId, state.lastTransactionAccountId)
             state.transactionAmount = state.formatAmount(0)
             state.transactionAccount = defaultAccount?.name ?: "Checking"
             state.newTransactionAccountId = defaultAccount?.id.orEmpty()
