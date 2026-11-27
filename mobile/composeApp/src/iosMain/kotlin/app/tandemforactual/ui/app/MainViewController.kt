@@ -24,6 +24,8 @@ import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
 import app.tandemforactual.ui.core.platform.shareTextOnIos
+import app.tandemforactual.ui.core.session.BackupSecrets
+import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
@@ -78,7 +80,15 @@ private fun createTandemViewController(
                         .firstOrNull()
                         ?.let { bankIcons("$it/bank-icons") { Clock.System.now().toEpochMilliseconds() } }
                 }
+            val backupSecrets =
+                remember {
+                    BackupSecrets(
+                        IosDeviceCredentialStore(SecurityIosKeychainClient("backup-passphrase")),
+                        IosDeviceCredentialStore(SecurityIosKeychainClient("backup-webdav")),
+                    )
+                }
             CompositionLocalProvider(
+                LocalBackupSecrets provides backupSecrets,
                 LocalBankIcons provides bankIcons,
                 LocalWindowControlsInset provides rememberWindowControlsInset(windowControlsInset),
             ) {

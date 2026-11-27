@@ -36,7 +36,7 @@ val LocalBackupSecrets = staticCompositionLocalOf<BackupSecrets?> { null }
 data class AutomaticBackupSettings(
     val enabled: Boolean = false,
     val intervalHours: Int = 24,
-    val network: SyncNetwork = SyncNetwork.ANY,
+    val network: SyncNetwork = SyncNetwork.WIFI,
     val keep: Int = 7,
     val folder: String? = null,
     val folderLabel: String? = null,

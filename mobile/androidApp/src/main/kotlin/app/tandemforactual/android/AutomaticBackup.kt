@@ -5,8 +5,11 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -32,17 +35,35 @@ import kotlinx.coroutines.CancellationException
 internal const val BACKUP_PASSPHRASE_STORE = "automatic_backup_passphrase"
 internal const val BACKUP_WEBDAV_STORE = "automatic_backup_webdav"
 
-/** Checks hourly whether an automatic backup is due; the worker itself reads the schedule, folder and network choice. */
+/**
+ * Checks hourly whether an automatic backup is due, only while the network "Back up using" allows; the worker reads the
+ * schedule and folder itself.
+ */
 internal object AutomaticBackupScheduler {
     private const val UNIQUE_WORK_NAME = "tandem-automatic-backup"
 
-    fun ensureScheduled(context: Context) {
-        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-            UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<AutomaticBackupWorker>(1, TimeUnit.HOURS).build(),
-        )
+    fun ensureScheduled(context: Context) = schedule(context, ExistingPeriodicWorkPolicy.KEEP, AutomaticBackupSettings().network)
+
+    fun update(
+        context: Context,
+        network: SyncNetwork,
+    ) = schedule(context, ExistingPeriodicWorkPolicy.UPDATE, network)
+
+    private fun schedule(
+        context: Context,
+        policy: ExistingPeriodicWorkPolicy,
+        network: SyncNetwork,
+    ) {
+        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, policy, periodicRequest(network))
     }
+
+    internal fun periodicRequest(network: SyncNetwork): PeriodicWorkRequest =
+        PeriodicWorkRequestBuilder<AutomaticBackupWorker>(1, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(networkType(network)).build())
+            .build()
+
+    internal fun networkType(network: SyncNetwork): NetworkType =
+        if (network == SyncNetwork.WIFI) NetworkType.UNMETERED else NetworkType.CONNECTED
 }
 
 class AutomaticBackupWorker(
@@ -191,12 +212,7 @@ class AutomaticBackupWorker(
         val manager = applicationContext.getSystemService(ConnectivityManager::class.java) ?: return false
         val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
         if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
-        val unmetered = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-        return when (network) {
-            SyncNetwork.WIFI -> unmetered
-            SyncNetwork.MOBILE_DATA -> !unmetered
-            SyncNetwork.ANY -> true
-        }
+        return network != SyncNetwork.WIFI || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     private fun backgroundPassword(budgetId: String): String? =

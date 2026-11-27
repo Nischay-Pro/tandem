@@ -2,169 +2,168 @@
 
 package app.tandemforactual.ui.feature.export
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import app.tandemforactual.data.store.AppPreferencesStore
-import app.tandemforactual.ui.core.format.platformFormatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.platform.rememberBackupFolderPicker
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
-import app.tandemforactual.ui.core.session.AutomaticBackups
-import app.tandemforactual.ui.core.session.BackupProblem
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.SyncNetwork
-import app.tandemforactual.ui.core.session.automaticBackupSummary
 import app.tandemforactual.ui.core.state.AppState
-import app.tandemforactual.ui.design.inputs.FilterPills
+import app.tandemforactual.ui.design.buttons.TandemModalHeader
+import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.ToggleRow
-import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.TandemTypography
-import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.sheets.SheetCard
+import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
+import app.tandemforactual.ui.design.templates.ChoiceRow
+import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.FolderOpen
-import com.composables.icons.lucide.KeyRound
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Wifi
 
 internal val BACKUP_INTERVALS = listOf(24 to "Daily", 72 to "Every 3 days", 168 to "Weekly", 720 to "Monthly")
-internal val BACKUP_KEEP = listOf(3, 7, 14, 30)
+
+internal fun backupIntervalLabel(settings: AutomaticBackupSettings): String =
+    if (!settings.enabled) "Off" else BACKUP_INTERVALS.firstOrNull { it.first == settings.intervalHours }?.second ?: "Daily"
+
+internal fun backupNetworkLabel(network: SyncNetwork): String = if (network == SyncNetwork.WIFI) "Wi-Fi only" else "Wi-Fi or mobile data"
+
+private enum class BackupChoice { SCHEDULE, NETWORK }
 
 /**
- * Backs up the whole budget and its planning data to a folder on a schedule, in the background, on the networks
- * chosen. Where the platform can't run them yet the card says so instead.
+ * How often backups run in the background, where they go, and on which networks. The rows after the schedule show only
+ * while it's on. Where the platform can't run them yet the section says so instead.
  */
 @Composable
-internal fun AutomaticBackupCard(
+internal fun AutomaticBackupsSection(
     state: AppState,
     preferences: AppPreferencesStore?,
+    encryption: BackupEncryption,
 ) {
     val settings = state.automaticBackup
     val update = { change: (AutomaticBackupSettings) -> AutomaticBackupSettings -> state.automaticBackup = change(state.automaticBackup) }
     val pickFolder = rememberBackupFolderPicker { folder, label -> update { it.copy(folder = folder, folderLabel = label) } }
     val secrets = LocalBackupSecrets.current
+    var choosing by remember { mutableStateOf<BackupChoice?>(null) }
     var settingWebDav by remember { mutableStateOf(false) }
-    var hasPassphrase by remember(secrets) { mutableStateOf(secrets?.hasPassphrase() == true) }
-    var settingPassphrase by remember { mutableStateOf(false) }
-    var turnOnAfterPassphrase by remember { mutableStateOf(false) }
-    val encrypted = state.selectedBudgetEncrypted
-    val turnOn = {
-        update { it.copy(enabled = true) }
-        if (settings.folder == null && settings.webDavUrl == null) pickFolder?.invoke()
-    }
     LaunchedEffect(preferences) {
         preferences?.let { store -> runCatching { store.read() }.onSuccess(state::restoreAutomaticBackupStatus) }
     }
-    SectionCard("Automatic backups", automaticBackupStatus(state, hasPassphrase)) {
+    SectionCard("Automatic backups") {
         if (pickFolder == null) {
-            Text(
-                "Automatic backups run on Android for now.",
-                Modifier.padding(TandemSpacing.large),
-                color = tandemPalette.muted,
-                fontSize = TandemTypography.label,
+            ListRow(
+                "Automatic backups run on Android for now",
+                leading = RowLeading.Icon(Lucide.Info),
+                options = ListRowOptions(showChevron = false),
             )
             return@SectionCard
         }
-        ToggleRow("Back up automatically", "The whole budget and its planning data", settings.enabled) { on ->
-            when {
-                !on -> update { it.copy(enabled = false) }
-                AutomaticBackups.needsPassphrase(encrypted, hasPassphrase) -> {
-                    turnOnAfterPassphrase = true
-                    settingPassphrase = true
-                }
-                else -> turnOn()
+        ListRow(
+            "Back up",
+            backupIntervalLabel(settings),
+            leading = RowLeading.Icon(Lucide.CalendarClock),
+            onClick = { choosing = BackupChoice.SCHEDULE },
+        )
+        AnimatedReveal(visible = settings.enabled) {
+            Column {
+                DividerLine()
+                ListRow(
+                    "Save to",
+                    settings.folderLabel ?: "Choose a folder",
+                    leading = RowLeading.Icon(Lucide.FolderOpen),
+                    onClick = pickFolder,
+                )
+                DividerLine()
+                ListRow(
+                    "Upload to WebDAV",
+                    settings.webDavUrl ?: "Not set up",
+                    leading = RowLeading.Icon(Lucide.Cloud),
+                    options = ListRowOptions(subtitleMaxLines = 1),
+                    onClick = if (secrets != null) ({ settingWebDav = true }) else null,
+                )
+                DividerLine()
+                ListRow(
+                    "Back up using",
+                    backupNetworkLabel(settings.network),
+                    leading = RowLeading.Icon(Lucide.Wifi),
+                    onClick = { choosing = BackupChoice.NETWORK },
+                )
             }
         }
-        DividerLine()
-        ListRow(
-            "Folder",
-            settings.folderLabel ?: "Choose where backups go",
-            leading = RowLeading.Icon(Lucide.FolderOpen),
-            onClick = pickFolder,
-        )
-        DividerLine()
-        BackupSchedule(settings, update)
-        DividerLine()
-        ListRow(
-            "Upload to WebDAV",
-            settings.webDavUrl ?: "Off. Copy each backup to Nextcloud, a NAS or another WebDAV server.",
-            leading = RowLeading.Icon(Lucide.Cloud),
-            onClick = if (secrets != null) ({ settingWebDav = true }) else null,
-        )
-        DividerLine()
-        ListRow(
-            "Encrypt backups",
-            passphraseSummary(hasPassphrase, encrypted),
-            leading = RowLeading.Icon(Lucide.KeyRound),
-            onClick = if (secrets != null) ({ settingPassphrase = true }) else null,
-        )
+    }
+    val schedule = { hours: Int? ->
+        choosing = null
+        val turnOn = {
+            update { it.copy(enabled = true, intervalHours = hours ?: it.intervalHours) }
+            if (settings.folder == null && settings.webDavUrl == null) pickFolder?.invoke()
+        }
+        when {
+            hours == null -> update { it.copy(enabled = false) }
+            encryption.ready -> turnOn()
+            else -> encryption.askForPassphrase(turnOn)
+        }
+    }
+    ScheduleChoice(choosing == BackupChoice.SCHEDULE, settings, onDismiss = { choosing = null }, onChoose = schedule)
+    NetworkChoice(choosing == BackupChoice.NETWORK, settings.network, onDismiss = { choosing = null }) { network ->
+        choosing = null
+        update { it.copy(network = network) }
     }
     WebDavSetup(settingWebDav, settings, secrets, onClose = { settingWebDav = false }, update = update)
-    PassphraseSetup(settingPassphrase, hasPassphrase, required = encrypted && settings.enabled, encrypted) { saved, passphrase ->
-        settingPassphrase = false
-        if (saved && secrets?.setPassphrase(passphrase) == true) {
-            hasPassphrase = passphrase != null
-            if (turnOnAfterPassphrase && passphrase != null) turnOn()
-        }
-        turnOnAfterPassphrase = false
-    }
 }
 
-/** The passphrase dialog; while an encrypted budget is being backed up, its passphrase can be changed but not removed. */
 @Composable
-private fun PassphraseSetup(
+private fun ScheduleChoice(
     visible: Boolean,
-    hasPassphrase: Boolean,
-    required: Boolean,
-    encrypted: Boolean,
-    onClose: (saved: Boolean, passphrase: String?) -> Unit,
+    settings: AutomaticBackupSettings,
+    onDismiss: () -> Unit,
+    onChoose: (Int?) -> Unit,
 ) {
-    AutomaticBackupPassphraseDialog(
-        visible,
-        hasPassphrase,
-        reason = if (required && hasPassphrase) KEEP_PASSPHRASE else ENCRYPTED_BUDGET.takeIf { encrypted },
-        canRemove = hasPassphrase && !required,
-        onDismiss = { onClose(false, null) },
-    ) { passphrase -> onClose(passphrase != null || !required, passphrase) }
+    ChoiceSheet(visible, "Back up", onDismiss) {
+        ChoiceRow("Off", selected = !settings.enabled) { onChoose(null) }
+        BACKUP_INTERVALS.forEach { (hours, label) ->
+            ChoiceRow(label, selected = settings.enabled && settings.intervalHours == hours) { onChoose(hours) }
+        }
+    }
 }
 
-private const val ENCRYPTED_BUDGET = "This budget is end-to-end encrypted, so its backups need a passphrase too."
-private const val KEEP_PASSPHRASE = "$ENCRYPTED_BUDGET To remove it, turn off automatic backups first."
-
-private fun passphraseSummary(
-    hasPassphrase: Boolean,
-    encrypted: Boolean,
-): String =
-    when {
-        hasPassphrase -> "With your passphrase. Tap to change or remove it."
-        encrypted -> "Needed before this end-to-end encrypted budget can be backed up."
-        else -> "Off. Anyone with the files can open them."
-    }
-
-/** How often backups run, on which networks, and how many are kept. */
 @Composable
-private fun BackupSchedule(
-    settings: AutomaticBackupSettings,
-    update: ((AutomaticBackupSettings) -> AutomaticBackupSettings) -> Unit,
+private fun NetworkChoice(
+    visible: Boolean,
+    network: SyncNetwork,
+    onDismiss: () -> Unit,
+    onChoose: (SyncNetwork) -> Unit,
 ) {
-    Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-        Label("How often")
-        FilterPills(BACKUP_INTERVALS, settings.intervalHours, { hours -> update { it.copy(intervalHours = hours) } })
-        Label("Back up on")
-        FilterPills(SyncNetwork.entries.map { it to it.shortLabel }, settings.network, { network -> update { it.copy(network = network) } })
-        Label("Keep")
-        FilterPills(BACKUP_KEEP.map { it to "Last $it" }, settings.keep, { keep -> update { it.copy(keep = keep) } })
+    ChoiceSheet(visible, "Back up using", onDismiss) {
+        ChoiceRow(
+            backupNetworkLabel(SyncNetwork.WIFI),
+            "Hotspots and metered Wi-Fi count as mobile data.",
+            selected = network == SyncNetwork.WIFI,
+        ) { onChoose(SyncNetwork.WIFI) }
+        ChoiceRow(backupNetworkLabel(SyncNetwork.ANY), selected = network != SyncNetwork.WIFI) { onChoose(SyncNetwork.ANY) }
+    }
+}
+
+@Composable
+private fun ChoiceSheet(
+    visible: Boolean,
+    title: String,
+    onDismiss: () -> Unit,
+    choices: @Composable () -> Unit,
+) {
+    TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
+        SheetCard(header = { TandemModalHeader(title, onClose = onDismiss) }) { choices() }
     }
 }
 
@@ -199,20 +198,3 @@ private fun WebDavSetup(
             },
     )
 }
-
-@Composable
-private fun Label(text: String) = Text(text, color = tandemPalette.muted, fontSize = TandemTypography.label)
-
-private fun automaticBackupStatus(
-    state: AppState,
-    hasPassphrase: Boolean,
-): String =
-    if (state.automaticBackup.enabled && AutomaticBackups.needsPassphrase(state.selectedBudgetEncrypted, hasPassphrase)) {
-        "Paused: ${BackupProblem.NEEDS_PASSPHRASE.text}"
-    } else {
-        automaticBackupSummary(
-            state.automaticBackup,
-            state.automaticBackupLastRun?.let(::platformFormatDateAtEpochMilliseconds),
-            state.automaticBackupResult,
-        )
-    }

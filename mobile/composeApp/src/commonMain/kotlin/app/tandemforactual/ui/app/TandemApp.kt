@@ -53,6 +53,7 @@ fun TandemApp(
     openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
     onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
     tabletopFold: StateFlow<TabletopFold?> = MutableStateFlow(null),
+    onAutomaticBackupNetworkChanged: ((SyncNetwork) -> Unit)? = null,
 ) {
     AppShell(
         ShellEnvironment(
@@ -85,6 +86,7 @@ fun TandemApp(
             openSignInPage,
             onAppSwitcherPrivacyChanged,
             tabletopFold = tabletopFold,
+            onAutomaticBackupNetworkChanged = onAutomaticBackupNetworkChanged,
         ),
     )
 }

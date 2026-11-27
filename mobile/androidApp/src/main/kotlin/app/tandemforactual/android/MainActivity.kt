@@ -163,6 +163,7 @@ class MainActivity : FragmentActivity() {
                 LocalLanAccess provides lanAccess,
             ) {
                 TandemApp(
+                    onAutomaticBackupNetworkChanged = { AutomaticBackupScheduler.update(applicationContext, it) },
                     actualBudgetFiles =
                         remember { sealedBudgetFiles(applicationContext) },
                     planningKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, "planning_keys") },
