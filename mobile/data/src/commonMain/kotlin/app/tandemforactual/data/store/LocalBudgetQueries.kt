@@ -15,16 +15,15 @@ suspend fun LocalBudgetRepository.findRecords(
     payeeId: String? = null,
     fromDate: String? = null,
     throughDate: String? = null,
-): List<BudgetRecordEntity> =
-    database.budgetRecordDao().findVisible(
-        budgetId,
-        recordType,
-        accountId,
-        categoryId,
-        payeeId,
-        fromDate,
-        throughDate,
-    )
+): List<BudgetRecordEntity> {
+    val dao = database.budgetRecordDao()
+    return when {
+        accountId != null || categoryId != null || payeeId != null ->
+            dao.findVisible(budgetId, recordType, accountId, categoryId, payeeId, fromDate, throughDate)
+        fromDate != null || throughDate != null -> dao.findVisibleFrom(budgetId, recordType, fromDate.orEmpty(), throughDate)
+        else -> dao.findAllVisible(budgetId, recordType)
+    }
+}
 
 /** The account's balance on this device through [throughDate], or across every date when it is null, as Actual counts it when closing. */
 suspend fun LocalBudgetRepository.readAccountBalance(

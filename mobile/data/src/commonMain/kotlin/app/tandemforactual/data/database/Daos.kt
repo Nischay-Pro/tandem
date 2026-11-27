@@ -7,45 +7,39 @@ import androidx.room3.Query
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
-private const val REPORT_CATEGORY_JSON = "COALESCE(category.localJson, category.remoteJson)"
-private const val REPORT_ACCOUNT_JSON = "COALESCE(account.localJson, account.remoteJson)"
+private const val REPORT_LIVE = """localDeleted = 0 AND remoteDeleted = 0
+          AND (localJson IS NOT NULL OR remoteJson IS NOT NULL)"""
 
-private const val REPORT_CATEGORY_IS_INCOME = """COALESCE(
-        CASE WHEN json_valid($REPORT_CATEGORY_JSON) = 1
-          THEN COALESCE(json_extract($REPORT_CATEGORY_JSON, '$.is_income'), json_extract($REPORT_CATEGORY_JSON, '$.isIncome'))
-          ELSE 0
-        END,
-        0
-      )"""
+private const val REPORT_INCOME_CATEGORIES = """SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'category' AND $REPORT_LIVE
+          AND COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(json_extract(COALESCE(localJson, remoteJson), '$.is_income'), json_extract(COALESCE(localJson, remoteJson), '$.isIncome'))
+              ELSE 0
+            END,
+            0
+          ) != 0"""
 
-private const val REPORT_ACCOUNT_OFF_BUDGET = """COALESCE(
-        CASE WHEN json_valid($REPORT_ACCOUNT_JSON) = 1
-          THEN COALESCE(json_extract($REPORT_ACCOUNT_JSON, '$.offbudget'), json_extract($REPORT_ACCOUNT_JSON, '$.offBudget'))
-          ELSE 0
-        END,
-        0
-      )"""
+private const val REPORT_OFF_BUDGET_ACCOUNTS = """SELECT recordId FROM budget_records
+        WHERE budgetId = :budgetId AND recordType = 'account' AND $REPORT_LIVE
+          AND COALESCE(
+            CASE WHEN json_valid(COALESCE(localJson, remoteJson)) = 1
+              THEN COALESCE(json_extract(COALESCE(localJson, remoteJson), '$.offbudget'), json_extract(COALESCE(localJson, remoteJson), '$.offBudget'))
+              ELSE 0
+            END,
+            0
+          ) != 0"""
+
+private const val REPORT_CATEGORY_IS_INCOME = "(tx.categoryId IN ($REPORT_INCOME_CATEGORIES))"
 
 private const val REPORT_TRANSACTIONS = """FROM budget_records AS tx
-    LEFT JOIN budget_records AS category
-      ON category.budgetId = tx.budgetId
-      AND category.recordType = 'category'
-      AND category.recordId = tx.categoryId
-      AND category.localDeleted = 0 AND category.remoteDeleted = 0
-      AND (category.localJson IS NOT NULL OR category.remoteJson IS NOT NULL)
-    LEFT JOIN budget_records AS account
-      ON account.budgetId = tx.budgetId
-      AND account.recordType = 'account'
-      AND account.recordId = tx.accountId
-      AND account.localDeleted = 0 AND account.remoteDeleted = 0
-      AND (account.localJson IS NOT NULL OR account.remoteJson IS NOT NULL)
     WHERE tx.budgetId = :budgetId AND tx.recordType = 'transaction'
       AND tx.recordDate IS NOT NULL AND length(tx.recordDate) >= 10
       AND tx.amountMinor IS NOT NULL
       AND tx.localDeleted = 0 AND tx.remoteDeleted = 0
       AND (tx.localJson IS NOT NULL OR tx.remoteJson IS NOT NULL)
       AND tx.isParent = 0
-      AND $REPORT_ACCOUNT_OFF_BUDGET = 0
+      AND (tx.accountId IS NULL OR tx.accountId NOT IN ($REPORT_OFF_BUDGET_ACCOUNTS))
       AND (:fromDate IS NULL OR tx.recordDate >= :fromDate)
       AND (:throughDate IS NULL OR tx.recordDate <= :throughDate)"""
 
@@ -285,6 +279,38 @@ interface BudgetRecordDao {
 
     @Query(
         """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findAllVisible(
+        budgetId: String,
+        recordType: String,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
+    SELECT * FROM budget_records
+    WHERE budgetId = :budgetId AND recordType = :recordType
+      AND recordDate >= :fromDate
+      AND (:throughDate IS NULL OR recordDate <= :throughDate)
+      AND localDeleted = 0
+      AND (localJson IS NOT NULL OR (remoteJson IS NOT NULL AND remoteDeleted = 0))
+    ORDER BY recordDate DESC, recordId ASC
+    """,
+    )
+    suspend fun findVisibleFrom(
+        budgetId: String,
+        recordType: String,
+        fromDate: String,
+        throughDate: String?,
+    ): List<BudgetRecordEntity>
+
+    @Query(
+        """
     SELECT categoryId FROM budget_records
     WHERE budgetId = :budgetId AND recordType = 'transaction' AND payeeId = :payeeId
       AND categoryId IS NOT NULL AND isParent = 0
@@ -480,182 +506,4 @@ interface BudgetSnapshotDao {
 
     @Query("DELETE FROM budget_snapshot_records WHERE budgetId = :budgetId")
     suspend fun deleteRecords(budgetId: String): Int
-}
-
-@Dao
-interface OutboxDao {
-    @Query("SELECT * FROM sync_outbox WHERE budgetId = :budgetId ORDER BY createdAtEpochMs ASC, operationId ASC")
-    suspend fun findAllForBudget(budgetId: String): List<OutboxOperationEntity>
-
-    @Query("DELETE FROM sync_outbox WHERE budgetId = :budgetId")
-    suspend fun deleteBudget(budgetId: String): Int
-
-    @Query("SELECT * FROM sync_outbox WHERE operationId = :operationId")
-    suspend fun find(operationId: String): OutboxOperationEntity?
-
-    @Query(
-        "SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected'))",
-    )
-    suspend fun hasUnresolvedWrites(): Boolean
-
-    @Query("SELECT * FROM sync_outbox WHERE idempotencyKey = :idempotencyKey")
-    suspend fun findByIdempotencyKey(idempotencyKey: String): OutboxOperationEntity?
-
-    @Query("SELECT * FROM sync_outbox WHERE recordType = :recordType ORDER BY createdAtEpochMs ASC, operationId ASC")
-    suspend fun findByRecordType(recordType: String): List<OutboxOperationEntity>
-
-    @Query("DELETE FROM sync_outbox WHERE operationId = :operationId AND status = 'queued' AND attemptCount = 0")
-    suspend fun deleteQueuedOperation(operationId: String): Int
-
-    @Query(
-        "DELETE FROM sync_outbox WHERE recordType != 'budget-mutation-metadata' AND status IN ('committed', 'discarded', 'superseded') AND updatedAtEpochMs < :cutoffEpochMs",
-    )
-    suspend fun deleteExpiredTerminalWrites(cutoffEpochMs: Long): Int
-
-    @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status = 'queued' AND serverOperationId IS NULL ORDER BY createdAtEpochMs DESC LIMIT 1",
-    )
-    suspend fun findMergeableQueuedForRecord(
-        budgetId: String,
-        recordType: String,
-        recordId: String,
-    ): OutboxOperationEntity?
-
-    @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND recordType = :recordType AND recordId = :recordId AND status IN ('queued', 'sending', 'uncertain', 'conflict') ORDER BY createdAtEpochMs ASC LIMIT 1",
-    )
-    suspend fun findBlockingForRecord(
-        budgetId: String,
-        recordType: String,
-        recordId: String,
-    ): OutboxOperationEntity?
-
-    @Query(
-        """
-    SELECT queued.* FROM sync_outbox AS queued
-    WHERE queued.budgetId = :budgetId
-      AND queued.recordType = 'transaction'
-      AND queued.status = 'queued'
-      AND NOT EXISTS (
-        SELECT 1 FROM sync_outbox AS blocking
-        WHERE blocking.budgetId = queued.budgetId
-          AND blocking.recordType = queued.recordType
-          AND blocking.recordId = queued.recordId
-          AND blocking.operationId != queued.operationId
-          AND blocking.status IN ('sending', 'uncertain', 'conflict')
-          AND (
-            blocking.createdAtEpochMs < queued.createdAtEpochMs
-            OR (blocking.createdAtEpochMs = queued.createdAtEpochMs AND blocking.operationId < queued.operationId)
-          )
-      )
-    ORDER BY queued.createdAtEpochMs ASC, queued.operationId ASC
-    LIMIT 1
-    """,
-    )
-    suspend fun findNextQueued(budgetId: String): OutboxOperationEntity?
-
-    @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected', 'superseded', 'discarded') ORDER BY createdAtEpochMs ASC, operationId ASC",
-    )
-    suspend fun findPending(budgetId: String): List<OutboxOperationEntity>
-
-    @Query(
-        "SELECT * FROM sync_outbox WHERE budgetId = :budgetId AND status IN ('queued', 'sending', 'uncertain', 'conflict', 'rejected', 'superseded', 'discarded') ORDER BY createdAtEpochMs ASC, operationId ASC",
-    )
-    fun observePending(budgetId: String): Flow<List<OutboxOperationEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insert(operation: OutboxOperationEntity)
-
-    @Upsert
-    suspend fun put(operation: OutboxOperationEntity)
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'sending', attemptCount = attemptCount + 1, updatedAtEpochMs = :updatedAtEpochMs WHERE operationId = :operationId AND status = 'queued'",
-    )
-    suspend fun markSending(
-        operationId: String,
-        updatedAtEpochMs: Long,
-    ): Int
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'uncertain', lastErrorCode = 'process-restarted-during-send', updatedAtEpochMs = :updatedAtEpochMs WHERE status = 'sending'",
-    )
-    suspend fun markInterruptedSendsUncertain(updatedAtEpochMs: Long): Int
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'uncertain', lastErrorCode = 'process-restarted-during-send', updatedAtEpochMs = :updatedAtEpochMs WHERE status = 'sending' AND recordType IN (:recordTypes)",
-    )
-    suspend fun markInterruptedSendsUncertainForRecordTypes(
-        recordTypes: List<String>,
-        updatedAtEpochMs: Long,
-    ): Int
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'uncertain', lastErrorCode = 'process-restarted-during-send', updatedAtEpochMs = :updatedAtEpochMs WHERE status = 'sending' AND recordType NOT IN (:recordTypes)",
-    )
-    suspend fun markInterruptedSendsUncertainExceptRecordTypes(
-        recordTypes: List<String>,
-        updatedAtEpochMs: Long,
-    ): Int
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'conflict', lastErrorCode = 'remote-deleted', updatedAtEpochMs = :updatedAtEpochMs WHERE budgetId = :budgetId AND recordType = 'transaction' AND recordId = :recordId AND action = 'UPDATE' AND status = 'queued' AND attemptCount = 0",
-    )
-    suspend fun markEditsForDeletedRecord(
-        budgetId: String,
-        recordId: String,
-        updatedAtEpochMs: Long,
-    ): Int
-
-    @Query(
-        "UPDATE sync_outbox SET status = 'conflict', lastErrorCode = 'remote-deleted', updatedAtEpochMs = :updatedAtEpochMs WHERE budgetId = :budgetId AND recordType = 'transaction' AND action = 'UPDATE' AND status = 'queued' AND attemptCount = 0 AND EXISTS (SELECT 1 FROM budget_records WHERE budget_records.budgetId = sync_outbox.budgetId AND budget_records.recordType = sync_outbox.recordType AND budget_records.recordId = sync_outbox.recordId AND budget_records.remoteDeleted = 1)",
-    )
-    suspend fun markEditsForDeletedRecords(
-        budgetId: String,
-        updatedAtEpochMs: Long,
-    ): Int
-}
-
-@Dao
-interface BudgetSyncStateDao {
-    @Query("DELETE FROM budget_sync_state WHERE budgetId = :budgetId")
-    suspend fun deleteBudget(budgetId: String): Int
-
-    @Query(
-        """
-        SELECT EXISTS(SELECT 1 FROM budget_records)
-            OR EXISTS(SELECT 1 FROM budget_snapshot_records)
-            OR EXISTS(SELECT 1 FROM budget_snapshot_progress)
-            OR EXISTS(SELECT 1 FROM budget_sync_state)
-            OR EXISTS(SELECT 1 FROM sync_outbox)
-        """,
-    )
-    suspend fun hasAnyBudgetData(): Boolean
-
-    @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
-    suspend fun find(budgetId: String): BudgetSyncStateEntity?
-
-    @Query(
-        "SELECT * FROM budget_sync_state WHERE generation != '' AND lastSyncedAtEpochMs IS NOT NULL ORDER BY lastSyncedAtEpochMs DESC, budgetId ASC",
-    )
-    suspend fun findCachedBudgets(): List<BudgetSyncStateEntity>
-
-    @Query("SELECT * FROM budget_sync_state WHERE budgetId = :budgetId")
-    fun observe(budgetId: String): Flow<BudgetSyncStateEntity?>
-
-    @Upsert
-    suspend fun put(state: BudgetSyncStateEntity)
-}
-
-@Dao
-interface AppPreferenceDao {
-    @Query("SELECT * FROM app_preferences")
-    suspend fun readAll(): List<AppPreferenceEntity>
-
-    @Query("DELETE FROM app_preferences")
-    suspend fun clearAll()
-
-    @Upsert
-    suspend fun putAll(preferences: List<AppPreferenceEntity>)
 }

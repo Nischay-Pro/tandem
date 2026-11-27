@@ -9,8 +9,11 @@ data class ActualTimestamp(
     val counter: Int,
     val node: String,
 ) : Comparable<ActualTimestamp> {
-    override fun toString(): String =
+    private val text by lazy(LazyThreadSafetyMode.PUBLICATION) {
         "${isoMillis(millis)}-${counter.toString(16).uppercase().padStart(4, '0').takeLast(4)}-${node.padStart(16, '0').takeLast(16)}"
+    }
+
+    override fun toString(): String = text
 
     /** MurmurHash3 of the string form, unsigned, as Actual's `Timestamp.hash()`. */
     fun hash(): Long = murmurHash3(toString())

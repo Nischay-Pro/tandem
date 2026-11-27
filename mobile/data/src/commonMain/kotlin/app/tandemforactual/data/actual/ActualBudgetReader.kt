@@ -33,64 +33,80 @@ class ActualBudgetReader(
     /** [today] is the device's local date as `YYYY-MM-DD`; it sets the current month and the account-balance cutoff. */
     fun read(today: String): ActualSnapshot {
         val preferences = db.query("SELECT id, value FROM preferences").associate { it["id"] as String to it["value"] as String? }
-        val tracking = preferences["budgetType"] == "tracking"
         val records = mutableListOf<ActualRecord>()
         db.query("SELECT id, name FROM account_groups WHERE tombstone = 0 ORDER BY sort_order, id").forEach {
             records += record("account-group", obj("id" to jsonString(it["id"]), "name" to jsonString(it["name"])))
         }
         readAccounts(today, records)
-        val groups = categoryGroups()
+        val categories = categories()
+        val groups = categoryGroups(categories)
         groups.forEach { records += record("category-group", JsonObject(it.external())) }
-        db.query("SELECT * FROM categories WHERE tombstone = 0 ORDER BY sort_order, id").forEach {
-            records +=
-                record(
-                    "category",
-                    JsonObject(
-                        BudgetCategory(
-                            it["id"] as String,
-                            it["name"] as String,
-                            truthy(it["is_income"]),
-                            truthy(it["hidden"]),
-                            it["cat_group"] as String,
-                        ).external(),
-                    ),
-                )
-        }
+        categories.forEach { records += record("category", JsonObject(it.external())) }
         readPayees(records)
+        val rules = rules()
+        refreshScheduleJsonPaths(rules)
+        scheduleRows().forEach { records += record("schedule", it) }
+        rules.forEach { records += record("rule", it) }
+        budgetMonths(today, preferences, groups).forEach { (month, body) -> records += record("budget-month", body, month) }
+        records += transactions()
+        return ActualSnapshot(records, budgetDisplaySettings(preferences))
+    }
+
+    /** The schedule records [read] returns, without building the rest of the budget. */
+    fun schedules(): List<JsonObject> {
+        refreshScheduleJsonPaths(rules())
+        return scheduleRows()
+    }
+
+    /** One schedule as [schedules] returns it, assuming its rule is unchanged since the last [schedules] or [read]. */
+    fun schedule(id: String): JsonObject? = scheduleRows(id).firstOrNull()
+
+    fun hasPayee(id: String): Boolean = payeeRows("AND p.id = ?", id).isNotEmpty()
+
+    /** The budget-month record [read] returns for [month], or null when the budget has no such month. */
+    fun budgetMonth(
+        today: String,
+        month: String,
+    ): JsonObject? {
+        val preferences = db.query("SELECT id, value FROM preferences").associate { it["id"] as String to it["value"] as String? }
+        return budgetMonths(today, preferences, categoryGroups(categories())).firstOrNull { it.first == month }?.second
+    }
+
+    private fun budgetMonths(
+        today: String,
+        preferences: Map<String, String?>,
+        groups: List<BudgetGroup>,
+    ): List<Pair<String, JsonObject>> {
+        val months = ActualBudgetMonths(db, groups, preferences["budgetType"] == "tracking")
+        val created = months.createdMonths(ActualMonths.fromIsoDate(today))
+        return months.compute(created, created.dropLast(1))
+    }
+
+    private fun rules(): List<JsonObject> {
         val mappings =
             (
                 db.query("SELECT id, transferId AS target FROM category_mapping") +
                     db.query("SELECT id, targetId AS target FROM payee_mapping")
             ).mapNotNull { row -> (row["target"] as String?)?.let { row["id"] as String to it } }
                 .toMap()
-        val rules =
-            ActualRules.load(
-                db.query("SELECT * FROM rules WHERE conditions IS NOT NULL AND actions IS NOT NULL AND tombstone = 0"),
-                mappings,
-            )
-        refreshScheduleJsonPaths(rules)
-        readSchedules(records)
-        rules.forEach { records += record("rule", it) }
-        val months = ActualBudgetMonths(db, groups, tracking)
-        val created = months.createdMonths(ActualMonths.fromIsoDate(today))
-        months.compute(created, created.dropLast(1)).forEach { (month, body) -> records += record("budget-month", body, month) }
-        records += transactions()
-        return ActualSnapshot(records, budgetDisplaySettings(preferences))
+        return ActualRules.load(
+            db.query("SELECT * FROM rules WHERE conditions IS NOT NULL AND actions IS NOT NULL AND tombstone = 0"),
+            mappings,
+        )
     }
 
     private fun readAccounts(
         today: String,
         records: MutableList<ActualRecord>,
     ) {
-        val cutoff = ActualMonths.dateInt(today)
+        val balances =
+            db
+                .query(
+                    "SELECT acct, sum(amount) AS balance FROM transactions WHERE isParent = 0 AND tombstone = 0 AND date <= ? GROUP BY acct",
+                    ActualMonths.dateInt(today),
+                ).associate { it["acct"] to it["balance"] }
         db.query("SELECT * FROM accounts WHERE tombstone = 0 ORDER BY sort_order, name").forEach {
-            val balance =
-                db
-                    .first(
-                        "SELECT sum(amount) as balance FROM transactions WHERE acct = ? AND isParent = 0 AND tombstone = 0 AND date <= ?",
-                        it["id"],
-                        cutoff,
-                    )?.get("balance")
+            val balance = balances[it["id"]]
             val fields =
                 linkedMapOf(
                     "id" to jsonString(it["id"]),
@@ -106,72 +122,72 @@ class ActualBudgetReader(
     }
 
     private fun readPayees(records: MutableList<ActualRecord>) {
-        db
-            .query(
-                """
-                SELECT p.*, COALESCE(a.name, p.name) AS name FROM payees p
-                LEFT JOIN accounts a ON (p.transfer_acct = a.id AND a.tombstone = 0)
-                WHERE p.tombstone = 0 AND (p.transfer_acct IS NULL OR a.id IS NOT NULL)
-                """.trimIndent(),
-            ).forEach {
-                records +=
-                    record(
-                        "payee",
-                        obj(
-                            "id" to jsonString(it["id"]),
-                            "name" to jsonString(it["name"]),
-                            "transfer_acct" to jsonString(it["transfer_acct"]),
-                        ),
-                    )
-            }
-    }
-
-    private fun readSchedules(records: MutableList<ActualRecord>) {
-        db.query("SELECT * FROM v_schedules WHERE tombstone = 0").forEach {
+        payeeRows("").forEach {
             records +=
                 record(
-                    "schedule",
+                    "payee",
                     obj(
                         "id" to jsonString(it["id"]),
                         "name" to jsonString(it["name"]),
-                        "rule" to jsonString(it["rule"]),
-                        "next_date" to
-                            ((it["next_date"] as? Number)?.let { d -> JsonPrimitive(ActualMonths.dateString(d.toLong())) } ?: JsonNull),
-                        "completed" to jsonBool(it["completed"]),
-                        "posts_transaction" to jsonBool(it["posts_transaction"]),
-                        "payee" to jsonString(it["_payee"]),
-                        "account" to jsonString(it["_account"]),
-                        "amount" to jsonFallback(it["_amount"]),
-                        "amountOp" to jsonString(it["_amountOp"]),
-                        "date" to jsonFallback(it["_date"]),
+                        "transfer_acct" to jsonString(it["transfer_acct"]),
                     ),
                 )
         }
     }
 
-    private fun categoryGroups(): List<BudgetGroup> {
-        val categories =
-            db.query("SELECT * FROM categories WHERE tombstone = 0 ORDER BY sort_order, id").map {
-                BudgetCategory(
-                    it["id"] as String,
-                    it["name"] as String,
-                    truthy(it["is_income"]),
-                    truthy(it["hidden"]),
-                    it["cat_group"] as String,
-                )
+    private fun payeeRows(
+        filter: String,
+        vararg args: Any?,
+    ): List<Row> =
+        db.query(
+            """
+            SELECT p.*, COALESCE(a.name, p.name) AS name FROM payees p
+            LEFT JOIN accounts a ON (p.transfer_acct = a.id AND a.tombstone = 0)
+            WHERE p.tombstone = 0 AND (p.transfer_acct IS NULL OR a.id IS NOT NULL)
+            """.trimIndent() + if (filter.isEmpty()) "" else " $filter",
+            *args,
+        )
+
+    private fun scheduleRows(id: String? = null): List<JsonObject> =
+        (
+            if (id == null) {
+                db.query("SELECT * FROM v_schedules WHERE tombstone = 0")
+            } else {
+                db.query("SELECT * FROM v_schedules WHERE tombstone = 0 AND id = ?", id)
             }
+        ).map {
+            obj(
+                "id" to jsonString(it["id"]),
+                "name" to jsonString(it["name"]),
+                "rule" to jsonString(it["rule"]),
+                "next_date" to
+                    ((it["next_date"] as? Number)?.let { d -> JsonPrimitive(ActualMonths.dateString(d.toLong())) } ?: JsonNull),
+                "completed" to jsonBool(it["completed"]),
+                "posts_transaction" to jsonBool(it["posts_transaction"]),
+                "payee" to jsonString(it["_payee"]),
+                "account" to jsonString(it["_account"]),
+                "amount" to jsonFallback(it["_amount"]),
+                "amountOp" to jsonString(it["_amountOp"]),
+                "date" to jsonFallback(it["_date"]),
+            )
+        }
+
+    private fun categories(): List<BudgetCategory> =
+        db.query("SELECT * FROM categories WHERE tombstone = 0 ORDER BY sort_order, id").map {
+            BudgetCategory(
+                it["id"] as String,
+                it["name"] as String,
+                truthy(it["is_income"]),
+                truthy(it["hidden"]),
+                it["cat_group"] as String,
+            )
+        }
+
+    private fun categoryGroups(categories: List<BudgetCategory>): List<BudgetGroup> {
+        val byGroup = categories.groupBy { it.groupId }
         return db.query("SELECT * FROM category_groups WHERE tombstone = 0 ORDER BY is_income, sort_order, id").map { group ->
             val id = group["id"] as String
-            BudgetGroup(
-                id,
-                group["name"] as String,
-                truthy(group["is_income"]),
-                truthy(group["hidden"]),
-                categories.filter {
-                    it.groupId ==
-                        id
-                },
-            )
+            BudgetGroup(id, group["name"] as String, truthy(group["is_income"]), truthy(group["hidden"]), byGroup[id].orEmpty())
         }
     }
 

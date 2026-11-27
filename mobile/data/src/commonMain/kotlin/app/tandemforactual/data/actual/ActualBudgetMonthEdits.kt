@@ -12,12 +12,7 @@ private fun ActualBudgetEdits.requireMonth(month: String) {
 }
 
 private fun ActualBudgetEdits.monthData(month: String): JsonObject =
-    ActualBudgetReader(db)
-        .read(today())
-        .records
-        .firstOrNull { it.type == "budget-month" && it.id == month }
-        ?.body
-        ?: fail("No budget exists for month: $month")
+    ActualBudgetReader(db).budgetMonth(today(), month) ?: fail("No budget exists for month: $month")
 
 private fun ActualBudgetEdits.monthCategories(month: String): List<JsonObject> =
     monthData(month).getValue("categoryGroups").jsonArray.flatMap { group ->

@@ -1069,7 +1069,7 @@ class LocalBudgetRepositoryTest {
     @Test
     fun roomMigrationsFromEverySavedVersionPreserveBudgetMutationOutboxRows() =
         runBlocking {
-            for (schemaVersion in 1..5) {
+            for (schemaVersion in 1..8) {
                 val databaseFile = File.createTempFile("tandem-schema-$schemaVersion-", ".db")
                 databaseFile.delete()
                 try {

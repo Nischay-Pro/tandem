@@ -9,7 +9,10 @@ import androidx.room3.PrimaryKey
     tableName = "budget_records",
     primaryKeys = ["budgetId", "recordType", "recordId"],
     indices = [
-        Index(value = ["budgetId", "recordType", "accountId", "recordDate"]),
+        Index(
+            value = ["budgetId", "recordType", "accountId", "recordDate", "recordId"],
+            orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
+        ),
         Index(value = ["budgetId", "recordType", "categoryId", "recordDate"]),
         Index(
             value = ["budgetId", "recordType", "recordDate", "recordId"],

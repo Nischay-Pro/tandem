@@ -27,19 +27,16 @@ class ActualScheduleEdits(
 
     private fun changed(): Nothing = fail(SCHEDULE_CHANGED, "schedule_changed")
 
-    private fun schedules(): List<JsonObject> =
-        ActualBudgetReader(db)
-            .read(today())
-            .records
-            .filter { it.type == "schedule" }
-            .map { it.body }
+    private val reader by lazy { ActualBudgetReader(db) }
 
-    private fun active(id: String): JsonObject? = schedules().firstOrNull { it.value("id") == id && it.value("completed") != true }
+    private fun schedules(): List<JsonObject> = reader.schedules()
 
-    private fun nameTaken(
+    private fun List<JsonObject>.active(id: String): JsonObject? = firstOrNull { it.value("id") == id && it.value("completed") != true }
+
+    private fun List<JsonObject>.nameTaken(
         id: String,
         name: String,
-    ) = schedules().any { it.value("id") != id && (it.value("name") as String?)?.trim() == name }
+    ) = any { it.value("id") != id && (it.value("name") as String?)?.trim() == name }
 
     fun nextDate(id: String): String? = schedules().firstOrNull { it.value("id") == id }?.value("next_date") as String?
 
@@ -49,8 +46,9 @@ class ActualScheduleEdits(
     ) = writer.batch {
         val clean = name.trim()
         if (clean.isEmpty() || clean.length > 100) fail("Schedule names must be between 1 and 100 characters")
-        active(id) ?: fail("Choose an active schedule in this budget")
-        if (nameTaken(id, clean)) fail("A schedule with this name already exists")
+        val all = schedules()
+        all.active(id) ?: fail("Choose an active schedule in this budget")
+        if (all.nameTaken(id, clean)) fail("A schedule with this name already exists")
         writer.update("schedules", id, mapOf("name" to clean))
     }
 
@@ -66,8 +64,9 @@ class ActualScheduleEdits(
         ) {
             fail("Schedule names must be between 1 and 100 characters")
         }
-        val schedule = active(id) ?: fail("Choose an active schedule in this budget")
-        if (!name.isNullOrEmpty() && nameTaken(id, name)) fail("A schedule with this name already exists")
+        val all = schedules()
+        val schedule = all.active(id) ?: fail("Choose an active schedule in this budget")
+        if (!name.isNullOrEmpty() && all.nameTaken(id, name)) fail("A schedule with this name already exists")
         val accountId = fields.value("accountId") as String?
         val payeeId = fields.value("payeeId") as String?
         requireEditTargets(accountId, payeeId)
@@ -121,7 +120,7 @@ class ActualScheduleEdits(
             val account = db.first("SELECT closed FROM accounts WHERE id = ? AND tombstone = 0", accountId)
             if (account == null || truthy(account["closed"])) fail("Choose an open account in this budget")
         }
-        if (payeeId != null && ActualBudgetReader(db).read(today()).records.none { it.type == "payee" && it.id == payeeId }) {
+        if (payeeId != null && !reader.hasPayee(payeeId)) {
             fail("Choose a payee in this budget")
         }
     }
@@ -177,7 +176,7 @@ class ActualScheduleEdits(
         id: String,
         expectedNextDate: String,
     ) = writer.batch {
-        val schedule = active(id) ?: changed()
+        val schedule = schedules().active(id) ?: changed()
         if (schedule["date"] !is JsonObject ||
             (schedule["date"] as JsonObject)["frequency"] == null
         ) {
@@ -199,20 +198,24 @@ class ActualScheduleEdits(
         expectedNextDate: String,
     ): String =
         writer.batch {
-            val schedule = active(id) ?: changed()
+            val schedule = schedules().active(id) ?: changed()
             if (schedule.value("next_date") != expectedNextDate) changed()
-            val account = schedule.value("account") as String? ?: fail("Choose an account before posting this schedule")
-            val transaction =
-                linkedMapOf(
-                    "payee" to schedule.value("payee"),
-                    "account" to account,
-                    "amount" to scheduledAmount(schedule["amount"]),
-                    "date" to expectedNextDate,
-                    "schedule" to id,
-                    "cleared" to false,
-                )
-            transactions.addTransactions(account, listOf(transaction), runTransfers = true).first()
+            postNext(schedule)
         }
+
+    private fun postNext(schedule: JsonObject): String {
+        val account = schedule.value("account") as String? ?: fail("Choose an account before posting this schedule")
+        val transaction =
+            linkedMapOf(
+                "payee" to schedule.value("payee"),
+                "account" to account,
+                "amount" to scheduledAmount(schedule["amount"]),
+                "date" to schedule.value("next_date"),
+                "schedule" to schedule.value("id"),
+                "cleared" to false,
+            )
+        return transactions.addTransactions(account, listOf(transaction), runTransfers = true).first()
+    }
 
     fun delete(id: String) =
         writer.batch {
@@ -273,9 +276,12 @@ class ActualScheduleEdits(
 
     private fun isRecurring(schedule: JsonObject) = (schedule["date"] as? JsonObject)?.get("frequency") != null
 
-    private fun hasTransaction(schedule: JsonObject): Boolean {
+    private fun hasTransaction(
+        schedule: JsonObject,
+        conditions: Lazy<List<JsonObject>>,
+    ): Boolean {
         val next = schedule.value("next_date") as String? ?: return false
-        val exactDate = conditionsOf(schedule).firstOrNull { it.value("field") == "date" }?.value("op") == "is"
+        val exactDate = conditions.value.firstOrNull { it.value("field") == "date" }?.value("op") == "is"
         val from = if (exactDate || schedule.value("posts_transaction") == true) next else Day.parse(next).plus(-2).toString()
         return db.first(
             "SELECT 1 AS found FROM v_transactions_internal_alive WHERE schedule = ? AND date >= ?",
@@ -285,12 +291,15 @@ class ActualScheduleEdits(
             null
     }
 
-    private fun status(schedule: JsonObject): String {
+    private fun status(
+        schedule: JsonObject,
+        conditions: Lazy<List<JsonObject>>,
+    ): String {
         val next = schedule.value("next_date") as String?
         val day = today()
         return when {
             schedule.value("completed") == true -> "completed"
-            hasTransaction(schedule) -> "paid"
+            hasTransaction(schedule, conditions) -> "paid"
             next == day -> "due"
             next != null && next < day -> "missed"
             else -> "scheduled"
@@ -312,34 +321,40 @@ class ActualScheduleEdits(
                                 db.first("SELECT closed FROM accounts WHERE id = ?", account)?.let { !truthy(it["closed"]) } == true
                         )
                 }
-            for (start in open) {
-                var schedule = start
-                var current = status(schedule)
-                val posts = schedule.value("posts_transaction") == true && schedule.value("account") != null
-                if (posts && (current != "paid" || isRecurring(schedule)) && current in setOf("paid", "due", "missed")) {
-                    while (current in setOf("paid", "due", "missed")) {
-                        if (current != "paid") {
-                            if (!syncSuccess) break
-                            post(schedule.value("id") as String, schedule.value("next_date") as String)
-                            if (current == "due" || !isRecurring(schedule)) break
-                        } else if (schedule.value("next_date") == today()) {
-                            break
-                        }
-                        val previous = schedule.value("next_date")
-                        setNextDate(schedule.value("id") as String, conditionsOf(schedule), NextDate.ADVANCE)
-                        schedule = schedules().firstOrNull { it.value("id") == schedule.value("id") } ?: break
-                        if (schedule.value("next_date") == previous) break
-                        current = status(schedule)
-                    }
-                } else if (current == "paid") {
-                    if (isRecurring(schedule)) {
-                        setNextDate(schedule.value("id") as String, conditionsOf(schedule), NextDate.REFRESH)
-                    } else if (((schedule["date"] as? JsonPrimitive)?.contentOrNull ?: "9999") < today()) {
-                        writer.update("schedules", schedule.value("id") as String, mapOf("completed" to 1L))
-                    }
+            for (start in open) transactions.batchRules { advance(start, syncSuccess) }
+        }
+
+    private fun advance(
+        start: JsonObject,
+        syncSuccess: Boolean,
+    ) {
+        val conditions = lazy { conditionsOf(start) }
+        var schedule = start
+        var current = status(schedule, conditions)
+        val posts = schedule.value("posts_transaction") == true && schedule.value("account") != null
+        if (posts && (current != "paid" || isRecurring(schedule)) && current in setOf("paid", "due", "missed")) {
+            while (current in setOf("paid", "due", "missed")) {
+                if (current != "paid") {
+                    if (!syncSuccess) break
+                    postNext(schedule)
+                    if (current == "due" || !isRecurring(schedule)) break
+                } else if (schedule.value("next_date") == today()) {
+                    break
                 }
+                val previous = schedule.value("next_date")
+                setNextDate(schedule.value("id") as String, conditions.value, NextDate.ADVANCE)
+                schedule = reader.schedule(schedule.value("id") as String) ?: break
+                if (schedule.value("next_date") == previous) break
+                current = status(schedule, conditions)
+            }
+        } else if (current == "paid") {
+            if (isRecurring(schedule)) {
+                setNextDate(schedule.value("id") as String, conditions.value, NextDate.REFRESH)
+            } else if (((schedule["date"] as? JsonPrimitive)?.contentOrNull ?: "9999") < today()) {
+                writer.update("schedules", schedule.value("id") as String, mapOf("completed" to 1L))
             }
         }
+    }
 
     /** `updateActions`: keeps a rule's fixed "set amount" actions equal to the amount the schedule posts. */
     private fun syncAmountActions(
