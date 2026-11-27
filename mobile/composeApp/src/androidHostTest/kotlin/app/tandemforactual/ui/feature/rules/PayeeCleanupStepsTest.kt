@@ -11,7 +11,7 @@ class PayeeCleanupStepsTest {
 
     @Test
     fun everyOtherPayeeMergesIntoTheKeptOneWhichThenTakesTheTidyName() {
-        val group = PayeeDuplicateGroup("Tesco", "b", listOf(kept) + others, emptyList())
+        val group = PayeeDuplicateGroup("Tesco", "b", listOf(kept) + others, emptyList(), safe = true)
         assertEquals(
             listOf(
                 PayeeCleanupStep.Merge("a", "b"),
@@ -25,7 +25,7 @@ class PayeeCleanupStepsTest {
     @Test
     fun aKeptPayeeAlreadyNamedRightIsNotRenamed() {
         val tidy = PayeeUsage("c", "Tesco", 12)
-        val group = PayeeDuplicateGroup("Tesco", "c", listOf(tidy, PayeeUsage("a", "POS TESCO", 2)), emptyList())
+        val group = PayeeDuplicateGroup("Tesco", "c", listOf(tidy, PayeeUsage("a", "POS TESCO", 2)), emptyList(), safe = true)
         assertEquals(listOf(PayeeCleanupStep.Merge("a", "c")), payeeCleanupSteps(group))
     }
 
@@ -33,5 +33,16 @@ class PayeeCleanupStepsTest {
     fun theSummarySaysHowManyPayeesAreShown() {
         assertEquals("120 payees", payeeCountSummary(120, 120, searching = false))
         assertEquals("4 of 120 payees", payeeCountSummary(4, 120, searching = true))
+    }
+
+    @Test
+    fun aGroupMarkedNotTheSameIsRememberedByItsMembersInAnyOrder() {
+        val group = PayeeDuplicateGroup("Tesco", "b", listOf(kept) + others, emptyList(), safe = true)
+        val key = payeeGroupKey(group)
+        assertEquals("a,b,c", key)
+        val stored = encodePayeeGroupKeys(setOf(key, "x,y"))
+        assertEquals(setOf("a,b,c", "x,y"), decodePayeeGroupKeys(stored))
+        assertEquals(emptySet(), decodePayeeGroupKeys(null))
+        assertEquals(emptySet(), decodePayeeGroupKeys(""))
     }
 }

@@ -63,5 +63,13 @@ class PayeeCleanupTest {
         assertEquals(listOf("12/11", "POS", "#4521"), groups[0].stripped)
         assertEquals("f", groups[1].keepId)
         assertEquals(listOf("f", "e"), groups[1].members.map { it.id })
+        assertEquals(listOf(true, true), groups.map { it.safe })
+    }
+
+    @Test
+    fun namesThatDifferBeyondBankDetailAreNotSafeToMergeUnseen() {
+        val groups = payeeDuplicateGroups(listOf(PayeeUsage("x", "Corner-Market", 2), PayeeUsage("y", "CORNER MARKET", 1)))
+        assertEquals(listOf("x", "y"), groups.single().members.map { it.id })
+        assertEquals(false, groups.single().safe)
     }
 }
