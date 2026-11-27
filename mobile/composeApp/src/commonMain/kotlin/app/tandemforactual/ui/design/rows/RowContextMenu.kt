@@ -19,6 +19,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,14 +49,18 @@ internal class RowMenuAction(
     val onClick: () -> Unit,
 )
 
-/** Wraps a row so a right-click or secondary tap opens [actions] at the pointer, the same choices long-press and swipe give. */
+/**
+ * Wraps a row so a right-click or secondary tap opens [actions] at the pointer, the same choices long-press and swipe give.
+ * Setting [anchorState] opens the menu there too, such as from a long-press.
+ */
 @Composable
 internal fun RowContextMenu(
     actions: List<RowMenuAction>,
     modifier: Modifier = Modifier,
+    anchorState: MutableState<Offset?> = remember { mutableStateOf(null) },
     content: @Composable () -> Unit,
 ) {
-    var anchor by remember { mutableStateOf<Offset?>(null) }
+    var anchor by anchorState
     Box(if (actions.isEmpty()) modifier else modifier.onSecondaryClick { anchor = it }) {
         content()
         val position = anchor

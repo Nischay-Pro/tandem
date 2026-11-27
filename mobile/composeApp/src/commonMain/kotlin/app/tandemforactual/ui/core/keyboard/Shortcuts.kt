@@ -23,6 +23,7 @@ internal enum class ShortcutScope(
     LIST("Lists and screens", preview = false, whileTyping = false),
     EDITOR("Forms", preview = false, whileTyping = true),
     TEXT_FIELD("Forms", preview = true, whileTyping = true),
+    GRID("Budget grid", preview = false, whileTyping = false),
 }
 
 internal enum class ShortcutMenu { FILE, GO, HELP }
@@ -39,6 +40,22 @@ internal enum class ShortcutAction {
     SAVE,
     SUBMIT,
     CLOSE,
+    GRID_MOVE,
+    GRID_EXTEND,
+    GRID_NEXT,
+    GRID_PREVIOUS,
+    GRID_EDIT,
+    GRID_TYPE,
+    GRID_CANCEL,
+    GRID_CLEAR,
+    GRID_COPY_PREVIOUS,
+    GRID_SET_SPENT,
+    GRID_FILL_DOWN,
+    GRID_FILL_RIGHT,
+    GRID_COPY,
+    GRID_PASTE,
+    GRID_UNDO,
+    GRID_REDO,
 }
 
 /** ⌘ on iPad and Mac keyboards, Ctrl elsewhere, when [command] is set. [symbol] is what the cheat sheet shows. */
@@ -48,10 +65,12 @@ internal data class ShortcutKey(
     val command: Boolean = false,
     val shift: Boolean = false,
 ) {
-    val printable: Boolean get() = symbol.length == 1
+    val printable: Boolean get() = symbol.length == 1 && symbol.single() !in KEY_GLYPHS
 
     fun matches(press: KeyPress): Boolean = press.key == key && press.command == command && press.shift == shift && !press.alt
 }
+
+private const val KEY_GLYPHS = "←↑→↓"
 
 internal data class KeyPress(
     val key: Key,
@@ -127,7 +146,8 @@ internal val SHORTCUTS: List<Shortcut> =
                 listOf(ShortcutKey(Key.Enter, "Enter"), ShortcutKey(Key.NumPadEnter, "Enter")),
             ),
             Shortcut("close", ShortcutAction.CLOSE, "Close", ShortcutScope.EDITOR, listOf(ShortcutKey(Key.Escape, "Esc"))),
-        )
+        ) +
+        GRID_SHORTCUTS
 
 /** The table with each tab row named after [tabTitles], in navigation order; digits past the last tab are dropped. */
 internal fun shortcutTable(tabTitles: List<String>): List<Shortcut> =

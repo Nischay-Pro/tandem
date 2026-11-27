@@ -40,6 +40,7 @@ import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.templates.ToggleRow
@@ -53,18 +54,30 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.feature.budget.BudgetMonthLabelWidth
 import app.tandemforactual.ui.feature.budget.BudgetMonthsView
+import app.tandemforactual.ui.feature.budget.grid.BudgetGridCell
+import app.tandemforactual.ui.feature.budget.grid.GridCellContext
+import app.tandemforactual.ui.feature.budget.grid.GridKey
+import app.tandemforactual.ui.feature.budget.grid.balanceColor
 import kotlin.math.abs
 
-/** The month headers, kept in view while scrolling, then one card per group with a row per category. */
+/**
+ * The month headers, kept in view while scrolling, then one card per group with a row per category. Spending
+ * categories are a grid: each month's budgeted amount can be focused, typed into and changed from the keyboard.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 internal fun LazyListScope.budgetMonthsTableItems(
     context: BudgetGroupListContext,
     months: BudgetMonthsView,
     groups: List<LiveCategoryGroupSummary>,
 ) {
-    stickyHeader(key = "budget-months-header") { BudgetMonthsHeader(context.state, months) }
+    val data = budgetGridData(months, groups)
+    val cells = GridCellContext(context.state, months.grid, data, months.gridIo)
+    stickyHeader(key = BUDGET_MONTHS_HEADER_KEY) {
+        BudgetMonthsHeader(context.state, months)
+        BudgetGridFollowFocus(months.grid, groups)
+    }
     groups.forEach { group ->
-        item(key = "budget-months-group:${group.id}") { BudgetMonthsGroupCard(context, months, group) }
+        item(key = "budget-months-group:${group.id}") { BudgetMonthsGroupCard(context, months, group, cells) }
     }
 }
 
@@ -102,7 +115,9 @@ private fun BudgetMonthsHeader(
             fontSize = TandemTypography.caption,
             fontWeight = FontWeight.SemiBold,
         )
-        months.monthIds.forEach { monthId -> BudgetMonthHeaderCell(state, monthId, months.toBudget(monthId)) }
+        months.monthIds.forEach { monthId ->
+            BudgetMonthHeaderCell(state, monthId, months.toBudget(monthId), focused = months.grid.focus?.monthId == monthId)
+        }
     }
 }
 
@@ -111,16 +126,23 @@ private fun RowScope.BudgetMonthHeaderCell(
     state: AppState,
     monthId: String,
     toBudgetMinor: Long?,
+    focused: Boolean,
 ) {
     val palette = tandemPalette
     val label = reportMonthLabel(monthId)
     val selected = monthId == state.selectedMonthId
     val colorSpec = tandemMotionSpec<Color>(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
-    val titleColor by animateColorAsState(if (selected) palette.accent else palette.text, colorSpec, label = "budget month title")
+    val titleColor by animateColorAsState(
+        if (selected || focused) palette.accent else palette.text,
+        colorSpec,
+        label = "budget month title",
+    )
+    val focusTint by animateColorAsState(if (focused) palette.accentSurface else Color.Transparent, colorSpec, label = "budget month focus")
     Column(
         Modifier
             .weight(1f)
             .clip(RoundedCornerShape(TandemShapes.medium))
+            .background(focusTint)
             .selectable(selected = selected, role = Role.Tab, onClick = { state.selectBudgetMonth(monthId) })
             .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
@@ -133,13 +155,14 @@ private fun RowScope.BudgetMonthHeaderCell(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        BudgetMonthTodayMarker(monthId)
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall), verticalAlignment = Alignment.CenterVertically) {
             Text("To budget", color = palette.muted, fontSize = TandemTypography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (toBudgetMinor != null) {
                 PrivacyAmountText(
                     state.formatCurrency(toBudgetMinor),
                     state.privacyModeEnabled,
-                    color = amountColor(toBudgetMinor),
+                    color = balanceColor(toBudgetMinor),
                     fontSize = TandemTypography.caption,
                     fontWeight = FontWeight.SemiBold,
                     fractionDigits = state.currencyFractionDigitsForDisplay,
@@ -167,6 +190,7 @@ private fun BudgetMonthsGroupCard(
     context: BudgetGroupListContext,
     months: BudgetMonthsView,
     group: LiveCategoryGroupSummary,
+    cells: GridCellContext,
 ) {
     val state = context.state
     val openGroup = { monthId: String ->
@@ -174,10 +198,13 @@ private fun BudgetMonthsGroupCard(
         state.selectedCategoryGroupId = group.id
         context.navigation.open(AppRoute.CATEGORY_GROUP)
     }
+    val nameMonth = state.selectedMonthId.takeIf { it in months.monthIds } ?: months.monthIds.first()
     SurfaceCard {
-        BudgetMonthsRow(months, group.name, FontWeight.SemiBold, openGroup) { monthId ->
-            val month = months.group(monthId, group.id)
-            BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+        BudgetMonthsRow(months, group.name, FontWeight.SemiBold, false, nameMonth, openGroup) { monthId ->
+            BudgetMonthsTappableCell(group.name, monthId, openGroup) {
+                val month = months.group(monthId, group.id)
+                BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+            }
         }
         group.categories.forEach { category ->
             val openCategory = { monthId: String ->
@@ -187,24 +214,37 @@ private fun BudgetMonthsGroupCard(
                 context.navigation.open(AppRoute.CATEGORY_DETAIL)
             }
             DividerLine()
-            BudgetMonthsRow(months, category.name, FontWeight.Normal, openCategory) { monthId ->
-                val month = months.category(monthId, category.id)
-                BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+            val focusedRow = months.grid.focus?.categoryId == category.id
+            BudgetMonthsRow(months, category.name, FontWeight.Normal, focusedRow, nameMonth, openCategory) { monthId ->
+                if (group.isIncome) {
+                    BudgetMonthsTappableCell(category.name, monthId, openCategory) {
+                        val month = months.category(monthId, category.id)
+                        BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+                    }
+                } else {
+                    val key = GridKey(category.id, monthId)
+                    BudgetGridCell(cells, key, category.name, budgetGridMenu(cells, key) { openCategory(monthId) })
+                }
             }
         }
     }
 }
 
-/** A name, then one tappable cell per month; the name opens the selected month. */
+/** A name that opens the selected month, then one cell per month; the row's name lights up while a cell in it has focus. */
 @Composable
 private fun BudgetMonthsRow(
     months: BudgetMonthsView,
     name: String,
     weight: FontWeight,
+    focused: Boolean,
+    nameMonth: String,
     onOpen: (monthId: String) -> Unit,
     cell: @Composable RowScope.(monthId: String) -> Unit,
 ) {
     val palette = tandemPalette
+    val colorSpec = tandemMotionSpec<Color>(tandemReduceMotion, TandemMotion.COLOR_MILLIS)
+    val nameColor by animateColorAsState(if (focused) palette.accent else palette.text, colorSpec, label = "budget row name")
+    val nameTint by animateColorAsState(if (focused) palette.accentSurface else Color.Transparent, colorSpec, label = "budget row tint")
     Row(
         Modifier
             .fillMaxWidth()
@@ -216,24 +256,40 @@ private fun BudgetMonthsRow(
             name,
             Modifier
                 .width(BudgetMonthLabelWidth)
+                .clip(RoundedCornerShape(TandemShapes.small))
+                .background(nameTint)
+                .clickable(role = Role.Button, onClickLabel = "Open $name") { onOpen(nameMonth) }
+                .pointerHighlight(palette.text, RoundedCornerShape(TandemShapes.small), tandemReduceMotion)
                 .padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemSpacing.small),
-            color = palette.text,
+            color = nameColor,
             fontSize = TandemTypography.compactBody,
             fontWeight = weight,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        months.monthIds.forEach { monthId ->
-            Row(
-                Modifier
-                    .weight(1f)
-                    .heightIn(min = TandemLayout.compactListRowMinHeight)
-                    .clickable(role = Role.Button, onClickLabel = "Open $name in ${reportMonthLabel(monthId)}") { onOpen(monthId) }
-                    .padding(horizontal = TandemSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-            ) { cell(monthId) }
-        }
+        months.monthIds.forEach { monthId -> cell(monthId) }
     }
+}
+
+/** A month cell that opens the group or category, for rows that aren't budgeted in the grid. */
+@Composable
+private fun RowScope.BudgetMonthsTappableCell(
+    name: String,
+    monthId: String,
+    onOpen: (monthId: String) -> Unit,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        Modifier
+            .weight(1f)
+            .heightIn(min = TandemLayout.compactListRowMinHeight)
+            .clip(RoundedCornerShape(TandemShapes.small))
+            .clickable(role = Role.Button, onClickLabel = "Open $name in ${reportMonthLabel(monthId)}") { onOpen(monthId) }
+            .pointerHighlight(tandemPalette.text, RoundedCornerShape(TandemShapes.small), tandemReduceMotion)
+            .padding(horizontal = TandemSpacing.medium),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
 }
 
 /** Budgeted, spent and balance for one month, or dashes while the month loads. */
@@ -247,7 +303,7 @@ private fun RowScope.BudgetMonthAmounts(
     val palette = tandemPalette
     BudgetMonthAmount(state, assignedMinor, palette.muted, FontWeight.Normal)
     BudgetMonthAmount(state, activityMinor?.let { abs(it) }, palette.muted, FontWeight.Normal)
-    BudgetMonthAmount(state, balanceMinor, if (balanceMinor != null) amountColor(balanceMinor) else palette.muted, FontWeight.SemiBold)
+    BudgetMonthAmount(state, balanceMinor, if (balanceMinor != null) balanceColor(balanceMinor) else palette.muted, FontWeight.SemiBold)
 }
 
 @Composable
@@ -272,14 +328,6 @@ private fun RowScope.BudgetMonthAmount(
         fractionDigits = state.currencyFractionDigitsForDisplay,
     )
 }
-
-@Composable
-private fun amountColor(amountMinor: Long): Color =
-    when {
-        amountMinor < 0 -> tandemPalette.negative
-        amountMinor > 0 -> tandemPalette.positive
-        else -> tandemPalette.muted
-    }
 
 private fun AppState.selectBudgetMonth(monthId: String) {
     selectedMonthId = monthId
