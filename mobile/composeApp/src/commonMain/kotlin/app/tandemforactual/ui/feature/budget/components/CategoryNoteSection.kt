@@ -64,7 +64,12 @@ internal fun CategoryNoteSection(
     val canEdit = !state.readOnlyMode
     SectionCard(
         "Note",
-        action = if (!canEdit) null else if (note.isBlank()) "Add" else "Edit",
+        action =
+            when {
+                !canEdit -> null
+                note.isBlank() -> "Add"
+                else -> "Edit"
+            },
         onClick =
             if (canEdit) {
                 {

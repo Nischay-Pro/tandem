@@ -24,9 +24,7 @@ internal data class CategorySaveFeedback(
 /** The category a save is reported against, the one holding the most money, and how many other categories it touched. */
 internal fun mainCategory(entries: List<CategoryEntry>): Pair<CategoryEntry, Int>? {
     val byCategory = entries.filter { it.categoryId.isNotBlank() }.groupBy { it.categoryId }
-    val main =
-        byCategory.values.maxByOrNull { lines -> lines.sumOf { kotlin.math.abs(it.amountMinor) } }?.first()
-            ?: return null
+    val main = byCategory.values.maxByOrNull { lines -> lines.sumOf { kotlin.math.abs(it.amountMinor) } }?.first() ?: return null
     return main to byCategory.size - 1
 }
 
