@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Captures Tandem screenshots at Pixel 11 and Pixel 11 Pro Fold screen sizes using the debug build's screenshot mode.
-# Usage: capture-android.sh <apk> <output dir> [server url]
+# Captures Tandem screenshots on the running emulator using the debug build's screenshot mode.
+# Usage: capture-android.sh <apk> <output dir> <phone|foldable-1-1|foldable-4-3|tablet> [server url]
 set -euo pipefail
 apk="$1"
 out="$2"
-server="${3:-http://10.0.2.2:19753}"
+set_name="$3"
+server="${4:-http://10.0.2.2:19753}"
 package=app.tandemforactual.android.localtest
 mkdir -p "$out"
 
 adb install -r "$apk" >/dev/null
 adb shell settings put global sysui_demo_allowed 1
+adb shell settings put system fold_lock_behavior_setting stay_awake_on_fold_key || true
 demo() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/null; }
 clean_status_bar() {
   demo exit
@@ -21,12 +23,33 @@ clean_status_bar() {
   demo notifications -e visible false
 }
 
+# Foldable profiles list the inner display first and the outer display second.
+capture() {
+  local file="$1" display_line="$2" id
+  id="$(adb shell dumpsys SurfaceFlinger --display-id | awk -v n="$display_line" 'NR==n {print $2}' | tr -d '\r')"
+  if [ -n "$id" ]; then
+    adb exec-out screencap -d "$id" -p > "$file"
+  else
+    adb exec-out screencap -p > "$file"
+  fi
+}
+
+# Locks the current display to landscape, or to portrait with "portrait", whatever its natural orientation.
+orient() {
+  local size width height
+  size="$(adb shell wm size | awk -F': ' '/Physical size/ {print $2}' | tr -d '\r')"
+  width="${size%x*}"
+  height="${size#*x}"
+  if { [ "$1" = landscape ] && [ "$width" -ge "$height" ]; } || { [ "$1" = portrait ] && [ "$width" -lt "$height" ]; }; then
+    adb shell wm user-rotation lock 0
+  else
+    adb shell wm user-rotation lock 1
+  fi
+}
+
 wait=75
-# name:size:density. Pixel 11 is 1080x2424; Pixel 11 Pro Fold is 2076x2152 inside and 1080x2342 on the cover.
-for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-11-pro-fold-folded:1080x2342:420; do
-  IFS=: read -r name size density <<<"$device"
-  adb shell wm size "$size"
-  adb shell wm density "$density"
+shoot() {
+  local name="$1" display_line="$2"
   sleep 5
   for mode in light dark; do
     if [ "$mode" = dark ]; then adb shell cmd uimode night yes >/dev/null; else adb shell cmd uimode night no >/dev/null; fi
@@ -35,6 +58,8 @@ for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-
       screen="${spec%%:*}"
       select="${spec#*:}"
       adb shell am force-stop "$package"
+      adb shell input keyevent KEYCODE_WAKEUP
+      adb shell wm dismiss-keyguard
       adb shell am start -n "$package/app.tandemforactual.android.MainActivity" \
         --es TANDEM_SCREENSHOT_SERVER "$server" \
         --es TANDEM_SCREENSHOT_PASSWORD demo-password \
@@ -45,11 +70,34 @@ for device in pixel-11:1080x2424:420 pixel-11-pro-fold-open:2076x2152:390 pixel-
       wait=25
       clean_status_bar
       sleep 2
-      adb exec-out screencap -p > "$out/$name-$mode-$screen.png"
+      capture "$out/$name-$mode-$screen.png" "$display_line"
       echo "captured $name-$mode-$screen"
     done
   done
-done
+}
+
+case "$set_name" in
+  phone)
+    shoot phone 1
+    ;;
+  foldable-1-1 | foldable-4-3)
+    adb emu unfold || true
+    sleep 5
+    orient landscape
+    shoot "$set_name-inner" 1
+    adb emu fold || true
+    sleep 5
+    orient portrait
+    shoot "$set_name-outer" 2
+    adb emu unfold || true
+    ;;
+  tablet)
+    orient landscape
+    shoot tablet 1
+    ;;
+  *)
+    echo "Unknown screenshot set: $set_name" >&2
+    exit 2
+    ;;
+esac
 adb shell cmd uimode night no >/dev/null
-adb shell wm size reset
-adb shell wm density reset
