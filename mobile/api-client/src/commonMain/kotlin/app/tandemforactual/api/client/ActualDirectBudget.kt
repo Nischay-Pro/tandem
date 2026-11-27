@@ -33,6 +33,7 @@ import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.PlanningKeys
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.bulkGroupOf
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
@@ -322,7 +323,8 @@ class ActualDirectBudget private constructor(
         action: String,
         patch: JsonObject,
         baseSnapshot: JsonObject?,
-    ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
+        group: String? = null,
+    ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot, group) }
 
     internal suspend fun outcome(operationId: String) = locked { operations.find(operationId) }
 
@@ -347,6 +349,7 @@ class ActualDirectBudget private constructor(
             action,
             BudgetSyncJson.parseJsonObject(operation.patchJson),
             operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
+            bulkGroupOf(operation.idempotencyKey),
         )
     }
 
