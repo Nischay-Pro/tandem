@@ -14,6 +14,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.KeyboardShortcutGroup
+import android.view.Menu
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +36,7 @@ import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
+import app.tandemforactual.ui.app.KeyboardCommands
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
 import app.tandemforactual.ui.app.TandemApp
@@ -306,6 +309,15 @@ class MainActivity : FragmentActivity() {
             syncSignalState.onActivityStopped()
         }
         super.onStop()
+    }
+
+    override fun onProvideKeyboardShortcuts(
+        data: MutableList<KeyboardShortcutGroup>?,
+        menu: Menu?,
+        deviceId: Int,
+    ) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        keyboardShortcutGroup(KeyboardCommands.current)?.let { data?.add(it) }
     }
 }
 
