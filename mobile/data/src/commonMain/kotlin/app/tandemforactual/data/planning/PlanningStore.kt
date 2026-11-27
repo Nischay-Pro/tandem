@@ -166,6 +166,13 @@ class PlanningStore(
             put(currency.id, AccountCurrency.TYPE, currency.toJson())
         }
 
+    fun accountKinds(): Flow<List<AccountKindChoice>> =
+        observe(AccountKindChoice.TYPE).map { list -> list.mapNotNull { (_, body) -> AccountKindChoice.fromJson(body) } }
+
+    suspend fun save(choice: AccountKindChoice) = put(choice.id, AccountKindChoice.TYPE, choice.toJson())
+
+    suspend fun deleteAccountKind(accountId: String) = delete(AccountKindChoice.id(accountId), AccountKindChoice.TYPE)
+
     fun exchangeRates(): Flow<List<ExchangeRate>> =
         observe(ExchangeRate.TYPE).map { list -> list.map { (id, body) -> ExchangeRate.fromJson(id, body) } }
 

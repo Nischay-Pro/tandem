@@ -221,7 +221,7 @@ private fun AccountCurrenciesSection(
                 account.name,
                 account.balanceMinor?.let { state.formatAccountMoney(it, code) },
                 code ?: "$budgetCurrency · Budget",
-                leading = RowLeading.Icon(accountTypeIcon(account.name, account.type)),
+                leading = RowLeading.Icon(accountTypeIcon(account.name, account.kind)),
                 options = ListRowOptions(dense = true, trailingColor = if (code == null) palette.muted else palette.text),
                 onClick = { onPick(account) }.takeIf { !state.readOnlyMode },
             )

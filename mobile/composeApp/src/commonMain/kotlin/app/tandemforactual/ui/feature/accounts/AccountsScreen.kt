@@ -158,7 +158,7 @@ private fun rememberAccountListModel(
                                 AccountListItemUi(
                                     account.id,
                                     account.name,
-                                    accountListTypeLabel(account.type),
+                                    account.kind,
                                     accountListSubtitle(account, mobileSession.localSyncState?.lastSyncedAtEpochMs),
                                     account.balanceMinor?.let {
                                         state.formatAccountMoney(
@@ -169,7 +169,6 @@ private fun rememberAccountListModel(
                                         ?: "Unavailable",
                                     account.offBudget,
                                     account.closed,
-                                    account.type ?: account.accountGroupName,
                                     account.balanceMinor,
                                 )
                             },

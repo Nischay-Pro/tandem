@@ -197,7 +197,7 @@ internal fun TransactionAccountPickerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                         ) {
-                            if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.type)
+                            if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.kind)
                             Box(Modifier.weight(1f)) {
                                 ChoiceRow(
                                     item.label,

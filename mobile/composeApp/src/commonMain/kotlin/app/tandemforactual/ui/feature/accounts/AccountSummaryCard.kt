@@ -189,7 +189,7 @@ private fun AccountSummaryIcon(
                 )
             } else {
                 Icon(
-                    accountTypeIcon(account.name, account.accountType),
+                    accountTypeIcon(account.name, account.kind),
                     contentDescription = null,
                     modifier = Modifier.size(TandemLayout.listRowIconSize),
                     tint = if (account.closed) palette.muted else palette.accent,
@@ -224,7 +224,7 @@ private fun AccountSummaryText(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            "${account.typeLabel} · ${account.status}",
+            "${account.kind.label} · ${account.status}",
             color = palette.muted,
             fontSize = TandemTypography.caption,
             maxLines = 2,

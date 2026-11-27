@@ -7,6 +7,8 @@ import app.tandemforactual.api.client.ExtensionSyncException
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.AccountCurrency
+import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.AccountKindChoice
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
@@ -28,6 +30,7 @@ import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -51,6 +54,8 @@ internal class PlanningController(
     var jurisdictionPeriods by mutableStateOf<List<JurisdictionPeriod>>(emptyList())
     var accountCurrencies by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+    var accountKinds by mutableStateOf<Map<String, AccountKind>>(emptyMap())
+        private set
     var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
         private set
     var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
@@ -62,6 +67,31 @@ internal class PlanningController(
         currency: String,
     ) {
         planningStore(budgetId)?.save(AccountCurrency(accountId, currency))
+    }
+
+    suspend fun saveAccountKind(
+        budgetId: String,
+        accountId: String,
+        kind: AccountKind,
+    ) {
+        planningStore(budgetId)?.save(AccountKindChoice(accountId, kind))
+    }
+
+    /** Keeps a kind chosen for an account added offline once Actual gives it a real id. */
+    suspend fun moveAccountKind(
+        budgetId: String,
+        fromAccountId: String,
+        toAccountId: String,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        val kind =
+            store
+                .accountKinds()
+                .first()
+                .firstOrNull { it.accountId == fromAccountId }
+                ?.kind ?: return
+        store.save(AccountKindChoice(toAccountId, kind))
+        store.deleteAccountKind(fromAccountId)
     }
 
     /** Saves a pension estimate, or removes it when [estimate] has no amount. */
@@ -364,6 +394,7 @@ internal class PlanningController(
                 accountCurrencies = list.associate { it.accountId to it.currency }
             }
         }
+        launch { store.accountKinds().collect { list -> accountKinds = list.associate { it.accountId to it.kind } } }
         launch { store.exchangeRates().collect { exchangeRates = it } }
         launch { store.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
         launch { store.customReports().collect { customReports = it } }

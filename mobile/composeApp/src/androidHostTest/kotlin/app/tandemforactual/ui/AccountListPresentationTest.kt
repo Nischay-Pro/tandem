@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemTheme
@@ -44,11 +45,10 @@ class AccountListPresentationTest {
                         AccountListItemUi(
                             id = "checking",
                             name = longName,
-                            typeLabel = "Checking",
+                            kind = AccountKind.BANK,
                             status = "Last synced today",
                             balance = "-\$3,200.00",
                             offBudget = false,
-                            accountType = "checking",
                             balanceMinor = -320000,
                         ),
                     merchantArtwork = null,
@@ -72,12 +72,11 @@ class AccountListPresentationTest {
                         AccountListItemUi(
                             id = "closed",
                             name = "Closed Rewards Card",
-                            typeLabel = "Credit",
+                            kind = AccountKind.CREDIT_CARD,
                             status = "Closed",
                             balance = "-\$4.00",
                             offBudget = false,
                             closed = true,
-                            accountType = "credit",
                             balanceMinor = -400,
                         ),
                     merchantArtwork = null,
@@ -86,7 +85,7 @@ class AccountListPresentationTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Credit · Closed").assertExists()
+        composeTestRule.onNodeWithText("Credit card · Closed").assertExists()
         composeTestRule.onNodeWithContentDescription("Negative balance, -\$4.00").assertExists()
     }
 
@@ -112,11 +111,10 @@ class AccountListPresentationTest {
                         AccountListItemUi(
                             id = "checking",
                             name = "Checking",
-                            typeLabel = "Checking",
+                            kind = AccountKind.BANK,
                             status = "Last synced today",
                             balance = "\$10.00",
                             offBudget = false,
-                            accountType = "checking",
                             balanceMinor = 1000,
                         ),
                     merchantArtwork = null,
@@ -148,11 +146,10 @@ class AccountListPresentationTest {
                                 AccountListItemUi(
                                     id = "checking",
                                     name = longName,
-                                    typeLabel = "Checking",
+                                    kind = AccountKind.BANK,
                                     status = "Off budget · Last synced today",
                                     balance = balance,
                                     offBudget = true,
-                                    accountType = "checking",
                                     balanceMinor = -123_456_789_00L,
                                 ),
                             merchantArtwork = null,

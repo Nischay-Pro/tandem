@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.TransactionDateValidationStatus
 import app.tandemforactual.ui.core.format.displayTransactionDate
@@ -353,9 +354,9 @@ class IosLocaleFormattingTest {
 
     @Test
     fun accountCardKeepsItsSyncSubtitleOnIos() {
-        val checking = LiveAccountSummary("checking", "Checking", 12_300, "checking", offBudget = false)
-        val closed = LiveAccountSummary("closed", "Closed", 0, "savings", offBudget = false, closed = true)
-        val offBudget = LiveAccountSummary("tracking", "Tracking", 4_500, "investment", offBudget = true)
+        val checking = LiveAccountSummary("checking", "Checking", 12_300, AccountKind.BANK, offBudget = false)
+        val closed = LiveAccountSummary("closed", "Closed", 0, AccountKind.SAVINGS, offBudget = false, closed = true)
+        val offBudget = LiveAccountSummary("tracking", "Tracking", 4_500, AccountKind.INVESTMENT, offBudget = true)
 
         assertTrue(accountListSubtitle(checking, 1_794_087_360_000)?.startsWith("Last synced ") == true)
         assertEquals("Not synced yet", accountListSubtitle(checking, null))

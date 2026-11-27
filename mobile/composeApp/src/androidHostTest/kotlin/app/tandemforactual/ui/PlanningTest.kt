@@ -1,4 +1,5 @@
 package app.tandemforactual.ui
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.PlanningKeyring
@@ -67,7 +68,7 @@ class PlanningTest {
                 0,
                 listOf(LiveCategoryGroupSummary("g", "Savings", listOf(LiveCategorySummary("cat", "Holiday", 0, 0, 42_000)))),
             )
-        val accounts = listOf(LiveAccountSummary("acct", "Savings", 90_000, null, false))
+        val accounts = listOf(LiveAccountSummary("acct", "Savings", 90_000, AccountKind.OTHER, false))
         val goal = SavingsGoal("1", "Holiday", 100_000, "USD")
         assertEquals(42_000, goal.copy(categoryId = "cat").saved(month, accounts))
         assertEquals(90_000, goal.copy(accountId = "acct").saved(null, accounts))

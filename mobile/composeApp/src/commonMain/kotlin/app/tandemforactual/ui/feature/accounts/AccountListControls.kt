@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -57,7 +58,7 @@ internal fun AccountTypeFilters(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        listOf("All", "Bank", "Credit", "Other").forEach { filter ->
+        ACCOUNT_FILTERS.forEach { filter ->
             AccountFilterChip(filter, selected = selectedFilter == filter) {
                 onFilterChange(filter)
             }
@@ -65,23 +66,28 @@ internal fun AccountTypeFilters(
     }
 }
 
+internal val ACCOUNT_FILTERS = listOf("All", "Bank", "Credit", "Loans", "Other")
+
+/** The filter chip an account kind falls under. */
+internal fun accountFilterFor(kind: AccountKind): String =
+    when (kind) {
+        AccountKind.BANK, AccountKind.SAVINGS, AccountKind.CASH -> "Bank"
+        AccountKind.CREDIT_CARD -> "Credit"
+        AccountKind.LOAN, AccountKind.MORTGAGE -> "Loans"
+        AccountKind.INVESTMENT, AccountKind.OTHER -> "Other"
+    }
+
 internal fun accountMatchesFilter(
     account: AccountListItemUi,
     groupName: String,
     filter: String,
     query: String,
 ): Boolean {
-    val matchesType =
-        when (filter) {
-            "Bank" -> account.typeLabel in setOf("Checking", "Savings")
-            "Credit" -> account.typeLabel == "Credit"
-            "Other" -> account.typeLabel !in setOf("Checking", "Savings", "Credit")
-            else -> true
-        }
+    val matchesType = filter == "All" || accountFilterFor(account.kind) == filter
     val matchesSearch =
         query.isBlank() ||
             account.name.contains(query, ignoreCase = true) ||
-            account.typeLabel.contains(query, ignoreCase = true) ||
+            account.kind.label.contains(query, ignoreCase = true) ||
             account.status.contains(query, ignoreCase = true) ||
             groupName.contains(query, ignoreCase = true)
     return matchesType && matchesSearch
