@@ -130,6 +130,9 @@ internal class TandemMobileSession(
     /** Unsent edits of an encrypted budget downloaded again, held until its new vault is created. */
     internal val writesToReplay = mutableMapOf<String, List<app.tandemforactual.data.database.OutboxOperationEntity>>()
 
+    /** The bound encrypted budget and the vault holding its inbox, set only once that vault is saved. */
+    internal var sealedInboxSource: Pair<String, EncryptedBudgetVault>? = null
+
     internal var encryptedStorageRequired by mutableStateOf<Set<String>>(emptySet())
 
     var isUsingLocalServer by mutableStateOf(false)
@@ -353,6 +356,7 @@ internal class TandemMobileSession(
         background: Boolean,
     ): BudgetSyncSummary? =
         synchronizationMutex.withLock {
+            if (boundEncryptedBudgetId == budgetId) applySealedInbox(budgetId, encryptionPassword)
             synchronizeSerialized(
                 budgetId = budgetId,
                 encryptionPassword = encryptionPassword,

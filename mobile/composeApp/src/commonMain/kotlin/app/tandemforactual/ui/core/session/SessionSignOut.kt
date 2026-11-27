@@ -90,6 +90,7 @@ internal suspend fun TandemMobileSession.signOutAndClearLocalData(): Boolean {
         try {
             budgetStorage?.repository?.clearAllLocalData()
             unbindEncryptedBudgetDatabase()
+            forgetSealedInboxKeys()
             budgetQueue.budgetQueuePersistenceMutex.withLock {
                 mainStorage?.repository?.clearAllLocalData()
                 cacheTablesCleared = true
