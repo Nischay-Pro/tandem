@@ -6,6 +6,7 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.data.store.bulkIdempotencyKey
 import app.tandemforactual.data.store.discardWrite
 import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecord
@@ -23,7 +24,8 @@ internal suspend fun TransactionController.deleteTransactionsWithUndo(
     budgetId: String,
     transactionIds: Set<String>,
 ): Boolean {
-    val deleted = transactionIds.takeWhile { deleteTransaction(budgetId, it) }.toSet()
+    val group = Uuid.random().toString().takeIf { transactionIds.size > 1 }
+    val deleted = transactionIds.takeWhile { deleteTransaction(budgetId, it, group) }.toSet()
     if (deleted.isNotEmpty()) {
         val undoable = deleted.filterTo(mutableSetOf()) { queuedTransactionDelete(budgetId, it) != null }
         undoNoticeCount += 1
@@ -71,6 +73,7 @@ internal suspend fun TransactionController.queuedTransactionDelete(
 internal suspend fun TransactionController.deleteTransaction(
     budgetId: String,
     transactionId: String,
+    group: String? = null,
 ): Boolean {
     host.reportTransactionWriteMessage(null)
     if (host.refuseWriteInReadOnlyMode()) return false
@@ -103,7 +106,7 @@ internal suspend fun TransactionController.deleteTransaction(
         host.reportTransactionWriteMessage("This transaction isn’t up to date. Sync the budget before deleting it.")
         return false
     }
-    return enqueueTransactionDelete(localRepository, budgetId, transactionId, revision, baseJson)
+    return enqueueTransactionDelete(localRepository, budgetId, transactionId, revision, baseJson, group)
 }
 
 private suspend fun TransactionController.discardQueuedTransactionCreate(
@@ -139,6 +142,7 @@ private suspend fun TransactionController.enqueueTransactionDelete(
     transactionId: String,
     revision: String,
     baseJson: String,
+    group: String?,
 ): Boolean {
     host.markSavingTransaction(true)
     try {
@@ -146,7 +150,7 @@ private suspend fun TransactionController.enqueueTransactionDelete(
         localRepository.enqueueWrite(
             LocalWriteRequest(
                 operationId = operationId,
-                idempotencyKey = operationId,
+                idempotencyKey = group?.let { bulkIdempotencyKey(it, operationId) } ?: operationId,
                 budgetId = budgetId,
                 recordType = "transaction",
                 recordId = transactionId,

@@ -107,4 +107,24 @@ class ActualRecurrenceTest {
             ),
         )
     }
+
+    @Test
+    fun upcomingDatesListTheNextOccurrencesLikeActual() {
+        val firstAndThirdFriday =
+            """{"frequency":"monthly","start":"2026-11-01","interval":1,"skipWeekend":true,"weekendSolveMode":"before",""" +
+                """"patterns":[{"type":"FR","value":1},{"type":"FR","value":3},{"type":"day","value":-1}],"endMode":"never"}"""
+        assertEquals(
+            listOf("2026-11-20", "2026-11-30", "2026-12-04", "2026-12-18"),
+            upcomingScheduleDates(firstAndThirdFriday, "2026-11-19", 4),
+        )
+        assertEquals(
+            listOf("2026-11-27", "2026-12-11"),
+            upcomingScheduleDates("""{"frequency":"weekly","start":"2026-11-13","interval":2}""", "2026-11-21", 2),
+        )
+        assertEquals(listOf("2026-12-24"), upcomingScheduleDates("\"2026-12-24\"", "2026-11-21", 3))
+        assertEquals(emptyList(), upcomingScheduleDates("\"2026-10-24\"", "2026-11-21", 3))
+        assertEquals(emptyList(), upcomingScheduleDates("5", "2026-11-21", 3))
+        assertEquals(emptyList(), upcomingScheduleDates("[]", "2026-11-21", 3))
+        assertEquals(emptyList(), upcomingScheduleDates("{", "2026-11-21", 3))
+    }
 }

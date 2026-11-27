@@ -74,7 +74,7 @@ internal val settingsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
             },
         AppRoute.WATCH to
             @Composable { ctx ->
-                WatchScreen(ctx.state, ctx.liveBudgetMonth)
+                WatchScreen(ctx.state, ctx.mobileSession)
             },
         AppRoute.SECURITY_PRIVACY to
             @Composable { ctx ->

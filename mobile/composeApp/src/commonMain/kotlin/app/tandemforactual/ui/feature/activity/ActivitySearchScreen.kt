@@ -45,6 +45,8 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemFloatingEnter
 import app.tandemforactual.ui.design.theme.tandemFloatingExit
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.feature.activity.components.ActivityBulkActions
+import app.tandemforactual.ui.feature.activity.components.ActivityBulkItem
 import app.tandemforactual.ui.feature.activity.components.ActivitySavedSearchControls
 import app.tandemforactual.ui.feature.activity.components.ActivitySearchEvaluationState
 import app.tandemforactual.ui.feature.activity.components.ActivitySearchFilterChips
@@ -54,6 +56,8 @@ import app.tandemforactual.ui.feature.activity.components.ActivitySearchSelectio
 import app.tandemforactual.ui.feature.activity.components.ActivitySearchSuggestions
 import app.tandemforactual.ui.feature.activity.components.ActivitySelectionState
 import app.tandemforactual.ui.feature.activity.components.SaveActivitySearchSheet
+import app.tandemforactual.ui.feature.activity.components.activitySearchBulkItems
+import app.tandemforactual.ui.feature.activity.components.activitySelectionMenuActions
 import app.tandemforactual.ui.feature.activity.components.rememberActivityQuickFilters
 import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchEvaluation
 import app.tandemforactual.ui.feature.activity.components.rememberActivitySearchIndex
@@ -90,10 +94,7 @@ internal fun ActivitySearchScreen(
     val quickFilters = rememberActivityQuickFilters(searchableRecords)
     val evaluation = rememberActivitySearchEvaluation(state, search, filters, searchableRecords, quickFilters, cachedEvaluation)
     ActivitySearchSelectionTotalEffect(state.selectedBudgetId, isLiveBudget, selection, searchableRecords, onActivitySelectionTotalChanged)
-    LaunchedEffect(search, filters) {
-        selection.selectionMode = false
-        selection.selectedTransactionIds = emptySet()
-    }
+    LaunchedEffect(search, filters) { selection.clear() }
     val resultsListState = LocalRouteLazyListState.current ?: rememberLazyListState()
     val onSearchChange: (String) -> Unit = {
         search = it
@@ -136,7 +137,10 @@ internal fun ActivitySearchScreen(
         val entry = SavedActivitySearch(state.selectedBudgetId, name, search, filters).toSavedSearch(id)
         scope.launch { mobileSession.planning.saveSearch(state.selectedBudgetId, entry) }
     }
-    ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection)
+    val selectedIds = selection.selectedTransactionIds
+    val bulkItems = remember(selectedIds, searchableRecords) { activitySearchBulkItems(selectedIds, searchableRecords) }
+    ActivityBulkDeleteEffect(mobileSession, state.selectedBudgetId, selection, bulkItems.count(ActivityBulkItem::reconciled))
+    ActivityBulkActions(state, mobileSession, selection, bulkItems)
 }
 
 /** Moves searches saved by older versions in app settings into the budget's planning store. */
@@ -262,6 +266,7 @@ private fun ColumnScope.ActivitySearchResultList(
                         } else {
                             null
                         },
+                    selectionMenuActions = activitySelectionMenuActions(selection),
                 ) {
                     if (selection.selectionMode && transactionId != null) {
                         selection.toggle(transactionId)
@@ -296,13 +301,14 @@ private fun BoxScope.ActivitySearchSelectionBar(
         TransactionSelectionFloatingBar(
             allSelected = allSelected,
             canDelete = selection.selectedTransactionIds.isNotEmpty() && !selection.isDeletingSelection,
-            isWorking = selection.isDeletingSelection,
+            isWorking = selection.isDeletingSelection || selection.runningBulkAction != null,
             onToggleAll = {
                 selection.selectedTransactionIds = if (allSelected) emptySet() else visibleTransactionIds
                 if (allSelected) selection.selectionMode = false
             },
             onDelete = { selection.askingToDelete = true },
             modifier = Modifier.padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
+            onEdit = { selection.bulkMenuOpen = true },
         )
     }
 }

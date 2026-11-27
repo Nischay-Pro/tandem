@@ -296,14 +296,14 @@
     <string name="accent_saffron">Saffron</string>
     <string name="accent_rose">Rose</string>
     <string name="watch_title">Watch</string>
-    <string name="watch_status_quick_add">Glance and quick add</string>
-    <string name="watch_status_glance">Glance only</string>
-    <string name="watch_intro">Your watch shows left to spend, a few categories and the next bills from the budget on this device. It never signs in, and it keeps no password or budget of its own.</string>
-    <string name="watch_categories">Categories on the watch</string>
-    <string name="watch_categories_detail">Choose up to 6. Without a choice, the watch shows the categories pinned on the budget.</string>
-    <string name="watch_categories_empty">Open the budget on this device to choose categories.</string>
+    <string name="watch_detail">Your watch shows what’s left to spend and your next bills, and adds transactions through Tandem on this device. Nothing on the watch signs in or keeps a copy of your budget.</string>
     <string name="watch_quick_add">Quick add from the watch</string>
-    <string name="watch_quick_add_detail">Transactions added on the watch go into the open budget once the watch reaches this device. Change History names them Watch.</string>
-    <string name="watch_after_unlock">Update the watch only after unlock</string>
-    <string name="watch_after_unlock_detail">Background syncs leave the watch as it was; it updates after you open and unlock Tandem.</string>
+    <string name="watch_quick_add_short">Quick add</string>
+    <string name="watch_quick_add_detail">An amount, a category, and optionally a recent payee, to the account you used last. Each one goes to the open budget like any other new transaction, and Change History names the watch. An encrypted budget takes them only after you unlock it in Tandem.</string>
+    <string name="watch_after_unlock">Send summary only after unlock</string>
+    <string name="watch_after_unlock_detail">With app lock on, the watch gets new numbers only after you unlock Tandem, and shows Locked until then. Turn this off to let background syncs update it too. An encrypted budget always waits for you to unlock it.</string>
+    <string name="watch_pinned">Pinned categories</string>
+    <string name="watch_pinned_detail">Up to 6, in the order you pick them. With none picked, the watch shows the first 6.</string>
+    <string name="watch_pinned_empty">Open the budget once to pick its categories.</string>
+    <string name="watch_status_pinned">%1$d pinned</string>
 </resources>

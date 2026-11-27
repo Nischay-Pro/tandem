@@ -2,6 +2,7 @@ package app.tandemforactual.ui.core.automation
 
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.platform.IosInboxFile
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,7 @@ data class IosAutomationAdded(
     val transactionId: String,
     val summary: String,
     val repeated: Boolean,
+    val sealed: Boolean,
 )
 
 data class IosAutomationFailure(
@@ -51,7 +53,7 @@ object IosAutomation {
         externalId: String?,
         completion: (IosAutomationAdded?, IosAutomationFailure?) -> Unit,
     ) = answer(completion) {
-        val target = openTarget(AutomationKind.WRITE)
+        val target = automationTarget(AppPreferencesStore(iosTandemDatabase).read(), AutomationKind.WRITE)
         val input =
             AutomationTransactionInput(
                 amount = amount,
@@ -65,8 +67,14 @@ object IosAutomation {
                 amountFormat = AutomationAmountFormat.PLAIN,
             )
         val now = Clock.System.now().toEpochMilliseconds()
-        val added = addAutomatedTransaction(iosTandemDatabase, target.budgetId, input, SOURCE, platformTodayIsoDate(), now)
-        IosAutomationAdded(target.budgetId, added.transactionId, added.summary, added.repeated)
+        val added =
+            if (target.encrypted) {
+                val inbox = IosInboxFile.forBudget(target.budgetId)
+                sealAutomatedTransaction(iosTandemDatabase, inbox, target.budgetId, input, SOURCE, platformTodayIsoDate(), now)
+            } else {
+                addAutomatedTransaction(iosTandemDatabase, target.budgetId, input, SOURCE, platformTodayIsoDate(), now)
+            }
+        IosAutomationAdded(target.budgetId, added.transactionId, added.summary, added.repeated, added.sealed)
     }
 
     /** This month's left to spend from this device's copy, for [categoryId] or the whole budget. */
@@ -101,7 +109,11 @@ object IosAutomation {
             val result =
                 runCatching {
                     val now = Clock.System.now().toEpochMilliseconds()
-                    undoAutomatedTransaction(iosTandemDatabase, budgetId, transactionId, now)
+                    if (withdrawSealedTransaction(IosInboxFile.forBudget(budgetId), budgetId, transactionId)) {
+                        AutomationUndo.REMOVED
+                    } else {
+                        undoAutomatedTransaction(iosTandemDatabase, budgetId, transactionId, now)
+                    }
                 }.getOrNull()
             completion(
                 when (result) {

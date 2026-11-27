@@ -39,6 +39,7 @@ import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.automation.announceAfterSync
 import app.tandemforactual.ui.core.automation.announceSyncFailure
 import app.tandemforactual.ui.core.automation.budgetEventsAllowed
+import app.tandemforactual.ui.core.automation.openSealedInbox
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
@@ -137,6 +138,7 @@ class BackgroundBudgetSyncWorker(
             }
             try {
                 progress.show("Syncing your budget")
+                if (password != null) applySealedInbox(database, budgetDatabase, budgetId, password)
                 val repository = LocalBudgetRepository(budgetDatabase) { System.currentTimeMillis() }
                 val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient))
                 var summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
@@ -176,6 +178,18 @@ class BackgroundBudgetSyncWorker(
             apiClient?.close()
             progress.clear()
             database.close()
+        }
+    }
+
+    private suspend fun applySealedInbox(
+        database: TandemDatabase,
+        budgetDatabase: TandemDatabase,
+        budgetId: String,
+        password: String,
+    ) {
+        runCatching {
+            val inbox = AndroidInboxFile.forBudget(applicationContext, budgetId)
+            openSealedInbox(budgetDatabase, database, inbox, budgetId, password, LocalDate.now().toString())
         }
     }
 

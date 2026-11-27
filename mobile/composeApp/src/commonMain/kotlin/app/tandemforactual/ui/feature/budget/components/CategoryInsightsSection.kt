@@ -47,12 +47,13 @@ internal fun CategoryInsightsSection(
     mobileSession: TandemMobileSession,
     category: LiveCategorySummary,
     isTrackingBudget: Boolean,
+    isIncome: Boolean = false,
 ) {
     val today = rememberTodayIsoDate()
     val monthId = state.selectedMonthId
     val isCurrentMonth = monthId == today.take(7)
     val pace =
-        if (isTrackingBudget || !isCurrentMonth) {
+        if (isIncome || !isCurrentMonth) {
             null
         } else {
             categoryPace(
@@ -88,12 +89,12 @@ internal fun CategoryInsightsSection(
             )
         }
         if (lastMonth != null &&
-            canQuickAssign(isTrackingBudget, state.readOnlyMode, category.assignedMinor, lastMonth, monthId >= today.take(7))
+            canQuickAssign(isIncome, state.readOnlyMode, category.assignedMinor, lastMonth, monthId >= today.take(7))
         ) {
             val scope = rememberCoroutineScope()
             DividerLine()
             ListRow(
-                "Assign last month’s spending",
+                if (isTrackingBudget) "Budget last month’s spending" else "Assign last month’s spending",
                 leading = RowLeading.Icon(Lucide.WalletCards),
                 trailing = state.formatCurrency(lastMonth),
                 options = ListRowOptions(trailingColor = tandemPalette.accent, muted = mobileSession.isPerformingBudgetAction),

@@ -46,6 +46,7 @@ import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
 import app.tandemforactual.ui.app.receiveSharedFile
 import app.tandemforactual.ui.app.separatingVerticalHinge
+import app.tandemforactual.ui.core.platform.LocalWatchLink
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
@@ -53,6 +54,7 @@ import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
+import app.tandemforactual.ui.core.watch.WatchPairing
 import app.tandemforactual.ui.design.theme.TabletopFold
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -163,6 +165,7 @@ class MainActivity : FragmentActivity() {
                 LocalBackupSecrets provides backupSecrets,
                 LocalBankIcons provides bankIcons,
                 LocalLanAccess provides lanAccess,
+                LocalWatchLink provides WatchPairing,
             ) {
                 TandemApp(
                     onAutomaticBackupNetworkChanged = { AutomaticBackupScheduler.update(applicationContext, it) },

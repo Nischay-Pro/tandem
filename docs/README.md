@@ -43,5 +43,6 @@ Choose a page by what you need to do.
 | [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                             |
 | [Extension sync API](develop/api-reference.md)                      | Developers integrating with the optional extension sync service.       |
 | [App and server versioning](develop/versioning.md)                  | Contributors changing the API or features the app depends on.          |
+| [Sealed automation inbox](develop/sealed-inbox.md)                  | Developers changing automation writes to locked encrypted budgets.     |
 | [Store screenshots](develop/store-screenshots.md)                   | Maintainers capturing phone, foldable, and tablet listing screenshots. |
 | [OpenAPI document](api/openapi-v1.json)                             | Tools generating or checking API clients. Keep this path stable.       |

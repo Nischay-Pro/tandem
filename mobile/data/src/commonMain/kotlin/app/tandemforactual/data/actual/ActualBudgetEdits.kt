@@ -36,7 +36,8 @@ class ActualBudgetEdits(
     fun importTransactions(
         accountId: String,
         rows: List<ImportRow>,
-    ): ImportResult = ActualImport(writer).reconcile(accountId, rows)
+        reviewed: Boolean = false,
+    ): ImportResult = ActualImport(writer).reconcile(accountId, rows, reviewed = reviewed)
 
     val schedules = ActualScheduleEdits(writer, today)
 

@@ -19,17 +19,25 @@ import androidx.appfunctions.testing.AppFunctionTestRule
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.work.testing.WorkManagerTestInitHelper
+import app.tandemforactual.android.AndroidInboxFile
 import app.tandemforactual.android.TandemProcess
+import app.tandemforactual.android.tasker.AutomationCalls
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.inbox.InboxKeyring
+import app.tandemforactual.data.inbox.InboxPublicKeys
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
 import app.tandemforactual.data.store.applyFullSnapshot
 import app.tandemforactual.data.store.readPendingWrites
+import app.tandemforactual.ui.core.automation.AutomatedTransaction
 import app.tandemforactual.ui.core.automation.AutomationAccess
 import app.tandemforactual.ui.core.automation.AutomationErrorCode
 import app.tandemforactual.ui.core.automation.AutomationException
+import app.tandemforactual.ui.core.automation.AutomationTarget
+import app.tandemforactual.ui.core.automation.AutomationUndo
 import app.tandemforactual.ui.core.automation.automatedTransactionSources
+import app.tandemforactual.ui.core.automation.openSealedInbox
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -72,7 +80,10 @@ class AssistantFunctionsTest {
         }
 
     @After
-    fun closeBudget() = database.close()
+    fun closeBudget() {
+        AndroidInboxFile.deleteAll(context)
+        database.close()
+    }
 
     @Test
     fun theGeneratedSchemaListsBothFunctions() {
@@ -117,6 +128,41 @@ class AssistantFunctionsTest {
             val locked = failure(log(AssistantTransaction(amount = "-5", account = "Checking")))
             assertTrue(locked is AppFunctionDeniedException)
             assertTrue(locked.errorMessage.orEmpty().contains("encrypted budget is locked"))
+        }
+
+    @Test
+    fun aLockedEncryptedBudgetSealsTheEntryForTheNextUnlock() =
+        runBlocking {
+            preferences("selectedBudgetEncrypted" to "true")
+            InboxPublicKeys.publish(database, BUDGET, InboxKeyring(database, BUDGET).ensure("budget password"))
+            val transaction = AssistantTransaction(amount = "-5", account = "Checking", payee = "Bakery")
+            val saved = success<AssistantLoggedTransaction>(log(transaction))
+            assertEquals(AutomatedTransaction.SEALED_SUMMARY, saved.summary)
+            assertTrue(LocalBudgetRepository(database) { 0L }.readPendingWrites(BUDGET).isEmpty())
+            val inbox = AndroidInboxFile.forBudget(context, BUDGET)
+            val sealed = inbox.lines().joinToString("\n")
+            assertFalse(sealed.contains("Bakery") || sealed.contains("Checking"))
+            val notification = shadowOf(context.getSystemService(NotificationManager::class.java)).allNotifications.single()
+            assertEquals("Transaction saved", notification.extras.getString("android.title"))
+
+            val result = openSealedInbox(database, database, inbox, BUDGET, "budget password", LocalDate.now().toString())
+            assertEquals(1, result.added)
+            assertEquals(listOf(saved.transactionId), LocalBudgetRepository(database) { 0L }.readPendingWrites(BUDGET).map { it.recordId })
+            assertTrue(inbox.lines().isEmpty())
+        }
+
+    @Test
+    fun undoTakesBackASealedEntryBeforeItsAdded() =
+        runBlocking {
+            preferences("selectedBudgetEncrypted" to "true")
+            InboxPublicKeys.publish(database, BUDGET, InboxKeyring(database, BUDGET).ensure("budget password"))
+            val saved = success<AssistantLoggedTransaction>(log(AssistantTransaction(amount = "-5", account = "Checking")))
+            val target = AutomationTarget(BUDGET, encrypted = true)
+            assertEquals(AutomationUndo.REMOVED, AutomationCalls.undo(context, target, saved.transactionId))
+            val inbox = AndroidInboxFile.forBudget(context, BUDGET)
+            val result = openSealedInbox(database, database, inbox, BUDGET, "budget password", LocalDate.now().toString())
+            assertEquals(0, result.added)
+            assertTrue(LocalBudgetRepository(database) { 0L }.readPendingWrites(BUDGET).isEmpty())
         }
 
     @Test

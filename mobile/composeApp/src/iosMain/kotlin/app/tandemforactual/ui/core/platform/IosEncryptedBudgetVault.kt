@@ -5,6 +5,7 @@ import app.tandemforactual.data.database.createEncryptedTandemDatabase
 import app.tandemforactual.data.database.deleteEncryptedTandemDatabase
 import app.tandemforactual.data.database.encryptedTandemDatabasePath
 import app.tandemforactual.data.database.unlockEncryptedTandemDatabase
+import app.tandemforactual.data.inbox.InboxFile
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.PendingEncryptedBudget
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -62,13 +63,17 @@ class IosEncryptedBudgetVault : EncryptedBudgetVault {
             }
         }
 
+    override fun inboxFile(budgetId: String): InboxFile = IosInboxFile.forBudget(budgetId)
+
     override fun delete(budgetId: String) {
+        IosInboxFile.delete(budgetId)
         val current = entries()
         current[budgetId]?.let { deleteEncryptedTandemDatabase(encryptedTandemDatabasePath(it.fileName)) }
         save(current - budgetId)
     }
 
     override fun deleteAll() {
+        IosInboxFile.deleteAll()
         entries().values.forEach { deleteEncryptedTandemDatabase(encryptedTandemDatabasePath(it.fileName)) }
         defaults.removeObjectForKey(VAULT_KEY)
     }

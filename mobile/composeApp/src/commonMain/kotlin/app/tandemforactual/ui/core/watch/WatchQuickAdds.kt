@@ -2,6 +2,7 @@ package app.tandemforactual.ui.core.watch
 
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.ui.core.automation.AutomatedTransaction
 import app.tandemforactual.ui.core.automation.AutomationAmountFormat
 import app.tandemforactual.ui.core.automation.AutomationException
@@ -39,7 +40,7 @@ suspend fun addFromWatch(
     whenLocked: suspend (AutomationTarget, WatchQuickAdd) -> WatchQuickAddOutcome? = { _, _ -> null },
 ): WatchQuickAddOutcome {
     fun refused(message: String) = WatchQuickAddOutcome(WatchQuickAddResult(entry.entryId, WatchQuickAddStatus.REFUSED, message))
-    if (!WatchSettings.from(preferences).quickAdd) return refused("Quick add is off. Turn it on in Tandem under Settings › Watch.")
+    if (!WatchSettings.from(preferences).quickAddEnabled) return refused("Quick add is off. Turn it on in Tandem under Settings › Watch.")
     val budgetId =
         preferences["selectedBudgetId"]?.takeIf(String::isNotBlank)
             ?: return refused("No budget is open. Open a budget in Tandem first.")

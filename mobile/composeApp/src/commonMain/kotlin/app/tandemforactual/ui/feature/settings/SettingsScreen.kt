@@ -4,7 +4,6 @@ package app.tandemforactual.ui.feature.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,6 +13,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import app.tandemforactual.ui.core.format.APP_LANGUAGES
 import app.tandemforactual.ui.core.format.LanguagePickerSheet
 import app.tandemforactual.ui.core.format.LocalAppLanguage
+import app.tandemforactual.ui.core.platform.watchPaired
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.formatRecoveryKey
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -23,7 +23,6 @@ import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.LocalPaneDetailRoute
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.ui.externalConnectionsStatus
-import app.tandemforactual.ui.core.watch.WatchPairing
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -358,16 +357,9 @@ private fun AutomationConnectionsSection(
             AppRoute.CONNECTED_SERVICES,
             navigation,
         )
-        val watchPaired by WatchPairing.available.collectAsState()
-        if (watchPaired) {
+        if (watchPaired()) {
             DividerLine()
-            SettingsPageRow(
-                stringResource(Res.string.watch_title),
-                watchStatus(state),
-                Lucide.Watch,
-                AppRoute.WATCH,
-                navigation,
-            )
+            SettingsPageRow(stringResource(Res.string.watch_title), watchStatus(state), Lucide.Watch, AppRoute.WATCH, navigation)
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import app.tandemforactual.android.AndroidDeviceCredentialStore
 import app.tandemforactual.android.AndroidEncryptedBudgetVault
+import app.tandemforactual.android.AndroidInboxFile
 import app.tandemforactual.android.BACKGROUND_KEY_STORE
 import app.tandemforactual.android.BackgroundBudgetSyncScheduler
 import app.tandemforactual.android.TandemProcess
@@ -13,9 +14,11 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.automation.AutomatedTransaction
 import app.tandemforactual.ui.core.automation.AutomationBudgetNumbers
 import app.tandemforactual.ui.core.automation.AutomationChoices
+import app.tandemforactual.ui.core.automation.AutomationErrorCode
 import app.tandemforactual.ui.core.automation.AutomationEvent
 import app.tandemforactual.ui.core.automation.AutomationEventKind
 import app.tandemforactual.ui.core.automation.AutomationEventStore
+import app.tandemforactual.ui.core.automation.AutomationException
 import app.tandemforactual.ui.core.automation.AutomationKind
 import app.tandemforactual.ui.core.automation.AutomationReadInput
 import app.tandemforactual.ui.core.automation.AutomationTarget
@@ -28,8 +31,10 @@ import app.tandemforactual.ui.core.automation.automationTarget
 import app.tandemforactual.ui.core.automation.categoriesOverBudget
 import app.tandemforactual.ui.core.automation.overBudgetValues
 import app.tandemforactual.ui.core.automation.readAutomationBudget
+import app.tandemforactual.ui.core.automation.sealAutomatedTransaction
 import app.tandemforactual.ui.core.automation.syncEventsAllowed
 import app.tandemforactual.ui.core.automation.undoAutomatedTransaction
+import app.tandemforactual.ui.core.automation.withdrawSealedTransaction
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
 
@@ -45,14 +50,18 @@ internal object AutomationCalls {
         source: String,
     ): AutomatedTransaction {
         val target = automationTarget(preferences(context), AutomationKind.WRITE)
+        val today = LocalDate.now().toString()
+        val now = System.currentTimeMillis()
         val added =
-            withBudget(context, target) { database ->
-                addAutomatedTransaction(database, target.budgetId, input, source, LocalDate.now().toString(), System.currentTimeMillis())
+            try {
+                withBudget(context, target) { database -> addAutomatedTransaction(database, target.budgetId, input, source, today, now) }
+            } catch (error: AutomationException) {
+                if (error.code != AutomationErrorCode.BUDGET_LOCKED) throw error
+                val inbox = AndroidInboxFile.forBudget(context, target.budgetId)
+                sealAutomatedTransaction(TandemProcess.database(context), inbox, target.budgetId, input, source, today, now)
             }
-        if (!added.repeated) {
-            AutomationNotifications.added(context, target, added, source)
-            requestSync(context)
-        }
+        if (!added.repeated) AutomationNotifications.added(context, target, added, source)
+        if (!added.repeated && !added.sealed) requestSync(context)
         return added
     }
 
@@ -111,6 +120,8 @@ internal object AutomationCalls {
         target: AutomationTarget,
         transactionId: String,
     ): AutomationUndo {
+        val inbox = AndroidInboxFile.forBudget(context, target.budgetId)
+        if (target.encrypted && withdrawSealedTransaction(inbox, target.budgetId, transactionId)) return AutomationUndo.REMOVED
         val result =
             withBudget(context, target) { undoAutomatedTransaction(it, target.budgetId, transactionId, System.currentTimeMillis()) }
         if (result == AutomationUndo.DELETING) requestSync(context)

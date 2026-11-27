@@ -186,3 +186,10 @@ fun ActualBudgetEdits.moveMoney(
     setBudget(month, toCategoryId, (destination.value("budgeted") as Long? ?: 0L) + amount)
     addMovementNote(month, amount, fromCategoryId, toCategoryId)
 }
+
+/** Actual's synced `budgetType`; each type keeps its own amounts, so switching back finds them as they were. */
+fun ActualBudgetEdits.setBudgetType(type: String) =
+    writer.batch {
+        if (type != "envelope" && type != "tracking") fail("Choose an envelope or tracking budget")
+        writer.update("preferences", "budgetType", mapOf("value" to type))
+    }

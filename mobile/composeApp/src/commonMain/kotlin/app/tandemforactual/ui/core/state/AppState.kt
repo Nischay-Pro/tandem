@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.QuietHours
+import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.ui.core.automation.AutomationAccess
 import app.tandemforactual.ui.core.format.currentMonthId
 import app.tandemforactual.ui.core.format.currentMonthLabel
@@ -19,7 +20,6 @@ import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.planning.ExchangeRateFetching
-import app.tandemforactual.ui.core.watch.WatchSettings
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
 
@@ -76,6 +76,7 @@ internal class AppState {
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
     var pendingScheduleToOpenId by mutableStateOf<String?>(null)
+    var pendingScheduleSeed by mutableStateOf<ScheduleSeed?>(null)
     var categoryEditRequested by mutableStateOf(false)
     var selectedTransactionRecordId by mutableStateOf("")
     var selectedCustomReportId by mutableStateOf("")
@@ -132,11 +133,11 @@ internal class AppState {
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
+    var watchSettings by mutableStateOf(WatchSettings())
 
     /** Whether automation apps such as Tasker may add transactions, and separately read budget numbers. */
     var automationWritesEnabled by mutableStateOf(false)
     var automationReadsEnabled by mutableStateOf(false)
-    var watchSettings by mutableStateOf(WatchSettings())
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)
@@ -220,6 +221,7 @@ internal class AppState {
         selectedMonth = currentMonthLabel()
         selectedMonthId = currentMonthId()
         pendingScheduleToOpenId = null
+        pendingScheduleSeed = null
         categoryEditRequested = false
         selectedTransactionRecordId = ""
         selectedTransactionAccountId = ""

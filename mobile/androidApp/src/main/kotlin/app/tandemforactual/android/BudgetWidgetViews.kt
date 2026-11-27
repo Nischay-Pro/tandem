@@ -68,6 +68,7 @@ private fun budgetViews(
         val ready = summary.readyToAssignMinor
         val negative = ready != null && ready < 0
         val readyText = formatAmount(ready, summary.displaySettings)
+        views.setTextViewText(R.id.widget_ready_label, summary.headline)
         views.setTextViewText(R.id.widget_ready, readyText)
         views.setTextViewText(R.id.widget_ready_negative, readyText)
         views.setViewVisibility(R.id.widget_ready, if (negative) View.GONE else View.VISIBLE)

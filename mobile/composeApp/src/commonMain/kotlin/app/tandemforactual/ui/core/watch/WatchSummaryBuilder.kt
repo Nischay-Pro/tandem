@@ -5,6 +5,7 @@ import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.data.store.dueSchedules
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.findRecords
@@ -61,7 +62,7 @@ suspend fun watchSummary(
             state = WatchState.LOCKED,
             budgetName = preferences["selectedBudget"]?.takeIf(String::isNotBlank) ?: "Budget",
             sentAtEpochMs = nowEpochMs,
-            quickAdd = settings.quickAdd && preferences["readOnlyMode"] != "true",
+            quickAdd = settings.quickAddEnabled && preferences["readOnlyMode"] != "true",
         )
     if (target.encrypted && !AutomationAccess.readsAllowed(preferences)) return locked
     val database =

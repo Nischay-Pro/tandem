@@ -67,7 +67,9 @@ struct LogTransactionIntent: AppIntent {
             return .result(value: added.transactionId, dialog: "Already added, so nothing new was added.")
         }
         TandemAutomationNotifications.shared.added(added)
-        IosBackgroundSyncScheduler.shared.requestAfterAutomation()
+        if !added.sealed {
+            IosBackgroundSyncScheduler.shared.requestAfterAutomation()
+        }
         return .result(value: added.transactionId, dialog: "\(added.summary)")
     }
 }
@@ -164,13 +166,17 @@ struct CategoryEntity: AppEntity {
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
 }
 
+/// An encrypted budget offers no names, so a typed name stands in and is matched once the budget is unlocked.
 struct AccountQuery: EntityStringQuery {
     func entities(for identifiers: [String]) async throws -> [AccountEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        let known = try await suggestedEntities()
+        return identifiers.map { id in known.first { $0.id == id } ?? AccountEntity(id: id, name: id) }
     }
 
     func entities(matching string: String) async throws -> [AccountEntity] {
-        try await suggestedEntities().filter { $0.name.localizedCaseInsensitiveContains(string) }
+        let known = try await suggestedEntities()
+        if known.isEmpty { return [AccountEntity(id: string, name: string)] }
+        return known.filter { $0.name.localizedCaseInsensitiveContains(string) }
     }
 
     func suggestedEntities() async throws -> [AccountEntity] {
@@ -180,11 +186,14 @@ struct AccountQuery: EntityStringQuery {
 
 struct CategoryQuery: EntityStringQuery {
     func entities(for identifiers: [String]) async throws -> [CategoryEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        let known = try await suggestedEntities()
+        return identifiers.map { id in known.first { $0.id == id } ?? CategoryEntity(id: id, name: id) }
     }
 
     func entities(matching string: String) async throws -> [CategoryEntity] {
-        try await suggestedEntities().filter { $0.name.localizedCaseInsensitiveContains(string) }
+        let known = try await suggestedEntities()
+        if known.isEmpty { return [CategoryEntity(id: string, name: string)] }
+        return known.filter { $0.name.localizedCaseInsensitiveContains(string) }
     }
 
     func suggestedEntities() async throws -> [CategoryEntity] {
@@ -327,8 +336,8 @@ final class TandemAutomationNotifications: NSObject, UNUserNotificationCenterDel
 
     func added(_ added: IosAutomationAdded) {
         let content = UNMutableNotificationContent()
-        content.title = added.summary
-        content.body = "Added by Shortcuts. Undo removes it."
+        content.title = added.sealed ? "Transaction saved" : added.summary
+        content.body = added.sealed ? "From Shortcuts. Added when you open Tandem." : "Added by Shortcuts. Undo removes it."
         content.categoryIdentifier = Self.category
         content.userInfo = AutomationUndoInfo.make(budgetId: added.budgetId, transactionId: added.transactionId)
         center.add(UNNotificationRequest(identifier: added.transactionId, content: content, trigger: nil)) { error in

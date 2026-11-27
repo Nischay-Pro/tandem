@@ -5,6 +5,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
+import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.data.store.applyFullSnapshot
 import app.tandemforactual.data.store.readPendingWrites
 import app.tandemforactual.ui.core.automation.AutomationAccess
@@ -143,7 +144,7 @@ class WatchSummaryTest {
     fun aWatchEntryIsRefusedOrHeldWithAReason() =
         withBudget { database ->
             val entry = WatchQuickAdd("entry-2", 900, null, null, NOW)
-            val off = open + WatchSettings(quickAdd = false).toPreferences()
+            val off = open + WatchSettings(quickAddEnabled = false).toPreferences()
             assertEquals(WatchQuickAddStatus.REFUSED, add(database, off, entry).result.status)
             assertEquals(WatchQuickAddStatus.REFUSED, add(database, open + ("readOnlyMode" to "true"), entry).result.status)
 

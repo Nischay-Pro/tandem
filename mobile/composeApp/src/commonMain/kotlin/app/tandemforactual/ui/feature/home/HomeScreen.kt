@@ -31,7 +31,9 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.state.isTrackingBudget
 import app.tandemforactual.ui.core.state.planHome
+import app.tandemforactual.ui.core.state.trackingMonthFigures
 import app.tandemforactual.ui.core.state.uncategorized
 import app.tandemforactual.ui.core.ui.AutoAssignSheet
 import app.tandemforactual.ui.core.ui.DebtOverviewCard
@@ -231,9 +233,10 @@ private fun HomeEntryCard(
                 "Open",
                 onClick = { navigation.selectTab(AppRoute.BUDGET) },
             ) {
+                val (label, amount) = homeBudgetFigure(state.isTrackingBudget, month)
                 ListRow(
-                    "To budget",
-                    trailingContent = { money(month?.toBudgetMinor ?: 0) },
+                    label,
+                    trailingContent = { money(amount) },
                     leading = RowLeading.None,
                     options = ListRowOptions(showChevron = false),
                 )
@@ -344,3 +347,15 @@ private fun RecentActivityCard(
 
 /** Where a module's skippable setup lives when it isn't a sheet on Home. */
 internal fun HomeModule.setupRoute(): AppRoute = if (this == HomeModule.DEBT_OVERVIEW) AppRoute.ACCOUNTS else AppRoute.BUDGET
+
+/** The budget card's one figure: to budget for an envelope budget, or this month's savings for a tracking one. */
+internal fun homeBudgetFigure(
+    isTrackingBudget: Boolean,
+    month: LiveBudgetMonthSummary?,
+): Pair<String, Long> =
+    if (isTrackingBudget) {
+        val figures = trackingMonthFigures(month?.groups.orEmpty())
+        (if (figures.savedMinor < 0) "Overspent" else "Saved") to figures.savedMinor
+    } else {
+        "To budget" to (month?.toBudgetMinor ?: 0)
+    }

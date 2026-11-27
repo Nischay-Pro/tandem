@@ -5,9 +5,9 @@ import app.tandemforactual.android.TandemProcess
 import app.tandemforactual.android.tasker.AutomationCalls
 import app.tandemforactual.android.tasker.AutomationNotifications
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.ui.core.watch.WATCH_SOURCE
 import app.tandemforactual.ui.core.watch.WatchPairing
-import app.tandemforactual.ui.core.watch.WatchSettings
 import app.tandemforactual.ui.core.watch.addFromWatch
 import app.tandemforactual.ui.core.watch.watchSummary
 import app.tandemforactual.watch.WatchLink
@@ -63,7 +63,8 @@ internal object PhoneWatch {
             withTimeoutOrNull(PUBLISH_MS) {
                 val database = TandemProcess.database(context)
                 val preferences = AppPreferencesStore(database).read()
-                if (afterUnlock || !WatchSettings.from(preferences).summaryAfterUnlock) {
+                val waitsForUnlock = preferences["biometricLockEnabled"] == "true" && WatchSettings.from(preferences).summaryAfterUnlock
+                if (afterUnlock || !waitsForUnlock) {
                     val summary =
                         watchSummary(database, preferences, LocalDate.now().toString(), System.currentTimeMillis()) {
                             AutomationCalls.open(context, it)

@@ -139,6 +139,7 @@ private final class TandemAppDelegate: NSObject, UIApplicationDelegate {
         IosBackgroundSyncScheduler.shared.register()
         TandemAutomationNotifications.shared.install()
         TandemAppShortcuts.updateAppShortcutParameters()
+        PhoneWatchSession.shared.activate()
         return true
     }
 
@@ -184,9 +185,10 @@ private final class TandemSceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 }
 
-/// Saves the widgets' summary to the App Group and asks WidgetKit to redraw them; nothing else leaves the app.
+/// Saves the widgets' summary to the App Group and asks WidgetKit to redraw them, and sends the paired watch its own.
 enum WidgetRefresh {
     static func refresh(then done: @escaping () -> Void = {}) {
+        PhoneWatchSession.shared.refreshSummary()
         IosWidgetSnapshotKt.readIosWidgetSnapshot { json in
             if let json, WidgetSnapshotStore.save(json, to: WidgetSnapshotStore.fileURL()) {
                 WidgetCenter.shared.reloadAllTimelines()
