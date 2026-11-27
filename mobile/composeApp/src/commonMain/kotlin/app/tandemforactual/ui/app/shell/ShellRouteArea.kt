@@ -63,7 +63,12 @@ internal fun ColumnScope.ShellRouteArea(
     val transitionInputModifier = Modifier.transitionInputBlocker(ctx.state, routeTransitionInputBlockedState)
     var routeBounds by remember { mutableStateOf<Rect?>(null) }
     if (!layout.workspaceActive) {
-        ListDetailContinuityEffect(routeBounds, ctx.backStack.map { it.route }, ctx.navigator::listDetailOpen, ctx.navigator::showListDetail)
+        ListDetailContinuityEffect(
+            routeBounds,
+            ctx.backStack.map { it.route },
+            ctx.navigator::listDetailOpen,
+            ctx.navigator::showListDetail,
+        )
     }
     Box(
         modifier =

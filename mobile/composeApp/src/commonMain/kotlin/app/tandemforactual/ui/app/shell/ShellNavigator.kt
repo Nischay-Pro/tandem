@@ -95,7 +95,12 @@ internal class ShellNavigator(
         shell.routeTransitionDirection = 0f
         when (change) {
             ListDetailChange.SHOW_PANE -> backStack.removeAt(backStack.lastIndex)
-            ListDetailChange.SHOW_PAGE -> backStack.last().route.listDetailPage()?.let { backStack.add(newRouteEntry(it)) }
+            ListDetailChange.SHOW_PAGE ->
+                backStack
+                    .last()
+                    .route
+                    .listDetailPage()
+                    ?.let { backStack.add(newRouteEntry(it)) }
         }
     }
 

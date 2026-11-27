@@ -5,8 +5,8 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.app.AppMenuItem
 import app.tandemforactual.ui.app.ListDetailPanes
 import app.tandemforactual.ui.app.MenuEntry
-import app.tandemforactual.ui.app.accountDetailKey
 import app.tandemforactual.ui.app.ScreenContext
+import app.tandemforactual.ui.app.accountDetailKey
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.accounts.AccountDetailScreen
 import app.tandemforactual.ui.feature.accounts.AccountOptionsScreen
