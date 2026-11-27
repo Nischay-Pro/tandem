@@ -38,7 +38,6 @@ import app.tandemforactual.ui.core.format.signedAmount
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
 import app.tandemforactual.ui.core.session.budget.applyBudgetTemplate
 import app.tandemforactual.ui.core.session.budget.budgetReorderMovesFor
-import app.tandemforactual.ui.core.session.budget.categoryNoteOverridesFor
 import app.tandemforactual.ui.core.session.budget.closeBudgetAccount
 import app.tandemforactual.ui.core.session.budget.copyBudgetMonth
 import app.tandemforactual.ui.core.session.budget.correctRejectedCategoryRename
@@ -50,15 +49,19 @@ import app.tandemforactual.ui.core.session.budget.importStatementTransactions
 import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
 import app.tandemforactual.ui.core.session.budget.moveBudgetAccount
 import app.tandemforactual.ui.core.session.budget.moveBudgetMoney
+import app.tandemforactual.ui.core.session.budget.noteOverridesFor
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
 import app.tandemforactual.ui.core.session.budget.pendingCategoryBudgetOverrides
 import app.tandemforactual.ui.core.session.budget.renameBudgetAccount
 import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
 import app.tandemforactual.ui.core.session.budget.resetBudgetHold
 import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
+import app.tandemforactual.ui.core.session.budget.setBudgetAccountNote
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
+import app.tandemforactual.ui.core.session.budget.setBudgetCategoryGroupNote
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryNote
+import app.tandemforactual.ui.core.session.budget.setBudgetMonthNote
 import app.tandemforactual.ui.core.session.budget.statementLedger
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.session.transactions.createTransaction
@@ -617,6 +620,9 @@ class TandemMobileSessionTest {
                 assertTrue(session.budgetEdits.renameBudgetAccount("budget-1", "account-1", "Daily checking", null))
                 assertTrue(session.budgetEdits.reopenBudgetAccount("budget-1", "account-1", null))
                 assertTrue(session.budgetEdits.setBudgetCategoryNote("budget-1", "category-1", " Weekly shop ", null))
+                assertTrue(session.budgetEdits.setBudgetCategoryGroupNote("budget-1", "group-1", "Day to day", null))
+                assertTrue(session.budgetEdits.setBudgetAccountNote("budget-1", "account-1", "Joint", null))
+                assertTrue(session.budgetEdits.setBudgetMonthNote("budget-1", "2026-11", "Holiday", null, "November 2026"))
                 assertTrue(
                     session.budgetEdits.moveBudgetAccount(
                         "budget-1",
@@ -641,7 +647,7 @@ class TandemMobileSessionTest {
 
                 val queued = repository.readBudgetMutationQueue().items
                 val operations = queued.flatMap { decodeBudgetReorderQueue(it.patchJson).moves }
-                assertEquals(18, operations.size)
+                assertEquals(21, operations.size)
                 assertEquals(
                     setOf(
                         BudgetReorderKind.SET_CATEGORY_AMOUNT,
@@ -662,10 +668,18 @@ class TandemMobileSessionTest {
                         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
                         BudgetReorderKind.IMPORT_STATEMENT,
                         BudgetReorderKind.SET_CATEGORY_NOTE,
+                        BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
+                        BudgetReorderKind.SET_ACCOUNT_NOTE,
+                        BudgetReorderKind.SET_MONTH_NOTE,
                     ),
                     operations.map { it.kind }.toSet(),
                 )
-                assertEquals("Weekly shop", session.budgetQueue.categoryNoteOverridesFor("budget-1")["category-1"])
+                val notes = session.budgetQueue
+                assertEquals("Weekly shop", notes.noteOverridesFor("budget-1", BudgetReorderKind.SET_CATEGORY_NOTE)["category-1"])
+                assertEquals("Day to day", notes.noteOverridesFor("budget-1", BudgetReorderKind.SET_CATEGORY_GROUP_NOTE)["group-1"])
+                assertEquals("Joint", notes.noteOverridesFor("budget-1", BudgetReorderKind.SET_ACCOUNT_NOTE)["account-1"])
+                assertEquals("Holiday", notes.noteOverridesFor("budget-1", BudgetReorderKind.SET_MONTH_NOTE)["2026-11"])
+                assertEquals("November 2026", operations.single { it.kind == BudgetReorderKind.SET_MONTH_NOTE }.name)
                 assertTrue(queued.all { it.status == "queued" })
                 assertEquals(9_000L, session.budgetQueue.pendingCategoryBudgetOverrides("budget-1", "2026-11")["category-1"])
                 assertEquals(

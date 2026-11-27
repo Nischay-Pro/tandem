@@ -50,6 +50,7 @@ import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.NoteText
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -219,10 +220,17 @@ private fun TransactionDetailFields(state: AppState) {
             trailing = displayTransactionDate(state.transactionDate),
         )
         DividerLine()
+        val notes = state.transactionNotes
         ListRow(
             "Notes",
             leading = RowLeading.Icon(Lucide.NotepadText),
-            trailing = state.transactionNotes.ifBlank { "No notes" },
+            trailing = "No notes".takeIf { notes.isBlank() },
+            subtitleContent =
+                if (notes.isBlank()) {
+                    null
+                } else {
+                    { NoteText(notes, collapsedLines = 4) }
+                },
         )
     }
 }

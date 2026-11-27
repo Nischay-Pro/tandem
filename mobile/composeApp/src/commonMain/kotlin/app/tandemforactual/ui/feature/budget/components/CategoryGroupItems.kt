@@ -98,6 +98,7 @@ internal fun LazyListScope.categoryGroupHeaderItems(
         AmountHero(hero.first, state.formatCurrency(hero.second), hero.third)
     }
     if (context.isLiveBudget) {
+        item(key = "category-group-note:${group.id}") { CategoryGroupNoteSection(state, mobileSession, group) }
         item(key = "category-group-usage:${group.id}") {
             SurfaceCard { WhereUsedRow { context.screen.showUsageSheet = true } }
         }

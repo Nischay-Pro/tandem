@@ -71,6 +71,7 @@ import app.tandemforactual.ui.feature.budget.components.BudgetReorderActions
 import app.tandemforactual.ui.feature.budget.components.BudgetScreenDock
 import app.tandemforactual.ui.feature.budget.components.BudgetScreenSheets
 import app.tandemforactual.ui.feature.budget.components.HoldSheetFigures
+import app.tandemforactual.ui.feature.budget.components.MonthNoteSection
 import app.tandemforactual.ui.feature.budget.components.TrackingMonthSummaryCard
 import app.tandemforactual.ui.feature.budget.components.budgetGroupItems
 import app.tandemforactual.ui.feature.budget.components.budgetMonthsTableItems
@@ -315,6 +316,9 @@ private fun LazyListScope.budgetMonthItems(
                 onAutoAssign = onAutoAssign,
             )
         }
+    }
+    if (context.isLiveBudget) {
+        item(key = "budget-month-note:${state.selectedMonthId}") { MonthNoteSection(state, context.mobileSession) }
     }
     if (pinnedCategories.isNotEmpty()) {
         val pinnedSectionKey = "live:${state.selectedBudgetId}:pinned"

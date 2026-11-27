@@ -39,17 +39,6 @@ fun ActualBudgetEdits.renameCategory(
     if (category["name"] != name) writer.update("categories", id, mapOf("name" to name.trim()))
 }
 
-/** Actual's `notes-save` for a category: the notes row shares the category's id; an empty note clears it. */
-fun ActualBudgetEdits.setCategoryNote(
-    id: String,
-    note: String,
-) = writer.batch {
-    categories().firstOrNull { it["id"] == id } ?: fail("Category does not exist in this budget")
-    val clean = note.trim()
-    val existing = db.first("SELECT note FROM notes WHERE id = ?", id)?.get("note") as String?
-    if (existing.orEmpty() != clean) writer.update("notes", id, mapOf("note" to clean))
-}
-
 fun ActualBudgetEdits.createCategoryGroup(
     name: String,
     isIncome: Boolean,

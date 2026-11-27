@@ -212,7 +212,7 @@ private fun CategoryDetailContent(
         scope,
         model.currentIncomeType,
     )
-    if (isLiveBudget) CategoryNoteSection(state, mobileSession, category, scope)
+    if (isLiveBudget) CategoryNoteSection(state, mobileSession, category)
     if (isLiveBudget) SurfaceCard { WhereUsedRow { sheets.showUsageSheet = true } }
     if (isLiveBudget) {
         SecondaryButton(

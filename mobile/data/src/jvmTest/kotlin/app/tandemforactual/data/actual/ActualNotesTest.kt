@@ -10,7 +10,7 @@ import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 
-class ActualCategoryNotesTest {
+class ActualNotesTest {
     private val today = "2026-11-21"
 
     private class Fixture(
@@ -26,11 +26,16 @@ class ActualCategoryNotesTest {
         fun recordNote(
             id: String,
             today: String,
+            type: String = "category",
         ) = ActualBudgetReader(db)
             .read(today)
             .records
-            .first { it.type == "category" && it.id == id }
+            .first { it.type == type && it.id == id }
             .body["note"]
+
+        fun accountId() = db.first("SELECT id FROM accounts WHERE tombstone = 0 ORDER BY sort_order, name")!!["id"] as String
+
+        fun groupId() = db.first("SELECT cat_group FROM categories WHERE name = 'Groceries' AND tombstone = 0")!!["cat_group"] as String
     }
 
     private fun fixture(): Fixture {
@@ -92,5 +97,58 @@ class ActualCategoryNotesTest {
     fun aMissingCategoryIsRejected() {
         val error = assertFailsWith<ActualEditException> { fixture().edits.setCategoryNote("missing", "x") }
         assertEquals("Category does not exist in this budget", error.message)
+    }
+
+    @Test
+    fun anAccountNoteUsesActualsPrefixedId() {
+        val f = fixture()
+        val account = f.accountId()
+        assertNull(f.recordNote(account, today, "account"))
+        f.edits.setAccountNote(account, " Joint with Sam ")
+        assertEquals("Joint with Sam", f.note("account-$account"))
+        assertNull(f.note(account))
+        assertEquals(JsonPrimitive("Joint with Sam"), f.recordNote(account, today, "account"))
+        f.edits.setAccountNote(account, "")
+        assertEquals("", f.note("account-$account"))
+        assertNull(f.recordNote(account, today, "account"))
+        val error = assertFailsWith<ActualEditException> { f.edits.setAccountNote("missing", "x") }
+        assertEquals("Account does not exist in this budget", error.message)
+    }
+
+    @Test
+    fun aGroupNoteIsSavedUnderTheGroupId() {
+        val f = fixture()
+        val group = f.groupId()
+        f.edits.setCategoryGroupNote(group, "Day to day")
+        assertEquals("Day to day", f.note(group))
+        assertEquals(JsonPrimitive("Day to day"), f.recordNote(group, today, "category-group"))
+        val sent = f.messages()
+        f.edits.setCategoryGroupNote(group, " Day to day ")
+        assertEquals(sent, f.messages())
+        f.edits.setCategoryGroupNote(group, " ")
+        assertNull(f.recordNote(group, today, "category-group"))
+        val error = assertFailsWith<ActualEditException> { f.edits.setCategoryGroupNote("missing", "x") }
+        assertEquals("Category group does not exist in this budget", error.message)
+    }
+
+    @Test
+    fun aMonthNoteIsSavedUnderTheBudgetMonthId() {
+        val f = fixture()
+        val month =
+            ActualBudgetReader(f.db)
+                .read(today)
+                .records
+                .first { it.type == "budget-month" }
+                .id
+        f.edits.setMonthNote(month, "Holiday month")
+        assertEquals("Holiday month", f.note("budget-$month"))
+        assertEquals(JsonPrimitive("Holiday month"), f.recordNote(month, today, "budget-month"))
+        assertEquals(JsonPrimitive("Holiday month"), ActualBudgetReader(f.db).budgetMonth(today, month)!!["note"])
+        f.edits.setMonthNote(month, "")
+        assertNull(f.recordNote(month, today, "budget-month"))
+        listOf("2026-13", "2026-1", "budget-2026-11").forEach {
+            val error = assertFailsWith<ActualEditException> { f.edits.setMonthNote(it, "x") }
+            assertEquals("Choose a month in this budget", error.message)
+        }
     }
 }

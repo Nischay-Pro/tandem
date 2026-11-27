@@ -97,7 +97,9 @@ internal fun budgetMutationChangeTitle(
         BudgetReorderKind.MERGE_PAYEE -> "Merge $itemName into ${payload?.stringValue("targetPayeeId") ?: "another payee"}"
         BudgetReorderKind.DELETE_PAYEE -> "Delete payee $itemName"
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Set $itemName’s default category"
-        BudgetReorderKind.SET_CATEGORY_NOTE -> "Update the note for $itemName"
+        BudgetReorderKind.SET_CATEGORY_NOTE, BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
+        BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE,
+        -> "Update the note for $itemName"
         BudgetReorderKind.IMPORT_STATEMENT -> "Import ${itemName.ifBlank { "transactions" }}"
         BudgetReorderKind.SET_BUDGET_TYPE -> "Switch to ${budgetTypeName(payload?.stringValue("type"))} budgeting"
         BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Change the order of $itemName"
@@ -184,7 +186,9 @@ internal fun budgetMutationPendingSummary(
         BudgetReorderKind.REOPEN_ACCOUNT -> "Reopen account"
         BudgetReorderKind.MERGE_PAYEE -> "Merge payee"
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Set default category"
-        BudgetReorderKind.SET_CATEGORY_NOTE -> "Edit note"
+        BudgetReorderKind.SET_CATEGORY_NOTE, BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
+        BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE,
+        -> "Edit note"
         BudgetReorderKind.IMPORT_STATEMENT -> "Import transactions"
         BudgetReorderKind.SET_BUDGET_TYPE -> "Switch to ${budgetTypeName(payload?.stringValue("type"))}"
     }
