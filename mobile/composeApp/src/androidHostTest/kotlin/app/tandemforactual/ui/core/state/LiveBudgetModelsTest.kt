@@ -211,6 +211,47 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun trackingIncomeReadsReceivedAndItsPlanStaysOutOfBudgetedSpending() {
+        val month =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json =
+                    """{"month":"2026-11","toBudget":null,"totalBudgeted":2500,"totalSpent":-2000,"totalIncome":4500,""" +
+                        """"categoryGroups":[{"id":"income","is_income":true,"categories":[{"id":"salary","budgeted":5000,""" +
+                        """"received":4500,"balance":500}]},{"id":"home","is_income":false,"categories":[{"id":"rent",""" +
+                        """"budgeted":2500,"spent":-2000,"balance":500}]}]}""",
+            )
+        val summary =
+            requireNotNull(
+                liveBudgetMonthSummary(
+                    monthRecord = month,
+                    categoryRecords = emptyList(),
+                    categoryGroupRecords = emptyList(),
+                    pendingBudgetMutations =
+                        listOf(
+                            queuedBudgetMutation(
+                                BudgetReorderKind.SET_CATEGORY_AMOUNT,
+                                itemId = "salary",
+                                payload = """{"month":"2026-11","amountMinor":6000}""",
+                            ),
+                        ),
+                ),
+            )
+
+        val salary =
+            summary.groups
+                .first { it.isIncome }
+                .categories
+                .single()
+        assertEquals(6_000L, salary.assignedMinor)
+        assertEquals(4_500L, salary.activityMinor)
+        assertEquals(1_500L, salary.balanceMinor)
+        assertEquals(2_500L, summary.totalBudgetedMinor)
+        assertEquals(3_500L, trackingMonthFigures(summary.groups).plannedSavingsMinor)
+    }
+
+    @Test
     fun projectsQueuedOfflineBudgetChangesAndClearsPendingMarksAfterSync() {
         val originalMonth =
             record(
@@ -483,6 +524,35 @@ class LiveBudgetModelsTest {
         assertEquals("New Rent", upcoming.single().name)
         assertEquals("2026-11-20", upcoming.single().nextDate)
         assertEquals(165_000L, upcoming.single().amountMinor)
+    }
+
+    @Test
+    fun showsAScheduleCreatedOnThisDeviceUntilActualHasIt() {
+        val queued =
+            listOf(
+                scheduleAction(
+                    id = "create-gym",
+                    recordId = "gym",
+                    action = "create",
+                    patchJson =
+                        """{"fields":{"accountId":"checking","payeeId":"club","amountOp":"isbetween",""" +
+                            """"amountRangeMinor":{"num1":-5000,"num2":-4000},"postsTransaction":true,""" +
+                            """"date":{"frequency":"monthly","start":"2026-12-03"}}}""",
+                ),
+                scheduleAction(id = "create-broken", recordId = "broken", action = "create", patchJson = """{"fields":{}}"""),
+            )
+        val payees = listOf(record(type = "payee", id = "club", name = "Climbing club"))
+        val accounts = listOf(record(type = "account", id = "checking", name = "Household Checking"))
+
+        val gym = liveScheduleSummaries(emptyList(), payees, accounts, queued).single()
+
+        assertEquals("Climbing club", gym.name)
+        assertEquals("2026-12-03", gym.nextDate)
+        assertEquals(-5_000L to -4_000L, gym.amountRangeMinor)
+        assertEquals("Household Checking", gym.accountName)
+        assertTrue(gym.postsTransaction)
+        val confirmed = record(type = "schedule", id = "gym", json = """{"id":"gym","name":"Gym","next_date":"2026-12-03"}""")
+        assertEquals("Gym", liveScheduleSummaries(listOf(confirmed), payees, accounts, queued).single().name)
     }
 }
 

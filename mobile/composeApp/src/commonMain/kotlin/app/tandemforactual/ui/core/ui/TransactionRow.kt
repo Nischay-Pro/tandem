@@ -62,6 +62,7 @@ internal fun TransactionRow(
     onLongClick: (() -> Unit)? = null,
     onSwipeDelete: (() -> Unit)? = null,
     highlighted: Boolean = false,
+    selectionMenuActions: List<RowMenuAction> = emptyList(),
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -90,7 +91,7 @@ internal fun TransactionRow(
                 onClick,
             )
         }
-        RowContextMenu(transactionRowMenuActions(selectionMode, onClick, onLongClick, onSwipeDelete)) {
+        RowContextMenu(transactionRowMenuActions(selectionMode, onClick, onLongClick, onSwipeDelete, selectionMenuActions)) {
             if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
         }
         if (showDivider) {
@@ -105,19 +106,23 @@ internal fun TransactionRow(
     }
 }
 
-/** Open, select and delete: what a tap, long-press and swipe do, for a right-click. Rows with only a tap get no menu. */
+/**
+ * Open, select and delete: what a tap, long-press and swipe do, for a right-click, plus [selectionActions] for the
+ * whole selection while selecting. Rows with only a tap get no menu.
+ */
 internal fun transactionRowMenuActions(
     selectionMode: Boolean,
     onOpen: () -> Unit,
     onSelect: (() -> Unit)?,
     onDelete: (() -> Unit)?,
+    selectionActions: List<RowMenuAction> = emptyList(),
 ): List<RowMenuAction> {
     if (onSelect == null && onDelete == null) return emptyList()
     return listOfNotNull(
         RowMenuAction("Open", Lucide.ExternalLink, onClick = onOpen),
         onSelect?.takeUnless { selectionMode }?.let { RowMenuAction("Select", Lucide.SquareCheck, onClick = it) },
         onDelete?.let { RowMenuAction("Delete", Lucide.Trash2, destructive = true, onClick = it) },
-    )
+    ) + selectionActions.takeIf { selectionMode }.orEmpty()
 }
 
 /** The highlighted list row for one transaction, without its date header and divider. */

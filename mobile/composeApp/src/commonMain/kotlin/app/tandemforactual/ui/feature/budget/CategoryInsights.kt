@@ -143,11 +143,11 @@ internal fun billsStillDue(
         .filter { it.nextDate >= today && it.nextDate.take(7) == today.take(7) }
         .sumOf { -(it.amountMinor ?: 0).coerceAtMost(0) }
 
-/** Offer to assign last month's spending to a category that has nothing assigned yet this month or later. */
+/** Offer to plan last month's spending for a spending category that has no plan yet this month or later. */
 internal fun canQuickAssign(
-    isTrackingBudget: Boolean,
+    isIncome: Boolean,
     readOnly: Boolean,
     assignedMinor: Long,
     lastMonthSpentMinor: Long,
     monthIsCurrentOrLater: Boolean,
-): Boolean = !isTrackingBudget && !readOnly && assignedMinor == 0L && lastMonthSpentMinor > 0 && monthIsCurrentOrLater
+): Boolean = !isIncome && !readOnly && assignedMinor == 0L && lastMonthSpentMinor > 0 && monthIsCurrentOrLater

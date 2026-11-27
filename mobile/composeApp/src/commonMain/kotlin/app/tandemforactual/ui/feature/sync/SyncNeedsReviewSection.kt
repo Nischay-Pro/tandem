@@ -241,6 +241,7 @@ private fun scheduleActionTitle(
         "skip" -> "Skip $name"
         "post" -> "Post $name"
         "edit" -> "Edit $name"
+        "create" -> "Add $name"
         "delete" -> "Delete $name"
         else -> "Scheduled transaction"
     }
@@ -259,6 +260,7 @@ private fun scheduleActionSummary(
             "post" -> "Add the scheduled payment to Actual"
             "delete" -> "Remove this scheduled item"
             "edit" -> "Update the scheduled item"
+            "create" -> "Add a new scheduled item"
             else -> null
         },
         amount,

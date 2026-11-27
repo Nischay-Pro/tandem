@@ -137,8 +137,9 @@ private fun RowScope.BudgetGroupHeading(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        val headingAmount = budgetGroupHeadingAmount(group, isTrackingBudget)
         when {
-            isReordering || isTrackingBudget -> {
+            isReordering || headingAmount == null -> {
                 Text(
                     categoryCountLabel(group.categories.size),
                     color = palette.muted,
@@ -150,14 +151,14 @@ private fun RowScope.BudgetGroupHeading(
             else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                     PrivacyAmountText(
-                        state.formatCurrency(group.assignedMinor),
+                        state.formatCurrency(headingAmount.first),
                         privacyModeEnabled = state.privacyModeEnabled,
                         fractionDigits = state.currencyFractionDigitsForDisplay,
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                     )
                     Text(
-                        "assigned · ${categoryCountLabel(group.categories.size)}",
+                        "${headingAmount.second} · ${categoryCountLabel(group.categories.size)}",
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                         maxLines = 1,
@@ -166,7 +167,7 @@ private fun RowScope.BudgetGroupHeading(
                 }
             }
         }
-        if (state.budgetShowProgressBars && !isTrackingBudget) {
+        if (state.budgetShowProgressBars && !group.isIncome) {
             BudgetGroupProgressBar(group)
         }
     }
@@ -216,17 +217,17 @@ private fun BudgetGroupBalance(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
     ) {
         PrivacyAmountText(
-            state.formatCurrency(group.balanceMinor),
+            state.formatCurrency(if (group.isIncome) group.activityMinor else group.balanceMinor),
             privacyModeEnabled = state.privacyModeEnabled,
             fractionDigits = state.currencyFractionDigitsForDisplay,
-            color = tandemPalette.accent,
+            color = if (group.isIncome) tandemPalette.positive else tandemPalette.accent,
             fontSize = TandemTypography.compactBody,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            if (isTrackingBudget) "Balance" else "Available",
+            budgetBalanceWord(group.isIncome, isTrackingBudget),
             color = tandemPalette.muted,
             fontSize = TandemTypography.micro,
             maxLines = 1,
@@ -239,3 +240,26 @@ private fun BudgetGroupBalance(
         onClick = { state.toggleBudgetSection(groupSectionKey) },
     )
 }
+
+/** The planned amount a group header shows under its name, and the word for it; envelope income has none. */
+internal fun budgetGroupHeadingAmount(
+    group: LiveCategoryGroupSummary,
+    isTrackingBudget: Boolean,
+): Pair<Long, String>? =
+    when {
+        group.isIncome && !isTrackingBudget -> null
+        group.isIncome -> group.assignedMinor to "expected"
+        isTrackingBudget -> group.assignedMinor to "budgeted"
+        else -> group.assignedMinor to "assigned"
+    }
+
+/** What the amount beside a group or category means: money received, left of the plan, or left in the envelope. */
+internal fun budgetBalanceWord(
+    isIncome: Boolean,
+    isTrackingBudget: Boolean,
+): String =
+    when {
+        isIncome -> "Received"
+        isTrackingBudget -> "Remaining"
+        else -> "Available"
+    }

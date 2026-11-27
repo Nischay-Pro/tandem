@@ -4,10 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.applyBudgetGoalTemplates
 import app.tandemforactual.api.client.importBudgetAccountTransactions
+import app.tandemforactual.api.client.setBudgetType
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
+import app.tandemforactual.ui.core.session.flag
 import app.tandemforactual.ui.core.session.goalTemplateCategoryIds
 import app.tandemforactual.ui.core.session.optionalString
 import app.tandemforactual.ui.core.session.requirePayload
@@ -70,6 +72,7 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.IMPORT_STATEMENT,
         -> Dispatched(sendPayeeEdit(request))
         BudgetReorderKind.SET_CATEGORY_NOTE -> Dispatched(sendCategoryNote(request))
+        BudgetReorderKind.SET_BUDGET_TYPE -> Dispatched(sendBudgetType(request))
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
         BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -390,6 +393,24 @@ private suspend fun BudgetEditQueue.sendCategoryNote(request: QueuedBudgetReorde
     }
 }
 
+/** Switching between envelope and tracking budgeting. */
+private suspend fun BudgetEditQueue.sendBudgetType(request: QueuedBudgetReorder): Boolean {
+    val payload = request.requirePayload()
+    return host.feedback.performBudgetAction(
+        request.budgetId,
+        request.encryptionPassword,
+        "Couldn’t switch the budget type.",
+        null,
+    ) {
+        host.apiClient.setBudgetType(
+            request.budgetId,
+            payload.requiredString("type"),
+            request.encryptionPassword,
+            request.operationId,
+        )
+    }
+}
+
 /** Payee changes and statement imports. */
 private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder): Boolean =
     when (request.kind) {
@@ -432,6 +453,7 @@ private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder):
                     imported,
                     request.encryptionPassword,
                     request.operationId,
+                    reviewed = payload.flag("reviewed"),
                 )
             }
         }

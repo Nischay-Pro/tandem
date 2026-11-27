@@ -166,6 +166,7 @@ internal fun budgetMutationTitle(
         "SET_PAYEE_DEFAULT_CATEGORY" -> "Update payee · $itemName"
         "SET_CATEGORY_NOTE" -> "Category note · $itemName"
         "IMPORT_STATEMENT" -> "Import transactions · $itemName"
+        "SET_BUDGET_TYPE" -> "Switch budget type"
         "RENAME_CATEGORY", "REFRESH_CATEGORY_RENAME" -> "Rename category · $itemName"
         "HIDE_CATEGORY", "HIDE_CATEGORY_GROUP" -> "Hide · $itemName"
         "SHOW_CATEGORY", "SHOW_CATEGORY_GROUP" -> "Show · $itemName"

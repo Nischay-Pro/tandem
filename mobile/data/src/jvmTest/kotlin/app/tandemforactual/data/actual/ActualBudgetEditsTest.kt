@@ -649,4 +649,26 @@ class ActualBudgetEditsTest {
             assertEquals(0L, f.month(month).value("totalIncome"))
         }
     }
+
+    @Test
+    fun switchingTheBudgetTypeKeepsEachTypesAmounts() {
+        val f = fixture()
+        val groceries = f.id("categories", "Groceries")
+        f.edits.setBudgetAmount(groceries, month, 40_000)
+
+        f.edits.setBudgetType("tracking")
+        assertTrue(f.edits.tracking())
+        assertEquals("tracking", f.one("SELECT value FROM preferences WHERE id = 'budgetType'")?.get("value"))
+        f.edits.setBudgetAmount(groceries, month, 7_000)
+        assertEquals(7_000L, f.category(month, groceries).value("budgeted"))
+        assertEquals(
+            7_000L,
+            f.one("SELECT amount FROM reflect_budgets WHERE month = 202611 AND category = ?", groceries)?.get("amount"),
+        )
+
+        f.edits.setBudgetType("envelope")
+        assertFalse(f.edits.tracking())
+        assertEquals(40_000L, f.category(month, groceries).value("budgeted"))
+        f.rejects("Choose an envelope or tracking budget") { setBudgetType("report") }
+    }
 }

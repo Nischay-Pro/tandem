@@ -207,6 +207,7 @@ internal enum class BudgetReorderKind {
     SET_PAYEE_DEFAULT_CATEGORY,
     SET_CATEGORY_NOTE,
     IMPORT_STATEMENT,
+    SET_BUDGET_TYPE,
 
     /** One request that saves every folded reorder draft (see [BudgetReorderQueueState.foldOrderDrafts]). */
     SET_ORDER,
@@ -294,6 +295,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
             BudgetReorderKind.SET_CATEGORY_NOTE -> "Couldn’t save this category’s note."
             BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
+            BudgetReorderKind.SET_BUDGET_TYPE -> "Couldn’t switch the budget type."
             BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
         }
     return if (detail == null) fallback else "$detail."

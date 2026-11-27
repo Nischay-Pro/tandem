@@ -10,6 +10,20 @@ data class ImportRow(
     val category: String? = null,
     val cleared: Boolean? = null,
     val rawSyncedData: String? = null,
+    val matchId: String? = null,
+)
+
+/** An account transaction a statement row can be paired with. */
+data class LedgerTransaction(
+    val id: String,
+    val date: String,
+    val amount: Long,
+    val payeeName: String?,
+    val importedPayee: String?,
+    val notes: String?,
+    val importedId: String?,
+    val cleared: Boolean,
+    val reconciled: Boolean,
 )
 
 enum class ImportOutcome { ADD, UPDATE, UNCHANGED, RECONCILED }
@@ -42,6 +56,7 @@ class ActualImport(
         strictIdChecking: Boolean = true,
         updateDates: Boolean = false,
         bankSync: Boolean = false,
+        reviewed: Boolean = false,
     ): ImportResult {
         val payeesToCreate = LinkedHashMap<String, Pair<String, String>>()
         val payeesByName =
@@ -51,6 +66,7 @@ class ActualImport(
             }
         val matched = HashSet<String>()
         val exactParents = HashSet<String>()
+        val matching = ImportMatching(reimportDeleted, strictIdChecking, reviewed)
         val steps =
             transactions.batchRules {
                 rows.map { row ->
@@ -64,12 +80,49 @@ class ActualImport(
                             payeesToCreate[name.lowercase()]?.first ?: payeesByName[name.lowercase()]
                                 ?: writer.uuid().also { payeesToCreate[name.lowercase()] = it to name }
                         }
-                    importStep(accountId, row, payeeName, payee, matched, reimportDeleted, strictIdChecking)
+                    importStep(accountId, row, payeeName, payee, matched, matching)
                         .also { step ->
                             step.match?.takeIf { bankSync && truthy(it["is_parent"]) }?.let { exactParents += it["id"] as String }
                         }
                 }
             }
+        matchFuzzy(steps, matched, exactParents)
+        val added = mutableListOf<Map<String, Any?>>()
+        val addedIds = mutableListOf<String>()
+        val updated = mutableListOf<Map<String, Any?>>()
+        val outcomes =
+            steps.map { step ->
+                val match = step.match
+                val trans = step.trans
+                when {
+                    match == null && (truthy(trans["tombstone"]) || step.missing) -> ImportOutcome.UNCHANGED
+                    match == null -> {
+                        val rows = newRows(trans, defaultCleared)
+                        addedIds += rows.first()["id"] as String
+                        added += rows
+                        ImportOutcome.ADD
+                    }
+                    truthy(match["reconciled"]) -> ImportOutcome.RECONCILED
+                    else -> updateMatch(match, trans, updateDates, reviewed, updated)
+                }
+            }
+        val now = writer.nowMillis()
+        val sorted = added.mapIndexed { index, t -> t + ("sort_order" to (t["sort_order"] ?: (now - index * 1024L))) }
+        if (preview) return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
+        writer.batch {
+            val used = (sorted + updated).map { it["payee"] }.toSet()
+            payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> transactions.insertPayee(name, id) }
+            transactions.batchUpdate(added = sorted, updated = updated)
+        }
+        return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
+    }
+
+    /** Actual's two fuzzy passes: first a candidate with the same payee, then any unmatched candidate. */
+    private fun matchFuzzy(
+        steps: List<Step>,
+        matched: MutableSet<String>,
+        exactParents: Set<String>,
+    ) {
         for (pass in 0..1) {
             for (step in steps) {
                 if (step.match != null) continue
@@ -82,34 +135,6 @@ class ActualImport(
                 step.match?.let { matched += it["id"] as String }
             }
         }
-        val added = mutableListOf<Map<String, Any?>>()
-        val addedIds = mutableListOf<String>()
-        val updated = mutableListOf<Map<String, Any?>>()
-        val outcomes =
-            steps.map { step ->
-                val match = step.match
-                val trans = step.trans
-                when {
-                    match == null && truthy(trans["tombstone"]) -> ImportOutcome.UNCHANGED
-                    match == null -> {
-                        val rows = newRows(trans, defaultCleared)
-                        addedIds += rows.first()["id"] as String
-                        added += rows
-                        ImportOutcome.ADD
-                    }
-                    truthy(match["reconciled"]) -> ImportOutcome.RECONCILED
-                    else -> updateMatch(match, trans, updateDates, updated)
-                }
-            }
-        val now = writer.nowMillis()
-        val sorted = added.mapIndexed { index, t -> t + ("sort_order" to (t["sort_order"] ?: (now - index * 1024L))) }
-        if (preview) return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
-        writer.batch {
-            val used = (sorted + updated).map { it["payee"] }.toSet()
-            payeesToCreate.values.filter { it.first in used }.forEach { (id, name) -> transactions.insertPayee(name, id) }
-            transactions.batchUpdate(added = sorted, updated = updated)
-        }
-        return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
     }
 
     /** A new row, or a split parent and its children when a rule split it, as `addTransactions` writes them. */
@@ -128,7 +153,42 @@ class ActualImport(
         val trans: Map<String, Any?>,
         var match: Row?,
         val fuzzy: List<Row>,
+        val missing: Boolean = false,
     )
+
+    private class ImportMatching(
+        val reimportDeleted: Boolean,
+        val strictIdChecking: Boolean,
+        val reviewed: Boolean,
+    )
+
+    /** The account's transactions between two dates, split children excluded, with their payee names. */
+    fun ledger(
+        accountId: String,
+        from: String,
+        to: String,
+    ): List<LedgerTransaction> =
+        db
+            .query(
+                "SELECT t.id, t.date, t.amount, t.imported_id, t.imported_payee, t.notes, t.cleared, t.reconciled, p.name AS payee_name " +
+                    "FROM v_transactions t LEFT JOIN payees p ON p.id = t.payee " +
+                    "WHERE t.account = ? AND t.is_child = 0 AND t.date >= ? AND t.date <= ? ORDER BY t.date, t.id",
+                accountId,
+                ActualDates.toInt(from),
+                ActualDates.toInt(to),
+            ).map { row ->
+                LedgerTransaction(
+                    id = row["id"] as String,
+                    date = ActualDates.fromInt((row["date"] as Number).toLong()),
+                    amount = (row["amount"] as Number).toLong(),
+                    payeeName = row["payee_name"] as String?,
+                    importedPayee = row["imported_payee"] as String?,
+                    notes = row["notes"] as String?,
+                    importedId = row["imported_id"] as String?,
+                    cleared = truthy(row["cleared"]),
+                    reconciled = truthy(row["reconciled"]),
+                )
+            }
 
     /** Runs the budget's rules on [row] and finds its exact match by imported id, or the fuzzy candidates. */
     private fun importStep(
@@ -137,8 +197,7 @@ class ActualImport(
         payeeName: String?,
         payee: String?,
         matched: MutableSet<String>,
-        reimportDeleted: Boolean,
-        strictIdChecking: Boolean,
+        matching: ImportMatching,
     ): Step {
         val trans =
             transactions.runRules(
@@ -154,19 +213,24 @@ class ActualImport(
                     "cleared" to row.cleared,
                 ).apply { row.rawSyncedData?.let { put("raw_synced_data", it) } },
             )
+        if (matching.reviewed) {
+            val chosen = row.matchId?.let { db.first("SELECT * FROM v_transactions WHERE id = ? AND account = ?", it, accountId) }
+            chosen?.let { matched += it["id"] as String }
+            return Step(trans, chosen, emptyList(), missing = row.matchId != null && chosen == null)
+        }
         var match: Row? = null
         var fuzzy = emptyList<Row>()
         val importedId = trans["imported_id"] as String?
         if (importedId != null) {
             match =
                 db.first(
-                    "SELECT * FROM ${if (reimportDeleted) "v_transactions" else "v_transactions_internal"} WHERE imported_id = ? AND account = ?",
+                    "SELECT * FROM ${if (matching.reimportDeleted) "v_transactions" else "v_transactions_internal"} WHERE imported_id = ? AND account = ?",
                     importedId,
                     accountId,
                 )
             match?.let { matched += it["id"] as String }
         }
-        if (match == null) fuzzy = fuzzyCandidates(accountId, row, trans, importedId, strictIdChecking)
+        if (match == null) fuzzy = fuzzyCandidates(accountId, row, trans, importedId, matching.strictIdChecking)
         return Step(trans, match, fuzzy)
     }
 
@@ -204,11 +268,12 @@ class ActualImport(
         match: Row,
         trans: Map<String, Any?>,
         updateDates: Boolean,
+        keepImportedId: Boolean,
         updated: MutableList<Map<String, Any?>>,
     ): ImportOutcome {
         val updates =
             linkedMapOf(
-                "imported_id" to (match["imported_id"]?.takeIf { bankId(it) == null } ?: trans["imported_id"]),
+                "imported_id" to (match["imported_id"]?.takeIf { keepImportedId || bankId(it) == null } ?: trans["imported_id"]),
                 "payee" to (match["payee"] ?: trans["payee"]),
                 "category" to (match["category"] ?: trans["category"]),
                 "imported_payee" to trans["imported_payee"],

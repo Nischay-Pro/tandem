@@ -4,6 +4,7 @@ import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.SyncProtocol
 import app.tandemforactual.data.actual.SyncRequest
 import app.tandemforactual.data.actual.SyncResponse
+import app.tandemforactual.data.regions.global.bank.BankProviders
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -123,6 +124,27 @@ class ActualServerClientTest {
                 ),
                 seen,
             )
+        }
+
+    @Test
+    fun scopesEveryProvidersStatusAndAccountsToTheBudget() =
+        runBlocking {
+            val seen = mutableListOf<String>()
+            HttpClient(
+                MockEngine { request ->
+                    seen += request.url.encodedPath + " " + request.headers["x-actual-file-id"]
+                    respond("""{"status":"ok","data":{"configured":true,"accounts":[]}}""")
+                },
+            ).use { http ->
+                val client = ActualServerClient(http, "https://budget.example")
+                client.token = "session"
+                for (provider in BankProviders.all) {
+                    assertEquals(BankProviderStatus(true, BankCredentialSource.SERVER), client.bankStatus(provider, "file"))
+                    client.bankAccounts(provider, "file")
+                }
+            }
+            assertEquals(BankProviders.all.size * 2, seen.size)
+            assertTrue(seen.all { it.endsWith(" file") })
         }
 
     @Test

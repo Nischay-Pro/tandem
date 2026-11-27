@@ -8,6 +8,7 @@ import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.applyBudgetTemplate
 import app.tandemforactual.data.actual.closeAccount
 import app.tandemforactual.data.actual.copyBudgetMonth
+import app.tandemforactual.data.actual.create
 import app.tandemforactual.data.actual.createAccount
 import app.tandemforactual.data.actual.createCategory
 import app.tandemforactual.data.actual.createCategoryGroup
@@ -61,7 +62,7 @@ class TandemApiClient(
     var budgetFiles: ActualBudgetFiles? = null,
     var today: () -> String = ::localTodayIsoDate,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
-    private val newId: () -> String = { Uuid.random().toString() },
+    internal val newId: () -> String = { Uuid.random().toString() },
 ) : AutoCloseable {
     internal val sessionMutex = Mutex()
     private val budgetMutex = processBudgetMutex
@@ -254,7 +255,7 @@ class TandemApiClient(
             val budget =
                 reopenStored(client, files, budgetId) ?: run {
                     if (!download) throw TandemApiException("no_device_copy")
-                    val file = call { fileFor(client, budgetId) }
+                    val file = call { client.budgetFile(budgetId) }
                     call {
                         ActualDirectBudget.download(
                             client,
@@ -601,7 +602,7 @@ class TandemApiClient(
         idempotencyKey: String? = null,
     ) = edit(budgetId, encryptionPassword) { it.deleteCategory(categoryId, transferCategoryId) }
 
-    /** [action] is rename, edit, skip, post or delete; [fields] carries an edit's changes. */
+    /** [action] is rename, edit, create, skip, post or delete; [fields] carries an edit's changes or a new schedule. */
     @Suppress("UNUSED_PARAMETER")
     suspend fun manageBudgetSchedule(
         budgetId: String,
@@ -619,13 +620,8 @@ class TandemApiClient(
         edit(budgetId, encryptionPassword) { edits ->
             when (action) {
                 "rename" -> edits.schedules.rename(scheduleId, name.orEmpty())
-                "edit" ->
-                    edits.schedules.edit(
-                        scheduleId,
-                        JsonObject(
-                            fields.orEmpty() + (name?.let { mapOf("name" to JsonPrimitive(it)) } ?: emptyMap()),
-                        ),
-                    )
+                "edit" -> edits.schedules.edit(scheduleId, withName(fields, name))
+                "create" -> edits.schedules.create(scheduleId, withName(fields, name))
                 "skip" -> edits.schedules.skip(scheduleId, expectedNextDate!!)
                 "post" -> edits.schedules.post(scheduleId, expectedNextDate!!)
                 "delete" -> edits.schedules.delete(scheduleId)
@@ -633,6 +629,11 @@ class TandemApiClient(
             }
         }
     }
+
+    private fun withName(
+        fields: JsonObject?,
+        name: String?,
+    ) = JsonObject(fields.orEmpty() + (name?.let { mapOf("name" to JsonPrimitive(it)) } ?: emptyMap()))
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetRule(
@@ -706,12 +707,6 @@ class TandemApiClient(
     }
 
     internal fun requireServer(): ActualServerClient = server?.takeIf { it.token != null } ?: throw TandemApiException("sign_in_required")
-
-    private suspend fun fileFor(
-        client: ActualServerClient,
-        budgetId: String,
-    ): ActualRemoteFile =
-        client.listFiles().firstOrNull { !it.deleted && it.groupId == budgetId } ?: throw ActualServerException("budget-unavailable")
 
     private suspend fun closeBudgets() = budgetMutex.withLock { closeBudgetsNow() }
 

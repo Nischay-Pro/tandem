@@ -178,19 +178,50 @@ class ActualRuleEngine(
 
     private fun payeeRows() = db.query("SELECT id, name FROM payees WHERE tombstone = 0")
 
-    private fun loadRules(): List<Rule> {
+    /** The budget's live rules as Actual loads them, with merged payees and categories mapped to what replaced them. */
+    internal fun loadedRules(): List<JsonObject> {
         val mappings =
             (
                 db.query("SELECT id, transferId AS target FROM category_mapping") +
                     db.query("SELECT id, targetId AS target FROM payee_mapping")
             ).mapNotNull { row -> (row["target"] as String?)?.let { row["id"] as String to it } }
                 .toMap()
-        return ActualRules
-            .load(
-                db.query("SELECT * FROM rules WHERE conditions IS NOT NULL AND actions IS NOT NULL AND tombstone = 0"),
-                mappings,
-            ).mapNotNull { json -> runCatching { parseRule(json) }.getOrNull() }
+        return ActualRules.load(
+            db.query("SELECT * FROM rules WHERE conditions IS NOT NULL AND actions IS NOT NULL AND tombstone = 0"),
+            mappings,
+        )
     }
+
+    private fun loadRules(): List<Rule> = loadedRules().mapNotNull { json -> runCatching { parseRule(json) }.getOrNull() }
+
+    /** Rule ids in the order `runRules` applies them. */
+    internal fun rankedIds(): List<String> = rank(loadRules()).map { it.id }
+
+    /** How many of the newest [limit] transactions were checked, and how many of them each rule's conditions match. */
+    internal fun matchCounts(limit: Int): Pair<Int, Map<String, Int>> {
+        val rules = loadRules()
+        val transactions = recent(limit).map(::prepare).toList()
+        return transactions.size to rules.associate { rule -> rule.id to transactions.count { matches(rule, it) } }
+    }
+
+    private fun recent(limit: Int): Sequence<Map<String, Any?>> =
+        db
+            .query("SELECT * FROM v_transactions WHERE is_parent = 0 ORDER BY date DESC, sort_order DESC LIMIT $limit")
+            .asSequence()
+            .map { row ->
+                mapOf(
+                    "id" to row["id"],
+                    "date" to ActualDates.fromInt((row["date"] as Number).toLong()),
+                    "amount" to row["amount"],
+                    "payee" to row["payee"],
+                    "account" to row["account"],
+                    "category" to row["category"],
+                    "notes" to row["notes"],
+                    "imported_payee" to row["imported_payee"],
+                    "cleared" to row["cleared"],
+                    "reconciled" to row["reconciled"],
+                )
+            }
 
     private fun parseRule(json: JsonObject): Rule =
         Rule(
@@ -514,25 +545,9 @@ class ActualRuleEngine(
     ): List<String> {
         val loaded = ActualRules.load(listOf(RuleWire.row(wire)), emptyMap()).firstOrNull() ?: return emptyList()
         val parsed = parseRule(JsonObject(loaded + ("actions" to JsonArray(emptyList()))))
-        return db
-            .query("SELECT * FROM v_transactions WHERE is_parent = 0 ORDER BY date DESC, sort_order DESC LIMIT 5000")
-            .asSequence()
-            .filter { row ->
-                val fields =
-                    mapOf(
-                        "id" to row["id"],
-                        "date" to ActualDates.fromInt((row["date"] as Number).toLong()),
-                        "amount" to row["amount"],
-                        "payee" to row["payee"],
-                        "account" to row["account"],
-                        "category" to row["category"],
-                        "notes" to row["notes"],
-                        "imported_payee" to row["imported_payee"],
-                        "cleared" to row["cleared"],
-                        "reconciled" to row["reconciled"],
-                    )
-                matches(parsed, prepare(fields))
-            }.take(limit)
+        return recent(PREVIEW_WINDOW)
+            .filter { matches(parsed, prepare(it)) }
+            .take(limit)
             .map { it["id"] as String }
             .toList()
     }
@@ -635,3 +650,5 @@ class ActualRuleEngine(
         return LinkedHashMap(transaction).apply { this["payee"] = payee }
     }
 }
+
+private const val PREVIEW_WINDOW = 5000

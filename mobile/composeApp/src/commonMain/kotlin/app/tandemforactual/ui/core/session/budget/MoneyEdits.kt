@@ -161,3 +161,18 @@ internal suspend fun BudgetEdits.moveBudgetMoney(
         encryptionPassword,
     )
 }
+
+internal suspend fun BudgetEdits.setBudgetType(
+    budgetId: String,
+    type: String,
+    encryptionPassword: String?,
+): Boolean =
+    queue.enqueueOfflineBudgetMutation(
+        budgetId,
+        BudgetReorderKind.SET_BUDGET_TYPE,
+        "budget-type",
+        "budget-type",
+        buildJsonObject { put("type", type) },
+        encryptionPassword,
+        name = if (type == "tracking") "Tracking budget" else "Envelope budget",
+    )

@@ -28,6 +28,8 @@ internal fun JsonObject.requiredLong(key: String): Long = this[key]?.jsonPrimiti
 
 internal fun JsonObject.requiredBoolean(key: String): Boolean = this[key]?.jsonPrimitive?.booleanOrNull ?: false
 
+internal fun JsonObject.flag(key: String): Boolean = (this[key] as? JsonPrimitive)?.booleanOrNull == true
+
 internal fun JsonObject.optionalString(key: String): String? = this[key]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull
 
 internal fun JsonObject.requiredAssignments(): List<Pair<String, Long>> =
@@ -50,7 +52,7 @@ internal fun JsonObject.requiredStatementItems(): List<StatementImportItem> =
             val amount = item["amountMinor"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
             val payeeName = item.stringValue("payeeName") ?: return@mapNotNull null
             val importedId = item.stringValue("importedId") ?: return@mapNotNull null
-            StatementImportItem(date, amount, payeeName, item.optionalString("notes"), importedId)
+            StatementImportItem(date, amount, payeeName, item.optionalString("notes"), importedId, item.optionalString("matchId"))
         }.orEmpty()
 
 internal fun rewriteAccountIds(

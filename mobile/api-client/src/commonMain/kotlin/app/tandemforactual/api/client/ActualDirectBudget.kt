@@ -8,7 +8,9 @@ import app.tandemforactual.data.actual.ActualChangeHistory
 import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
+import app.tandemforactual.data.actual.ActualImport
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.ActualRuleDiagnostics
 import app.tandemforactual.data.actual.ActualRuleEngine
 import app.tandemforactual.data.actual.ActualStoreGuard
 import app.tandemforactual.data.actual.ActualSyncEngine
@@ -19,8 +21,10 @@ import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.GoalTemplateEngine
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.LedgerTransaction
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
+import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.actual.ZipArchive
@@ -30,6 +34,7 @@ import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.PlanningKeys
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
+import app.tandemforactual.data.store.bulkGroupOf
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
@@ -113,11 +118,16 @@ class ActualDirectBudget private constructor(
 
     /** Runs Actual's schedule service once a day after a successful sync, then uploads anything it changed. */
     private suspend fun runSchedules(today: String) {
+        if (runSchedulesLocally(today)) synchronize()
+    }
+
+    /** Actual's `advanceSchedulesAfterSync`: false when today's run already happened and nothing was saved since. */
+    private fun runSchedulesLocally(today: String): Boolean {
         db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
-        if (db.first("SELECT value FROM tandem_prefs WHERE id = 'lastScheduleRun'")?.get("value") == today) return
+        if (db.first("SELECT value FROM tandem_prefs WHERE id = 'lastScheduleRun'")?.get("value") == today) return false
         ActualBudgetEdits(writer, { today }).schedules.runService(syncSuccess = true)
         db.execute("INSERT OR REPLACE INTO tandem_prefs (id, value) VALUES ('lastScheduleRun', ?)", today)
-        synchronize()
+        return true
     }
 
     /** Builds the mobile cache projection at the same checkpoint as the completed CRDT sync. */
@@ -228,6 +238,12 @@ class ActualDirectBudget private constructor(
             }
         }
 
+    suspend fun ledger(
+        accountId: String,
+        from: String,
+        to: String,
+    ): List<LedgerTransaction> = locked { ActualImport(writer).ledger(accountId, from, to) }
+
     val deviceNode: String get() = clock.clock.timestamp.node
 
     suspend fun linkedAccounts(today: String): List<LinkedAccount> =
@@ -262,6 +278,8 @@ class ActualDirectBudget private constructor(
         return locked { ActualDataHealth(db).check(today) }
     }
 
+    suspend fun ruleDiagnostics(): List<RuleFinding> = locked { ActualRuleDiagnostics(db).check() }
+
     suspend fun changeHistory(limit: Int): List<ChangeSet> {
         syncWhenPossible()
         return locked { ActualChangeHistory(writer).recent(limit) }
@@ -287,6 +305,7 @@ class ActualDirectBudget private constructor(
             synchronize()
             runSchedules(today)
             val result = writer.atOneMoment { block(ActualBudgetEdits(writer, { today })) }
+            runSchedulesLocally(today)
             syncWhenPossible()
             result
         }
@@ -310,7 +329,8 @@ class ActualDirectBudget private constructor(
         action: String,
         patch: JsonObject,
         baseSnapshot: JsonObject?,
-    ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot) }
+        group: String? = null,
+    ) = locked { operations.submit(operationId, transactionId, action, patch, baseSnapshot, group) }
 
     internal suspend fun outcome(operationId: String) = locked { operations.find(operationId) }
 
@@ -335,6 +355,7 @@ class ActualDirectBudget private constructor(
             action,
             BudgetSyncJson.parseJsonObject(operation.patchJson),
             operation.baseSnapshotJson?.let(BudgetSyncJson::parseJsonObject),
+            bulkGroupOf(operation.idempotencyKey),
         )
     }
 

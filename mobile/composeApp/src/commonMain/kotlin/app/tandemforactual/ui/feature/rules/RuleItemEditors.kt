@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import app.tandemforactual.ui.core.format.ruleOperatorLabel
 import app.tandemforactual.ui.design.buttons.SegmentedSelector
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.rows.DividerLine

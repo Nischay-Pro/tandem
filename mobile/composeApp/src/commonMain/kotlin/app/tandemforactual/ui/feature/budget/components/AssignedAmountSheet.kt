@@ -40,7 +40,7 @@ import com.composables.icons.lucide.X
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** Sheet for changing how much is assigned to a category this month. */
+/** Sheet for changing a category's assigned, budgeted or expected amount this month. */
 @Composable
 internal fun AssignedAmountSheet(
     visible: Boolean,
@@ -49,6 +49,7 @@ internal fun AssignedAmountSheet(
     category: LiveCategorySummary?,
     sheets: CategoryDetailSheetState,
     scope: CoroutineScope,
+    title: String = "Assigned",
 ) {
     TandemTaskSheet(
         visible = visible,
@@ -62,7 +63,7 @@ internal fun AssignedAmountSheet(
             SheetCard(
                 maxWidth = 460.dp,
                 header = {
-                    BudgetSheetTitle(Lucide.WalletCards, "Assigned amount", mobileSession) { sheets.showAssignedAmountDialog = false }
+                    BudgetSheetTitle(Lucide.WalletCards, "$title amount", mobileSession) { sheets.showAssignedAmountDialog = false }
                 },
                 actions = {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
