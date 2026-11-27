@@ -126,6 +126,80 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  apple_watch:
+    name: Apple Watch screenshots
+    if: ${{ inputs.platforms != 'android' }}
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the simulator app built from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 50); do
+            read -r run_id status conclusion < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push --limit 1 --json databaseId,status,conclusion --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"')
+            if [ "$status" = completed ]; then break; fi
+            sleep 60
+          done
+          if [ "${conclusion:-}" != success ]; then
+            echo "::error::CI for $GITHUB_SHA did not pass (${conclusion:-no run}); capture from a commit whose CI passed."
+            exit 1
+          fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ios-simulator-app --dir "$RUNNER_TEMP"
+          (cd "$RUNNER_TEMP" && unzip -q TandemForActual-simulator.zip)
+          test -d "$RUNNER_TEMP/TandemForActual.app"
+
+      - name: Capture Apple Watch screenshots
+        env:
+          DEMO_SUMMARY: '{"v":1,"s":"ready","g":1795255200000,"k":"demo","b":"Demo household","y":1795255200000,"l":"$842.65","lo":false,"r":"$125.00","ro":false,"c":[{"i":"groceries","n":"Groceries","l":"$181.70","o":false,"p":70,"bu":"$600.00","sp":"$418.30","x":[{"n":"Corner Market","a":"$64.20","d":"2026-11-19"},{"n":"Fresh Fields","a":"$31.15","d":"2026-11-17"}]},{"i":"dining","n":"Dining out","l":"$24.50","o":true,"p":100,"bu":"$200.00","sp":"$224.50"},{"i":"fuel","n":"Fuel","l":"$84.00","o":false,"p":53,"bu":"$180.00","sp":"$96.00"},{"i":"fun","n":"Fun money","l":"$65.00","o":false,"p":35,"bu":"$100.00","sp":"$35.00"}],"u":[{"n":"Internet","d":"2026-11-24","a":"$60.00"},{"n":"Phone","d":"2026-11-28","a":"$45.00"},{"n":"Rent","d":"2026-12-01","a":"$1,650.00"}],"q":{"on":true,"f":2,"a":[{"i":"checking","n":"Everyday checking"}],"p":["Corner Market","Bean There","City Transit"],"k":[{"i":"phone","n":"Phone"},{"i":"coffee","n":"Coffee"}]}}'
+        run: |
+          watch_app="$RUNNER_TEMP/TandemForActual.app/Watch/TandemWatch.app"
+          bundle="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$watch_app/Info.plist")"
+          out="$RUNNER_TEMP/screenshots"
+          mkdir -p "$out"
+          runtime="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="watchOS" and x["isAvailable"]]; print(r[-1]["identifier"] if r else "")')"
+          if [ -z "$runtime" ]; then
+            echo "::notice::No watchOS simulator runtime on this runner image; skipping Apple Watch screenshots."
+            exit 0
+          fi
+          pick() {
+            xcrun simctl list devicetypes -j | python3 -c 'import json,re,sys; t=[d for d in json.load(sys.stdin)["devicetypes"] if re.search(sys.argv[1], d["name"])]; print(t[-1]["identifier"] if t else "")' "$1"
+          }
+          shoot_watch() {
+            local name="$1" type="$2" udid
+            [ -n "$type" ] || { echo "No simulator for $name"; return; }
+            udid="$(xcrun simctl create "$name" "$type" "$runtime")"
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl install "$udid" "$watch_app"
+            for screen in glance bills add; do
+              xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1 || true
+              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SUMMARY="$DEMO_SUMMARY" \
+              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SCREEN="$screen" \
+                xcrun simctl launch "$udid" "$bundle"
+              sleep 15
+              xcrun simctl io "$udid" screenshot "$out/$name-$screen.png"
+            done
+            xcrun simctl shutdown "$udid"
+          }
+          shoot_watch apple-watch-46mm "$(pick '^Apple Watch Series .*46mm')"
+          shoot_watch apple-watch-ultra "$(pick '^Apple Watch Ultra')"
+          ls -la "$out"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-watch-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: warn
+          retention-days: 14
+
   android_build:
     name: Android debug build for screenshots
     if: ${{ inputs.platforms != 'ios' }}
@@ -144,15 +218,23 @@ jobs:
           setup_android: "true"
           setup_node: "true"
 
-      - name: Build the debug app
+      - name: Build the debug apps
         working-directory: mobile
-        run: ./gradlew :androidApp:assembleDebug
+        run: ./gradlew :androidApp:assembleDebug :wearApp:assembleDebug
 
       - name: Upload the debug app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-debug-apk
           path: mobile/androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload the debug watch app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wear-debug-apk
+          path: mobile/wearApp/build/outputs/apk/debug/wearApp-debug.apk
           if-no-files-found: error
           retention-days: 1
 
@@ -251,5 +333,55 @@ jobs:
           path: |
             ${{ runner.temp }}/screenshots
             ${{ runner.temp }}/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  wear:
+    name: Wear OS ${{ matrix.set }} screenshots
+    needs: android_build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - set: large-round
+            profile: wearos_large_round
+          - set: small-round
+            profile: wearos_small_round
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enable KVM
+        run: |
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+
+      - name: Download the debug watch app
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wear-debug-apk
+          path: ${{ runner.temp }}/apk
+
+      - name: Capture screenshots
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: android-wear
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          emulator-boot-timeout: 300
+          disable-linux-hw-accel: false
+          script: bash scripts/screenshots/capture-wear.sh "${{ runner.temp }}/apk/wearApp-debug.apk" "${{ runner.temp }}/screenshots" ${{ matrix.set }}
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wear-screenshots-${{ matrix.set }}
+          path: ${{ runner.temp }}/screenshots
           if-no-files-found: warn
           retention-days: 14
