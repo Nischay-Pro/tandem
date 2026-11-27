@@ -84,6 +84,21 @@ class AccountKindsTest {
     }
 
     @Test
+    fun aCardKeepsItsNetworkThroughJson() {
+        val card = AccountKindChoice("acc", AccountKind.CREDIT_CARD, CardNetwork.AMEX)
+        assertEquals(card, AccountKindChoice.fromJson(card.toJson()))
+        assertEquals(JsonPrimitive("amex"), card.toJson()["network"])
+        assertNull(AccountKindChoice("acc", AccountKind.CREDIT_CARD).toJson()["network"])
+        val unknown =
+            JsonObject(mapOf("accountId" to JsonPrimitive("acc"), "kind" to JsonPrimitive("credit_card"), "network" to JsonPrimitive("x")))
+        assertNull(AccountKindChoice.fromJson(unknown)?.network)
+        CardNetwork.entries.forEach { assertEquals(it, CardNetwork.fromKey(it.key)) }
+        assertNull(CardNetwork.fromKey(null))
+        assertEquals("American Express", CardNetwork.AMEX.label)
+        assertEquals("diners-club", CardNetwork.DINERS.iconSlug)
+    }
+
+    @Test
     fun storesAndClearsChoices(): Unit =
         runBlocking {
             val database = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))

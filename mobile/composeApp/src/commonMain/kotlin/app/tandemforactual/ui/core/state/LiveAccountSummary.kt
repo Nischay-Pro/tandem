@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.core.state
 
 import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.CardNetwork
 
 internal data class LiveAccountSummary(
     val id: String,
@@ -13,6 +14,7 @@ internal data class LiveAccountSummary(
     val accountGroupName: String? = null,
     val sortOrder: Double? = null,
     val kindChosen: Boolean = false,
+    val cardNetwork: CardNetwork? = null,
 )
 
 /** A new transaction's account: the one asked for, else the last or first on-budget one; never a closed one. */

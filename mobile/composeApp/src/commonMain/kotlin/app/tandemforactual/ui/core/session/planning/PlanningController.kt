@@ -9,6 +9,7 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.AccountCurrency
 import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.AccountKindChoice
+import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
@@ -56,6 +57,8 @@ internal class PlanningController(
         private set
     var accountKinds by mutableStateOf<Map<String, AccountKind>>(emptyMap())
         private set
+    var accountCardNetworks by mutableStateOf<Map<String, CardNetwork>>(emptyMap())
+        private set
     var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
         private set
     var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
@@ -74,7 +77,17 @@ internal class PlanningController(
         accountId: String,
         kind: AccountKind,
     ) {
-        planningStore(budgetId)?.save(AccountKindChoice(accountId, kind))
+        val network = accountCardNetworks[accountId]?.takeIf { kind == AccountKind.CREDIT_CARD }
+        planningStore(budgetId)?.save(AccountKindChoice(accountId, kind, network))
+    }
+
+    /** Sets a credit card's network; choosing one also confirms the account is a credit card. */
+    suspend fun saveCardNetwork(
+        budgetId: String,
+        accountId: String,
+        network: CardNetwork?,
+    ) {
+        planningStore(budgetId)?.save(AccountKindChoice(accountId, AccountKind.CREDIT_CARD, network))
     }
 
     /** Keeps a kind chosen for an account added offline once Actual gives it a real id. */
@@ -84,13 +97,12 @@ internal class PlanningController(
         toAccountId: String,
     ) {
         val store = planningStore(budgetId) ?: return
-        val kind =
+        val choice =
             store
                 .accountKinds()
                 .first()
-                .firstOrNull { it.accountId == fromAccountId }
-                ?.kind ?: return
-        store.save(AccountKindChoice(toAccountId, kind))
+                .firstOrNull { it.accountId == fromAccountId } ?: return
+        store.save(choice.copy(accountId = toAccountId))
         store.deleteAccountKind(fromAccountId)
     }
 
@@ -394,7 +406,12 @@ internal class PlanningController(
                 accountCurrencies = list.associate { it.accountId to it.currency }
             }
         }
-        launch { store.accountKinds().collect { list -> accountKinds = list.associate { it.accountId to it.kind } } }
+        launch {
+            store.accountKinds().collect { list ->
+                accountKinds = list.associate { it.accountId to it.kind }
+                accountCardNetworks = list.mapNotNull { choice -> choice.network?.let { choice.accountId to it } }.toMap()
+            }
+        }
         launch { store.exchangeRates().collect { exchangeRates = it } }
         launch { store.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
         launch { store.customReports().collect { customReports = it } }

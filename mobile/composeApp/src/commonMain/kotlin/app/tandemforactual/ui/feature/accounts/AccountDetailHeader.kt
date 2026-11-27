@@ -71,7 +71,7 @@ internal fun AccountDetailHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        AccountIconTile(accountName, account?.kind)
+        AccountIconTile(accountName, account?.kind, network = account?.cardNetwork)
         Box(Modifier.weight(1f)) {
             if (description.isNotBlank()) Badge(description, tandemPalette.muted)
         }

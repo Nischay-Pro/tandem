@@ -1,5 +1,6 @@
 package app.tandemforactual.data.planning
 
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -25,14 +26,39 @@ enum class AccountKind(
     }
 }
 
-/** The kind the person chose for one Actual account. */
+/** A credit card's network, as the person picked it; never read from card numbers. [iconSlug] names its bundled mark. */
+enum class CardNetwork(
+    val key: String,
+    val label: String,
+    val iconSlug: String,
+) {
+    VISA("visa", "Visa", "visa"),
+    MASTERCARD("mastercard", "Mastercard", "mastercard"),
+    AMEX("amex", "American Express", "american-express"),
+    DISCOVER("discover", "Discover", "discover"),
+    JCB("jcb", "JCB", "jcb"),
+    DINERS("diners", "Diners Club", "diners-club"),
+    ;
+
+    companion object {
+        fun fromKey(key: String?): CardNetwork? = entries.firstOrNull { it.key == key }
+    }
+}
+
+/** The kind the person chose for one Actual account, and a credit card's network. */
 data class AccountKindChoice(
     val accountId: String,
     val kind: AccountKind,
+    val network: CardNetwork? = null,
 ) {
     val id: String get() = id(accountId)
 
-    fun toJson(): JsonObject = jsonOf("accountId" to JsonPrimitive(accountId), "kind" to JsonPrimitive(kind.key))
+    fun toJson(): JsonObject =
+        jsonOf(
+            "accountId" to JsonPrimitive(accountId),
+            "kind" to JsonPrimitive(kind.key),
+            "network" to (network?.let { JsonPrimitive(it.key) } ?: JsonNull),
+        )
 
     companion object {
         const val TYPE = "planning.account_kind"
@@ -42,7 +68,7 @@ data class AccountKindChoice(
         fun fromJson(body: JsonObject): AccountKindChoice? {
             val accountId = body.text("accountId")?.takeIf { it.isNotBlank() } ?: return null
             val kind = AccountKind.fromKey(body.text("kind")) ?: return null
-            return AccountKindChoice(accountId, kind)
+            return AccountKindChoice(accountId, kind, CardNetwork.fromKey(body.text("network")))
         }
     }
 }

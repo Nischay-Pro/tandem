@@ -13,6 +13,7 @@ internal class RowLogos(
     val payee: (String) -> DrawableResource?,
     val account: (String) -> DrawableResource?,
     val bankIcon: @Composable (accountName: String) -> LogoPainter? = { null },
+    val bySlug: (String) -> DrawableResource? = { null },
 )
 
 internal val LocalRowLogos = staticCompositionLocalOf<RowLogos?> { null }

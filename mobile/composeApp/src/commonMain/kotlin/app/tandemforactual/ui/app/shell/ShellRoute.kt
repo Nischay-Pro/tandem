@@ -156,6 +156,7 @@ private fun ShellRouteContent(
                 payee = { matcher?.iconFor(it) },
                 account = { matcher?.accountIconFor(it) },
                 bankIcon = { name -> rememberBankIcon(bankIds[name], downloadBankIcons) },
+                bySlug = { matcher?.iconForSlug(it) },
             )
         }
     CompositionLocalProvider(

@@ -68,6 +68,9 @@ internal fun AccountOptionsScreen(
                 onKindChange = { kind ->
                     scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, kind) }
                 },
+                onNetworkChange = { network ->
+                    scope.launch { mobileSession.planning.saveCardNetwork(state.selectedBudgetId, liveAccount.id, network) }
+                },
             ) { navigation.open(AppRoute.EXCHANGE_RATES) }
             SurfaceCard { WhereUsedRow { showUsage = true } }
             AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {

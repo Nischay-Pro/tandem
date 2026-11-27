@@ -3,6 +3,7 @@ package app.tandemforactual.ui.core.state
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.data.planning.resolveAccountKind
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
@@ -93,6 +94,7 @@ internal fun liveAccountSummaries(
     nameOverrides: Map<String, String> = emptyMap(),
     closedOverrides: Map<String, Boolean> = emptyMap(),
     accountKinds: Map<String, AccountKind> = emptyMap(),
+    cardNetworks: Map<String, CardNetwork> = emptyMap(),
 ): List<LiveAccountSummary> {
     val groupNames = accountGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
     return accountRecords.mapNotNull { record ->
@@ -106,6 +108,7 @@ internal fun liveAccountSummaries(
             balanceMinor = body.longValue("balance_current"),
             kind = kind.kind,
             kindChosen = kind.chosen,
+            cardNetwork = cardNetworks[record.recordId]?.takeIf { kind.kind == AccountKind.CREDIT_CARD },
             offBudget = body.booleanValue("offbudget") ?: body.booleanValue("offBudget") ?: false,
             closed = closedOverrides[record.recordId] ?: body.booleanValue("closed") ?: false,
             accountGroupId = accountGroupId,

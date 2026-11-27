@@ -29,7 +29,11 @@ internal data class MerchantIconNotice(
 internal data class MerchantIconMatcherPack(
     private val matcher: MerchantAliasMatcher<DrawableResource>,
     private val accountMatcher: MerchantAliasMatcher<DrawableResource>,
+    private val resourcesBySlug: Map<String, DrawableResource> = emptyMap(),
 ) {
+    /** A bundled mark by its icon pack slug, such as a card network's. */
+    fun iconForSlug(slug: String): DrawableResource? = resourcesBySlug[slug]
+
     fun iconFor(payee: String): DrawableResource? = matcher.findPayeeIcon(payee)
 
     fun accountIconFor(accountName: String): DrawableResource? = accountMatcher.findAccountIcon(accountName)
@@ -84,7 +88,7 @@ internal suspend fun loadMerchantIconMatcherPack(): MerchantIconMatcherPack {
         aliases.forEach { alias -> accountMatcher.add(alias, resource, licensePriority, isTitle = false) }
     }
 
-    return MerchantIconMatcherPack(matcher, accountMatcher)
+    return MerchantIconMatcherPack(matcher, accountMatcher, resourcesBySlug)
 }
 
 internal suspend fun loadMerchantIconCatalog(): MerchantIconCatalog {

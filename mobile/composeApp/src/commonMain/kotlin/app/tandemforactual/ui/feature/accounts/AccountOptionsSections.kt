@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
@@ -60,6 +61,7 @@ internal fun AccountOptionsDetails(
     accountBalance: String,
     currency: String,
     onKindChange: (AccountKind) -> Unit,
+    onNetworkChange: (CardNetwork?) -> Unit,
     onOpenExchangeRates: () -> Unit,
 ) {
     SectionCard("Account") {
@@ -67,6 +69,10 @@ internal fun AccountOptionsDetails(
         DividerLine()
         AccountKindPicker(account.kind, suggested = !account.kindChosen, onKindChange)
         DividerLine()
+        if (account.kind == AccountKind.CREDIT_CARD) {
+            CardNetworkPicker(account.cardNetwork, onNetworkChange)
+            DividerLine()
+        }
         ListRow("Balance", "Current balance", accountBalance)
         DividerLine()
         ListRow("Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
