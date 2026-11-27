@@ -11,6 +11,7 @@ class FileDropTest {
     fun photosAndStatementsAreToldApartByTypeOrName() {
         assertEquals(DroppedFileKind.IMAGE, droppedFileKind("image/jpeg", "receipt.jpg"))
         assertEquals(DroppedFileKind.STATEMENT, droppedFileKind("text/csv", "march.csv"))
+        assertEquals(DroppedFileKind.STATEMENT, droppedFileKind("text/tab-separated-values", "march.tsv"))
         assertEquals(DroppedFileKind.STATEMENT, droppedFileKind("application/octet-stream", "Checking.QFX"))
         assertEquals(DroppedFileKind.STATEMENT, droppedFileKind("text/plain", "export.qif"))
         assertEquals(DroppedFileKind.STATEMENT, droppedFileKind("application/x-ofx; charset=utf-8", null))

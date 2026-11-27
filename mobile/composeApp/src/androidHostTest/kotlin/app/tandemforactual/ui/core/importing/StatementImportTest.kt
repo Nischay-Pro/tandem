@@ -8,6 +8,7 @@ import app.tandemforactual.ui.core.platform.decodeStatementBytes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StatementImportTest {
@@ -225,7 +226,8 @@ class StatementImportTest {
         assertEquals("2026-11-01", parsed.transactions[0].date)
         assertEquals(-1_234L, parsed.transactions[0].amountMinor)
         assertEquals("Market, Main St.", parsed.transactions[0].payeeName)
-        assertEquals("row-1", parsed.transactions[0].importedId)
+        assertEquals("row-1", parsed.transactions[0].bankId)
+        assertTrue(parsed.transactions.all { it.importedId.startsWith("tandem-import-") })
         assertEquals("2026-11-02", parsed.transactions[1].date)
         assertEquals(250_000L, parsed.transactions[1].amountMinor)
     }
@@ -242,11 +244,11 @@ class StatementImportTest {
             listOf("Posted On", "Details", "Money Out", "Money In", "Transaction Trace", "Extra"),
             layout.columns.map { it.name },
         )
-        assertEquals(false, layout.suggestedMapping.isUsable)
-
-        assertThrows(StatementImportParseException::class.java) {
-            parseStatementImport("statement.csv", statement)
-        }
+        assertEquals(
+            StatementCsvColumnMapping(dateColumn = 0, debitColumn = 2, creditColumn = 3, payeeColumn = 1),
+            layout.suggestedMapping,
+        )
+        assertEquals(listOf(-1_850L, 250_000L), parseStatementImport("statement.csv", statement).transactions.map { it.amountMinor })
 
         val mapped =
             parseStatementImport(
@@ -266,7 +268,8 @@ class StatementImportTest {
 
         assertEquals(listOf("2026-11-04", "2026-11-05"), mapped.transactions.map { it.date })
         assertEquals(listOf(-1_850L, 250_000L), mapped.transactions.map { it.amountMinor })
-        assertEquals(listOf("ref-1", "ref-2"), mapped.transactions.map { it.importedId })
+        assertEquals(listOf("ref-1", "ref-2"), mapped.transactions.map { it.bankId })
+        assertTrue(mapped.transactions.none { it.importedId.startsWith("ref-") })
         assertEquals(listOf("Corner Market", "Payroll"), mapped.transactions.map { it.payeeName })
         assertEquals(listOf("Groceries", "Paycheck"), mapped.transactions.map { it.notes })
         assertEquals(mapped.transactions.map { it.amountMinor }, mapped.toStatementImportItems().map { it.amountMinor })
@@ -466,7 +469,8 @@ class StatementImportTest {
             )
         assertEquals("2026-11-04", ofx.transactions.single().date)
         assertEquals(-1_850L, ofx.transactions.single().amountMinor)
-        assertEquals("ofx-1", ofx.transactions.single().importedId)
+        assertEquals("ofx-1", ofx.transactions.single().bankId)
+        assertNotEquals("ofx-1", ofx.transactions.single().importedId)
         assertEquals("Medication", ofx.transactions.single().notes)
 
         val qfx =
@@ -476,7 +480,7 @@ class StatementImportTest {
             )
         assertEquals("2026-11-04", qfx.transactions.single().date)
         assertEquals(-1_850L, qfx.transactions.single().amountMinor)
-        assertEquals("qfx-1", qfx.transactions.single().importedId)
+        assertEquals("qfx-1", qfx.transactions.single().bankId)
     }
 
     @Test
