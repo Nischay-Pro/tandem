@@ -155,7 +155,11 @@ suspend fun upcomingBillsAlert(
     val message =
         if (fresh.size == 1) {
             val only = fresh.single()
-            val money = only.amountMinor?.takeUnless { policy.hideAmounts }?.let { " for ${formatAmount(kotlin.math.abs(it))}" }.orEmpty()
+            val money =
+                only.amountMinor
+                    ?.takeUnless { policy.hideAmounts }
+                    ?.let { " for ${formatAmount(kotlin.math.abs(it))}" }
+                    .orEmpty()
             "${only.name} is due soon$money."
         } else {
             "${fresh[0].name} and ${fresh.size - 1} more are due in the next ${policy.billLeadDays} days."
