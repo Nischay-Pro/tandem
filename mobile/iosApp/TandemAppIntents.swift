@@ -5,7 +5,6 @@ import Foundation
 /// Opens a new transaction from Shortcuts, Siri or Spotlight, filled with the amount and payee given.
 struct AddTransactionIntent: AppIntent {
     static let title: LocalizedStringResource = "Add transaction"
-    static let description = IntentDescription("Opens a new transaction in Tandem. Review it and tap Save to add it.")
     static let openAppWhenRun = true
 
     @Parameter(title: "Amount")
