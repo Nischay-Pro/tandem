@@ -179,13 +179,15 @@ private fun ReviewCardFace(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (item.notes.isNotBlank()) Text(
-            item.notes,
-            color = palette.muted,
-            fontSize = TandemTypography.compactBody,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (item.notes.isNotBlank()) {
+            Text(
+                item.notes,
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Spacer(Modifier.weight(1f))
         footer()
     }
