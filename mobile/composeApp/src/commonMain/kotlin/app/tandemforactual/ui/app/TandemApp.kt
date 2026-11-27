@@ -15,6 +15,7 @@ import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.design.theme.TabletopFold
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,7 @@ fun TandemApp(
     backgroundBudgetKeyStore: DeviceCredentialStore? = null,
     openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
     onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
+    tabletopFold: StateFlow<TabletopFold?> = MutableStateFlow(null),
 ) {
     AppShell(
         ShellEnvironment(
@@ -82,6 +84,7 @@ fun TandemApp(
             backgroundBudgetKeyStore,
             openSignInPage,
             onAppSwitcherPrivacyChanged,
+            tabletopFold = tabletopFold,
         ),
     )
 }

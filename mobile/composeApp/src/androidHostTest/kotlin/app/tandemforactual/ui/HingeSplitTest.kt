@@ -14,6 +14,12 @@ class HingeSplitTest {
     }
 
     @Test
+    fun theRailCountsTowardTheLeftHalfInBookPosture() {
+        assertEquals(240f to 0f, hingeSplit(WindowHinge(800f, 800f), containerLeftPx = 200f, containerWidthPx = 1_400f, density = 2.5f))
+        assertNull(hingeSplit(WindowHinge(150f, 150f), containerLeftPx = 200f, containerWidthPx = 1_400f, density = 2.5f))
+    }
+
+    @Test
     fun hingesThatLeaveAPaneTooNarrowAreIgnored() {
         assertNull(hingeSplit(null, 0f, 2_000f, 2.5f))
         assertNull(hingeSplit(WindowHinge(600f, 600f), 0f, 2_000f, 2.5f))

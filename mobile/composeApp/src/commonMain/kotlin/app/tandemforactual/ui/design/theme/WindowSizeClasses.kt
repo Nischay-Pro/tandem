@@ -2,6 +2,7 @@ package app.tandemforactual.ui.design.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 
@@ -49,9 +50,23 @@ internal data class WindowSizeInfo(
     /** Short windows tighten the header and move the add action into it. */
     val compactHeight = heightClass == WindowHeightClass.COMPACT
 
+    /** Editors that fill a phone float as a centred dialog once the window has room around them. */
+    val floatsEditors = widthClass >= WindowWidthClass.MEDIUM && heightClass >= WindowHeightClass.MEDIUM
+
     /** Width left for content beside the navigation. */
     val contentWidthDp = if (usesRail) widthDp - TandemLayout.railWidth.value else widthDp
 }
+
+/** A horizontal fold half open like a laptop, in window pixels, with the height of the window it splits. */
+data class TabletopFold(
+    val top: Float,
+    val bottom: Float,
+    val windowHeight: Float,
+) {
+    val belowFold: Float get() = windowHeight - bottom
+}
+
+internal val LocalTabletopFold = staticCompositionLocalOf<TabletopFold?> { null }
 
 @Composable
 internal fun currentWindowSizeInfo(): WindowSizeInfo {
