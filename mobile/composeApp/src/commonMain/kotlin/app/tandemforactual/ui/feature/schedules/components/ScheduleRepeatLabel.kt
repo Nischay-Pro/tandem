@@ -30,6 +30,11 @@ internal fun ordinal(n: Int): String =
             else -> "th"
         }
 
+private fun startDay(config: JsonObject): Int? {
+    val start = config["start"]?.jsonPrimitive?.contentOrNull ?: return null
+    return start.takeLast(2).toIntOrNull()
+}
+
 private fun nth(value: Int) = if (value == -1) "last" else ordinal(value)
 
 /** A schedule's date rule in words, such as "Every 2 weeks" or "Monthly on the 1st and 3rd Friday". */
@@ -59,7 +64,7 @@ internal fun scheduleRepeatLabel(dateJson: String): String {
                     "${nth(it["value"]?.jsonPrimitive?.intOrNull ?: 1)} $name"
                 }
             days.isNotEmpty() -> days.joinToString(" and ") { if (it == -1) "last day" else ordinal(it) }
-            else -> config["start"]?.jsonPrimitive?.contentOrNull?.takeLast(2)?.toIntOrNull()?.let(::ordinal) ?: return every
+            else -> startDay(config)?.let(::ordinal) ?: return every
         }
     return "$every on the $on"
 }
