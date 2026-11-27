@@ -72,23 +72,42 @@ internal fun ShellFrame(
         onBack = ctx.navigator::handleCurrentRouteBack,
         onBackProgress = ctx.navigator::updateBackGesture,
     )
-    val headerClockMs = rememberHeaderClock(ctx)
+    val headerClockMs = rememberHeaderClock(ctx, isAppInForeground)
     val chrome = ShellChromeState(ctx, windowSize, isLandscape, useRail, mainCloudStatus(ctx), headerClockMs)
     ShellScaffold(chrome)
     ShellOverlays(chrome, isAppInForeground)
 }
 
 @Composable
-internal fun rememberHeaderClock(ctx: ShellContext): State<Long> {
+internal fun rememberHeaderClock(
+    ctx: ShellContext,
+    isAppInForeground: Boolean,
+): State<Long> {
     val headerClockMs = remember { mutableStateOf(ctx.env.nowEpochMillis()) }
-    LaunchedEffect(Unit) {
+    val lastSyncedAtEpochMs = ctx.mobileSession.localSyncState?.lastSyncedAtEpochMs
+    LaunchedEffect(isAppInForeground, lastSyncedAtEpochMs) {
+        if (!isAppInForeground) return@LaunchedEffect
+        headerClockMs.value = ctx.env.nowEpochMillis()
         while (true) {
-            delay(30_000)
+            delay(headerClockDelayMs(ctx.env.nowEpochMillis(), lastSyncedAtEpochMs))
             headerClockMs.value = ctx.env.nowEpochMillis()
         }
     }
-    LaunchedEffect(ctx.mobileSession.localSyncState?.lastSyncedAtEpochMs) { headerClockMs.value = ctx.env.nowEpochMillis() }
     return headerClockMs
+}
+
+internal fun headerClockDelayMs(
+    nowEpochMs: Long,
+    lastSyncedAtEpochMs: Long?,
+): Long {
+    val sinceSync = lastSyncedAtEpochMs?.let { nowEpochMs - it }
+    val phase =
+        if (sinceSync != null && sinceSync in 0L until 3_600_000L) {
+            sinceSync % 60_000L
+        } else {
+            nowEpochMs.mod(60_000L)
+        }
+    return (60_000L - phase).coerceAtLeast(1_000L)
 }
 
 internal fun mainCloudStatus(ctx: ShellContext): MainCloudStatus {
