@@ -78,6 +78,7 @@ sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher
 activityCompose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 litert = { module = "com.google.ai.edge.litert:litert", version.ref = "litert" }
 windowManager = { module = "androidx.window:window", version.ref = "windowManager" }
+windowTesting = { module = "androidx.window:window-testing", version.ref = "windowManager" }
 desugarJdkLibs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 junit = { module = "junit:junit", version.ref = "junit" }

@@ -29,9 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
-import androidx.window.layout.WindowLayoutInfo
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.QuickActionEvents
@@ -321,10 +319,3 @@ internal fun usesSecureWindowFlag(
     sdkInt: Int,
     hidden: Boolean,
 ): Boolean = hidden && sdkInt < Build.VERSION_CODES.TIRAMISU
-
-private fun WindowLayoutInfo.separatingVerticalHinge(): WindowHinge? =
-    displayFeatures
-        .filterIsInstance<FoldingFeature>()
-        .firstOrNull { it.isSeparating && it.orientation == FoldingFeature.Orientation.VERTICAL }
-        ?.bounds
-        ?.let { WindowHinge(it.left.toFloat(), it.right.toFloat()) }

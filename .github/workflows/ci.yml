@@ -378,15 +378,39 @@ jobs:
           fi
           ./gradlew "${tasks[@]}"
 
-      - name: Test iOS app host and background scheduler
+      - name: Test iOS app host and background scheduler on iPhone and iPad
         working-directory: mobile
+        env:
+          EXTRA_DESTINATIONS: ${{ github.ref == 'refs/heads/main' }}
         run: |
-          simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && $2 ~ /^[[:xdigit:]-]+$/ { print $2; exit }')"
-          test -n "$simulator_id"
+          pick() {
+            xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          runtimes = {k: v for k, v in json.load(sys.stdin)["devices"].items() if ".iOS-" in k}
+          for runtime in sorted(runtimes, key=lambda k: [int(n) for n in re.findall(r"\d+", k.split(".iOS-")[1])], reverse=True):
+              for device in runtimes[runtime]:
+                  if re.search(sys.argv[1], device["name"]):
+                      print(device["udid"])
+                      sys.exit()
+          ' "$1"
+          }
+          iphone="$(pick '^iPhone (?!Duo)')"
+          ipad="$(pick '^iPad')"
+          test -n "$iphone"
+          test -n "$ipad"
+          destinations=(-destination "platform=iOS Simulator,id=$iphone" -destination "platform=iOS Simulator,id=$ipad")
+          if [[ "$EXTRA_DESTINATIONS" == true ]]; then
+            duo="$(pick '^iPhone Duo')"
+            if [[ -n "$duo" ]]; then
+              destinations+=(-destination "platform=iOS Simulator,id=$duo")
+            else
+              echo "::notice::No iPhone Duo simulator on this runner image; testing iPhone and iPad only."
+            fi
+          fi
           xcodebuild \
             -project iosApp/TandemForActual.xcodeproj \
             -scheme TandemForActual \
-            -destination "platform=iOS Simulator,id=$simulator_id" \
+            "${destinations[@]}" \
             -resultBundlePath "$RUNNER_TEMP/TandemForActual.xcresult" \
             -derivedDataPath "$RUNNER_TEMP/derived" \
             ARCHS=arm64 \

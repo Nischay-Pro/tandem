@@ -106,7 +106,31 @@ dependencies {
   implementation(libs.composeFoundationAndroid)
   implementation(libs.composeMaterialAndroid)
   testImplementation(libs.junit)
+  testImplementation(libs.robolectric)
+  testImplementation(libs.windowTesting)
   androidTestImplementation(libs.androidxTestRunner)
   androidTestImplementation(libs.androidxTestExtJunit)
   add("baselineProfile", project(":baselineprofile"))
+}
+
+val robolectricSdk by configurations.creating { isTransitive = false }
+
+dependencies {
+  robolectricSdk(libs.robolectricSdk)
+}
+
+val prepareRobolectricSdk by tasks.registering(Sync::class) {
+  from(robolectricSdk)
+  into(layout.buildDirectory.dir("robolectric-sdk"))
+}
+
+tasks.withType<Test>().configureEach {
+  jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+  dependsOn(prepareRobolectricSdk)
+  val sdkDirectory = prepareRobolectricSdk.map { it.destinationDir.absolutePath }
+  jvmArgumentProviders.add(
+    CommandLineArgumentProvider {
+      listOf("-Drobolectric.offline=true", "-Drobolectric.dependency.dir=${sdkDirectory.get()}")
+    },
+  )
 }
