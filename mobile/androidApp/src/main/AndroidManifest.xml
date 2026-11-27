@@ -75,5 +75,19 @@
         android:name="android.appwidget.provider"
         android:resource="@xml/budget_widget_info" />
     </receiver>
+    <receiver
+      android:name=".BudgetCoverWidget"
+      android:exported="false"
+      android:label="@string/widget_cover_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/budget_cover_widget_info" />
+      <meta-data
+        android:name="com.samsung.android.appwidget.provider"
+        android:resource="@xml/budget_cover_widget_samsung" />
+    </receiver>
   </application>
 </manifest>
