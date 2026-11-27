@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.FloatingAction
 import app.tandemforactual.ui.app.FloatingActionClearance
+import app.tandemforactual.ui.core.navigation.openRulesUsing
 import app.tandemforactual.ui.core.session.DragReorderState
 import app.tandemforactual.ui.core.session.HIDDEN_CATEGORY_SCOPE_SUFFIX
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -37,6 +38,13 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
 import app.tandemforactual.ui.core.ui.AccountActionDropdown
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageSummary
+import app.tandemforactual.ui.core.usage.UsageTarget
+import app.tandemforactual.ui.core.usage.WhereUsedSheet
+import app.tandemforactual.ui.core.usage.isChecking
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -129,7 +137,37 @@ internal fun CategoryGroupScreen(
             DeleteCategoryGroupDialog(state, navigation, mobileSession, group, groups, screen, scope)
         }
         AddCategoryDialog(state, mobileSession, group, screen, scope)
+        CategoryGroupUsageSheet(state, navigation, mobileSession, group, screen)
     }
+}
+
+@Composable
+private fun CategoryGroupUsageSheet(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    group: LiveCategoryGroupSummary,
+    screen: CategoryGroupScreenState,
+) {
+    WhereUsedSheet(
+        visible = screen.showUsageSheet,
+        mobileSession = mobileSession,
+        target = UsageTarget(state.selectedBudgetId, UsageSubject.CATEGORY_GROUP, group.id, group.name),
+        links =
+            UsageLinks(
+                rules = {
+                    screen.showUsageSheet = false
+                    val categoryIds =
+                        mobileSession.categoryRecords
+                            .filter { record ->
+                                val body = record.recordBody()
+                                (body?.stringValue("group") ?: body?.stringValue("group_id")) == group.id
+                            }.map { it.recordId }
+                    openRulesUsing(state, navigation, listOf(group.id) + group.categories.map { it.id } + categoryIds, group.name)
+                },
+            ),
+        onDismiss = { screen.showUsageSheet = false },
+    )
 }
 
 @Composable
@@ -244,6 +282,7 @@ private fun DeleteCategoryGroupDialog(
                     }
                 }
         }
+    val usage = rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.CATEGORY_GROUP, group.id)
     val groupHasCategories =
         remember(group.id, group.categories, mobileSession.categoryRecords) {
             group.categories.isNotEmpty() ||
@@ -267,9 +306,11 @@ private fun DeleteCategoryGroupDialog(
         enabled =
             !state.readOnlyMode &&
                 !mobileSession.isPerformingBudgetAction &&
+                !usage.isChecking &&
                 (!groupHasCategories || screen.deleteGroupDestinationId != UNSELECTED_GROUP_DELETE_DESTINATION),
         dismissEnabled = !mobileSession.isPerformingBudgetAction,
         content = {
+            UsageSummary(usage, UsageSubject.CATEGORY_GROUP)
             if (groupHasCategories) {
                 GroupDeleteDestinationPicker(screen, groupDeleteDestinations)
             }

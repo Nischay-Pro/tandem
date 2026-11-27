@@ -26,7 +26,7 @@ struct TandemApp: App {
     }
 }
 
-/// Mirrors the shortcuts Compose offers, so the iPad menu bar lists them and sends the chosen one back.
+/// Mirrors the menu rows of the Kotlin shortcut table, so the iPad menu bar lists them and sends the chosen one back.
 private final class TandemKeyboardCommands: ObservableObject {
     @Published private(set) var commands: [KeyboardCommand] = []
 
@@ -35,32 +35,42 @@ private final class TandemKeyboardCommands: ObservableObject {
             self?.commands = commands
         }
     }
+
+    func menu(_ name: String) -> [KeyboardCommand] {
+        commands.filter { $0.menu == name && $0.key.count == 1 }
+    }
 }
 
 private struct TandemCommands: Commands {
-    static let newTransaction = "new-transaction"
-
     @ObservedObject var model: TandemKeyboardCommands
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            ForEach(model.commands.filter { $0.commandId == Self.newTransaction }, id: \.commandId) { command in
-                button(command)
-            }
+            buttons(KeyboardCommands.shared.MENU_FILE)
         }
         CommandMenu("Go") {
-            ForEach(model.commands.filter { $0.commandId != Self.newTransaction }, id: \.commandId) { command in
-                button(command)
-            }
+            buttons(KeyboardCommands.shared.MENU_GO)
+        }
+        CommandGroup(replacing: .help) {
+            buttons(KeyboardCommands.shared.MENU_HELP)
         }
     }
 
-    private func button(_ command: KeyboardCommand) -> some View {
-        Button(command.title) {
-            KeyboardCommands.shared.perform(id: command.commandId)
+    private func buttons(_ menu: String) -> some View {
+        ForEach(model.menu(menu), id: \.commandId) { command in
+            Button(command.title) {
+                KeyboardCommands.shared.perform(id: command.commandId)
+            }
+            .keyboardShortcut(KeyEquivalent(Character(command.key)), modifiers: Self.modifiers(command))
+            .disabled(!command.enabled)
         }
-        .keyboardShortcut(KeyEquivalent(Character(command.key)), modifiers: .command)
-        .disabled(!command.enabled)
+    }
+
+    private static func modifiers(_ command: KeyboardCommand) -> EventModifiers {
+        var modifiers: EventModifiers = []
+        if command.command { modifiers.insert(.command) }
+        if command.shift { modifiers.insert(.shift) }
+        return modifiers
     }
 }
 

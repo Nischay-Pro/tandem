@@ -20,10 +20,20 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.navigation.openActivityFor
+import app.tandemforactual.ui.core.navigation.openRulesUsing
+import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
+import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.WHERE_USED_TITLE
+import app.tandemforactual.ui.core.usage.WhereUsedBody
+import app.tandemforactual.ui.core.usage.WhereUsedRow
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
@@ -38,6 +48,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Tags
@@ -84,6 +95,7 @@ internal fun ManagePayeeSheet(
     selectedDefaultCategoryId: String?,
     selectedDefaultCategoryLabel: String,
     state: AppState,
+    navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     scope: CoroutineScope,
     defaultCategoryContent: @Composable () -> Unit,
@@ -118,6 +130,7 @@ internal fun ManagePayeeSheet(
                     "delete" -> {
                         Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                     }
+                    "usage" -> PayeeUsageSection(payee, selectedPayee, state, navigation, mobileSession)
                     else ->
                         ManagePayeeMenu(
                             payee,
@@ -147,7 +160,11 @@ private fun ManagePayeeSheetHeader(
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         Icon(
-            if (mode == "rename") Lucide.Pencil else Lucide.Tags,
+            when (mode) {
+                "rename" -> Lucide.Pencil
+                "usage" -> Lucide.Link
+                else -> Lucide.Tags
+            },
             contentDescription = null,
             modifier = Modifier.size(24.dp),
             tint = tandemPalette.accent,
@@ -158,6 +175,7 @@ private fun ManagePayeeSheetHeader(
                 "merge", "confirm-merge" -> "Merge payee"
                 "default-category" -> "Default category"
                 "delete" -> "Delete payee?"
+                "usage" -> WHERE_USED_TITLE
                 else -> payeeName
             },
             modifier = Modifier.weight(1f),
@@ -262,6 +280,9 @@ private fun ManagePayeeMenu(
 ) {
     budgetActionFeedbackMessage(mobileSession)
     SurfaceCard {
+        WhereUsedRow { payee.mode = "usage" }
+    }
+    SurfaceCard {
         ListRow(
             "Default category",
             selectedDefaultCategoryLabel,
@@ -304,4 +325,33 @@ private fun ManagePayeeMenu(
         mobileSession.feedback.clearBudgetActionMessage()
         payee.mode = "delete"
     }
+}
+
+/** Read-only counts for the payee, linking to its transactions and the rules that name it. */
+@Composable
+private fun PayeeUsageSection(
+    payee: ManagePayeeState,
+    selectedPayee: Pair<String, String>,
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+) {
+    val (payeeId, name) = selectedPayee
+    WhereUsedBody(
+        name,
+        rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.PAYEE, payeeId),
+        UsageSubject.PAYEE,
+        links =
+            UsageLinks(
+                transactions = {
+                    payee.sheetVisible = false
+                    openActivityFor(state, navigation, ActivitySearchField.PAYEE_CONTAINS, payeeId, "Payee: $name")
+                },
+                rules = {
+                    payee.sheetVisible = false
+                    openRulesUsing(state, navigation, listOf(payeeId), name)
+                },
+            ),
+    )
+    TandemActionButton("Back", TandemActionButtonTone.NEUTRAL, modifier = Modifier.fillMaxWidth()) { payee.mode = "menu" }
 }

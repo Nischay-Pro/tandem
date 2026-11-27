@@ -37,7 +37,10 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BottomNavigation
 import app.tandemforactual.ui.app.SideNavigationRail
 import app.tandemforactual.ui.app.navigationRoutes
+import app.tandemforactual.ui.app.navigationTabs
 import app.tandemforactual.ui.app.showsBottomNavigation
+import app.tandemforactual.ui.core.keyboard.TypingState
+import app.tandemforactual.ui.core.keyboard.shortcutTable
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.Workspace
 import app.tandemforactual.ui.core.state.WorkspaceLayout
@@ -71,19 +74,25 @@ internal class ShellLayout(
 
 /** The window-filling scaffold: keyboard shortcuts, the side rail, and the header, routes and bottom bar column. */
 @Composable
-internal fun ShellScaffold(chrome: ShellChromeState) {
+internal fun ShellScaffold(
+    chrome: ShellChromeState,
+    typing: TypingState,
+) {
     val ctx = chrome.ctx
     val state = ctx.state
     val layout = shellLayout(chrome)
     val shortcutsEnabled = layout.tabShellRoute != null && state.selectedBudgetId.isNotBlank()
     val rootFocus = remember { FocusRequester() }
     LaunchedEffect(shortcutsEnabled) { if (shortcutsEnabled) runCatching { rootFocus.requestFocus() } }
-    ShellKeyboardCommands(ctx, shortcutsEnabled)
+    val tabs = navigationTabs(state.interfaceMode)
+    val tabRoutes = tabs.map { it.first }
+    val shortcuts = remember(tabs) { shortcutTable(tabs.map { it.second }) }
+    ShellKeyboardCommands(ctx, shortcutsEnabled, shortcuts, tabRoutes)
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .shellKeyboard(ctx, shortcutsEnabled, navigationRoutes(state.interfaceMode))
+                .shellKeyboard(ctx, shortcutsEnabled, shortcuts, tabRoutes, typing)
                 .focusRequester(rootFocus)
                 .focusable()
                 .background(appBackgroundBrush(state.backgroundStyle, tandemPalette, state.theme == ThemeMode.PURE_BLACK))

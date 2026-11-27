@@ -71,7 +71,7 @@ class SettingsPagesTest {
         showSettings()
 
         row("Automation").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("What apps can add").assertExists()
+        composeTestRule.onNodeWithText("What apps can add and see").assertExists()
         row("Automation").assertIsSelected()
 
         row("Connected services").performScrollTo().performClick()

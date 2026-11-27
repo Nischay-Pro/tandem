@@ -1,20 +1,21 @@
 package app.tandemforactual.android
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.api.client.WebDavClient
+import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -24,8 +25,8 @@ import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.AutomaticBackups
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.BackupDestination
 import app.tandemforactual.ui.core.session.BackupProblem
-import app.tandemforactual.ui.core.session.BackupProblemException
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -36,29 +37,41 @@ internal const val BACKUP_PASSPHRASE_STORE = "automatic_backup_passphrase"
 internal const val BACKUP_WEBDAV_STORE = "automatic_backup_webdav"
 
 /**
- * Checks hourly whether an automatic backup is due, only while the network "Back up using" allows; the worker reads the
- * schedule and folder itself.
+ * Checks hourly whether an automatic backup is due. Backups are made from the device's copy and saved to the folder
+ * without a network; a WebDAV copy is queued for [AutomaticBackupUploadWorker], which waits for the network "Back up
+ * using" allows.
  */
 internal object AutomaticBackupScheduler {
     private const val UNIQUE_WORK_NAME = "tandem-automatic-backup"
+    internal const val UPLOAD_WORK_NAME = "tandem-automatic-backup-upload"
 
-    fun ensureScheduled(context: Context) = schedule(context, ExistingPeriodicWorkPolicy.KEEP, AutomaticBackupSettings().network)
+    fun ensureScheduled(context: Context) {
+        WorkManager
+            .getInstance(context.applicationContext)
+            .enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodicRequest())
+    }
 
+    /** Moves a queued WebDAV upload onto the newly chosen network. */
     fun update(
         context: Context,
         network: SyncNetwork,
-    ) = schedule(context, ExistingPeriodicWorkPolicy.UPDATE, network)
-
-    private fun schedule(
-        context: Context,
-        policy: ExistingPeriodicWorkPolicy,
-        network: SyncNetwork,
     ) {
-        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, policy, periodicRequest(network))
+        if (PendingWebDavUpload(context).read() != null) queueUpload(context, network)
     }
 
-    internal fun periodicRequest(network: SyncNetwork): PeriodicWorkRequest =
-        PeriodicWorkRequestBuilder<AutomaticBackupWorker>(1, TimeUnit.HOURS)
+    fun queueUpload(
+        context: Context,
+        network: SyncNetwork,
+    ) {
+        WorkManager
+            .getInstance(context.applicationContext)
+            .enqueueUniqueWork(UPLOAD_WORK_NAME, ExistingWorkPolicy.REPLACE, uploadRequest(network))
+    }
+
+    internal fun periodicRequest(): PeriodicWorkRequest = PeriodicWorkRequestBuilder<AutomaticBackupWorker>(1, TimeUnit.HOURS).build()
+
+    internal fun uploadRequest(network: SyncNetwork): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<AutomaticBackupUploadWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(networkType(network)).build())
             .build()
 
@@ -78,10 +91,14 @@ class AutomaticBackupWorker(
         return try {
             val preferences = store.read()
             val settings = AutomaticBackupSettings.from(preferences)
-            val lastRun = preferences[AutomaticBackupSettings.LAST_RUN]?.toLongOrNull()
-            if (!AutomaticBackups.due(settings, lastRun, now) || !networkAllows(settings.network)) return Result.success()
-            val result = attempt(settings, preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() }, database, progress)
+            val lastMade =
+                listOf(AutomaticBackupSettings.LAST_RUN, AutomaticBackupSettings.LAST_MADE)
+                    .mapNotNull { preferences[it]?.toLongOrNull() }
+                    .maxOrNull()
+            if (!AutomaticBackups.due(settings, lastMade, now)) return Result.success()
+            val result = attempt(settings, preferences, database, progress, now)
             record(store, result, now)
+            if (BackupDestination.WEBDAV in result.waiting) AutomaticBackupScheduler.queueUpload(applicationContext, settings.network)
             if (result.outcome == AutomaticBackupResult.Outcome.FAILED) Result.retry() else Result.success()
         } catch (error: CancellationException) {
             throw error
@@ -96,47 +113,57 @@ class AutomaticBackupWorker(
 
     private suspend fun attempt(
         settings: AutomaticBackupSettings,
-        budgetId: String?,
+        preferences: Map<String, String>,
         database: TandemDatabase,
         progress: BackupProgress,
+        now: Long,
     ): AutomaticBackupResult {
-        budgetId ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BUDGET)
+        val budgetId =
+            preferences["selectedBudgetId"]?.takeIf { it.isNotBlank() } ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BUDGET)
         val storedSession =
             AndroidDeviceCredentialStore(applicationContext).read() ?: return AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
+        val name = preferences["selectedBudget"]?.takeIf { it.isNotBlank() } ?: "Budget"
+        val budget = BackupBudget(budgetId, name, preferences["selectedBudgetEncrypted"] == "true")
         val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = sealedBudgetFiles(applicationContext))
-        return client.use { attemptWith(it, settings, budgetId, storedSession, database, progress) }
+        return client.use { attemptWith(it, settings, budget, storedSession, database, progress, now) }
     }
 
     private suspend fun attemptWith(
         client: TandemApiClient,
         settings: AutomaticBackupSettings,
-        budgetId: String,
+        selected: BackupBudget,
         storedSession: String,
         database: TandemDatabase,
         progress: BackupProgress,
+        now: Long,
     ): AutomaticBackupResult {
         progress.show(0)
         client.restoreStoredSession(storedSession)
-        val budget =
-            client.listBudgets().firstOrNull { it.budgetId == budgetId }
-                ?: return AutomaticBackupResult.skipped(BackupProblem.BUDGET_GONE)
+        val copyEncrypted = client.storedCopyEncrypted(selected.id) ?: return AutomaticBackupResult.skipped(BackupProblem.NO_DEVICE_COPY)
+        val budget = selected.copy(encrypted = selected.encrypted || copyEncrypted)
         val password =
-            if (budget.isEncrypted) {
-                backgroundPassword(budgetId) ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BACKGROUND_KEY)
+            if (budget.encrypted) {
+                backgroundPassword(budget.id) ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BACKGROUND_KEY)
             } else {
                 null
             }
         val passphrase = AndroidDeviceCredentialStore(applicationContext, BACKUP_PASSPHRASE_STORE).read()
-        if (AutomaticBackups.needsPassphrase(budget.isEncrypted, passphrase != null)) {
+        if (AutomaticBackups.needsPassphrase(budget.encrypted, passphrase != null)) {
             return AutomaticBackupResult.skipped(BackupProblem.NEEDS_PASSPHRASE)
         }
         progress.show(25)
-        val bytes = backup(database, client, budgetId, budget.name, password, passphrase)
-        if (!AutomaticBackups.mayWrite(budget.isEncrypted, BudgetBackupFile.isSealed(bytes))) {
+        val (bytes, syncedAt) =
+            try {
+                backup(database, client, budget, password, passphrase)
+            } catch (error: TandemApiException) {
+                if (error.errorCode == "no_device_copy") return AutomaticBackupResult.skipped(BackupProblem.NO_DEVICE_COPY)
+                throw error
+            }
+        if (!AutomaticBackups.mayWrite(budget.encrypted, BudgetBackupFile.isSealed(bytes))) {
             return AutomaticBackupResult.skipped(BackupProblem.NEEDS_PASSPHRASE)
         }
         progress.show(70)
-        return deliver(settings, budgetId, budget.name, bytes, progress).also { progress.show(100) }
+        return deliver(settings, budget, bytes, AutomaticBackups.staleSince(syncedAt, now), progress).also { progress.show(100) }
     }
 
     private suspend fun record(
@@ -145,74 +172,57 @@ class AutomaticBackupWorker(
         now: Long,
     ) = result.preferences(now).forEach { (name, value) -> store.putValue(name, value) }
 
-    /** The backup bytes, with planning records from the encrypted budget's vault when the budget has one. */
+    /**
+     * The backup bytes from the device's copy, with planning records from the encrypted budget's vault when the budget
+     * has one, and when the copy last synced.
+     */
     private suspend fun backup(
         database: TandemDatabase,
         client: TandemApiClient,
-        budgetId: String,
-        budgetName: String,
+        budget: BackupBudget,
         password: String?,
         passphrase: String?,
-    ): ByteArray {
-        val vault = password?.let { AndroidEncryptedBudgetVault(applicationContext).open(budgetId, it) }
+    ): Pair<ByteArray, Long?> {
+        val vault = password?.let { AndroidEncryptedBudgetVault(applicationContext).open(budget.id, it) }
         try {
             val keys = AndroidDeviceCredentialStore(applicationContext, "planning_keys")
-            return AutomaticBackups.build(client, vault ?: database, keys, budgetId, password, budgetName, passphrase) {
-                System.currentTimeMillis()
-            }
+            val bytes =
+                AutomaticBackups.build(client, vault ?: database, keys, budget.id, password, budget.name, passphrase) {
+                    System.currentTimeMillis()
+                }
+            val syncedAt = runCatching { (vault ?: database).budgetSyncStateDao().find(budget.id)?.lastSyncedAtEpochMs }.getOrNull()
+            return bytes to syncedAt
         } finally {
             vault?.close()
         }
     }
 
-    /** Saves the backup to the folder and WebDAV, trimming old copies in each. */
+    /** Saves the backup to the folder, trimming old copies, and queues the WebDAV copy. */
     private suspend fun deliver(
         settings: AutomaticBackupSettings,
-        budgetId: String,
-        budgetName: String,
+        budget: BackupBudget,
         bytes: ByteArray,
+        staleSince: Long?,
         progress: BackupProgress,
     ): AutomaticBackupResult {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm"))
-        val name = AutomaticBackups.fileName(budgetName, budgetId, stamp, BudgetBackupFile.isSealed(bytes))
+        val name = AutomaticBackups.fileName(budget.name, budget.id, stamp, BudgetBackupFile.isSealed(bytes))
+        val pending = PendingWebDavUpload(applicationContext)
+        if (settings.webDavUrl == null) pending.clear()
         return AutomaticBackupResult.deliver(
             toFolder =
                 settings.folder?.let { folder ->
                     {
                         BackupFolder(applicationContext, Uri.parse(folder)).apply {
                             save(name, bytes)
-                            AutomaticBackups.toDelete(names(), budgetName, budgetId, settings.keep).forEach(::delete)
+                            AutomaticBackups.toDelete(names(), budget.name, budget.id, settings.keep).forEach(::delete)
                         }
                         progress.show(85)
                     }
                 },
-            toWebDav = settings.webDavUrl?.let { url -> { uploadToWebDav(settings, url, name, bytes, budgetId, budgetName) } },
+            queueWebDav = settings.webDavUrl?.let { { pending.write(PendingWebDavUpload.Upload(name, budget.id, budget.name), bytes) } },
+            budgetSyncedAt = staleSince,
         )
-    }
-
-    private suspend fun uploadToWebDav(
-        settings: AutomaticBackupSettings,
-        url: String,
-        name: String,
-        bytes: ByteArray,
-        budgetId: String,
-        budgetName: String,
-    ) {
-        val password =
-            runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE).read() }.getOrNull()
-                ?: throw BackupProblemException(BackupProblem.WEBDAV_PASSWORD)
-        WebDavClient.connect(url, settings.webDavUser.orEmpty(), password).use { dav ->
-            dav.check()
-            AutomaticBackups.saveCompletely(name, { dav.upload(it, bytes) }, dav::move, dav::delete)
-            AutomaticBackups.toDelete(dav.list(), budgetName, budgetId, settings.keep).forEach { dav.delete(it) }
-        }
-    }
-
-    private fun networkAllows(network: SyncNetwork): Boolean {
-        val manager = applicationContext.getSystemService(ConnectivityManager::class.java) ?: return false
-        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
-        if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
-        return network != SyncNetwork.WIFI || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     private fun backgroundPassword(budgetId: String): String? =
@@ -221,6 +231,12 @@ class AutomaticBackupWorker(
             ?.takeIf { it.first == budgetId }
             ?.second
 }
+
+private data class BackupBudget(
+    val id: String,
+    val name: String,
+    val encrypted: Boolean,
+)
 
 /** The folder the person picked, written through the storage framework so backups show up in their Files app. */
 private class BackupFolder(
