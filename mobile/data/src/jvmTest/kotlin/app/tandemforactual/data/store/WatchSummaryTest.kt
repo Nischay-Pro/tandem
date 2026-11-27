@@ -165,6 +165,82 @@ class WatchSummaryTest {
         }
 
     @Test
+    fun everyRefusalNamesItsReason() {
+        assertNull(watchQuickAddRefusal(open))
+        assertEquals("No budget is open. Open a budget in Tandem first.", watchQuickAddRefusal(emptyMap()))
+        assertTrue(watchQuickAddRefusal(open + ("readOnlyMode" to "true")).orEmpty().startsWith("Lock editing"))
+        val off = open + WatchSettings(quickAddEnabled = false).toPreferences()
+        assertTrue(watchQuickAddRefusal(off).orEmpty().startsWith("Quick add is off"))
+    }
+
+    @Test
+    fun trimmingFallsBackStepByStepUntilItFits() {
+        val summary =
+            WatchSummary(
+                state = WatchState.READY,
+                generatedAtEpochMs = NOW,
+                budgetId = "budget",
+                budgetName = "Home",
+                syncedAtEpochMs = NOW,
+                leftToSpend = "E1",
+                leftToSpendNegative = true,
+                toBudget = "E2",
+                categories = (1..4).map { WatchCategory("c$it", "Category $it", "E$it", spentPercent = 10, budgeted = "E9", spent = "E8") },
+                bills = (1..3).map { WatchBill("Bill $it", "2026-12-0$it") },
+                quickAdd =
+                    WatchQuickAdd(
+                        open = true,
+                        accounts = listOf(WatchChoice("a", "Account")),
+                        payees = listOf("Shop"),
+                        recentCategories = listOf(WatchChoice("r", "Recent")),
+                    ),
+            )
+
+        val tiny = decode(encodeWatchSummary(summary, maxBytes = 10))
+        assertNull(tiny["c"])
+        assertNull(tiny["u"])
+        assertEquals("Home", tiny.text("b"))
+        assertEquals(listOf("a"), tiny.getValue("q").jsonObject.getValue("a").jsonArray.map { it.jsonObject.text("i") })
+
+        val full = decode(encodeWatchSummary(summary))
+        assertEquals("true", full.text("lo"))
+        assertEquals("E9", full.getValue("c").jsonArray[0].jsonObject.text("bu"))
+        assertNull(full.getValue("u").jsonArray[0].jsonObject["a"])
+        assertEquals("r", full.getValue("q").jsonObject.getValue("k").jsonArray[0].jsonObject.text("i"))
+    }
+
+    @Test
+    fun readOnlyBudgetsStillShowNumbersButOfferNoQuickAdd() =
+        withBudget { repository ->
+            val ready = decode(watchSummaryJson(repository, open + ("readOnlyMode" to "true"), TODAY, NOW, opened = true, format))
+
+            assertEquals("ready", ready.text("s"))
+            assertEquals("false", ready.getValue("q").jsonObject.text("on"))
+            assertEquals(listOf("food", "rent"), ready.getValue("c").jsonArray.map { it.jsonObject.text("i") })
+        }
+
+    @Test
+    fun aMonthNotOnTheDeviceLeavesNumbersOut() =
+        withBudget { repository ->
+            val later = decode(watchSummaryJson(repository, open, "2027-03-01", NOW, opened = true, format))
+
+            assertEquals("ready", later.text("s"))
+            assertNull(later["l"])
+            assertNull(later["c"])
+            assertTrue(watchCategoryChoices(repository, "budget", "2027-03-01").isEmpty())
+        }
+
+    @Test
+    fun pinChoicesAreThisMonthsExpenseCategoriesWithTheirGroup() =
+        withBudget { repository ->
+            val choices = watchCategoryChoices(repository, "budget", TODAY)
+
+            assertEquals(listOf("food", "rent"), choices.map { it.id })
+            assertEquals("Living", choices.first().group)
+            assertEquals(11240L, choices.first().spentMinor)
+        }
+
+    @Test
     fun spentPercentCountsSpendingWithNothingBudgetedAsAll() {
         assertEquals(50, watchSpentPercent(200, 100))
         assertEquals(0, watchSpentPercent(200, -100))
