@@ -61,7 +61,11 @@ internal fun payeeCleanupSteps(group: PayeeDuplicateGroup): List<PayeeCleanupSte
 }
 
 /** Identifies a group by its members, so a group marked as not duplicates stays hidden until its members change. */
-internal fun payeeGroupKey(group: PayeeDuplicateGroup): String = group.members.map { it.id }.sorted().joinToString(",")
+internal fun payeeGroupKey(group: PayeeDuplicateGroup): String =
+    group.members
+        .map { it.id }
+        .sorted()
+        .joinToString(",")
 
 internal fun decodePayeeGroupKeys(stored: String?): Set<String> = stored?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
 
