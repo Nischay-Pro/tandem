@@ -78,6 +78,7 @@ internal fun ColumnScope.ShellRouteArea(
                 .onGloballyPositioned { routeBounds = Rect(it.positionInWindow(), it.size.toSize()) }
                 .clipToBounds()
                 .then(transitionInputModifier)
+                .then(rememberTransactionSheetFileDrop(ctx))
                 .tandemEdgeBackGesture(
                     ctx.backStack.size > 1 && !ctx.transactionSheetActive,
                     ctx.navigator::handleBack,
@@ -263,6 +264,7 @@ private fun TransactionTaskSheet(
                 .fillMaxSize()
                 .clipToBounds()
                 .then(transitionInputModifier)
+                .then(rememberTransactionSheetFileDrop(ctx))
                 .tandemEdgeBackGesture(
                     enabled = ctx.transactionSheetActive && backStack.size > 1,
                     onBack = ctx.navigator::handleCurrentRouteBack,

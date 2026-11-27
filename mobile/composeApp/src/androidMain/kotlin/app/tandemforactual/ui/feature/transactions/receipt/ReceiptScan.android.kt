@@ -72,6 +72,7 @@ internal actual fun rememberReceiptScanner(
             choosePhoto = {
                 library.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
+            readPhoto = { reference -> read(Uri.parse(reference)) },
         )
     }
 }

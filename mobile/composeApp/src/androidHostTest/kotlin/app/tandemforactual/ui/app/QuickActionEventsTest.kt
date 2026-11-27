@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.app
 
+import app.tandemforactual.ui.core.platform.PickedStatementFile
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,6 +15,26 @@ class QuickActionEventsTest {
         QuickActionEvents.consumeReceiptScan()
         QuickActionEvents.consumeDestination()
         QuickActionEvents.consumeSharedText()
+        QuickActionEvents.consumeSharedReceiptPhoto()
+        QuickActionEvents.consumeSharedStatement()
+    }
+
+    @Test
+    fun aSharedPhotoOpensTheFormAndReadsThatReceipt() {
+        QuickActionEvents.shareReceiptPhoto("content://photos/receipt.jpg")
+        assertTrue(QuickActionEvents.consumeAddTransaction())
+        assertFalse(QuickActionEvents.consumeReceiptScan())
+        assertEquals("content://photos/receipt.jpg", QuickActionEvents.consumeSharedReceiptPhoto())
+        assertNull(QuickActionEvents.consumeSharedReceiptPhoto())
+    }
+
+    @Test
+    fun aSharedStatementOpensAccounts() {
+        val file = PickedStatementFile("march.ofx", "<OFX></OFX>")
+        QuickActionEvents.shareStatement(file)
+        assertEquals(QuickAction.ACCOUNTS, QuickActionEvents.consumeDestination())
+        assertEquals(file, QuickActionEvents.consumeSharedStatement())
+        assertNull(QuickActionEvents.consumeSharedStatement())
     }
 
     @Test

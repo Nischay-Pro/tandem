@@ -11,7 +11,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import kotlinx.coroutines.CancellationException
 
-/** Re-parses the picked statement when its options change, then loads the server import preview. */
+/** Starts a dropped or shared statement, re-parses it when its options change, then loads the server import preview. */
 @Composable
 internal fun StatementImportEffects(
     statementImport: StatementImportState,
@@ -19,6 +19,14 @@ internal fun StatementImportEffects(
     mobileSession: TandemMobileSession,
     liveAccount: LiveAccountSummary?,
 ) {
+    val pendingStatement = state.pendingStatementFile
+    LaunchedEffect(pendingStatement, liveAccount?.id) {
+        if (pendingStatement != null && liveAccount != null && !liveAccount.closed && !state.readOnlyMode) {
+            state.pendingStatementFile = null
+            mobileSession.feedback.clearBudgetActionMessage()
+            statementImport.onFilePicked(pendingStatement, state, liveAccount)
+        }
+    }
     val currencyFractionDigits = mobileSession.budgetDisplaySettings?.currencyFractionDigits
     val numberFormat = mobileSession.budgetDisplaySettings?.numberFormat
     LaunchedEffect(

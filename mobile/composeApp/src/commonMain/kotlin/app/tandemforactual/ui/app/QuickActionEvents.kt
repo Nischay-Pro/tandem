@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.app
 
+import app.tandemforactual.ui.core.platform.PickedStatementFile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -64,6 +65,8 @@ object QuickActionEvents {
     internal val destinationRequested: StateFlow<QuickAction?> = mutableDestination
 
     private var sharedText: String? = null
+    private var sharedReceiptPhoto: String? = null
+    private var sharedStatement: PickedStatementFile? = null
     private var receiptScan = false
 
     fun requestAddTransaction() {
@@ -96,7 +99,24 @@ object QuickActionEvents {
         mutableAddTransaction.value = true
     }
 
+    /** Opens a new transaction and reads the receipt photo shared into Tandem. */
+    fun shareReceiptPhoto(reference: String) {
+        sharedReceiptPhoto = reference
+        receiptScan = false
+        mutableAddTransaction.value = true
+    }
+
+    /** Opens Accounts so the person can choose where the shared statement goes. */
+    internal fun shareStatement(file: PickedStatementFile) {
+        sharedStatement = file
+        mutableDestination.value = QuickAction.ACCOUNTS
+    }
+
     internal fun consumeSharedText(): String? = sharedText.also { sharedText = null }
+
+    internal fun consumeSharedReceiptPhoto(): String? = sharedReceiptPhoto.also { sharedReceiptPhoto = null }
+
+    internal fun consumeSharedStatement(): PickedStatementFile? = sharedStatement.also { sharedStatement = null }
 
     internal fun consumeReceiptScan(): Boolean = receiptScan.also { receiptScan = false }
 

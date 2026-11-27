@@ -97,7 +97,8 @@ internal fun ShellScaffold(chrome: ShellChromeState) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = railInset),
+                .padding(start = railInset)
+                .then(rememberShellFileDrop(ctx)),
         ) {
             if (!layout.workspaceActive && shouldRenderRouteHeader(ctx.route, layout.tabShellRoute != null)) {
                 AnimatedContent(

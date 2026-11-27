@@ -114,6 +114,7 @@ internal fun NavigationEffects(ctx: ShellContext) {
         delay(TandemMotion.ROUTE_MILLIS * 2L)
         if (!shell.routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) {
             if (QuickActionEvents.consumeReceiptScan()) state.receiptScanRequested = true
+            QuickActionEvents.consumeSharedReceiptPhoto()?.let { state.pendingReceiptPhoto = it }
             ctx.navigator.newTransaction(null)
             QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
                 fillNewTransaction(
@@ -148,6 +149,7 @@ private fun QuickDestinationEffect(ctx: ShellContext) {
                 else -> null
             } ?: return@LaunchedEffect
         state.menuOpen = false
+        if (target == AppRoute.ACCOUNTS) QuickActionEvents.consumeSharedStatement()?.let { state.pendingStatementFile = it }
         if (target in navigationRoutes(state.interfaceMode)) ctx.navigation.selectTab(target) else ctx.navigation.open(target)
     }
 }
