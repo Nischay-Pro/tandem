@@ -42,6 +42,20 @@ final class WatchSummaryTests: XCTestCase {
         XCTAssertNil(try summary(self.ready).perDayText)
     }
 
+    func testTheGlanceLeadsWithTheAmountADayUnlessTheIPhoneSaysOtherwise() throws {
+        let perDay = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9,"pf":true}"#)
+        XCTAssertEqual(perDay.headlineLabel, "A day · 9 days left")
+        XCTAssertEqual(perDay.headlineAmount, "$93.62")
+        XCTAssertEqual(perDay.headlineSecondary, "$842.65 left this month")
+
+        let month = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9,"pf":false}"#)
+        XCTAssertEqual(month.headlineLabel, "Left to spend")
+        XCTAssertEqual(month.headlineAmount, "$842.65")
+        XCTAssertEqual(month.headlineSecondary, "$93.62 a day · 9 days left")
+
+        XCTAssertEqual(try summary(self.ready).headlineLabel, "Left to spend")
+    }
+
     func testSummariesOverTheLimitOrFromAnotherVersionAreIgnored() {
         XCTAssertNil(WatchSummary.decode(nil))
         XCTAssertNil(WatchSummary.decode(Data(#"{"v":2,"s":"ready","g":1}"#.utf8)))

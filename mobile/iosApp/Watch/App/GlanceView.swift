@@ -35,18 +35,18 @@ private struct LeftToSpendHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Left to spend")
+            Text(summary.headlineLabel)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text(summary.amount(summary.leftToSpend))
+            Text(summary.headlineAmount)
                 .font(.system(size: 34, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .foregroundStyle(summary.showsAmounts && summary.leftToSpendNegative == true ? Color.tandemOver : .primary)
                 .privacySensitive()
-            if let perDay = summary.perDayText {
-                Text(perDay)
+            if let secondary = summary.headlineSecondary {
+                Text(secondary)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .privacySensitive()

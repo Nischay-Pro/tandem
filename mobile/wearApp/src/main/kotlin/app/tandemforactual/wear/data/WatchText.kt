@@ -29,6 +29,17 @@ object WatchText {
         return if (days == 1) "$amount for today" else "$amount a day · $days days left"
     }
 
+    /** The glance's large figure, its label and the other figure in small type, led by an amount a day unless the phone says otherwise. */
+    fun headline(summary: WatchSummary): Headline {
+        val perDay = summary.perDayMinor?.takeIf { summary.amountsShown && summary.perDayFirst }
+        val days = summary.daysLeft
+        if (perDay != null && days != null) {
+            val label = if (days == 1) "Left for today" else "A day · $days days left"
+            return Headline(perDay, label, "${summary.money(summary.leftToSpendMinor)} left this month")
+        }
+        return Headline(summary.leftToSpendMinor, LEFT_TO_SPEND, perDay(summary))
+    }
+
     /** "Synced 10:42", or null before the phone has synced. */
     fun synced(
         summary: WatchSummary,
@@ -91,3 +102,9 @@ object WatchText {
         return if (summary.money.symbolAfter) "$sign$number$symbol" else "$sign$symbol$number"
     }
 }
+
+data class Headline(
+    val minor: Long?,
+    val label: String,
+    val secondary: String?,
+)

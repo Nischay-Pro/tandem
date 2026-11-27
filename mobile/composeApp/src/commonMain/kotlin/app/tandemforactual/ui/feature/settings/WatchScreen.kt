@@ -29,6 +29,8 @@ import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.watch_after_unlock
 import app.tandemforactual.ui.generated.resources.watch_after_unlock_detail
 import app.tandemforactual.ui.generated.resources.watch_detail
+import app.tandemforactual.ui.generated.resources.watch_per_day_first
+import app.tandemforactual.ui.generated.resources.watch_per_day_first_detail
 import app.tandemforactual.ui.generated.resources.watch_pinned
 import app.tandemforactual.ui.generated.resources.watch_pinned_detail
 import app.tandemforactual.ui.generated.resources.watch_pinned_empty
@@ -62,6 +64,13 @@ internal fun WatchScreen(
                 subtitle = stringResource(Res.string.watch_after_unlock_detail),
                 checked = settings.summaryAfterUnlock,
                 onChange = { state.watchSettings = state.watchSettings.copy(summaryAfterUnlock = it) },
+            )
+            DividerLine()
+            ToggleRow(
+                stringResource(Res.string.watch_per_day_first),
+                subtitle = stringResource(Res.string.watch_per_day_first_detail),
+                checked = settings.perDayFirst,
+                onChange = { state.watchSettings = state.watchSettings.copy(perDayFirst = it) },
             )
         }
         PinnedCategories(state, mobileSession)

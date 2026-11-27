@@ -158,15 +158,15 @@ private fun LeftToSpend(
             summary == null -> Hint(WatchText.NO_BUDGET)
             summary.state == WatchState.LOCKED -> Hint(WatchText.LOCKED)
             else -> {
-                val left = summary.leftToSpendMinor
+                val headline = WatchText.headline(summary)
                 Text(
-                    summary.money(left),
+                    summary.money(headline.minor),
                     style = MaterialTheme.typography.displayMedium,
-                    color = if ((left ?: 0) < 0) WearColors.over else MaterialTheme.colorScheme.onSurface,
+                    color = if ((headline.minor ?: 0) < 0) WearColors.over else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                 )
-                Text(WatchText.LEFT_TO_SPEND, style = MaterialTheme.typography.labelMedium, color = WearColors.muted)
-                WatchText.perDay(summary)?.let {
+                Text(headline.label, style = MaterialTheme.typography.labelMedium, color = WearColors.muted)
+                headline.secondary?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = WearColors.muted, textAlign = TextAlign.Center)
                 }
                 WatchText.synced(summary)?.let {

@@ -75,6 +75,7 @@ suspend fun watchSummary(
         toBudgetNegative = (month?.long("toBudget") ?: 0) < 0,
         perDay = allowance?.let { money(it.perDayMinor) },
         daysLeft = allowance?.daysLeft,
+        perDayFirst = WatchSettings.from(preferences).perDayFirst,
         categories =
             shown.map { category ->
                 val lines = if (amounts) recent.filter { it.categoryId == category.id }.take(TRANSACTION_COUNT) else emptyList()

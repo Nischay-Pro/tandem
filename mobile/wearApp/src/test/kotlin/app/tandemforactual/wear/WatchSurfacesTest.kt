@@ -13,6 +13,7 @@ import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
 import app.tandemforactual.wear.complications.WatchComplications
+import app.tandemforactual.wear.data.Headline
 import app.tandemforactual.wear.data.WatchText
 import app.tandemforactual.wear.tiles.leftToSpendLayout
 import app.tandemforactual.wear.tiles.nextBillLayout
@@ -70,6 +71,19 @@ class WatchSurfacesTest {
         assertEquals("$10.00 for today", WatchText.perDay(summary().copy(perDayMinor = 1_000, daysLeft = 1)))
         assertNull(WatchText.perDay(summary(WatchState.AMOUNTS_HIDDEN).copy(perDayMinor = 1_000, daysLeft = 3)))
         assertNull(WatchText.perDay(summary()))
+    }
+
+    @Test
+    fun theGlanceLeadsWithTheAmountADayUnlessThePhoneSaysOtherwise() {
+        val split = summary().copy(perDayMinor = 9_362, daysLeft = 9)
+        assertEquals(Headline(9_362, "A day · 9 days left", "$1,234.56 left this month"), WatchText.headline(split))
+        assertEquals("Left for today", WatchText.headline(split.copy(daysLeft = 1)).label)
+        assertEquals(
+            Headline(123_456, WatchText.LEFT_TO_SPEND, "$93.62 a day · 9 days left"),
+            WatchText.headline(split.copy(perDayFirst = false)),
+        )
+        val hidden = summary(WatchState.AMOUNTS_HIDDEN).copy(perDayMinor = 1, daysLeft = 3)
+        assertEquals(WatchText.LEFT_TO_SPEND, WatchText.headline(hidden).label)
     }
 
     @Test
