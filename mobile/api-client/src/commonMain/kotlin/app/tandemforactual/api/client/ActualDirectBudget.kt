@@ -26,6 +26,7 @@ import app.tandemforactual.data.actual.ZipArchive
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.AccountMovement
+import app.tandemforactual.data.planning.PlanningKeys
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import kotlin.coroutines.AbstractCoroutineContextElement
@@ -37,7 +38,13 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /** Owns one local budget connection and serializes edits with CRDT synchronization. */
 class ActualDirectBudget private constructor(
@@ -329,7 +336,7 @@ class ActualDirectBudget private constructor(
     suspend fun snapshot(
         files: ActualBudgetFiles,
         budgetId: String,
-    ): ByteArray = locked { files.snapshot(budgetId) { path -> db.execute("VACUUM INTO ?", path) } }
+    ): ByteArray = locked { files.snapshot(budgetId) { path -> files.exportPlain(budgetId, db, path) } }
 
     suspend fun close() = locked { db.close() }
 
@@ -350,6 +357,7 @@ class ActualDirectBudget private constructor(
             newId: () -> String,
             expectedGroupId: String?,
             unlock: suspend (ActualKeyInfo) -> ActualBudgetKey,
+            installSealed: ((ByteArray, ActualBudgetKey, ActualKeyInfo) -> ActualDatabase)? = null,
             install: (ByteArray) -> ActualDatabase,
         ): ActualDirectBudget {
             val info = server.fileInfo(fileId)
@@ -359,10 +367,31 @@ class ActualDirectBudget private constructor(
             val key = keyInfo?.let { unlock(it) }
             val archive = server.download(fileId).let { bytes -> if (key != null) key.decrypt(bytes, info.encryptMeta) else bytes }
             val data = ZipArchive.read(archive)["db.sqlite"] ?: throw ActualServerException("invalid-budget-archive")
-            val db = install(data)
+            val db = if (key != null && keyInfo != null && installSealed != null) installSealed(data, key, keyInfo) else install(data)
             if (keyInfo != null) saveKeyInfo(db, keyInfo)
             return open(db, server, fileId, groupId, now, newId, downloaded = true, key)
         }
+
+        /** The key of an encrypted budget's device copy, bound to the budget and derived from its Actual key. */
+        internal fun copyKey(
+            key: ActualBudgetKey,
+            budgetId: String,
+        ): ByteArray = PlanningKeys.hkdf(key.secret, ByteArray(0), "tandem-budget-copy/v1|$budgetId".encodeToByteArray())
+
+        internal fun encodeKeyInfo(info: ActualKeyInfo): String =
+            buildJsonObject {
+                put("id", info.id)
+                put("salt", info.salt)
+                put("test", info.test)
+            }.toString()
+
+        internal fun decodeKeyInfo(value: String): ActualKeyInfo? =
+            runCatching {
+                val root = Json.parseToJsonElement(value).jsonObject
+
+                fun text(name: String) = root[name]?.jsonPrimitive?.contentOrNull
+                ActualKeyInfo(text("id"), text("salt"), text("test"))
+            }.getOrNull()?.takeIf { it.id != null }
 
         /** The key Actual encrypted this budget with, saved without the password or the derived key. */
         fun storedKeyInfo(db: ActualDatabase): ActualKeyInfo? =

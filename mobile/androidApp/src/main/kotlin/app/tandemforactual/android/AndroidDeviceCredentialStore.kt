@@ -1,6 +1,8 @@
 package app.tandemforactual.android
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -12,10 +14,15 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Keystore-sealed storage for one secret value; [name] keeps separate secrets apart. */
+/**
+ * Keystore-sealed storage for one secret value; [name] keeps separate secrets apart. Keys need no user authentication
+ * because background sync and backups read them while the phone is locked; they stay in StrongBox where the phone has
+ * one. With [freshKeyOnWrite], each saved value gets a new key, so a replaced secret's key is gone with it.
+ */
 internal class AndroidDeviceCredentialStore(
     context: Context,
     name: String = "device_session",
+    private val freshKeyOnWrite: Boolean = false,
 ) : DeviceCredentialStore {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -34,8 +41,14 @@ internal class AndroidDeviceCredentialStore(
     }
 
     override fun write(value: String) {
+        if (freshKeyOnWrite) deleteKey()
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey())
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, encryptionKey())
+        } catch (_: Exception) {
+            deleteKey()
+            cipher.init(Cipher.ENCRYPT_MODE, generateKey(strongBox = false))
+        }
         val encrypted = cipher.iv + cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
         val encoded = Base64.encodeToString(encrypted, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         check(preferences.edit().putString(credentialKey, encoded).commit()) {
@@ -47,6 +60,10 @@ internal class AndroidDeviceCredentialStore(
         check(preferences.edit().remove(credentialKey).commit()) {
             "Could not clear device credential"
         }
+        deleteKey()
+    }
+
+    private fun deleteKey() {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         if (keyStore.containsAlias(keyAlias)) keyStore.deleteEntry(keyAlias)
     }
@@ -56,8 +73,17 @@ internal class AndroidDeviceCredentialStore(
         val storedKey = keyStore.getKey(keyAlias, null)
         if (storedKey is SecretKey) return storedKey
 
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
-        generator.init(
+        val strongBox = prefersStrongBox(Build.VERSION.SDK_INT, hasStrongBox())
+        return try {
+            generateKey(strongBox)
+        } catch (error: Exception) {
+            if (!strongBox) throw error
+            generateKey(strongBox = false)
+        }
+    }
+
+    private fun generateKey(strongBox: Boolean): SecretKey {
+        val spec =
             KeyGenParameterSpec
                 .Builder(
                     keyAlias,
@@ -67,10 +93,15 @@ internal class AndroidDeviceCredentialStore(
                 .setRandomizedEncryptionRequired(true)
                 .setUserAuthenticationRequired(false)
                 .setKeySize(KEY_SIZE_BITS)
-                .build(),
-        )
+        if (strongBox && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) spec.setIsStrongBoxBacked(true)
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
+        generator.init(spec.build())
         return generator.generateKey()
     }
+
+    private fun hasStrongBox(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
 
     private companion object {
         const val PREFERENCES_NAME = "tandem_secure_session"
@@ -81,3 +112,8 @@ internal class AndroidDeviceCredentialStore(
         const val KEY_SIZE_BITS = 256
     }
 }
+
+internal fun prefersStrongBox(
+    sdkInt: Int,
+    hasStrongBox: Boolean,
+): Boolean = hasStrongBox && sdkInt >= Build.VERSION_CODES.P

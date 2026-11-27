@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,6 +55,7 @@ class MainActivity : FragmentActivity() {
     private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
     private var notificationPermissionEnabled by mutableStateOf(false)
     private var openSettingsIfBlocked = false
+    private var appSwitcherHidden: Boolean? = null
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             notificationPermissionEnabled = granted && appNotificationsEnabled()
@@ -145,12 +147,10 @@ class MainActivity : FragmentActivity() {
             ) {
                 TandemApp(
                     actualBudgetFiles =
-                        remember {
-                            app.tandemforactual.data.database
-                                .AndroidActualBudgetFiles(applicationContext)
-                        },
+                        remember { sealedBudgetFiles(applicationContext) },
                     planningKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, "planning_keys") },
-                    backgroundBudgetKeyStore = remember { AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE) },
+                    backgroundBudgetKeyStore =
+                        remember { AndroidDeviceCredentialStore(applicationContext, BACKGROUND_KEY_STORE, freshKeyOnWrite = true) },
                     deviceName =
                         Settings.Global
                             .getString(contentResolver, Settings.Global.DEVICE_NAME)
@@ -177,8 +177,20 @@ class MainActivity : FragmentActivity() {
                     screenshotScript = screenshotScript(),
                     postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
                     openSignInPage = signInBrowser::open,
+                    onAppSwitcherPrivacyChanged = ::updateAppSwitcherPrivacy,
                 )
             }
+        }
+    }
+
+    /** Android 13 and later never snapshot Tandem for Recents; earlier versions need the secure flag, which also blocks screenshots. */
+    private fun updateAppSwitcherPrivacy(hidden: Boolean) {
+        if (appSwitcherHidden == hidden) return
+        appSwitcherHidden = hidden
+        if (usesSecureWindowFlag(Build.VERSION.SDK_INT, hidden)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 
@@ -299,6 +311,11 @@ private const val LEGACY_QUICK_ADD_SHORTCUT_ID = "add-transaction"
 private const val STALE_SHARED_FILE_MILLIS = 60L * 60 * 1000
 
 internal const val ACTION_ADD_TRANSACTION = "app.tandemforactual.action.ADD_TRANSACTION"
+
+internal fun usesSecureWindowFlag(
+    sdkInt: Int,
+    hidden: Boolean,
+): Boolean = hidden && sdkInt < Build.VERSION_CODES.TIRAMISU
 
 private fun WindowLayoutInfo.separatingVerticalHinge(): WindowHinge? =
     displayFeatures

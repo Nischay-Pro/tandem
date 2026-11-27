@@ -50,6 +50,7 @@ fun TandemApp(
     postLocalAlert: ((LocalAlert) -> Unit)? = null,
     backgroundBudgetKeyStore: DeviceCredentialStore? = null,
     openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
+    onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
 ) {
     AppShell(
         ShellEnvironment(
@@ -80,6 +81,7 @@ fun TandemApp(
             postLocalAlert,
             backgroundBudgetKeyStore,
             openSignInPage,
+            onAppSwitcherPrivacyChanged,
         ),
     )
 }

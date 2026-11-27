@@ -2,6 +2,7 @@ package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
+import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualSyncException
 import app.tandemforactual.data.actual.ChangeSet
@@ -240,20 +241,8 @@ class TandemApiClient(
             openBudgets[budgetId]?.let { return@withLock it }
             val client = requireServer()
             val files = budgetFiles ?: throw TandemApiException("not_supported")
-            val existing = files.open(budgetId)
-            val fileId = existing?.let(ActualDirectBudget::storedFileId)
-            if (existing != null && fileId == null) {
-                existing.close()
-                files.remove(budgetId)
-            }
             val budget =
-                if (existing != null && fileId != null) {
-                    val key =
-                        ActualDirectBudget.storedKeyInfo(existing)?.let { info ->
-                            runCatching { unlock(budgetId, info) }.onFailure { existing.close() }.getOrThrow()
-                        }
-                    ActualDirectBudget.reopen(existing, client, fileId, budgetId, now, newId, key)
-                } else {
+                reopenStored(client, files, budgetId) ?: run {
                     val file = call { fileFor(client, budgetId) }
                     call {
                         ActualDirectBudget.download(
@@ -263,12 +252,74 @@ class TandemApiClient(
                             newId,
                             expectedGroupId = budgetId,
                             unlock = { info -> unlock(budgetId, info) },
+                            installSealed =
+                                if (files.canSeal) {
+                                    { bytes, key, info ->
+                                        files.installSealed(
+                                            budgetId,
+                                            bytes,
+                                            ActualDirectBudget.copyKey(key, budgetId),
+                                            ActualDirectBudget.encodeKeyInfo(info),
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
                         ) { files.install(budgetId, it) }
                     }
                 }
             openBudgets[budgetId] = budget
             budget
         }
+
+    /**
+     * Opens the device's copy, or null when there's none to open. An encrypted budget's copy is kept encrypted under a
+     * key derived from its Actual key; a plaintext copy left by an earlier version is encrypted the first time it opens.
+     */
+    private suspend fun reopenStored(
+        client: ActualServerClient,
+        files: ActualBudgetFiles,
+        budgetId: String,
+    ): ActualDirectBudget? {
+        files.sealedKeyInfo(budgetId)?.let { stored ->
+            val info = ActualDirectBudget.decodeKeyInfo(stored) ?: return null
+            val key = unlock(budgetId, info)
+            val sealed = runCatching { files.openSealed(budgetId, ActualDirectBudget.copyKey(key, budgetId)) }.getOrNull() ?: return null
+            if (runCatching { sealed.first("SELECT count(*) AS tables FROM sqlite_master") }.isFailure) {
+                runCatching { sealed.close() }
+                return null
+            }
+            return reopen(client, files, sealed, budgetId, key)
+        }
+        val existing = files.open(budgetId) ?: return null
+        val info = ActualDirectBudget.storedKeyInfo(existing)
+        val key = info?.let { runCatching { unlock(budgetId, it) }.onFailure { existing.close() }.getOrThrow() }
+        if (key == null || info == null || !files.canSeal) return reopen(client, files, existing, budgetId, key)
+        existing.close()
+        val copyKey = ActualDirectBudget.copyKey(key, budgetId)
+        val sealed =
+            runCatching {
+                files.sealBudget(budgetId, copyKey, ActualDirectBudget.encodeKeyInfo(info))
+                files.openSealed(budgetId, copyKey)
+            }.getOrNull()
+        return (sealed ?: files.open(budgetId))?.let { reopen(client, files, it, budgetId, key) }
+    }
+
+    private suspend fun reopen(
+        client: ActualServerClient,
+        files: ActualBudgetFiles,
+        db: ActualDatabase,
+        budgetId: String,
+        key: ActualBudgetKey?,
+    ): ActualDirectBudget? {
+        val fileId = ActualDirectBudget.storedFileId(db)
+        if (fileId == null) {
+            db.close()
+            files.remove(budgetId)
+            return null
+        }
+        return ActualDirectBudget.reopen(db, client, fileId, budgetId, now, newId, key)
+    }
 
     /** Derives the budget key from its password and checks it against Actual's test message. */
     private fun unlock(

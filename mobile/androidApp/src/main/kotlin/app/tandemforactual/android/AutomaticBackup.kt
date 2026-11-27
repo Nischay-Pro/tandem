@@ -12,7 +12,6 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.WebDavClient
-import app.tandemforactual.data.database.AndroidActualBudgetFiles
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -83,7 +82,7 @@ class AutomaticBackupWorker(
         budgetId ?: return AutomaticBackupResult.skipped(BackupProblem.NO_BUDGET)
         val storedSession =
             AndroidDeviceCredentialStore(applicationContext).read() ?: return AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
-        val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = AndroidActualBudgetFiles(applicationContext))
+        val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = sealedBudgetFiles(applicationContext))
         return client.use { attemptWith(it, settings, budgetId, storedSession, database, progress) }
     }
 
