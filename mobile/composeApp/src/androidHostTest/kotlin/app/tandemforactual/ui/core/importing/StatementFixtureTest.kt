@@ -90,7 +90,10 @@ class StatementFixtureTest {
         val parsed = parse("card-spending-positive.csv")
 
         assertEquals(listOf(2_598L, 625L, -51_240L, 200L), parsed.transactions.map { it.amountMinor })
-        assertEquals(listOf("AMZN MKTP US*2K4", "BLUE BOTTLE COFFEE", "AUTOPAY PAYMENT - THANK YOU", "FEE"), parsed.transactions.map { it.payeeName })
+        assertEquals(
+            listOf("AMZN MKTP US*2K4", "BLUE BOTTLE COFFEE", "AUTOPAY PAYMENT - THANK YOU", "FEE"),
+            parsed.transactions.map { it.payeeName },
+        )
     }
 
     @Test
