@@ -437,20 +437,18 @@ class ActualRuleDiagnostics(
             4 -> (text.toDouble() * 10_000).let { Range(it + 101, false, it + 1231, false) }
             else -> null
         }
-
-    private companion object {
-        const val SAMPLE = 2000
-        const val MIN_SAMPLE = 20
-        const val BROAD_PERCENT = 40
-        val MERGEABLE = setOf("is", "oneOf")
-        val RANGED = setOf("number", "date")
-
-        fun isPlainSet(action: JsonObject): Boolean {
-            val options = action["options"] as? JsonObject
-            val split = (options?.get("splitIndex") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
-            return action.value("op") == "set" && split == 0 && options?.get("formula") == null && options?.get("template") == null
-        }
-
-        fun String.lowercaseIf(condition: Boolean) = if (condition) lowercase() else this
-    }
 }
+
+private const val SAMPLE = 2000
+private const val MIN_SAMPLE = 20
+private const val BROAD_PERCENT = 40
+private val MERGEABLE = setOf("is", "oneOf")
+private val RANGED = setOf("number", "date")
+
+private fun isPlainSet(action: JsonObject): Boolean {
+    val options = action["options"] as? JsonObject
+    val split = (options?.get("splitIndex") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
+    return action.value("op") == "set" && split == 0 && options?.get("formula") == null && options?.get("template") == null
+}
+
+private fun String.lowercaseIf(condition: Boolean) = if (condition) lowercase() else this

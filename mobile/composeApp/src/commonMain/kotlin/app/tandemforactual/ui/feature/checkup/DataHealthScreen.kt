@@ -118,9 +118,7 @@ internal fun DataHealthScreen(
     val shown = remember { mutableStateMapOf<String, Int>() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        val password = state.encryptedPassword.takeIf { it.isNotBlank() }
-        mobileSession.insights.loadDataHealth(state.selectedBudgetId, password)
-        mobileSession.insights.loadRuleFindings(state.selectedBudgetId, password)
+        loadCheckup(mobileSession, state)
         loading = false
     }
     val ignored =
@@ -175,12 +173,19 @@ internal fun DataHealthScreen(
                 ) { item -> openTransaction(state, navigation, item, isLive = true) }
             }
         }
-        if (ruleFindings.isNotEmpty()) {
-            item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
-        }
+        if (ruleFindings.isNotEmpty()) item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
     }
     CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
     RuleFindingActions(state, navigation, mobileSession, openFinding, ruleTexts, { openFinding = null }, { reload++ }) { failure = it }
+}
+
+private suspend fun loadCheckup(
+    mobileSession: TandemMobileSession,
+    state: AppState,
+) {
+    val password = state.encryptedPassword.takeIf { it.isNotBlank() }
+    mobileSession.insights.loadDataHealth(state.selectedBudgetId, password)
+    mobileSession.insights.loadRuleFindings(state.selectedBudgetId, password)
 }
 
 private fun visibleRuleFindings(
