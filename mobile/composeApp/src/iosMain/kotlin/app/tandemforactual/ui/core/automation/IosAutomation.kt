@@ -1,7 +1,10 @@
 package app.tandemforactual.ui.core.automation
 
+import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.platform.IosEncryptedBudgetVault
+import app.tandemforactual.ui.core.platform.iosReadablePassword
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +39,7 @@ object IosAutomation {
     const val SOURCE = "Shortcuts"
 
     private const val UNEXPECTED_FAILURE = "Tandem couldn’t open this budget. Open Tandem and try again."
+    const val LOCKED = "Open Tandem to unlock this budget."
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -75,20 +79,43 @@ object IosAutomation {
         categoryName: String?,
         completion: (AutomationLeftToSpend?, IosAutomationFailure?) -> Unit,
     ) = answer(completion) {
-        val target = openTarget(AutomationKind.READ)
-        readAutomationBudget(iosTandemDatabase, target.budgetId, AutomationReadInput(category = categoryId), platformTodayIsoDate())
-            .leftToSpend(categoryName?.takeIf { categoryId != null })
+        val target = automationTarget(AppPreferencesStore(iosTandemDatabase).read(), AutomationKind.READ)
+        withReadableBudget(target) { database ->
+            readAutomationBudget(database, target.budgetId, AutomationReadInput(category = categoryId), platformTodayIsoDate())
+                .leftToSpend(categoryName?.takeIf { categoryId != null })
+        }
     }
 
-    /** Accounts and categories to offer; empty while both opt-ins are off or the budget is encrypted. */
+    /** Accounts and categories to offer; empty while both opt-ins are off or an encrypted budget may not be read locked. */
     fun records(completion: (AutomationRecords) -> Unit) {
         scope.launch {
             val records =
                 runCatching {
-                    val target = automationNamesTarget(AppPreferencesStore(iosTandemDatabase).read())
-                    target?.let { automationRecords(iosTandemDatabase, it.budgetId) }
+                    val preferences = AppPreferencesStore(iosTandemDatabase).read()
+                    val readable = preferences["selectedBudgetId"]?.let { iosReadablePassword(it) } != null
+                    val target = automationNamesTarget(preferences, encryptedReadable = readable)
+                    target?.let { withReadableBudget(it) { database -> automationRecords(database, it.budgetId) } }
                 }.getOrNull()
             completion(records ?: AutomationRecords(emptyList(), emptyList()))
+        }
+    }
+
+    /**
+     * Runs [block] on [target]'s data. An encrypted budget opens only with the password the person allowed widgets,
+     * Siri and Shortcuts to use while it's locked; otherwise the call asks them to open Tandem.
+     */
+    private suspend fun <T> withReadableBudget(
+        target: AutomationTarget,
+        block: suspend (TandemDatabase) -> T,
+    ): T {
+        if (!target.encrypted) return block(iosTandemDatabase)
+        val database =
+            iosReadablePassword(target.budgetId)?.let { IosEncryptedBudgetVault().open(target.budgetId, it) }
+                ?: throw AutomationException(AutomationErrorCode.BUDGET_LOCKED, LOCKED)
+        return try {
+            block(database)
+        } finally {
+            database.close()
         }
     }
 

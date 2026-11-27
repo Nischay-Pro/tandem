@@ -21,6 +21,7 @@ import app.tandemforactual.ui.core.platform.IosEncryptedBudgetVault
 import app.tandemforactual.ui.core.platform.IosPrivacyCover
 import app.tandemforactual.ui.core.platform.IosSyncEventSource
 import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
+import app.tandemforactual.ui.core.platform.iosBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
 import app.tandemforactual.ui.core.platform.shareTextOnIos
@@ -99,6 +100,7 @@ private fun createTandemViewController(
                                 .IosActualBudgetFiles()
                         },
                     planningKeyStore = remember { IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys")) },
+                    backgroundBudgetKeyStore = remember { iosBackgroundBudgetKeyStore() },
                     deviceName = UIDevice.currentDevice.name.ifBlank { UIDevice.currentDevice.model },
                     database = database,
                     deviceCredentialStore = remember { IosDeviceCredentialStore() },

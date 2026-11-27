@@ -47,6 +47,10 @@ class WidgetSnapshotTest {
                     widgetSnapshotJson(repository, open + ("privacyModeEnabled" to "true"), "2026-11-26", format),
                 )
                 assertEquals(
+                    """{"version":1,"month":"2026-11","state":"locked","budgetName":"Home"}""",
+                    widgetSnapshotJson(repository, open + ("selectedBudgetEncrypted" to "true"), "2026-11-26", format),
+                )
+                assertEquals(
                     """{"version":1,"month":"2026-11","state":"ready","budgetName":"Home","readyToAssign":"E-50",""" +
                         """"readyToAssignNegative":true,"spent":"E2500","categories":[{"id":"food","name":"Food","group":"Living",""" +
                         """"amount":"E-1240","text":"E1240 over","overspent":true},{"id":"rent","name":"Rent","group":"Living",""" +

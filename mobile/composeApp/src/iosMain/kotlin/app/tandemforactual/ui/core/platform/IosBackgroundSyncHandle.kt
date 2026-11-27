@@ -10,10 +10,13 @@ import app.tandemforactual.data.store.AlertKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.LocalAlert
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.NotificationPolicy
+import app.tandemforactual.data.store.forBudget
 import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.overspendingAlert
+import app.tandemforactual.data.store.overspendingForBudget
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -112,28 +115,21 @@ private suspend fun runSelectedBudgetBackgroundSync(afterAutomation: Boolean): I
         val budget =
             sessionClient.listBudgets().firstOrNull { it.budgetId == budgetId }
                 ?: return IosBackgroundSyncAlerts(taskSucceeded = true)
-        if (budget.isEncrypted) return IosBackgroundSyncAlerts(taskSucceeded = true)
-
-        val repository = LocalBudgetRepository(database) { Clock.System.now().toEpochMilliseconds() }
-        val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(sessionClient))
-        var summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId) }
-        if (sessionClient.claimDueBankSync(budgetId, null, AppPreferencesStore(database), Clock.System.now().toEpochMilliseconds())) {
-            try {
-                sessionClient.runBudgetBankSync(budgetId, null)
-            } catch (_: TandemApiException) {
+        val password = if (budget.isEncrypted) iosReadablePassword(budgetId) ?: return skipped() else null
+        val budgetDatabase =
+            if (password == null) {
+                database
+            } else {
+                IosEncryptedBudgetVault().open(budgetId, password) ?: return forgetReadablePassword()
             }
-            summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId) }
+        try {
+            val repository = LocalBudgetRepository(budgetDatabase) { Clock.System.now().toEpochMilliseconds() }
+            val summary = syncWithBanks(sessionClient, database, repository, budgetId, password)
+            val alerts = SyncAlertChoices(overspendingAlertsEnabled, conflictAlertsEnabled, rejectedAlertsEnabled, password != null)
+            postSyncAlerts(database, repository, preferences, budgetId, summary, alerts)
+        } finally {
+            if (budgetDatabase !== database) budgetDatabase.close()
         }
-        postSyncAlerts(
-            database,
-            repository,
-            preferences,
-            budgetId,
-            summary,
-            overspendingAlertsEnabled,
-            conflictAlertsEnabled,
-            rejectedAlertsEnabled,
-        )
     } catch (error: CancellationException) {
         IosBackgroundSyncAlerts(taskSucceeded = false)
     } catch (_: IosCredentialUnavailableBeforeFirstUnlockException) {
@@ -151,38 +147,72 @@ private suspend fun runSelectedBudgetBackgroundSync(afterAutomation: Boolean): I
     }
 }
 
+private fun skipped() = IosBackgroundSyncAlerts(taskSucceeded = true)
+
+/** The kept password no longer opens the budget, so its password changed; reads wait until it's allowed again. */
+private fun forgetReadablePassword(): IosBackgroundSyncAlerts {
+    runCatching { iosBackgroundBudgetKeyStore().clear() }
+    return IosBackgroundSyncAlerts(taskSucceeded = true)
+}
+
+private suspend fun syncWithBanks(
+    client: TandemApiClient,
+    database: TandemDatabase,
+    repository: LocalBudgetRepository,
+    budgetId: String,
+    password: String?,
+): BudgetSyncSummary {
+    val coordinator = BudgetSyncCoordinator(repository, DirectBudgetSyncRemote(client))
+    val summary = client.withExclusiveSession { coordinator.synchronize(budgetId, password) }
+    if (!client.claimDueBankSync(budgetId, password, AppPreferencesStore(database), Clock.System.now().toEpochMilliseconds())) {
+        return summary
+    }
+    try {
+        client.runBudgetBankSync(budgetId, password)
+    } catch (_: TandemApiException) {
+    }
+    return client.withExclusiveSession { coordinator.synchronize(budgetId, password) }
+}
+
+private class SyncAlertChoices(
+    val overspending: Boolean,
+    val conflicts: Boolean,
+    val rejected: Boolean,
+    val encrypted: Boolean,
+)
+
 private suspend fun postSyncAlerts(
     database: TandemDatabase,
     repository: LocalBudgetRepository,
     preferences: Map<String, String>,
     budgetId: String,
     summary: BudgetSyncSummary,
-    overspendingAlertsEnabled: Boolean,
-    conflictAlertsEnabled: Boolean,
-    rejectedAlertsEnabled: Boolean,
+    choices: SyncAlertChoices,
 ): IosBackgroundSyncAlerts {
+    val policy = NotificationPolicy.read(preferences)
     val overspending =
-        if (overspendingAlertsEnabled) {
-            overspendingAlert(repository, AppPreferencesStore(database), budgetId, platformTodayIsoDate().take(7))
+        if (choices.overspending) {
+            val message = overspendingAlert(repository, AppPreferencesStore(database), budgetId, platformTodayIsoDate().take(7))
+            policy.overspendingForBudget(message, choices.encrypted)
         } else {
             null
         }
-    val policy = NotificationPolicy.read(preferences)
     val minute = platformMinuteOfDay()
     val today = platformTodayIsoDate()
     val settings = repository.readBudgetDisplaySettings(budgetId)
     val format = { minor: Long -> formatCurrency(minor, settings) }
     val store = AppPreferencesStore(database)
+    val post = { alert: LocalAlert -> postIosLocalAlert(policy.forBudget(alert, choices.encrypted)) }
     if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
-        upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+        upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(post)
     }
     if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
-        largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(::postIosLocalAlert)
+        largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(post)
     }
     return if (policy.quietHours?.contains(minute) == true) {
         IosBackgroundSyncAlerts(taskSucceeded = true)
     } else {
-        summary.toAlerts(conflictAlertsEnabled, rejectedAlertsEnabled).copy(overspendingMessage = overspending)
+        summary.toAlerts(choices.conflicts, choices.rejected).copy(overspendingMessage = overspending)
     }
 }
 

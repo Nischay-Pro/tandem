@@ -24,6 +24,7 @@ struct WidgetStatusMessage: View {
         switch status {
         case .noBudget: return "Open Tandem to choose a budget."
         case .hidden: return "Open Tandem to see your budget."
+        case .locked: return "Locked. Open Tandem to unlock it."
         case .outdated: return "Open Tandem to update this month."
         case .ready: return ""
         }

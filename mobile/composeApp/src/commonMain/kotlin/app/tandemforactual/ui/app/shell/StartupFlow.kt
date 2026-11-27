@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.OpenIdLoginProofState
 import app.tandemforactual.ui.core.session.PlanningKeyring
@@ -81,6 +82,11 @@ internal fun StartupEffects(
         val keyFor = BackgroundBudgetKey.budgetIn(env.backgroundBudgetKeyStore)
         if (state.selectedBudgetEncrypted && keyFor != state.selectedBudgetId) state.backgroundSyncEnabled = false
     }
+    LaunchedEffect(state.selectedBudgetId, state.encryptedPassword) {
+        if (keptPasswordChanged(env.backgroundBudgetKeyStore, state.selectedBudgetId, state.encryptedPassword)) {
+            state.backgroundSyncEnabled = false
+        }
+    }
     LaunchedEffect(
         shell.cacheDiscoveryComplete,
         mobileSession.cachedBudgets,
@@ -147,4 +153,16 @@ private fun leaveStartupRoute(
             backStack.add(navigator.newRouteEntry(AppRoute.WELCOME))
         }
     }
+}
+
+/** Forgets a kept budget password that no longer matches the one just used to unlock, because it changed in Actual. */
+internal fun keptPasswordChanged(
+    store: DeviceCredentialStore?,
+    budgetId: String,
+    password: String,
+): Boolean {
+    if (store == null || password.isBlank()) return false
+    val kept = BackgroundBudgetKey.decode(runCatching { store.read() }.getOrNull()) ?: return false
+    if (kept.first != budgetId || kept.second == password) return false
+    return runCatching { store.clear() }.isSuccess
 }

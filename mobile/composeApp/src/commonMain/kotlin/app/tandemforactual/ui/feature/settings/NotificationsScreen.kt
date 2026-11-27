@@ -171,6 +171,14 @@ private fun MoneyAlertsSection(
                 { state.largeTransactionMinor = it },
             )
         }
+        if (state.selectedBudgetEncrypted) {
+            DividerLine()
+            ToggleRow(
+                "Show details",
+                if (state.encryptedAlertDetails) "Names and amounts appear on the lock screen" else "Off: says only what happened",
+                state.encryptedAlertDetails,
+            ) { state.encryptedAlertDetails = it }
+        }
     }
 }
 

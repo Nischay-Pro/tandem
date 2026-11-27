@@ -54,6 +54,7 @@ data class NotificationPolicy(
     val largeTransactionMinor: Long = DEFAULT_LARGE_TRANSACTION_MINOR,
     val billLeadDays: Int = DEFAULT_BILL_LEAD_DAYS,
     val hideAmounts: Boolean = false,
+    val encryptedDetails: Boolean = false,
 ) {
     fun allows(
         kind: AlertKind,
@@ -69,6 +70,7 @@ data class NotificationPolicy(
         const val QUIET_HOURS = "quietHours"
         const val LARGE_TRANSACTION_MINOR = "largeTransactionMinor"
         const val BILL_LEAD_DAYS = "billLeadDays"
+        const val ENCRYPTED_DETAILS = "encryptedAlertDetails"
         const val DEFAULT_LARGE_TRANSACTION_MINOR = 50_000L
         const val DEFAULT_BILL_LEAD_DAYS = 3
 
@@ -82,9 +84,34 @@ data class NotificationPolicy(
                     preferences[LARGE_TRANSACTION_MINOR]?.toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_LARGE_TRANSACTION_MINOR,
                 billLeadDays = preferences[BILL_LEAD_DAYS]?.toIntOrNull()?.coerceIn(0, 14) ?: DEFAULT_BILL_LEAD_DAYS,
                 hideAmounts = preferences["privacyModeEnabled"] == "true",
+                encryptedDetails = preferences[ENCRYPTED_DETAILS] == "true",
             )
     }
 }
+
+/**
+ * What [alert] may say about a budget. An encrypted budget's notifications name the kind of news only, never a payee,
+ * category, schedule or amount, unless the person allowed details.
+ */
+fun NotificationPolicy.forBudget(
+    alert: LocalAlert,
+    encrypted: Boolean,
+): LocalAlert = if (!encrypted || encryptedDetails) alert else alert.copy(message = privateAlertMessage(alert.kind))
+
+/** The overspending message for a budget, kept generic for an encrypted one as [forBudget] does. */
+fun NotificationPolicy.overspendingForBudget(
+    message: String?,
+    encrypted: Boolean,
+): String? = message?.takeIf { !encrypted || encryptedDetails } ?: message?.let { privateAlertMessage(AlertKind.OVERSPENDING) }
+
+private fun privateAlertMessage(kind: AlertKind): String =
+    when (kind) {
+        AlertKind.OVERSPENDING -> "A category is over budget this month."
+        AlertKind.UPCOMING_BILLS -> "A bill is due soon."
+        AlertKind.LARGE_TRANSACTION, AlertKind.UNCATEGORIZED -> "New transaction to review."
+        AlertKind.BANK_SYNC_FAILURE -> "A bank connection needs attention."
+        else -> "Open Tandem to see what changed."
+    }
 
 /** A notification ready to post: a stable key so it replaces rather than stacks, and its text. */
 data class LocalAlert(
