@@ -67,7 +67,7 @@ internal fun AppHeader(
     liveBudgetMonth: LiveBudgetMonthSummary?,
     activitySelectionTotalMinor: Long?,
     conflictTitle: String?,
-    compactLandscape: Boolean = false,
+    compactHeight: Boolean = false,
     onAddTransaction: (() -> Unit)? = null,
     addTransactionEnabled: Boolean = true,
     syncCaption: String? = null,
@@ -79,7 +79,7 @@ internal fun AppHeader(
     val budgetHeaderSlotHeight = maxOf(88.dp, 88.dp * headerFontScale)
     val headerMinHeight =
         if (route == AppRoute.BUDGET || route == AppRoute.BUDGET_CHOOSER) {
-            if (compactLandscape && headerFontScale < 1.5f) 64.dp else budgetHeaderSlotHeight
+            if (compactHeight && headerFontScale < 1.5f) 64.dp else budgetHeaderSlotHeight
         } else {
             64.dp
         }

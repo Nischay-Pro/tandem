@@ -94,6 +94,11 @@ internal object TandemSpacing {
 internal object TandemLayout {
     val readableContentWidth = 720.dp
     val setupContentWidth = 560.dp
+    val railWidth = 80.dp
+    val bottomBarHeight = 88.dp
+    val listPaneWidth = 360.dp
+    val wideListPaneWidth = 420.dp
+    val minDetailPaneWidth = 340.dp
     val listRowMinHeight = 64.dp
     val compactListRowMinHeight = 56.dp
     val listRowHorizontalInset = TandemSpacing.large

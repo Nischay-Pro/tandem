@@ -27,14 +27,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.theme.TandemLayout
+import app.tandemforactual.ui.design.theme.WindowWidthClass
 import app.tandemforactual.ui.design.theme.tandemPalette
 
-internal const val LIST_DETAIL_MIN_WIDTH_DP = 700f
+/** Whether a list and its detail fit side by side in the space they share. */
+internal fun usesListDetailPanes(containerWidthDp: Float): Boolean =
+    containerWidthDp >= TandemLayout.listPaneWidth.value + TandemLayout.minDetailPaneWidth.value
 
-/** Whether a list and its detail fit side by side in this much width. */
-internal fun usesListDetailPanes(widthDp: Float): Boolean = widthDp >= LIST_DETAIL_MIN_WIDTH_DP
-
-internal fun listPaneWidth(widthDp: Float): Dp = if (widthDp >= 1_000f) 420.dp else 360.dp
+/** The list pane widens once the space the panes share reaches Expanded width itself. */
+internal fun listPaneWidth(containerWidthDp: Float): Dp =
+    if (WindowWidthClass.of(containerWidthDp) >= WindowWidthClass.EXPANDED) TandemLayout.wideListPaneWidth else TandemLayout.listPaneWidth
 
 /** A hinge that splits the window, in window pixels, reported while a foldable is half open like a book. */
 data class WindowHinge(

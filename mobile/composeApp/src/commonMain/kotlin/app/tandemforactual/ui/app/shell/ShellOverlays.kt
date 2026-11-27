@@ -16,13 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BudgetSwitchSplash
 import app.tandemforactual.ui.app.UNDO_NOTICE_MILLIS
-import app.tandemforactual.ui.app.isLandscapeViewport
-import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.core.session.ForgetBankIconsWhenOff
 import app.tandemforactual.ui.core.session.planning.FetchExchangeRatesWhenOn
 import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
@@ -35,6 +31,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.feature.auth.AppLockGate
 import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
 import kotlinx.coroutines.delay
@@ -86,15 +83,7 @@ internal fun ShellOverlays(
 private fun UndoNotice(ctx: ShellContext) {
     val mobileSession = ctx.mobileSession
     val undoNotice = mobileSession.transactions.undoNotice
-    val undoAboveTabBar =
-        !usesRailNavigation(
-            with(LocalDensity.current) {
-                LocalWindowInfo.current.containerSize.width
-                    .toDp()
-                    .value
-            },
-            isLandscapeViewport(LocalWindowInfo.current.containerSize.width, LocalWindowInfo.current.containerSize.height),
-        )
+    val undoAboveTabBar = !currentWindowSizeInfo().usesRail
     LaunchedEffect(undoNotice?.id) {
         val shown = undoNotice ?: return@LaunchedEffect
         delay(UNDO_NOTICE_MILLIS)

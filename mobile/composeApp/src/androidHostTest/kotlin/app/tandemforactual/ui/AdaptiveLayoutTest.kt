@@ -1,23 +1,11 @@
 package app.tandemforactual.ui
 
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.design.templates.readablePadding
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class AdaptiveLayoutTest {
-    @Test
-    fun wideWindowsAndLandscapePhonesUseTheSideRail() {
-        assertFalse(usesRailNavigation(widthDp = 412f, isLandscape = false))
-        assertTrue(usesRailNavigation(widthDp = 412f, isLandscape = true))
-        assertTrue(usesRailNavigation(widthDp = 626f, isLandscape = false))
-        assertTrue(usesRailNavigation(widthDp = 800f, isLandscape = false))
-        assertFalse(usesRailNavigation(widthDp = 599f, isLandscape = false))
-    }
-
     @Test
     fun contentStaysReadableAndCenteredOnWideWindows() {
         assertEquals(16.dp, readablePadding(412.dp, 16.dp, 720.dp))

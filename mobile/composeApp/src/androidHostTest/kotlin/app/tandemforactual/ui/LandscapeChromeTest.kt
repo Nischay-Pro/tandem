@@ -109,7 +109,7 @@ class LandscapeChromeTest {
                     liveBudgetMonth = null,
                     activitySelectionTotalMinor = null,
                     conflictTitle = null,
-                    compactLandscape = true,
+                    compactHeight = true,
                     onAddTransaction = { addRequested = true },
                 )
             }

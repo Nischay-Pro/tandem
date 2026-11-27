@@ -141,19 +141,6 @@ internal fun HeaderMenuAction(
     }
 }
 
-internal fun isLandscapeViewport(
-    widthPx: Int,
-    heightPx: Int,
-): Boolean = widthPx > heightPx
-
-internal const val RAIL_NAVIGATION_MIN_WIDTH_DP = 600f
-
-/** Wide windows (tablets, unfolded foldables) and landscape phones use the side rail instead of the tab bar. */
-internal fun usesRailNavigation(
-    widthDp: Float,
-    isLandscape: Boolean,
-): Boolean = isLandscape || widthDp >= RAIL_NAVIGATION_MIN_WIDTH_DP
-
 /** Navigation labels grow with the system font size up to 130%, so they still fit the tab bar and rail. */
 internal fun navigationLabelDensity(density: Density): Density = Density(density.density, density.fontScale.coerceAtMost(1.3f))
 

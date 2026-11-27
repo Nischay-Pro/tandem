@@ -1,5 +1,4 @@
 package app.tandemforactual.ui
-import app.tandemforactual.ui.app.isLandscapeViewport
 import app.tandemforactual.ui.app.showsBottomNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -131,12 +130,5 @@ class BottomNavigationVisibilityTest {
         assertFalse(AppRoute.PERSONALIZE.showsBottomNavigation())
         assertFalse(AppRoute.BUDGET_UNLOCK.showsBottomNavigation())
         assertFalse(AppRoute.SETUP_COMPLETE.showsBottomNavigation())
-    }
-
-    @Test
-    fun landscapeUsesSideRailWhilePortraitAndSquareUseBottomNavigation() {
-        assertTrue(isLandscapeViewport(widthPx = 1_920, heightPx = 1_080))
-        assertFalse(isLandscapeViewport(widthPx = 1_080, heightPx = 1_920))
-        assertFalse(isLandscapeViewport(widthPx = 1_000, heightPx = 1_000))
     }
 }
