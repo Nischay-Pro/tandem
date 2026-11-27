@@ -147,7 +147,11 @@ private fun SchedulePatternFields(draft: ScheduleEditDraft) {
         modifier = Modifier.fillMaxWidth(),
         icon = Lucide.Plus,
     ) {
-        val day = draft.dateDraft.takeLast(2).toIntOrNull()?.coerceIn(1, 31) ?: 1
+        val day =
+            draft.dateDraft
+                .takeLast(2)
+                .toIntOrNull()
+                ?.coerceIn(1, 31) ?: 1
         draft.patternsDraft = draft.patternsDraft + SchedulePattern("day", day)
     }
 }

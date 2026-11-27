@@ -28,7 +28,9 @@ internal fun scheduleDraftValues(
     format: (Long) -> String,
 ): ScheduleDraftValues {
     val config = dateValue as? JsonObject
+
     fun text(key: String) = config?.get(key)?.jsonPrimitive?.contentOrNull
+
     val range = schedule.amountRangeMinor
     val single = schedule.amountMinor ?: 0L
     val outflow = if (range != null) range.second <= 0 else single <= 0

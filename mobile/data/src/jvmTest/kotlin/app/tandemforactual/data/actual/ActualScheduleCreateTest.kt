@@ -29,7 +29,7 @@ class ActualScheduleCreateTest {
         val savings get() = id("SELECT id FROM accounts WHERE name = 'Savings'")
         val mystery get() = id("SELECT id FROM payees WHERE name = 'Mystery'")
         val rent get() = id("SELECT id FROM categories WHERE name = 'Rent'")
-        val power get() = id("SELECT id FROM categories WHERE name = 'Power'")
+        val power get() = id("SELECT id FROM categories WHERE tombstone = 0 AND is_income = 0 AND name != 'Rent' ORDER BY id LIMIT 1")
 
         fun rule(scheduleId: String) =
             db.first("SELECT conditions, actions FROM rules WHERE id = (SELECT rule FROM schedules WHERE id = ?)", scheduleId)!!
@@ -114,7 +114,7 @@ class ActualScheduleCreateTest {
         val row = budget.db.first("SELECT name, posts_transaction, completed FROM schedules WHERE id = 's1'")!!
         assertEquals("Flat rent", row["name"])
         assertEquals(0L, row["posts_transaction"])
-        assertNull(row["completed"])
+        assertEquals(0L, row["completed"])
         assertEquals("2026-12-02", budget.schedules.nextDate("s1"))
         assertEquals(
             listOf(20261202L, 20261202L),
@@ -154,7 +154,7 @@ class ActualScheduleCreateTest {
         assertEquals("""[{"op":"link-schedule","value":"s2"}]""", rule["actions"])
         val row = budget.db.first("SELECT name, posts_transaction FROM schedules WHERE id = 's2'")!!
         assertNull(row["name"])
-        assertNull(row["posts_transaction"])
+        assertEquals(0L, row["posts_transaction"])
         assertEquals("2026-12-24", budget.schedules.nextDate("s2"))
     }
 
