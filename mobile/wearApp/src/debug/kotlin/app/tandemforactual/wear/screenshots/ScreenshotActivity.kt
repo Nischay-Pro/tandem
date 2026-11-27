@@ -50,6 +50,9 @@ class ScreenshotActivity : ComponentActivity() {
                 syncedAtEpochMs = 1_795_255_200_000L,
                 toBudgetMinor = 12_500,
                 leftToSpendMinor = 84_265,
+                perDayMinor = 9_362,
+                daysLeft = 9,
+                nextBillOnGlance = true,
                 categories =
                     listOf(
                         WatchCategory(

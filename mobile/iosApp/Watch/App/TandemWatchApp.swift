@@ -44,6 +44,7 @@ struct WatchRootView: View {
                             addingTransaction = true
                         } label: {
                             Image(systemName: "plus")
+                                .foregroundStyle(.black)
                         }
                         .accessibilityLabel("Add transaction")
                     }

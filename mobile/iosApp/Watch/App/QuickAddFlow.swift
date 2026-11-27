@@ -36,7 +36,7 @@ struct QuickAddFlow: View {
             AmountKeypad(amount: $amount) {
                 path.append(nextStep(after: nil))
             }
-            .navigationTitle("Amount")
+            .navigationTitle(amount.isValid ? amount.display : "Amount")
             .navigationDestination(for: Step.self) { step in
                 switch step {
                 case .category: categoryStep
@@ -170,25 +170,6 @@ private struct AmountKeypad: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            HStack {
-                Text(amount.display)
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: amount.display)
-                Spacer(minLength: 2)
-                Button(action: onNext) {
-                    Image(systemName: "arrow.right")
-                        .font(.body.weight(.bold))
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.tandemAccent)
-                .disabled(!amount.isValid)
-                .frame(width: 44)
-                .accessibilityLabel("Next")
-            }
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(keys, id: \.self) { key in
                     Button {
@@ -205,6 +186,16 @@ private struct AmountKeypad: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .bottomBar) {
+                Button(action: onNext) {
+                    Image(systemName: "arrow.right")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(.black)
+                }
+                .tint(.tandemAccent)
+                .disabled(!amount.isValid)
+                .accessibilityLabel("Next")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 TextFieldLink(prompt: Text("Say an amount")) {
                     Image(systemName: "mic")
