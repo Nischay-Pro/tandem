@@ -10,9 +10,11 @@ import app.tandemforactual.api.client.budgetChangeHistory
 import app.tandemforactual.api.client.budgetDataHealth
 import app.tandemforactual.api.client.budgetRuleDiagnostics
 import app.tandemforactual.api.client.budgetTaggedPayments
+import app.tandemforactual.api.client.discoverBudgetSchedules
 import app.tandemforactual.api.client.exportBudgetTransactions
 import app.tandemforactual.api.client.previewBudgetRule
 import app.tandemforactual.api.client.undoBudgetChange
+import app.tandemforactual.data.actual.DiscoveredSchedule
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
@@ -100,6 +102,19 @@ internal class InsightsController(
     ): String? =
         try {
             apiClient.exportBudgetTransactions(budgetId, from, to, encryptionPassword)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    /** Recurring payments that could become schedules, or null when the budget couldn't be read. */
+    suspend fun discoverSchedules(
+        budgetId: String,
+        encryptionPassword: String?,
+    ): List<DiscoveredSchedule>? =
+        try {
+            apiClient.discoverBudgetSchedules(budgetId, encryptionPassword)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

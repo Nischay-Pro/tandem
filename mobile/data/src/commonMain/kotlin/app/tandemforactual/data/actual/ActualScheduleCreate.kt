@@ -9,7 +9,8 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * `schedule/create` with the conditions Actual's schedule form builds (`updateScheduleConditions`): payee, account, an
  * approximate date and the amount. [fields] uses the names [ActualScheduleEdits.edit] takes, plus `linkTransactionIds`
- * for the transactions the new schedule should claim. Creating a schedule that already exists does nothing, so a resent
+ * for the transactions the new schedule should claim. A schedule from [ActualScheduleDiscovery] sets `discovered` and
+ * `dateOp` and is written in the order "Find schedules" writes it. Creating a schedule that already exists does nothing, so a resent
  * create can't add a second one.
  */
 fun ActualScheduleEdits.create(
@@ -24,15 +25,40 @@ fun ActualScheduleEdits.create(
     val payeeId = fields.value("payeeId") as String?
     val categoryId = fields.value("categoryId") as String?
     requireEditTargets(accountId, payeeId, categoryId)
+    val amountCondition = scheduleCondition(fields.value("amountOp") as String, "amount", amount)
+    val discovered = fields.value("discovered") == true
     val conditions =
-        listOfNotNull(
-            scheduleCondition("is", "payee", payeeId?.let { JsonPrimitive(it) } ?: JsonNull),
-            accountId?.let { scheduleCondition("is", "account", JsonPrimitive(it)) },
-            scheduleCondition("isapprox", "date", date),
-            scheduleCondition(fields.value("amountOp") as String, "amount", amount),
-        )
+        if (discovered) {
+            val dateOp = fields.value("dateOp") as? String
+            if (dateOp !in setOf("is", "isapprox") || accountId == null || payeeId == null) fail("Choose a schedule found in this budget")
+            listOf(
+                scheduleCondition("is", "account", JsonPrimitive(accountId)),
+                scheduleCondition("is", "payee", JsonPrimitive(payeeId)),
+                scheduleCondition(dateOp!!, "date", date),
+                amountCondition,
+            )
+        } else {
+            listOfNotNull(
+                scheduleCondition("is", "payee", payeeId?.let { JsonPrimitive(it) } ?: JsonNull),
+                accountId?.let { scheduleCondition("is", "account", JsonPrimitive(it)) },
+                scheduleCondition("isapprox", "date", date),
+                amountCondition,
+            )
+        }
     insertSchedule(id, fields, conditions, listOfNotNull(categoryId?.let { setAction("category", it) }))
     linkTransactions(id, fields["linkTransactionIds"])
+    if (discovered) linkMatching(id, conditions)
+}
+
+/** What Actual's "Find schedules" does after creating one: links every transaction its conditions match. */
+private fun ActualScheduleEdits.linkMatching(
+    scheduleId: String,
+    conditions: List<JsonObject>,
+) {
+    val rule = JsonObject(mapOf("conditionsOp" to JsonPrimitive("and"), "conditions" to JsonArray(conditions)))
+    ActualRuleEngine(db) { fail("Choose a schedule found in this budget") }
+        .preview(rule, Int.MAX_VALUE)
+        .forEach { writer.update("transactions", it, mapOf("schedule" to scheduleId)) }
 }
 
 /** Inserts the schedule's rule, next date and row in the order `createSchedule` writes them. */

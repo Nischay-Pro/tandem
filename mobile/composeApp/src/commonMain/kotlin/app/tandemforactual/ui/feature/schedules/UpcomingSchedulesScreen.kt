@@ -2,8 +2,10 @@
 
 package app.tandemforactual.ui.feature.schedules
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Text
@@ -25,6 +27,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatTransactionListDate
+import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -43,6 +46,8 @@ import app.tandemforactual.ui.feature.schedules.components.ScheduleCreatePane
 import app.tandemforactual.ui.feature.schedules.components.ScheduleCreateSheet
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDeleteConfirmationDialog
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDialogState
+import app.tandemforactual.ui.feature.schedules.components.ScheduleDiscoverySheet
+import app.tandemforactual.ui.feature.schedules.components.ScheduleDiscoveryState
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDraftValues
 import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDatePicker
 import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDraft
@@ -50,10 +55,12 @@ import app.tandemforactual.ui.feature.schedules.components.ScheduleEditForm
 import app.tandemforactual.ui.feature.schedules.components.ScheduleSelectionState
 import app.tandemforactual.ui.feature.schedules.components.scheduleDraftValues
 import com.composables.icons.lucide.CalendarDays
+import com.composables.icons.lucide.CalendarSearch
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 @Composable
@@ -69,19 +76,14 @@ internal fun UpcomingSchedulesScreen(
     // after Back returns to an earlier Upcoming bills route entry.
     val selection = remember(state.selectedBudgetId) { ScheduleSelectionState() }
     val dialog = remember(state.selectedBudgetId, selection.selectedScheduleId) { ScheduleDialogState() }
+    val discovery = remember(state.selectedBudgetId) { ScheduleDiscoveryState() }
     ScheduleOpenRequests(state, schedules, selection, dialog)
     val selectedSchedule = schedules.firstOrNull { it.id == selection.selectedScheduleId }
     val dateValue =
         remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
             selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
         }
-    val editDraft =
-        rememberSaveable(state.selectedBudgetId, selection.selectedScheduleId, saver = ScheduleEditDraft.Saver) {
-            val categoryId = selectedSchedule?.let { scheduleCategoryId(mobileSession.ruleRecords, it.ruleId) }
-            ScheduleEditDraft(
-                selectedSchedule?.let { scheduleDraftValues(it, dateValue, categoryId, state::formatAmount) } ?: ScheduleDraftValues(),
-            )
-        }
+    val editDraft = rememberScheduleEditDraft(state, mobileSession, selection, selectedSchedule, dateValue)
     val createDraft =
         rememberSaveable(state.selectedBudgetId, selection.createKey, saver = ScheduleEditDraft.Saver) {
             ScheduleEditDraft(selection.createValues)
@@ -119,7 +121,7 @@ internal fun UpcomingSchedulesScreen(
         emptyTitle = "Choose a bill",
         emptyMessage = "Post it, skip it or change it here.",
         list = { detailInPane ->
-            UpcomingScheduleList(state, mobileSession, schedules, selection, dialog, detailInPane)
+            UpcomingScheduleList(state, mobileSession, schedules, selection, dialog, detailInPane, discovery)
             if (!detailInPane) {
                 ScheduleActionsSheet(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
                 ScheduleCreateSheet(mobileSession, selection, createForm)
@@ -136,7 +138,26 @@ internal fun UpcomingSchedulesScreen(
         ScheduleDeleteDialog(state, mobileSession, selectedSchedule, selection, dialog)
     }
     ScheduleEditDatePicker(if (selection.creating) createDraft else editDraft)
+    ScheduleDiscoverySheet(state, mobileSession, discovery) { found ->
+        val payee = payeeRecords.firstOrNull { it.recordId == found.payeeId }?.recordName() ?: "Payee"
+        payee to (accounts.firstOrNull { it.id == found.accountId }?.name ?: "Account")
+    }
 }
+
+/** The edit form's draft, filled from the selected schedule and its rule's category. */
+@Composable
+private fun rememberScheduleEditDraft(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    selection: ScheduleSelectionState,
+    selectedSchedule: LiveScheduleSummary?,
+    dateValue: JsonElement?,
+): ScheduleEditDraft =
+    rememberSaveable(state.selectedBudgetId, selection.selectedScheduleId, saver = ScheduleEditDraft.Saver) {
+        val categoryId = selectedSchedule?.let { scheduleCategoryId(mobileSession.ruleRecords, it.ruleId) }
+        val values = selectedSchedule?.let { scheduleDraftValues(it, dateValue, categoryId, state::formatAmount) }
+        ScheduleEditDraft(values ?: ScheduleDraftValues())
+    }
 
 @Composable
 private fun ScheduleDeleteDialog(
@@ -193,6 +214,7 @@ private fun UpcomingScheduleList(
     selection: ScheduleSelectionState,
     dialog: ScheduleDialogState,
     detailInPane: Boolean,
+    discovery: ScheduleDiscoveryState,
 ) {
     val openId = selection.selectedScheduleId.takeIf { detailInPane && selection.showScheduleEditor && !selection.creating }
     TandemBackHandler(
@@ -208,7 +230,14 @@ private fun UpcomingScheduleList(
     )
     PageLazyColumn {
         item(key = "upcoming-schedules-header") {
-            ScheduleCountRow(schedules.size, canAdd = !state.readOnlyMode) {
+            ScheduleCountRow(
+                schedules.size,
+                canAdd = !state.readOnlyMode,
+                onFind = {
+                    mobileSession.feedback.clearBudgetActionMessage()
+                    discovery.open()
+                },
+            ) {
                 mobileSession.feedback.clearBudgetActionMessage()
                 selection.startCreating(ScheduleDraftValues(date = platformTodayIsoDate(), endDate = platformTodayIsoDate()))
             }
@@ -228,6 +257,7 @@ private fun UpcomingScheduleList(
 private fun ScheduleCountRow(
     count: Int,
     canAdd: Boolean,
+    onFind: () -> Unit,
     onAdd: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {
@@ -237,6 +267,15 @@ private fun ScheduleCountRow(
             color = tandemPalette.muted,
             fontSize = TandemTypography.caption,
         )
+        TandemIconButton(
+            Lucide.CalendarSearch,
+            "Find recurring payments",
+            enabled = canAdd,
+            tint = tandemPalette.accent,
+            containerColor = tandemPalette.raised,
+            onClick = onFind,
+        )
+        Spacer(Modifier.width(TandemSpacing.small))
         TandemIconButton(
             Lucide.Plus,
             "Add schedule",
@@ -261,7 +300,7 @@ private fun LazyListScope.upcomingScheduleItems(
             SurfaceCard {
                 EmptyState(
                     "No upcoming bills",
-                    "Add a schedule for rent, subscriptions or pay, and Tandem shows when each one is due.",
+                    "Add a schedule for rent, subscriptions or pay, or find the ones already in your transactions.",
                     modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 )
             }

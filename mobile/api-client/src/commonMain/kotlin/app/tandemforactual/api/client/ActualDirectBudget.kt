@@ -18,6 +18,7 @@ import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.DiscoveredSchedule
 import app.tandemforactual.data.actual.GoalTemplateEngine
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
@@ -28,6 +29,7 @@ import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.actual.ZipArchive
+import app.tandemforactual.data.actual.discoverSchedules as findSchedules
 import app.tandemforactual.data.database.ActualBudgetFiles
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.AccountMovement
@@ -264,6 +266,8 @@ class ActualDirectBudget private constructor(
         tag: String,
         fromDate: String,
     ): List<TaggedPayment> = locked { reader.taggedPayments(tag, fromDate) }
+
+    suspend fun discoverSchedules(today: String): List<DiscoveredSchedule> = locked { findSchedules(db, today) }
 
     suspend fun previewRule(rule: JsonObject): List<HealthRow> =
         locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }

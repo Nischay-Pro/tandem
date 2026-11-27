@@ -446,6 +446,7 @@ class TandemApiClientTest {
             assertFailsWith<IllegalArgumentException> { client.manageBudgetSchedule("group", schedule.id, "post", null, null) }
             assertFailsWith<TandemApiException> { client.manageBudgetSchedule("group", schedule.id, "explode", null, null) }
             client.manageBudgetSchedule("group", schedule.id, "delete", null, null)
+            assertTrue(client.discoverBudgetSchedules("group", null).all { it.payeeId.isNotEmpty() })
             client.manageBudgetSchedule(
                 "group",
                 "created-schedule",
