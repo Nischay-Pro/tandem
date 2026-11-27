@@ -44,6 +44,7 @@ import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.homeLayout
 import app.tandemforactual.ui.core.state.isBudgetSectionCollapsed
 import app.tandemforactual.ui.core.state.isCategoryPinned
+import app.tandemforactual.ui.core.state.isTrackingBudget
 import app.tandemforactual.ui.core.state.presentBudgetAssignment
 import app.tandemforactual.ui.core.state.toggleBudgetSection
 import app.tandemforactual.ui.core.ui.AutoAssignSheet
@@ -71,6 +72,7 @@ import app.tandemforactual.ui.feature.budget.components.BudgetScreenDock
 import app.tandemforactual.ui.feature.budget.components.BudgetScreenSheets
 import app.tandemforactual.ui.feature.budget.components.HoldSheetFigures
 import app.tandemforactual.ui.feature.budget.components.MonthNoteSection
+import app.tandemforactual.ui.feature.budget.components.TrackingMonthSummaryCard
 import app.tandemforactual.ui.feature.budget.components.budgetGroupItems
 import app.tandemforactual.ui.feature.budget.components.budgetMonthsTableItems
 import app.tandemforactual.ui.feature.budget.components.budgetOverviewItems
@@ -109,7 +111,7 @@ internal fun BudgetScreen(
     LaunchedEffect(reorder.selectedGroupOrderId) {
         onGroupReorderModeChange(reorder.selectedGroupOrderId != null)
     }
-    val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
+    val isTrackingBudget = state.isTrackingBudget
     val groups = visibleBudgetGroups(mobileSession, state.selectedBudgetId, liveBudgetMonth)
     val displayGroups = rememberOrderedGroups(state, mobileSession, groups, reorder.groupDrag)
     val readyToAssignMinor = liveBudgetMonth?.toBudgetMinor ?: 0
@@ -239,7 +241,6 @@ private fun BudgetList(
     val state = context.state
     val mobileSession = context.mobileSession
     val isLiveBudget = context.isLiveBudget
-    val isTrackingBudget = context.isTrackingBudget
     val liveBudgetMonth = month.liveBudgetMonth
     val sectionSpacing = if (context.compact) 10.dp else 16.dp
     val groupReorderStatus = mobileSession.budgetQueue.budgetReorderStatus(state.selectedBudgetId, BUDGET_GROUP_ORDER_SCOPE)
@@ -262,7 +263,6 @@ private fun BudgetList(
             context.navigation,
             mobileSession,
             isLiveBudget,
-            isTrackingBudget,
             liveBudgetMonth,
             groupReorderStatus,
             onCopyLastMonth,
@@ -271,12 +271,11 @@ private fun BudgetList(
         if (
             isLiveBudget &&
             liveBudgetMonth == null &&
-            !isTrackingBudget &&
             !mobileSession.isLoadingSelectedBudgetMonth &&
             mobileSession.selectedBudgetMonthRecord == null
         ) {
             item(key = "budget-month-empty") { BudgetMonthEmptyCard() }
-        } else if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
+        } else if (isLiveBudget && liveBudgetMonth == null) {
             item(key = "budget-month-loading") { BudgetMonthLoadingCard(state.selectedMonth) }
         } else {
             budgetMonthItems(context, month, months, pinnedCategories, sectionSpacing, onOpenHold, onAutoAssign)
@@ -295,7 +294,12 @@ private fun LazyListScope.budgetMonthItems(
     onAutoAssign: () -> Unit,
 ) {
     val state = context.state
-    if (!context.isTrackingBudget) {
+    if (context.isTrackingBudget) {
+        val summaryKey = "live:${state.selectedBudgetId}:tracking-summary:${state.selectedMonthId}"
+        item(key = summaryKey) {
+            TrackingMonthSummaryCard(state, summaryKey, month.groups, context.billsDueMinor, sectionSpacing)
+        }
+    } else {
         val summaryKey = "live:${state.selectedBudgetId}:summary:${state.selectedMonthId}"
         item(key = summaryKey) {
             BudgetMonthSummaryCard(

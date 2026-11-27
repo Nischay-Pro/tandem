@@ -35,24 +35,6 @@ private val ID_OPS = listOf("is", "isNot", "oneOf", "notOneOf")
 private val TEXT_OPS = listOf("is", "isNot", "contains", "doesNotContain", "matches")
 private val AMOUNT_OPS = listOf("is", "isapprox", "isbetween", "gt", "gte", "lt", "lte")
 
-internal fun ruleOperatorLabel(op: String): String =
-    when (op) {
-        "is" -> "is"
-        "isNot" -> "is not"
-        "oneOf" -> "is one of"
-        "notOneOf" -> "is not one of"
-        "contains" -> "contains"
-        "doesNotContain" -> "doesn’t contain"
-        "matches" -> "matches pattern"
-        "isapprox" -> "is about"
-        "isbetween" -> "is between"
-        "gt" -> "is more than"
-        "gte" -> "is at least"
-        "lt" -> "is less than"
-        "lte" -> "is at most"
-        else -> op
-    }
-
 internal enum class RuleActionKind(
     val label: String,
     val field: String?,

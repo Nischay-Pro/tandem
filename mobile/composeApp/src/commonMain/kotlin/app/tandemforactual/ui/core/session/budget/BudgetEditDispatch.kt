@@ -6,6 +6,7 @@ import app.tandemforactual.api.client.importBudgetAccountTransactions
 import app.tandemforactual.api.client.setBudgetAccountNote
 import app.tandemforactual.api.client.setBudgetCategoryGroupNote
 import app.tandemforactual.api.client.setBudgetMonthNote
+import app.tandemforactual.api.client.setBudgetType
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
@@ -74,6 +75,7 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.SET_ACCOUNT_NOTE,
         BudgetReorderKind.SET_MONTH_NOTE,
         -> Dispatched(sendNote(request))
+        BudgetReorderKind.SET_BUDGET_TYPE -> Dispatched(sendBudgetType(request))
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
         BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -370,6 +372,24 @@ private suspend fun BudgetEditQueue.sendNote(request: QueuedBudgetReorder): Bool
             BudgetReorderKind.SET_MONTH_NOTE -> api.setBudgetMonthNote(budgetId, id, note, password, key)
             else -> api.setBudgetCategoryNote(budgetId, id, note, password, key)
         }
+    }
+}
+
+/** Switching between envelope and tracking budgeting. */
+private suspend fun BudgetEditQueue.sendBudgetType(request: QueuedBudgetReorder): Boolean {
+    val payload = request.requirePayload()
+    return host.feedback.performBudgetAction(
+        request.budgetId,
+        request.encryptionPassword,
+        "Couldn’t switch the budget type.",
+        null,
+    ) {
+        host.apiClient.setBudgetType(
+            request.budgetId,
+            payload.requiredString("type"),
+            request.encryptionPassword,
+            request.operationId,
+        )
     }
 }
 

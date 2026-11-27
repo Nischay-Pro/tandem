@@ -21,8 +21,7 @@ internal fun parseQif(
     if (current.isNotEmpty()) records += current
     var skipped = 0
     var firstSkippedReason: String? = null
-    val generatedIds = mutableMapOf<String, Int>()
-    val usedIds = mutableSetOf<String>()
+    val ids = StatementImportIds()
     val fileDateOrder = statementDateOrderFor(records.map { it['D'].orEmpty() }, dateOrder)
     val transactions =
         records.mapIndexedNotNull { index, fields ->
@@ -37,11 +36,13 @@ internal fun parseQif(
                 }
                 val payee = fields['P'].orEmpty().ifBlank { "Imported transaction" }.take(200)
                 StatementImportDraft(
-                    date,
-                    amount,
-                    payee,
-                    fields['M']?.take(500),
-                    uniqueImportId("", date, amount, payee, generatedIds, usedIds),
+                    date = date,
+                    amountMinor = amount,
+                    payeeName = payee,
+                    notes = fields['M']?.take(500),
+                    importedId = ids.next(date, amount, payee),
+                    bankId = fields['N']?.trim()?.takeIf { it.any(Char::isDigit) }?.take(200),
+                    rowNumber = rowNumber,
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++
@@ -64,15 +65,7 @@ internal fun parseOfx(
             .toList()
     var skipped = 0
     var firstSkippedReason: String? = null
-    val generatedIds = mutableMapOf<String, Int>()
-    val usedIds = mutableSetOf<String>()
-    val sourceIds = records.map { ofxField(it, "FITID").take(200) }.filter(String::isNotBlank)
-    val duplicateSourceIds =
-        sourceIds
-            .groupingBy { it }
-            .eachCount()
-            .filterValues { it > 1 }
-            .keys
+    val ids = StatementImportIds()
     val transactions =
         records.mapIndexedNotNull { index, record ->
             val rowNumber = index + 1
@@ -85,13 +78,14 @@ internal fun parseOfx(
                     return@mapIndexedNotNull null
                 }
                 val payee = ofxField(record, "NAME").ifBlank { ofxField(record, "MEMO") }.ifBlank { "Imported transaction" }.take(200)
-                val sourceId = ofxField(record, "FITID").take(200).takeUnless { it.isBlank() || it in duplicateSourceIds }.orEmpty()
                 StatementImportDraft(
-                    date,
-                    amount,
-                    payee,
-                    ofxField(record, "MEMO").take(500).ifBlank { null },
-                    uniqueImportId(sourceId, date, amount, payee, generatedIds, usedIds),
+                    date = date,
+                    amountMinor = amount,
+                    payeeName = payee,
+                    notes = ofxField(record, "MEMO").take(500).ifBlank { null }?.takeUnless { it == payee },
+                    importedId = ids.next(date, amount, payee),
+                    bankId = ofxField(record, "FITID").take(200).ifBlank { null },
+                    rowNumber = rowNumber,
                 )
             } catch (error: IllegalArgumentException) {
                 skipped++

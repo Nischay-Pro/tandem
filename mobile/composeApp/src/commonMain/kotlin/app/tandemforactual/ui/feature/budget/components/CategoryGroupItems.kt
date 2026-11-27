@@ -94,15 +94,8 @@ internal fun LazyListScope.categoryGroupHeaderItems(
         }
     }
     item(key = "category-group-summary:${group.id}") {
-        AmountHero(
-            if (context.isTrackingBudget) "Activity this month" else "Assigned this month",
-            state.formatCurrency(if (context.isTrackingBudget) group.activityMinor else group.assignedMinor),
-            if (context.isTrackingBudget) {
-                null
-            } else {
-                "${state.formatCurrency(group.balanceMinor)} available"
-            },
-        )
+        val hero = categoryGroupHero(group, context.isTrackingBudget) { state.formatCurrency(it) }
+        AmountHero(hero.first, state.formatCurrency(hero.second), hero.third)
     }
     if (context.isLiveBudget) {
         item(key = "category-group-note:${group.id}") { CategoryGroupNoteSection(state, mobileSession, group) }
@@ -195,7 +188,7 @@ private fun LazyItemScope.CategoryGroupCategoryCard(
                 ),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CategoryGroupCategoryRow(state, category, isReordering, context.isTrackingBudget)
+            CategoryGroupCategoryRow(state, category, isReordering, budgetCategoryWords(group.isIncome, context.isTrackingBudget))
             if (isReordering && isLiveBudget) {
                 CategoryGroupCategoryReorderActions(category, orderedCategories, context)
             }
@@ -208,21 +201,13 @@ private fun RowScope.CategoryGroupCategoryRow(
     state: AppState,
     category: LiveCategorySummary,
     isReordering: Boolean,
-    isTrackingBudget: Boolean,
+    words: BudgetCategoryWords,
 ) {
     val palette = tandemPalette
     ListRow(
         category.name,
-        if (isReordering) {
-            null
-        } else if (isTrackingBudget) {
-            "Activity ${state.formatCurrency(category.activityMinor)}"
-        } else {
-            "Spent ${state.formatCurrency(
-                kotlin.math.abs(category.activityMinor),
-            )} · ${state.formatCurrency(category.balanceMinor)} available"
-        },
-        if (isReordering || isTrackingBudget) null else state.formatCurrency(category.assignedMinor),
+        if (isReordering) null else categoryRowSummary(category, words) { state.formatCurrency(it) },
+        if (isReordering || words.plan == null) null else state.formatCurrency(category.assignedMinor),
         leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
         options =
             ListRowOptions(
@@ -268,3 +253,28 @@ private fun CategoryGroupCategoryReorderActions(
         onDragStopped = { reorder.dropDrag(category.id) },
     )
 }
+
+/** The group page's headline: what was planned (or received, for income), and what is left of it. */
+internal fun categoryGroupHero(
+    group: LiveCategoryGroupSummary,
+    isTrackingBudget: Boolean,
+    format: (Long) -> String,
+): Triple<String, Long, String?> =
+    when {
+        group.isIncome ->
+            Triple("Received this month", group.activityMinor, "${format(group.assignedMinor)} expected".takeIf { isTrackingBudget })
+        isTrackingBudget -> Triple("Budgeted this month", group.assignedMinor, "${format(group.balanceMinor)} remaining")
+        else -> Triple("Assigned this month", group.assignedMinor, "${format(group.balanceMinor)} available")
+    }
+
+/** One category's month in a line: spending and what is left, or income received against what was expected. */
+internal fun categoryRowSummary(
+    category: LiveCategorySummary,
+    words: BudgetCategoryWords,
+    format: (Long) -> String,
+): String =
+    when {
+        words.isIncome && words.plan != null -> "Received ${format(category.activityMinor)} of ${format(category.assignedMinor)} expected"
+        words.isIncome -> "Received ${format(category.activityMinor)}"
+        else -> "Spent ${format(kotlin.math.abs(category.activityMinor))} · ${format(category.balanceMinor)} ${words.left}"
+    }

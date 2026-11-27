@@ -209,6 +209,7 @@ internal enum class BudgetReorderKind {
     SET_ACCOUNT_NOTE,
     SET_MONTH_NOTE,
     IMPORT_STATEMENT,
+    SET_BUDGET_TYPE,
 
     /** One request that saves every folded reorder draft (see [BudgetReorderQueueState.foldOrderDrafts]). */
     SET_ORDER,
@@ -299,6 +300,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.SET_MONTH_NOTE,
             -> "Couldn’t save this note."
             BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
+            BudgetReorderKind.SET_BUDGET_TYPE -> "Couldn’t switch the budget type."
             BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
         }
     return if (detail == null) fallback else "$detail."

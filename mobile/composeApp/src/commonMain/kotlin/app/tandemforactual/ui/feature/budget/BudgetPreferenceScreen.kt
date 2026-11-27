@@ -52,21 +52,26 @@ internal fun BudgetPreferencesScreen(
             DividerLine()
             ListRow("Start of week", "Follows the device locale", formatFirstWeekday())
         }
+        if (state.selectedBudgetId.isNotBlank()) BudgetTypeSection(state, mobileSession)
         SectionCard("Planning") {
             ListRow(
-                "Available category amounts",
+                if (isTrackingBudget) "Remaining category amounts" else "Available category amounts",
                 "From the Actual budget",
             )
             DividerLine()
+            ListRow(
+                if (isTrackingBudget) "Roll the balance into next month" else "Roll overspending into next month",
+                "Turn on for a category from its page in Budget",
+                "Per category",
+            )
+        }
+        PreviewNote(
             if (isTrackingBudget) {
-                ListRow("Category rollover", "Change this in Actual", "Read-only")
+                "Without rollover, each month starts from its own plan. With it, a category’s leftover or overspending carries forward."
             } else {
-                ListRow("Roll overspending into next month", "Turn on for a category from its page in Budget", "Per category")
-            }
-        }
-        if (!isTrackingBudget) {
-            PreviewNote("Unused money always stays in its category. Overspending rollover only changes where a shortfall comes from.")
-        }
+                "Unused money always stays in its category. Overspending rollover only changes where a shortfall comes from."
+            },
+        )
     }
 }
 

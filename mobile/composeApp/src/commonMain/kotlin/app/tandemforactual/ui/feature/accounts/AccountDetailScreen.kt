@@ -18,8 +18,10 @@ import app.tandemforactual.ui.core.importing.StatementCsvColumnMapping
 import app.tandemforactual.ui.core.importing.StatementCsvLayout
 import app.tandemforactual.ui.core.importing.StatementCsvMappingPreference
 import app.tandemforactual.ui.core.importing.StatementDateOrder
+import app.tandemforactual.ui.core.importing.StatementFormat
 import app.tandemforactual.ui.core.importing.StatementImportParseException
 import app.tandemforactual.ui.core.importing.StatementParseResult
+import app.tandemforactual.ui.core.importing.detectStatementFormat
 import app.tandemforactual.ui.core.importing.inspectStatementCsv
 import app.tandemforactual.ui.core.importing.parseStatementImport
 import app.tandemforactual.ui.core.importing.statementCsvMappingPreferenceFor
@@ -178,6 +180,7 @@ internal class StatementImportState(
     importPreviewLoading: MutableState<Boolean>,
     importPreviewRetry: MutableState<Int>,
     showDialog: MutableState<Boolean>,
+    isQif: MutableState<Boolean>,
 ) {
     var pickedFile by pickedFile
     var parseResult by parseResult
@@ -191,6 +194,7 @@ internal class StatementImportState(
     var importPreviewLoading by importPreviewLoading
     var importPreviewRetry by importPreviewRetry
     var showDialog by showDialog
+    var isQif by isQif
 
     val dateOrder: StatementDateOrder
         get() = StatementDateOrder.entries.firstOrNull { it.name == dateOrderName } ?: StatementDateOrder.MONTH_DAY_YEAR
@@ -208,8 +212,9 @@ internal class StatementImportState(
         csvMapping = StatementCsvColumnMapping()
         parseError =
             file.errorMessage ?: if (file.contents == null) "Couldn’t read this file. Choose another statement." else null
-        val isCsv = file.name.substringAfterLast('.', "").equals("csv", ignoreCase = true)
-        if (isCsv && file.contents != null) {
+        val format = file.contents?.let { runCatching { detectStatementFormat(it) }.getOrNull() }
+        isQif = format == StatementFormat.QIF
+        if (format == StatementFormat.DELIMITED && file.contents != null) {
             runCatching { inspectStatementCsv(file.contents) }
                 .onSuccess { layout ->
                     csvLayout = layout
@@ -262,6 +267,7 @@ private fun rememberStatementImportState(
         importPreviewLoading = remember(budgetId, accountId) { mutableStateOf(false) },
         importPreviewRetry = remember(budgetId, accountId) { mutableStateOf(0) },
         showDialog = remember(budgetId, accountId) { mutableStateOf(false) },
+        isQif = remember(budgetId, accountId) { mutableStateOf(false) },
     )
 }
 
@@ -313,7 +319,7 @@ internal suspend fun parseStatement(
                 )
         }
     } catch (error: StatementImportParseException) {
-        statementImport.parseError = error.message ?: "Couldn’t read this statement. Choose a CSV, QIF, OFX, or QFX file."
+        statementImport.parseError = error.message ?: "Couldn’t read this statement. Choose a CSV, TSV, QIF, OFX, or QFX file."
     }
 }
 
@@ -332,6 +338,7 @@ private fun StatementImportFlow(
         currencyDisplaySettings = mobileSession.budgetDisplaySettings,
         accountName = liveAccount.name,
         filename = statementImport.pickedFile?.name.orEmpty(),
+        showDateOrder = statementImport.isQif,
         parseResult = statementImport.parseResult,
         parseError = statementImport.parseError,
         actionMessage = mobileSession.budgetActionMessage,

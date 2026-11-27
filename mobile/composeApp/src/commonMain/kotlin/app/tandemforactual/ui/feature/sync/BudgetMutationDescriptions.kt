@@ -98,6 +98,7 @@ internal fun budgetMutationChangeTitle(
         BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE,
         -> "Update the note for $itemName"
         BudgetReorderKind.IMPORT_STATEMENT -> "Import ${itemName.ifBlank { "transactions" }}"
+        BudgetReorderKind.SET_BUDGET_TYPE -> "Switch to ${budgetTypeName(payload?.stringValue("type"))} budgeting"
         BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Change the order of $itemName"
         BudgetReorderKind.SET_ORDER -> {
             val lists = mutation.orderBatchScopes().size
@@ -185,5 +186,8 @@ internal fun budgetMutationPendingSummary(
         BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE,
         -> "Edit note"
         BudgetReorderKind.IMPORT_STATEMENT -> "Import transactions"
+        BudgetReorderKind.SET_BUDGET_TYPE -> "Switch to ${budgetTypeName(payload?.stringValue("type"))}"
     }
 }
+
+private fun budgetTypeName(type: String?): String = if (type == "tracking") "tracking" else "envelope"

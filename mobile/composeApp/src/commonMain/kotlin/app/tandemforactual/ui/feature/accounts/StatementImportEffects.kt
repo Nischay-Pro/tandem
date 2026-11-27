@@ -72,7 +72,7 @@ private suspend fun loadStatementImportPreview(
             mobileSession.budgetEdits.previewStatementImportTransactions(
                 state.selectedBudgetId,
                 liveAccount.id,
-                parsed.transactions.map { it.importedId },
+                parsed.transactions.flatMap { listOfNotNull(it.importedId, it.bankId) }.distinct(),
                 state.encryptedPassword.takeIf(String::isNotBlank),
             )
     } catch (error: CancellationException) {

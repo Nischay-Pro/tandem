@@ -31,6 +31,7 @@ import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.feedback.ProgressBar
 import app.tandemforactual.ui.design.money.AvailableAmountPill
 import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.rows.ListRow
@@ -58,6 +59,24 @@ internal class BudgetCategoryReorder(
     val onDragStopped: (() -> Unit)? = null,
 )
 
+/** The words a category row uses: its plan ("Assigned", "Budgeted", "Expected", none for envelope income) and what happened. */
+internal class BudgetCategoryWords(
+    val isIncome: Boolean,
+    val plan: String?,
+    val actual: String,
+    val left: String = "available",
+)
+
+internal fun budgetCategoryWords(
+    isIncome: Boolean,
+    isTrackingBudget: Boolean,
+): BudgetCategoryWords =
+    when {
+        isIncome -> BudgetCategoryWords(true, "Expected".takeIf { isTrackingBudget }, "Received")
+        isTrackingBudget -> BudgetCategoryWords(false, "Budgeted", "Spent", "remaining")
+        else -> BudgetCategoryWords(false, "Assigned", "Spent")
+    }
+
 /** A budget category row, drawn with or without a progress bar. */
 @Composable
 internal fun BudgetCategoryCard(
@@ -66,10 +85,13 @@ internal fun BudgetCategoryCard(
     compact: Boolean,
     modifier: Modifier = Modifier,
     reorder: BudgetCategoryReorder = BudgetCategoryReorder(),
+    words: BudgetCategoryWords = budgetCategoryWords(isIncome = false, isTrackingBudget = false),
     onClick: () -> Unit,
 ) {
     if (!state.budgetShowProgressBars) {
-        BudgetCategoryListCard(state, category, compact, modifier, reorder, onClick)
+        BudgetCategoryListCard(state, category, compact, modifier, reorder, words, onClick)
+    } else if (words.isIncome) {
+        IncomeCategoryProgressCard(state, category, modifier, reorder, words, onClick)
     } else {
         BudgetCategoryProgressCard(state, category, modifier, reorder, onClick)
     }
@@ -101,6 +123,7 @@ private fun BudgetCategoryListCard(
     compact: Boolean,
     modifier: Modifier,
     reorder: BudgetCategoryReorder,
+    words: BudgetCategoryWords,
     onClick: () -> Unit,
 ) {
     SurfaceCard(modifier = modifier, animateSizeChanges = false) {
@@ -108,7 +131,7 @@ private fun BudgetCategoryListCard(
             category.name,
             leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
             options = ListRowOptions(dense = compact),
-            subtitleContent = { CategoryAssignedAndSpent(state, category) },
+            subtitleContent = { CategoryAssignedAndSpent(state, category, words) },
             onClick = onClick,
             trailingContent = {
                 if (reorder.isReordering) {
@@ -119,12 +142,23 @@ private fun BudgetCategoryListCard(
                         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
                     ) {
                         if (category.pendingChanges) PendingBudgetSyncIcon()
-                        AvailableAmountPill(
-                            state.formatCurrency(category.balanceMinor),
-                            isOverspent = category.balanceMinor < 0,
-                            privacyModeEnabled = state.privacyModeEnabled,
-                            fractionDigits = state.currencyFractionDigitsForDisplay,
-                        )
+                        if (words.isIncome) {
+                            PrivacyAmountText(
+                                state.formatCurrency(category.activityMinor),
+                                privacyModeEnabled = state.privacyModeEnabled,
+                                fractionDigits = state.currencyFractionDigitsForDisplay,
+                                color = tandemPalette.positive,
+                                fontSize = TandemTypography.compactBody,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        } else {
+                            AvailableAmountPill(
+                                state.formatCurrency(category.balanceMinor),
+                                isOverspent = category.balanceMinor < 0,
+                                privacyModeEnabled = state.privacyModeEnabled,
+                                fractionDigits = state.currencyFractionDigitsForDisplay,
+                            )
+                        }
                     }
                 }
             },
@@ -136,20 +170,27 @@ private fun BudgetCategoryListCard(
 private fun CategoryAssignedAndSpent(
     state: AppState,
     category: LiveCategorySummary,
+    words: BudgetCategoryWords,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
     ) {
-        Text("Assigned", color = tandemPalette.muted, fontSize = TandemTypography.caption)
-        PrivacyAmountText(
-            state.formatCurrency(category.assignedMinor),
-            privacyModeEnabled = state.privacyModeEnabled,
-            fractionDigits = state.currencyFractionDigitsForDisplay,
+        words.plan?.let { plan ->
+            Text(plan, color = tandemPalette.muted, fontSize = TandemTypography.caption)
+            PrivacyAmountText(
+                state.formatCurrency(category.assignedMinor),
+                privacyModeEnabled = state.privacyModeEnabled,
+                fractionDigits = state.currencyFractionDigitsForDisplay,
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.caption,
+            )
+        }
+        Text(
+            if (words.plan == null) words.actual else "· ${words.actual}",
             color = tandemPalette.muted,
             fontSize = TandemTypography.caption,
         )
-        Text("· Spent", color = tandemPalette.muted, fontSize = TandemTypography.caption)
         PrivacyAmountText(
             state.formatCurrency(kotlin.math.abs(category.activityMinor)),
             privacyModeEnabled = state.privacyModeEnabled,
@@ -280,6 +321,70 @@ private fun RowScope.CategoryProgressDetails(
                     .clip(CircleShape)
                     .background(if (overspent) palette.negative else palette.accent),
             )
+        }
+    }
+}
+
+@Composable
+private fun IncomeCategoryProgressCard(
+    state: AppState,
+    category: LiveCategorySummary,
+    modifier: Modifier,
+    reorder: BudgetCategoryReorder,
+    words: BudgetCategoryWords,
+    onClick: () -> Unit,
+) {
+    val palette = tandemPalette
+    val received = category.activityMinor
+    val expected = category.assignedMinor
+    val progress =
+        when {
+            expected > 0 -> (received.toDouble() / expected).toFloat().coerceIn(0f, 1f)
+            received > 0 -> 1f
+            else -> 0f
+        }
+    SurfaceCard(modifier = modifier, onClick = onClick, animateSizeChanges = false) {
+        ListRow(
+            category.name,
+            if (state.privacyModeEnabled) {
+                null
+            } else if (words.plan == null) {
+                "${state.formatCurrency(received)} received"
+            } else {
+                "${state.formatCurrency(received)} received of ${state.formatCurrency(expected)} expected"
+            },
+            leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
+            trailingContent = {
+                if (reorder.isReordering) {
+                    CategoryReorderActions(state, category, reorder)
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
+                    ) {
+                        if (category.pendingChanges) PendingBudgetSyncIcon()
+                        PrivacyAmountText(
+                            state.formatCurrency(received),
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            fractionDigits = state.currencyFractionDigitsForDisplay,
+                            color = palette.positive,
+                            fontSize = TandemTypography.compactBody,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            },
+        )
+        if (words.plan != null) {
+            Box(
+                Modifier.padding(
+                    start = TandemLayout.listRowHorizontalInset,
+                    end = TandemLayout.listRowHorizontalInset,
+                    bottom = TandemSpacing.medium,
+                ),
+            ) {
+                ProgressBar(progress, palette.positive)
+            }
         }
     }
 }
