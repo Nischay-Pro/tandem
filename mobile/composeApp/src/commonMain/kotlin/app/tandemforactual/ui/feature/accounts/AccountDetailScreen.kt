@@ -93,9 +93,7 @@ internal fun AccountDetailScreen(
                 },
                 onUpdateBalance = { balanceUpdate.value = true },
             )
-            if (!statementImport.showDialog) {
-                budgetActionFeedbackMessage(mobileSession)
-            }
+            if (!statementImport.showDialog) budgetActionFeedbackMessage(mobileSession)
             ScheduledOccurrencesCard(state, navigation, rememberRegisterOccurrences(mobileSession, liveAccount.id))
             AccountRecentActivity(shownAccountActivity, state, navigation, liveAccount) {
                 scrollRestore.pending = routeScrollState?.value ?: -1
