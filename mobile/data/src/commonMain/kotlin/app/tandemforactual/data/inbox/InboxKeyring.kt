@@ -81,14 +81,12 @@ class InboxKeyring(
         val pair: InboxKeyPair,
         val check: String,
     )
-
-    private companion object {
-        const val MAX_KEYS = 4
-        const val MAX_APPLIED = 1000
-        const val CHECK_BYTES = 16
-        val CHECK_SALT = "tandem-inbox-password-check".encodeToByteArray()
-    }
 }
+
+private const val MAX_KEYS = 4
+private const val MAX_APPLIED = 1000
+private const val CHECK_BYTES = 16
+private val CHECK_SALT = "tandem-inbox-password-check".encodeToByteArray()
 
 /** Each budget's inbox public key, kept on the device in the clear so automation can seal entries while it's locked. */
 @OptIn(ExperimentalEncodingApi::class)

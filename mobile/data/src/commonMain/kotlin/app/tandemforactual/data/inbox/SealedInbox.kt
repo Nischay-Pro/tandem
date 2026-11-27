@@ -91,10 +91,8 @@ class SealedInbox(
 
     private fun decode(line: String): ByteArray? =
         line.takeIf { it.startsWith(ENTRY) }?.let { runCatching { Base64.decode(it.removePrefix(ENTRY)) }.getOrNull() }
-
-    private companion object {
-        const val ENTRY = "e "
-        const val WITHDRAWN = "x "
-        val lock = Mutex()
-    }
 }
+
+private const val ENTRY = "e "
+private const val WITHDRAWN = "x "
+private val lock = Mutex()
