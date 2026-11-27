@@ -42,6 +42,11 @@ import app.tandemforactual.ui.design.theme.tandemLabelExit
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 
+private val FloatingActionHeight = 56.dp
+
+/** Space a page leaves under its last item so it can scroll fully above a floating action and its margin. */
+internal val FloatingActionClearance = FloatingActionHeight + TandemSpacing.large * 2
+
 @Composable
 internal fun FloatingAction(
     compact: Boolean,
@@ -79,8 +84,8 @@ internal fun FloatingAction(
         modifier =
             modifier
                 .reservesNoticeSpace()
-                .height(56.dp)
-                .defaultMinSize(minWidth = 56.dp)
+                .height(FloatingActionHeight)
+                .defaultMinSize(minWidth = FloatingActionHeight)
                 .clip(shape)
                 .background(backgroundColor)
                 .then(if (outlined) Modifier.border(1.dp, palette.border, shape) else Modifier)

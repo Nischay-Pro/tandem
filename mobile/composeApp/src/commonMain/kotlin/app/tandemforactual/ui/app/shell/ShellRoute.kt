@@ -22,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BottomNavigation
+import app.tandemforactual.ui.app.FloatingActionClearance
 import app.tandemforactual.ui.app.FloatingSyncAction
 import app.tandemforactual.ui.app.FloatingTransactionAction
 import app.tandemforactual.ui.app.LocalWindowHinge
@@ -43,6 +45,7 @@ import app.tandemforactual.ui.core.state.routeContentStateKey
 import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.rows.RowLogos
+import app.tandemforactual.ui.design.templates.LocalFloatingActionClearance
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
@@ -169,8 +172,13 @@ private fun ShellRouteContent(
         Column(modifier = pageModifier.fillMaxSize()) {
             if (includeChrome && shouldRenderStandaloneRouteHeader(visibleRoute)) ShellHeader(chrome, visibleRoute)
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                ShellScreen(ctx, visibleEntry)
-                RouteFloatingActions(ctx, visibleRoute, routeScrollState, routeLazyListState)
+                val actions = routeFloatingActions(ctx, visibleRoute)
+                CompositionLocalProvider(
+                    LocalFloatingActionClearance provides if (actions.any) FloatingActionClearance else 0.dp,
+                ) {
+                    ShellScreen(ctx, visibleEntry)
+                }
+                RouteFloatingActions(ctx, actions, routeScrollState, routeLazyListState)
             }
             if (includeChrome && visibleRoute.isTab() && !chrome.useRail) {
                 BottomNavigation(visibleRoute, ctx.navigation.selectTab)
@@ -179,13 +187,18 @@ private fun ShellRouteContent(
     }
 }
 
-@Composable
-private fun BoxScope.RouteFloatingActions(
+/** Which floating buttons the route shows over its content. */
+private data class FloatingActionsShown(
+    val sync: Boolean,
+    val add: Boolean,
+) {
+    val any: Boolean get() = sync || add
+}
+
+private fun routeFloatingActions(
     ctx: ShellContext,
     visibleRoute: AppRoute,
-    routeScrollState: ScrollState,
-    routeLazyListState: LazyListState,
-) {
+): FloatingActionsShown {
     val state = ctx.state
     val mobileSession = ctx.mobileSession
     val pendingSyncOperation =
@@ -193,9 +206,25 @@ private fun BoxScope.RouteFloatingActions(
             it.operationId == state.selectedConflictOperationId &&
                 (it.status == "queued" || (it.status == "sending" && mobileSession.isSyncing))
         }
-    val showSyncAction =
-        visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null
-    if (showSyncAction) {
+    return FloatingActionsShown(
+        sync = visibleRoute == AppRoute.UNCERTAIN_WRITE && pendingSyncOperation != null,
+        add =
+            visibleRoute in QUICK_ADD_TABS &&
+                state.selectedBudgetId.isNotBlank() &&
+                !needsEncryptedBudgetUnlock(state, visibleRoute),
+    )
+}
+
+@Composable
+private fun BoxScope.RouteFloatingActions(
+    ctx: ShellContext,
+    shown: FloatingActionsShown,
+    routeScrollState: ScrollState,
+    routeLazyListState: LazyListState,
+) {
+    val state = ctx.state
+    val mobileSession = ctx.mobileSession
+    if (shown.sync) {
         val syncActionCompact by
             remember(routeScrollState) {
                 derivedStateOf { routeScrollState.value > 72 }
@@ -213,10 +242,7 @@ private fun BoxScope.RouteFloatingActions(
                     .padding(end = TandemSpacing.large, bottom = TandemSpacing.large),
         )
     }
-    if (visibleRoute in QUICK_ADD_TABS &&
-        state.selectedBudgetId.isNotBlank() &&
-        !needsEncryptedBudgetUnlock(state, visibleRoute)
-    ) {
+    if (shown.add) {
         val addCompact by
             remember(routeScrollState, routeLazyListState) {
                 derivedStateOf { routeScrollState.value > 72 || routeLazyListState.firstVisibleItemIndex > 0 }

@@ -19,11 +19,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -32,6 +34,19 @@ import app.tandemforactual.ui.design.theme.TandemPalette
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
+
+/** Extra room under a page's last item for floating buttons drawn over the page. */
+internal val LocalFloatingActionClearance = compositionLocalOf { 0.dp }
+
+/** The page's padding, with room at the bottom for any floating buttons over it. */
+@Composable
+internal fun pageContentPadding(horizontal: Dp): PaddingValues =
+    PaddingValues(
+        start = horizontal,
+        top = TandemSpacing.medium,
+        end = horizontal,
+        bottom = TandemSpacing.medium + LocalFloatingActionClearance.current,
+    )
 
 @Composable
 internal fun PageColumn(
@@ -47,10 +62,7 @@ internal fun PageColumn(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(
-                        horizontal = readablePadding(maxWidth, horizontalPadding, TandemLayout.readableContentWidth),
-                        vertical = TandemSpacing.medium,
-                    ),
+                    .padding(pageContentPadding(readablePadding(maxWidth, horizontalPadding, TandemLayout.readableContentWidth))),
             verticalArrangement = Arrangement.spacedBy(verticalSpacing),
             content = content,
         )
@@ -160,7 +172,7 @@ private fun PageLazyColumnContent(
         LazyColumn(
             state = routeListState,
             modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            contentPadding = pageContentPadding(horizontalPadding),
             verticalArrangement = Arrangement.spacedBy(verticalSpacing),
             content = content,
         )

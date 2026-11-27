@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.app.FloatingActionClearance
 import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
@@ -50,6 +52,7 @@ import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
+import app.tandemforactual.ui.design.templates.LocalFloatingActionClearance
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -125,21 +128,23 @@ internal fun BudgetScreen(
         )
     BudgetScrollToSummaryEffect(state)
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        BudgetList(
-            context = context,
-            month = BudgetListMonth(liveBudgetMonth, groups, displayGroups, holdFigures),
-            months = rememberBudgetMonthsView(state, mobileSession, liveBudgetMonth, maxWidth - TandemSpacing.screen * 2),
-            liveTransactions = liveTransactions,
-            liveSchedules = liveSchedules,
-            onSyncNow = onSyncNow,
-            onCopyLastMonth = { dialogs.showCopyLastMonth = true },
-            onPlanTemplates = { dialogs.showTemplates = true },
-            onOpenHold = {
-                mobileSession.feedback.clearBudgetActionMessage()
-                hold.open(readyToAssignMinor)
-            },
-            onAutoAssign = { dialogs.showAutoAssign = true },
-        )
+        CompositionLocalProvider(LocalFloatingActionClearance provides FloatingActionClearance) {
+            BudgetList(
+                context = context,
+                month = BudgetListMonth(liveBudgetMonth, groups, displayGroups, holdFigures),
+                months = rememberBudgetMonthsView(state, mobileSession, liveBudgetMonth, maxWidth - TandemSpacing.screen * 2),
+                liveTransactions = liveTransactions,
+                liveSchedules = liveSchedules,
+                onSyncNow = onSyncNow,
+                onCopyLastMonth = { dialogs.showCopyLastMonth = true },
+                onPlanTemplates = { dialogs.showTemplates = true },
+                onOpenHold = {
+                    mobileSession.feedback.clearBudgetActionMessage()
+                    hold.open(readyToAssignMinor)
+                },
+                onAutoAssign = { dialogs.showAutoAssign = true },
+            )
+        }
         BudgetScreenDock(state, navigation, reorder, isLiveBudget, Modifier.align(Alignment.BottomEnd)) {
             mobileSession.feedback.clearBudgetActionMessage()
             dialogs.openCreateCategoryGroup()
