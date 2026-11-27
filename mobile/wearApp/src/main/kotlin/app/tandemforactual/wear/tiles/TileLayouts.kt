@@ -29,6 +29,7 @@ private const val ARC_SWEEP = 300f
 private const val ARC_START = -150f
 private const val RINGS = 3
 private const val RING_GAP = 8f
+private const val SMALL_SCREEN_DP = 210
 private const val TRACK = 0xFF332E45.toInt()
 private const val ACCENT = 0xFFB9A8FF.toInt()
 private const val OVER = 0xFFFFB4A9.toInt()
@@ -48,7 +49,7 @@ fun leftToSpendLayout(
                     text(message.orEmpty().layoutString, maxLines = 3, typography = Typography.BODY_MEDIUM)
                 } else {
                     rings(summary, summary.categories.take(RINGS)) {
-                        text(summary.money(summary.leftToSpendMinor).layoutString, typography = Typography.TITLE_LARGE)
+                        text(summary.money(summary.leftToSpendMinor).layoutString, typography = amountTypography())
                     }
                 }
             },
@@ -81,6 +82,10 @@ fun nextBillLayout(
             bottomSlot = { textEdgeButton(onClick = openApp(context, quickAdd = false), labelContent = { text("Open".layoutString) }) },
         )
     }
+
+/** Small round screens leave less room inside the rings, so the amount steps down a size there. */
+private fun MaterialScope.amountTypography(): Int =
+    if (deviceConfiguration.screenWidthDp < SMALL_SCREEN_DP) Typography.TITLE_SMALL else Typography.TITLE_LARGE
 
 private fun addButton(context: Context): MaterialScope.() -> LayoutElement =
     { textEdgeButton(onClick = openApp(context, quickAdd = true), labelContent = { text("+ Add".layoutString) }) }
