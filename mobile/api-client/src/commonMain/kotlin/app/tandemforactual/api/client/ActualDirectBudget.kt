@@ -62,6 +62,7 @@ class ActualDirectBudget private constructor(
             require(identity != null && identity["file_id"] == fileId && identity["group_id"] == groupId) {
                 "The local Actual database belongs to another budget or sync group."
             }
+            runCatching { ActualMessageStore(db).replayPending() }
         }
     }
 
@@ -368,7 +369,10 @@ class ActualDirectBudget private constructor(
             }
         }
 
-        /** The Actual file id saved with a downloaded budget, or null for a database Tandem didn't download. */
+        /**
+         * The Actual file id saved with a downloaded budget. It is written last, so null means the download never
+         * finished (or Tandem didn't make this database) and the copy should be downloaded again.
+         */
         fun storedFileId(db: ActualDatabase): String? =
             runCatching { db.first("SELECT file_id FROM tandem_direct_sync WHERE id = 1")?.get("file_id") as String? }.getOrNull()
 
