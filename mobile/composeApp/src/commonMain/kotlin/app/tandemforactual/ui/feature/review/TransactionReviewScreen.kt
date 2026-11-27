@@ -36,6 +36,7 @@ import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.uncategorized
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -100,11 +101,16 @@ internal fun TransactionReviewScreen(
             onAccept = { suggestion?.let(::categorize) ?: run { picking = true } },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            SecondaryButton("Skip for now", Modifier.weight(1f)) { queue = queue.skip() }
-            PrimaryButton(accept, modifier = Modifier.weight(1f)) { suggestion?.let(::categorize) ?: run { picking = true } }
+        Column(
+            Modifier.fillMaxWidth().reservesNoticeSpace(),
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.large),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                SecondaryButton("Skip for now", Modifier.weight(1f)) { queue = queue.skip() }
+                PrimaryButton(accept, modifier = Modifier.weight(1f)) { suggestion?.let(::categorize) ?: run { picking = true } }
+            }
+            SecondaryButton("Open transaction", Modifier.fillMaxWidth()) { openTransaction(state, navigation, current, isLive = true) }
         }
-        SecondaryButton("Open transaction", Modifier.fillMaxWidth()) { openTransaction(state, navigation, current, isLive = true) }
     }
     ReviewCategoryPicker(picking, categories, onDismiss = { picking = false }) {
         picking = false

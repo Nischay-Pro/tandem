@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatAmount
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.templates.AMOUNT_KEYPAD_HEIGHT
 import app.tandemforactual.ui.design.templates.AmountKeypadActions
 import app.tandemforactual.ui.design.templates.TransactionAmountKeypad
@@ -146,7 +147,7 @@ internal fun TransactionFormKeypad(
     val fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2
     TransactionAmountKeypad(
         actions = if (fractionDigits > 0) actions else actions.withoutDecimal(),
-        modifier = modifier,
+        modifier = modifier.reservesNoticeSpace(),
         height = layout.keypadHeight,
         decimalSeparator = state.formatAmount(1).firstOrNull { !it.isDigit() } ?: '.',
     )

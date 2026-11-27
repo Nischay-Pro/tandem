@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -76,6 +77,7 @@ internal fun FloatingAction(
     Row(
         modifier =
             modifier
+                .reservesNoticeSpace()
                 .height(56.dp)
                 .defaultMinSize(minWidth = 56.dp)
                 .clip(shape)

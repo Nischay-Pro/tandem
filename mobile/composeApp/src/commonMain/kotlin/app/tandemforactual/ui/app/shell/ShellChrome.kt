@@ -25,6 +25,10 @@ import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
+import app.tandemforactual.ui.design.feedback.LocalNoticeClearance
+import app.tandemforactual.ui.design.feedback.NoticeClearance
+import app.tandemforactual.ui.design.feedback.NoticeEdge
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.theme.LocalTabletopFold
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSystemBars
@@ -76,7 +80,8 @@ internal fun ShellFrame(
     val headerClockMs = rememberHeaderClock(ctx, isAppInForeground)
     val chrome = ShellChromeState(ctx, window, mainCloudStatus(ctx), headerClockMs)
     val tabletopFold by ctx.env.tabletopFold.collectAsState()
-    CompositionLocalProvider(LocalTabletopFold provides tabletopFold) {
+    val noticeClearance = remember { NoticeClearance() }
+    CompositionLocalProvider(LocalTabletopFold provides tabletopFold, LocalNoticeClearance provides noticeClearance) {
         ShellScaffold(chrome)
         ShellOverlays(chrome, isAppInForeground)
     }
@@ -150,7 +155,7 @@ internal fun ShellHeader(
             null
         }
     val conflictTitle = conflictPayeeTitle(conflictOperation, ctx.shell.liveTransactions, mobileSession)
-    Box(Modifier.windowControlsPadding()) {
+    Box(Modifier.windowControlsPadding().reservesNoticeSpace(NoticeEdge.TOP)) {
         AppHeader(
             route = headerRoute,
             state = state,

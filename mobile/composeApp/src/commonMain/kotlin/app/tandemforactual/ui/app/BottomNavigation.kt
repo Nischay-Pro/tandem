@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -72,6 +73,7 @@ internal fun BottomNavigation(
                 .fillMaxWidth()
                 .graphicsLayer { alpha = if (visible) 1f else 0f }
                 .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small)
+                .reservesNoticeSpace(enabled = visible)
                 .clip(RoundedCornerShape(TandemShapes.capsule))
                 .background(palette.raised)
                 .border(1.dp, palette.border, RoundedCornerShape(TandemShapes.capsule))
