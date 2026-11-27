@@ -10,6 +10,7 @@ import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
 import app.tandemforactual.data.actual.ActualRuleEngine
+import app.tandemforactual.data.actual.ActualStoreGuard
 import app.tandemforactual.data.actual.ActualSyncEngine
 import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
@@ -27,9 +28,12 @@ import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import app.tandemforactual.data.store.BudgetSyncProtocolException
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -70,18 +74,33 @@ class ActualDirectBudget private constructor(
     private val store = ActualMessageStore(db)
     private val clock = store.loadClock()
     internal val cacheGeneration = "actual:${clock.clock.timestamp.node}"
-    private val syncEngine = ActualSyncEngine(store, server::sync, groupId, fileId, cipher = key, now = now)
+    private val syncEngine =
+        ActualSyncEngine(
+            store,
+            server::sync,
+            groupId,
+            fileId,
+            cipher = key,
+            guard =
+                object : ActualStoreGuard {
+                    override suspend fun <T> locked(block: suspend () -> T): T = this@ActualDirectBudget.locked(block)
+                },
+            now = now,
+        )
     private val reader = ActualBudgetReader(db)
     private val writer = ActualWriter(store, clock, now, newId)
     private val operations = ActualTransactionOperations(writer)
 
-    suspend fun sync() = locked { synchronize() }
+    /** Syncs with Actual, letting reads and edits use the budget while it waits on the server. */
+    suspend fun sync() = synchronize()
 
+    /** Holds the budget only between network calls, unless the caller already holds it for an edit. */
     private suspend fun synchronize(): ActualSyncResult {
-        val lastSyncedTimestamp = db.first("SELECT timestamp FROM tandem_direct_sync WHERE id = 1")?.get("timestamp") as String?
-        return syncEngine.fullSync(clock, lastSyncedTimestamp).also {
-            db.execute("UPDATE tandem_direct_sync SET timestamp = ? WHERE id = 1", it.lastSyncedTimestamp)
-        }
+        val lastSyncedTimestamp =
+            locked { db.first("SELECT timestamp FROM tandem_direct_sync WHERE id = 1")?.get("timestamp") as String? }
+        val result = syncEngine.fullSync(clock, lastSyncedTimestamp)
+        locked { db.execute("UPDATE tandem_direct_sync SET timestamp = ? WHERE id = 1", result.lastSyncedTimestamp) }
+        return result
     }
 
     /** Runs Actual's schedule service once a day after a successful sync, then uploads anything it changed. */
@@ -225,21 +244,15 @@ class ActualDirectBudget private constructor(
     suspend fun previewRule(rule: JsonObject): List<HealthRow> =
         locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
 
-    suspend fun dataHealth(today: String): List<HealthIssue> =
-        locked {
-            runCatching {
-                synchronize()
-            }.exceptionOrNull()?.let { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
-            ActualDataHealth(db).check(today)
-        }
+    suspend fun dataHealth(today: String): List<HealthIssue> {
+        syncWhenPossible()
+        return locked { ActualDataHealth(db).check(today) }
+    }
 
-    suspend fun changeHistory(limit: Int): List<ChangeSet> =
-        locked {
-            runCatching {
-                synchronize()
-            }.exceptionOrNull()?.let { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
-            ActualChangeHistory(writer).recent(limit)
-        }
+    suspend fun changeHistory(limit: Int): List<ChangeSet> {
+        syncWhenPossible()
+        return locked { ActualChangeHistory(writer).recent(limit) }
+    }
 
     /** Reverts one edit from the change history against freshly synced state, then uploads the reversal. */
     suspend fun undoChange(id: String): UndoResult =
@@ -261,15 +274,15 @@ class ActualDirectBudget private constructor(
             synchronize()
             runSchedules(today)
             val result = writer.atOneMoment { block(ActualBudgetEdits(writer, { today })) }
-            uploadWhenPossible()
+            syncWhenPossible()
             result
         }
 
     /**
-     * Uploads an edit already saved to this device's copy. If that fails it stays in the local log and goes up with
-     * the next sync, so the edit still counts as made and isn't repeated by a retry.
+     * Syncs, carrying on with the device's copy when Actual can't be reached. An edit already saved stays in the local
+     * log and goes up with the next sync, so it still counts as made and isn't repeated by a retry.
      */
-    private suspend fun uploadWhenPossible() {
+    private suspend fun syncWhenPossible() {
         try {
             synchronize()
         } catch (error: kotlin.coroutines.cancellation.CancellationException) {
@@ -406,14 +419,25 @@ class ActualDirectBudget private constructor(
             }
     }
 
-    /** Background sync can open a second copy of this budget, so copies share one lock and reload the saved clock. */
-    private suspend fun <T> locked(block: suspend () -> T): T =
-        withContext(Dispatchers.IO) {
+    /**
+     * Background sync can open a second copy of this budget, so copies share one lock and reload the saved clock. A
+     * block already holding the lock runs straight away, so an edit can sync without letting go of the budget.
+     */
+    private suspend fun <T> locked(block: suspend () -> T): T {
+        if (currentCoroutineContext()[ProcessLockHeld] != null) return block()
+        return withContext(Dispatchers.IO) {
             processLock.withLock {
-                store.reload(clock)
-                block()
+                withContext(ProcessLockHeld()) {
+                    store.reload(clock)
+                    block()
+                }
             }
         }
+    }
 }
 
 private val processLock = Mutex()
+
+private class ProcessLockHeld : AbstractCoroutineContextElement(ProcessLockHeld) {
+    companion object Key : CoroutineContext.Key<ProcessLockHeld>
+}

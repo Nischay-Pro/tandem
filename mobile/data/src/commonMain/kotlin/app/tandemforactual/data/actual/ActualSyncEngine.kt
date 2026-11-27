@@ -14,6 +14,15 @@ interface ActualMessageCipher {
     fun decrypt(data: EncryptedData): ByteArray
 }
 
+/** Guards the local database between network calls, so a sync never holds it while waiting on the server. */
+interface ActualStoreGuard {
+    suspend fun <T> locked(block: suspend () -> T): T
+
+    object None : ActualStoreGuard {
+        override suspend fun <T> locked(block: suspend () -> T): T = block()
+    }
+}
+
 class ActualSyncException(
     val reason: String,
     message: String = reason,
@@ -36,6 +45,7 @@ class ActualSyncEngine(
     private val fileId: String,
     private val cipher: ActualMessageCipher? = null,
     private val maxUploadBytes: Int = MAX_UPLOAD_BYTES,
+    private val guard: ActualStoreGuard = ActualStoreGuard.None,
     private val now: () -> Long,
 ) {
     suspend fun fullSync(
@@ -48,8 +58,9 @@ class ActualSyncEngine(
         var count = 0
         var prevDiff: Long? = null
         while (true) {
-            val currentTime = clock.clock.timestamp.toString()
-            val outgoing = if (receiveOnly) emptyList() else uploadAllButLast(store.messagesSince(since).map(::envelope), since)
+            val (currentTime, local) =
+                guard.locked { clock.clock.timestamp.toString() to if (receiveOnly) emptyList() else store.messagesSince(since) }
+            val outgoing = uploadAllButLast(local.map(::envelope), since)
             val response =
                 transport.sync(
                     SyncRequest(
@@ -64,13 +75,19 @@ class ActualSyncEngine(
                 runCatching {
                     MerkleTrie.fromJson(response.merkle)
                 }.getOrElse { throw ActualSyncException("invalid-merkle", cause = it) }
-            val localTimeChanged = clock.clock.timestamp.toString() != currentTime
             val incoming = response.messages.map(::decode)
-            if (incoming.isNotEmpty()) {
-                receive(clock, incoming)
-                received += store.apply(incoming, clock, deferUnknownSchema = true)
-            }
-            val diff = MerkleTrie.diff(serverMerkle, clock.merkle) ?: return ActualSyncResult(received, clock.clock.timestamp.toString())
+            var localTimeChanged = false
+            var syncedTimestamp = ""
+            val diff =
+                guard.locked {
+                    localTimeChanged = clock.clock.timestamp.toString() != currentTime
+                    if (incoming.isNotEmpty()) {
+                        receive(clock, incoming)
+                        received += store.apply(incoming, clock, deferUnknownSchema = true)
+                    }
+                    syncedTimestamp = clock.clock.timestamp.toString()
+                    MerkleTrie.diff(serverMerkle, clock.merkle)
+                } ?: return ActualSyncResult(received, syncedTimestamp)
             if ((count >= 10 && diff == prevDiff) || count >= 100) throw ActualSyncException("out-of-sync")
             since = ActualTimestamp(diff, 0, "0").toString()
             count = if (localTimeChanged) 0 else count + 1
