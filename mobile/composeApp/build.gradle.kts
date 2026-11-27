@@ -119,6 +119,7 @@ kotlin {
         implementation(libs.sqliteFramework)
         implementation(libs.composeUiTestJunit4)
         implementation(libs.composeUiTestManifest)
+        implementation(libs.espressoCore)
         implementation(libs.robolectric)
         implementation(libs.konsist)
       }

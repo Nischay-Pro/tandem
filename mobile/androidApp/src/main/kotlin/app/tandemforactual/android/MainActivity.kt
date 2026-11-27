@@ -31,6 +31,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
+import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
@@ -122,6 +123,10 @@ class MainActivity : FragmentActivity() {
         BudgetSystemNotifications.initialize(applicationContext)
         AutomaticBackupScheduler.ensureScheduled(applicationContext)
         val database = TandemProcess.database(applicationContext)
+        showApp(database)
+    }
+
+    private fun showApp(database: TandemDatabase) {
         setContent {
             val onBackgroundSyncSettingsChanged: (Boolean, SyncNetwork, String) -> Unit =
                 remember(applicationContext) {
