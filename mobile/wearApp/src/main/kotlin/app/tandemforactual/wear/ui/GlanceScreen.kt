@@ -9,12 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,10 +24,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.foundation.pager.HorizontalPager
+import androidx.wear.compose.foundation.pager.rememberPagerState
+import androidx.wear.compose.material3.AnimatedPage
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.FilledTonalButton
-import androidx.wear.compose.material3.HorizontalPageIndicator
+import androidx.wear.compose.material3.HorizontalPagerScaffold
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -56,15 +56,16 @@ fun GlancePager(
     onRefresh: () -> Unit,
 ) {
     val pagerState = rememberPagerState { 2 }
-    Box(Modifier.fillMaxSize()) {
+    HorizontalPagerScaffold(pagerState = pagerState) {
         HorizontalPager(state = pagerState) { page ->
-            if (page == 0) {
-                GlanceScreen(summary, waiting, onCategory, onAdd, onRefresh)
-            } else {
-                BillsScreen(summary)
+            AnimatedPage(page, pagerState) {
+                if (page == 0) {
+                    GlanceScreen(summary, waiting, onCategory, onAdd, onRefresh)
+                } else {
+                    BillsScreen(summary)
+                }
             }
         }
-        HorizontalPageIndicator(pagerState = pagerState)
     }
 }
 
