@@ -30,6 +30,19 @@ data class StatementImportItem(
     val payeeName: String,
     val notes: String?,
     val importedId: String,
+    val matchId: String? = null,
+)
+
+data class StatementLedgerTransaction(
+    val id: String,
+    val date: String,
+    val amountMinor: Long,
+    val payeeName: String?,
+    val importedPayee: String?,
+    val notes: String?,
+    val importedId: String?,
+    val cleared: Boolean,
+    val reconciled: Boolean,
 )
 
 data class StatementImportSummary(

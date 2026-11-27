@@ -19,21 +19,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.data.store.BudgetDisplaySettings
-import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.importing.StatementCsvColumn
 import app.tandemforactual.ui.core.importing.StatementCsvColumnMapping
 import app.tandemforactual.ui.core.importing.StatementCsvLayout
 import app.tandemforactual.ui.core.importing.StatementDateOrder
-import app.tandemforactual.ui.core.importing.StatementParseResult
-import app.tandemforactual.ui.core.importing.isAlreadyIn
-import app.tandemforactual.ui.core.importing.newRows
+import app.tandemforactual.ui.core.importing.StatementReview
+import app.tandemforactual.ui.core.importing.StatementRowAction
+import app.tandemforactual.ui.core.importing.description
+import app.tandemforactual.ui.core.importing.statementApplyLabel
 import app.tandemforactual.ui.core.importing.statementCount
+import app.tandemforactual.ui.core.importing.summary
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
@@ -54,138 +52,154 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.X
 
+/** What the statement import sheet shows: the file, how it was read, and the row-by-row review. */
+internal data class StatementImportContent(
+    val accountName: String,
+    val filename: String,
+    val showDateOrder: Boolean,
+    val parsed: Boolean,
+    val parseError: String?,
+    val skippedRows: Int,
+    val firstSkippedReason: String?,
+    val review: StatementReview?,
+    val actions: Map<Int, StatementRowAction>,
+    val flipSigns: Boolean,
+    val ledgerLoading: Boolean,
+    val ledgerError: String?,
+    val dateOrder: StatementDateOrder,
+    val csvLayout: StatementCsvLayout?,
+    val csvMapping: StatementCsvColumnMapping,
+    val showCsvMapping: Boolean,
+)
+
+internal class StatementImportCallbacks(
+    val onDateOrderChange: (StatementDateOrder) -> Unit,
+    val onCsvMappingChange: (StatementCsvColumnMapping) -> Unit,
+    val onToggleCsvMapping: () -> Unit,
+    val onRetryLedger: () -> Unit,
+    val onFlipSigns: () -> Unit,
+    val onAction: (Int, StatementRowAction) -> Unit,
+    val onDismiss: () -> Unit,
+    val onDismissed: () -> Unit,
+    val onApply: () -> Unit,
+)
+
 @Composable
 internal fun StatementImportDialog(
     visible: Boolean,
     state: AppState,
+    content: StatementImportContent,
     currencyDisplaySettings: BudgetDisplaySettings?,
-    accountName: String,
-    filename: String,
-    showDateOrder: Boolean,
-    parseResult: StatementParseResult?,
-    parseError: String?,
     actionMessage: String?,
     actionMessageKind: InlineMessageKind = InlineMessageKind.ERROR,
-    dateOrder: StatementDateOrder,
-    csvLayout: StatementCsvLayout?,
-    csvMapping: StatementCsvColumnMapping,
-    showCsvMapping: Boolean,
-    importPreview: StatementImportPreview?,
-    importPreviewLoading: Boolean,
-    importPreviewError: String?,
     busy: Boolean,
-    onDateOrderChange: (StatementDateOrder) -> Unit,
-    onCsvMappingChange: (StatementCsvColumnMapping) -> Unit,
-    onToggleCsvMapping: () -> Unit,
-    onRetryImportPreview: () -> Unit,
-    onDismiss: () -> Unit,
-    onDismissed: () -> Unit,
-    onImport: (StatementParseResult) -> Unit,
+    callbacks: StatementImportCallbacks,
 ) {
-    TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = onDismissed) {
+    val review = content.review
+    TandemTaskSheet(visible = visible, onDismissRequest = callbacks.onDismiss, onDismissed = callbacks.onDismissed) {
         SheetCard(
-            modifier = Modifier.heightIn(max = 720.dp),
-            maxWidth = 480.dp,
-            header = {
-                StatementImportHeader(busy, onDismiss)
-            },
+            modifier = Modifier.heightIn(max = 760.dp),
+            maxWidth = 560.dp,
+            header = { StatementImportHeader(busy, callbacks.onDismiss) },
+            actions =
+                review?.let {
+                    { StatementApplyBar(it, content.actions, busy || state.readOnlyMode, busy, callbacks.onApply) }
+                },
         ) {
-            ListRow("File", trailing = filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
-            ListRow("Account", trailing = accountName, leading = RowLeading.Account(accountName))
-            StatementParseStatus(parseResult != null, parseError, importPreviewLoading, importPreviewError, busy, onRetryImportPreview)
-            actionMessage?.let {
-                InlineMessage(it, actionMessageKind)
+            ListRow("File", trailing = content.filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
+            ListRow("Account", trailing = content.accountName, leading = RowLeading.Account(content.accountName))
+            StatementParseStatus(content, busy, callbacks.onRetryLedger)
+            actionMessage?.let { InlineMessage(it, actionMessageKind) }
+            if (content.parsed && content.showDateOrder) {
+                StatementDateOrderPicker(content.dateOrder, !busy, callbacks.onDateOrderChange)
             }
-            if (parseResult != null && showDateOrder) {
-                StatementDateOrderPicker(
-                    dateOrder = dateOrder,
-                    enabled = !busy,
-                    onDateOrderChange = onDateOrderChange,
-                )
-            }
-            if (csvLayout != null) {
-                StatementCsvSection(
-                    csvLayout,
-                    csvMapping,
-                    dateOrder,
-                    showCsvMapping,
-                    busy,
-                    onToggleCsvMapping,
-                    onCsvMappingChange,
-                    onDateOrderChange,
-                )
-            }
-            parseResult?.let { result ->
-                StatementImportResult(
-                    state,
-                    result,
-                    importPreview,
-                    importPreviewLoading,
-                    busy,
-                    currencyDisplaySettings,
-                ) { onImport(importPreview?.takeIf { it.serverChecked }?.let(result::newRows) ?: result) }
+            content.csvLayout?.let { layout -> StatementCsvSection(layout, content, busy, callbacks) }
+            if (content.skippedRows > 0) StatementSkippedRows(content.skippedRows, content.firstSkippedReason)
+            review?.let {
+                StatementReviewSection(it, content.actions, content.flipSigns, currencyDisplaySettings, !busy, callbacks)
             }
         }
     }
 }
 
-/** Progress and errors while the statement is read and checked against Actual. */
+/** Progress and errors while the statement is read and compared with the account. */
 @Composable
 private fun StatementParseStatus(
-    parsed: Boolean,
-    parseError: String?,
-    importPreviewLoading: Boolean,
-    importPreviewError: String?,
+    content: StatementImportContent,
     busy: Boolean,
-    onRetryImportPreview: () -> Unit,
+    onRetryLedger: () -> Unit,
 ) {
-    if (!parsed && parseError == null) {
-        InlineMessage("Reading statement…", InlineMessageKind.INFO)
-    }
-    parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
-    if (parsed && importPreviewLoading) {
-        InlineMessage("Checking existing transactions…", InlineMessageKind.INFO)
-    }
-    if (parsed && importPreviewError != null) {
-        InlineMessage(importPreviewError, InlineMessageKind.ERROR)
+    if (!content.parsed && content.parseError == null) InlineMessage("Reading statement…", InlineMessageKind.INFO)
+    content.parseError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+    if (content.parsed && content.ledgerLoading) InlineMessage("Comparing with this account…", InlineMessageKind.INFO)
+    if (content.parsed && content.ledgerError != null) {
+        InlineMessage(content.ledgerError, InlineMessageKind.ERROR)
         TandemActionButton(
-            "Check again",
+            "Try again",
             TandemActionButtonTone.NEUTRAL,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !busy && !importPreviewLoading,
-            onClick = onRetryImportPreview,
+            enabled = !busy && !content.ledgerLoading,
+            onClick = onRetryLedger,
         )
     }
+}
+
+@Composable
+private fun StatementSkippedRows(
+    skippedRows: Int,
+    firstSkippedReason: String?,
+) {
+    val skippedCount = statementCount(skippedRows, "row")
+    val pronoun = if (skippedRows == 1) "It" else "They"
+    val reason = firstSkippedReason?.let { " First issue: $it" }.orEmpty()
+    InlineMessage("Couldn’t read $skippedCount. $pronoun will be skipped.$reason", InlineMessageKind.INFO)
+}
+
+/** The summary of what Apply will do and the Apply button, pinned under the review. */
+@Composable
+private fun StatementApplyBar(
+    review: StatementReview,
+    actions: Map<Int, StatementRowAction>,
+    disabled: Boolean,
+    busy: Boolean,
+    onApply: () -> Unit,
+) {
+    val summary = review.summary(actions)
+    Text(summary.description(), color = tandemPalette.muted, fontSize = TandemTypography.compactBody)
+    TandemActionButton(
+        statementApplyLabel(summary, busy),
+        TandemActionButtonTone.PRIMARY,
+        modifier = Modifier.fillMaxWidth(),
+        icon = Lucide.Check,
+        enabled = !disabled && summary.changes > 0,
+        loading = busy,
+        onClick = onApply,
+    )
 }
 
 /** The CSV column summary row and, when open, the column mapping editor. */
 @Composable
 private fun StatementCsvSection(
     csvLayout: StatementCsvLayout,
-    csvMapping: StatementCsvColumnMapping,
-    dateOrder: StatementDateOrder,
-    showCsvMapping: Boolean,
+    content: StatementImportContent,
     busy: Boolean,
-    onToggleCsvMapping: () -> Unit,
-    onCsvMappingChange: (StatementCsvColumnMapping) -> Unit,
-    onDateOrderChange: (StatementDateOrder) -> Unit,
+    callbacks: StatementImportCallbacks,
 ) {
     ListRow(
         "CSV columns",
-        trailing = if (showCsvMapping) "Done" else "Change",
+        trailing = if (content.showCsvMapping) "Done" else "Change",
         leading = RowLeading.None,
-        options =
-            ListRowOptions(dense = true),
-        onClick = if (busy) null else onToggleCsvMapping,
+        options = ListRowOptions(dense = true),
+        onClick = if (busy) null else callbacks.onToggleCsvMapping,
     )
-    if (showCsvMapping) {
+    if (content.showCsvMapping) {
         StatementCsvColumnMappingEditor(
             layout = csvLayout,
-            mapping = csvMapping,
-            dateOrder = dateOrder,
+            mapping = content.csvMapping,
+            dateOrder = content.dateOrder,
             enabled = !busy,
-            onMappingChange = onCsvMappingChange,
-            onDateOrderChange = onDateOrderChange,
+            onMappingChange = callbacks.onCsvMappingChange,
+            onDateOrderChange = callbacks.onDateOrderChange,
         )
     }
 }
@@ -209,85 +223,6 @@ private fun StatementImportHeader(
         TandemIconButton(Lucide.X, "Close", sizeDp = 40, iconSizeDp = 18, enabled = !busy, onClick = onDismiss)
     }
 }
-
-/** The parsed statement's counts, skipped rows, a short preview and the import button. */
-@Composable
-private fun StatementImportResult(
-    state: AppState,
-    result: StatementParseResult,
-    importPreview: StatementImportPreview?,
-    importPreviewLoading: Boolean,
-    busy: Boolean,
-    currencyDisplaySettings: BudgetDisplaySettings?,
-    onImport: () -> Unit,
-) {
-    ListRow("Transactions", trailing = result.transactions.size.toString(), leading = RowLeading.Icon(Lucide.Receipt))
-    importPreview?.let { preview ->
-        if (preview.serverChecked) {
-            ListRow(
-                "New in Actual",
-                trailing = result.newRows(preview).transactions.size.toString(),
-                leading = RowLeading.None,
-            )
-            ListRow(
-                "Already in Actual",
-                trailing = result.transactions.count { it.isAlreadyIn(preview) }.toString(),
-                leading = RowLeading.None,
-            )
-        } else {
-            InlineMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED, InlineMessageKind.ERROR)
-        }
-    }
-    if (result.skippedRows > 0) {
-        val skippedCount = statementCount(result.skippedRows, "row")
-        val skippedMessage =
-            if (result.skippedRows == 1) {
-                "Couldn’t read $skippedCount. It will be skipped."
-            } else {
-                "Couldn’t read $skippedCount. They will be skipped."
-            }
-        val reason = result.firstSkippedReason?.let { " First issue: $it" }.orEmpty()
-        InlineMessage("$skippedMessage$reason", InlineMessageKind.INFO)
-    }
-    Text("Preview", color = tandemPalette.text, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold)
-    result.transactions.take(5).forEach { transaction ->
-        ListRow(
-            "${transaction.date} · ${transaction.payeeName}",
-            subtitle =
-                buildList {
-                    if (importPreview?.let(transaction::isAlreadyIn) == true) {
-                        add("Already in Actual")
-                    }
-                    transaction.notes?.let { add(it) }
-                }.joinToString(" · ").ifBlank { null },
-            trailing = formatCurrency(transaction.amountMinor, currencyDisplaySettings),
-            leading = RowLeading.Icon(Lucide.Receipt),
-        )
-    }
-    val newRows = importPreview?.takeIf { it.serverChecked }?.let { result.newRows(it).transactions.size }
-    TandemActionButton(
-        statementImportButtonLabel(result.transactions.size, newRows, busy),
-        TandemActionButtonTone.PRIMARY,
-        modifier = Modifier.fillMaxWidth(),
-        icon = Lucide.Check,
-        enabled = !busy && !state.readOnlyMode && newRows != null && newRows > 0 && !importPreviewLoading,
-        loading = busy,
-        onClick = onImport,
-    )
-}
-
-/** The import button's label, counting only rows Actual doesn't have yet once [newRows] is known. */
-internal fun statementImportButtonLabel(
-    totalRows: Int,
-    newRows: Int?,
-    busy: Boolean,
-): String =
-    when {
-        busy -> "Importing…"
-        newRows == null -> "Import ${statementCount(totalRows, "transaction")}"
-        newRows == 0 -> "No new transactions"
-        else -> "Import ${statementCount(newRows, "new transaction")}"
-    }
 
 @Composable
 private fun StatementCsvColumnMappingEditor(

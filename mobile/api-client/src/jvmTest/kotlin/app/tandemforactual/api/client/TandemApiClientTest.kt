@@ -483,6 +483,15 @@ class TandemApiClientTest {
                 client.previewBudgetAccountStatementImport("group", checking, listOf("stmt-1", "stmt-2"), null).existingImportedIds,
             )
             assertEquals(StatementImportSummary(0, 0, 0), client.importBudgetAccountTransactions("group", checking, statement, null))
+            val shop = client.budgetAccountLedger("group", checking, "2026-11-01", "2026-11-30", null).single { it.importedId == "stmt-1" }
+            assertEquals(-1_234, shop.amountMinor)
+            val reviewed =
+                listOf(
+                    StatementImportItem("2026-11-21", -1_234, "corner shop", null, "stmt-r1", shop.id),
+                    StatementImportItem("2026-11-21", -99, "kiosk", null, "stmt-r2"),
+                )
+            assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, reviewed, null, reviewed = true))
+            assertTrue(client.budgetAccountLedger("group", checking, "2026-11-21", "2026-11-21", null).any { it.importedId == "stmt-r2" })
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
             assertTrue(
