@@ -25,6 +25,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.defaultCategoryRulesByPayee
+import app.tandemforactual.ui.core.state.payeesInRules
 import app.tandemforactual.ui.core.ui.ActivitySearchInput
 import app.tandemforactual.ui.core.ui.ScheduleChoiceField
 import app.tandemforactual.ui.design.buttons.TandemActionButton
@@ -61,6 +62,7 @@ internal fun ManagePayeesScreen(
     val scope = rememberCoroutineScope()
     val payees = rememberManagedPayees(payeeRecords)
     val defaultCategories = remember(ruleRecords) { defaultCategoryRulesByPayee(ruleRecords) }
+    val inRules = remember(ruleRecords) { payeesInRules(ruleRecords) }
     val categoryOptions = rememberPayeeCategoryOptions(categoryRecords)
     val selectedPayee = payees.firstOrNull { it.first == payee.selectedPayeeId }
     val visiblePayees = remember(payees, searchQuery) { payees.filter { it.second.contains(searchQuery.trim(), ignoreCase = true) } }
@@ -98,7 +100,7 @@ internal fun ManagePayeesScreen(
     }
 
     AddPayeeSheet(showAddPayee, newPayeeName, { newPayeeName = it }, { showAddPayee = false }, payees, state, mobileSession, scope)
-    PayeeCleanupSheet(showCleanup, payees, state, mobileSession, scope) { showCleanup = false }
+    PayeeCleanupSheet(showCleanup, payees, inRules, state, mobileSession, scope) { showCleanup = false }
     ManagePayeeSheet(
         payee,
         selectedPayee,

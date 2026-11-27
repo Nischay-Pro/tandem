@@ -15,6 +15,7 @@ import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -65,3 +66,23 @@ internal fun RulesReferenceFilter.matches(rule: BudgetRecordEntity): Boolean {
         }
     }
 }
+
+/** Payees a live rule or schedule matches on or sets, so they're never offered for removal as unused. */
+internal fun payeesInRules(rules: List<BudgetRecordEntity>): Set<String> =
+    rules
+        .filterNot { it.localDeleted || it.remoteDeleted }
+        .mapNotNull { it.recordBody()?.takeIf { body -> body.booleanValue("tombstone") != true } }
+        .flatMap { body -> listOf("conditions", "actions").flatMap { (body[it] as? JsonArray).orEmpty() } }
+        .mapNotNull { it as? JsonObject }
+        .filter { it.stringValue("field") in PAYEE_FIELDS }
+        .flatMap { entry -> payeeValues(entry["value"]) }
+        .toSet()
+
+private fun payeeValues(value: JsonElement?): List<String> =
+    when (value) {
+        is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+        else -> emptyList()
+    }
+
+private val PAYEE_FIELDS = setOf("payee", "description")
