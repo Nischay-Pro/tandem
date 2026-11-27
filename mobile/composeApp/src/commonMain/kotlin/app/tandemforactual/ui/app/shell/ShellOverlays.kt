@@ -38,6 +38,7 @@ internal fun ShellOverlays(
     val shell = ctx.shell
     ForgetBankIconsWhenOff(state.bankIconsEnabled)
     FetchExchangeRatesWhenOn(state, ctx.mobileSession)
+    PublishWatchSummary(ctx, isAppInForeground)
     UndoNotice(ctx)
     if (shell.showDiscardTransactionDialog) DiscardTransactionDialog(ctx)
     ShellMenu(chrome)

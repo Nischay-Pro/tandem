@@ -23,6 +23,7 @@ app="$derived/Build/Products/Release-iphoneos/TandemForActual.app"
 test -d "$app"
 test -d "$app/PlugIns/TandemShare.appex"
 test -d "$app/PlugIns/TandemWidgets.appex"
+test -d "$app/Watch/TandemWatch.app"
 mkdir -p "$staging/Payload"
 cp -R "$app" "$staging/Payload/"
 (cd "$staging" && zip -qry "$output" Payload)

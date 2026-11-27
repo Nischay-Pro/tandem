@@ -378,7 +378,7 @@ jobs:
           fi
           ./gradlew "${tasks[@]}"
 
-      - name: Test iOS app host and background scheduler on iPhone and iPad
+      - name: Test iOS app host, watch app build and background scheduler on iPhone and iPad
         working-directory: mobile
         env:
           EXTRA_DESTINATIONS: ${{ github.ref == 'refs/heads/main' }}
@@ -417,6 +417,12 @@ jobs:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+      - name: Check the Apple Watch app and its complications are embedded
+        run: |
+          app="$RUNNER_TEMP/derived/Build/Products/Debug-iphonesimulator/TandemForActual.app"
+          test -d "$app/Watch/TandemWatch.app"
+          test -d "$app/Watch/TandemWatch.app/PlugIns/TandemWatchComplications.appex"
 
       - name: Package the simulator app for screenshots
         if: github.ref == 'refs/heads/main'
