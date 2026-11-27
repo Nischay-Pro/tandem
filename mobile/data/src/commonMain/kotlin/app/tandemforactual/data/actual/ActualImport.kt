@@ -52,19 +52,23 @@ class ActualImport(
         val matched = HashSet<String>()
         val exactParents = HashSet<String>()
         val steps =
-            rows.map { row ->
-                val payeeName =
-                    row.payeeName
-                        ?.trim()
-                        ?.ifEmpty { null }
-                        ?.let { if (titleCasePayees) titleCase(it) else it }
-                val payee =
-                    payeeName?.let { name ->
-                        payeesToCreate[name.lowercase()]?.first ?: payeesByName[name.lowercase()]
-                            ?: writer.uuid().also { payeesToCreate[name.lowercase()] = it to name }
-                    }
-                importStep(accountId, row, payeeName, payee, matched, reimportDeleted, strictIdChecking)
-                    .also { step -> step.match?.takeIf { bankSync && truthy(it["is_parent"]) }?.let { exactParents += it["id"] as String } }
+            transactions.batchRules {
+                rows.map { row ->
+                    val payeeName =
+                        row.payeeName
+                            ?.trim()
+                            ?.ifEmpty { null }
+                            ?.let { if (titleCasePayees) titleCase(it) else it }
+                    val payee =
+                        payeeName?.let { name ->
+                            payeesToCreate[name.lowercase()]?.first ?: payeesByName[name.lowercase()]
+                                ?: writer.uuid().also { payeesToCreate[name.lowercase()] = it to name }
+                        }
+                    importStep(accountId, row, payeeName, payee, matched, reimportDeleted, strictIdChecking)
+                        .also { step ->
+                            step.match?.takeIf { bankSync && truthy(it["is_parent"]) }?.let { exactParents += it["id"] as String }
+                        }
+                }
             }
         for (pass in 0..1) {
             for (step in steps) {
