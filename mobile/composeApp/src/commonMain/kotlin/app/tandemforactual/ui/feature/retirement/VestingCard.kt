@@ -27,11 +27,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.regions.us.retirement.k401.Vesting
 import app.tandemforactual.data.regions.us.retirement.k401.VestingStep
+import app.tandemforactual.ui.core.format.formatShortMonth
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.inputs.FilterPills
+import app.tandemforactual.ui.design.inputs.PillGrid
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -69,12 +71,19 @@ internal fun rememberStepDrafts(vesting: Vesting?): MutableList<StepDraft> =
 
 private val digits = TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
-/** Vesting and the year you joined, folded away behind an Advanced gear since most matches vest right away. */
+/** When you joined, as typed: service for vesting counts from this month. */
+internal class JoinedDate(
+    val year: String,
+    val onYear: (String) -> Unit,
+    val month: Int?,
+    val onMonth: (Int?) -> Unit,
+)
+
+/** Vesting and when you joined, folded away behind an Advanced gear since most matches vest right away. */
 @Composable
 internal fun AdvancedMatchCard(
     steps: MutableList<StepDraft>,
-    joinedYear: String,
-    onJoinedYearChange: (String) -> Unit,
+    joined: JoinedDate,
 ) {
     val palette = tandemPalette
     var open by remember { mutableStateOf(steps.isNotEmpty()) }
@@ -116,7 +125,16 @@ internal fun AdvancedMatchCard(
                 )
                 VestingSteps(steps)
                 if (steps.isNotEmpty()) {
-                    TextFieldCard("Year you joined", joinedYear, { onJoinedYearChange(it.filter(Char::isDigit).take(4)) }, digits)
+                    TextFieldCard("Year you joined", joined.year, { joined.onYear(it.filter(Char::isDigit).take(4)) }, digits)
+                    Text("Month you joined", color = palette.muted, fontSize = TandemTypography.label)
+                    PillGrid(
+                        (1..12).map<Int, Pair<Int?, String>> {
+                            it to formatShortMonth(2000, it).substringBefore(' ')
+                        },
+                        joined.month,
+                        joined.onMonth,
+                        columns = 6,
+                    )
                 }
             }
         }

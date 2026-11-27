@@ -100,12 +100,14 @@ internal fun MatchEditorScreen(
                 .orEmpty(),
         )
     }
+    var joinedMonth by remember { mutableStateOf(profile.match?.joinedMonth) }
     val match =
         EmployerMatch(
             tiers.mapNotNull { it.toTier() },
             cap.toLongOrNull()?.times(100),
             vesting,
             joined.toIntOrNull()?.takeIf { vesting != Vesting.IMMEDIATE },
+            joinedMonth?.takeIf { vesting != Vesting.IMMEDIATE },
         )
     val salaryMinor = salary.toLongOrNull()?.times(100)
     val palette = tandemPalette
@@ -121,7 +123,7 @@ internal fun MatchEditorScreen(
         TextFieldCard("Yearly match cap ($, optional)", cap, { cap = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("Your yearly salary ($)", salary, { salary = it.filter(Char::isDigit) }, numbers)
         TextFieldCard("You plan to contribute (% of pay)", percent, { percent = it.filter(Char::isDigit) }, numbers)
-        AdvancedMatchCard(steps, joined, { joined = it })
+        AdvancedMatchCard(steps, JoinedDate(joined, { joined = it }, joinedMonth, { joinedMonth = it }))
         if (salaryMinor != null && match.tiers.isNotEmpty()) MatchPreviewCard(year, profile, salaryMinor, percent, match)
         TandemActionButton("Save match", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
             scope.launch {
@@ -204,7 +206,7 @@ private fun MatchPreviewCard(
 ) {
     val palette = tandemPalette
     val planned = percent.toLongOrNull()?.let { salaryMinor * it / 100 } ?: 0
-    val result = K401.match(year, profile.age, salaryMinor, planned, match)
+    val result = K401.match(year, profile.ageIn(year), salaryMinor, planned, match)
     val full = match.fullMatchAt(salaryMinor)
     SectionCard("Preview for $year", null) {
         Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {

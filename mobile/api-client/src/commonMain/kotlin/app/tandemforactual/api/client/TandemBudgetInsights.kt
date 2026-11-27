@@ -3,6 +3,7 @@ package app.tandemforactual.api.client
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import kotlinx.serialization.json.JsonObject
 
@@ -16,15 +17,15 @@ suspend fun TandemApiClient.budgetChangeHistory(
         BudgetChangeHistory(budget.deviceNode, budget.changeHistory(limit))
     }
 
-/** Deposits and transfers into each account by calendar year, keyed by account id; the first year shows when saving began. */
-suspend fun TandemApiClient.budgetAccountInflows(
+/** Each account's transactions, keyed by account id, for sorting contributions from growth and withdrawals. */
+suspend fun TandemApiClient.budgetAccountMovements(
     budgetId: String,
     accountIds: List<String>,
     encryptionPassword: String?,
-): Map<String, Map<Int, Long>> =
+): Map<String, List<AccountMovement>> =
     call {
         val budget = budget(budgetId, encryptionPassword)
-        accountIds.associateWith { budget.inflowsByYear(it) }
+        accountIds.associateWith { budget.accountMovements(it) }
     }
 
 /** Money-in transactions since [fromDate] tagged `#`[tag] in their notes, newest first. */

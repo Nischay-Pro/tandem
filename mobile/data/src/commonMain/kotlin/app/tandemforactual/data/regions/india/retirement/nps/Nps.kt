@@ -12,6 +12,7 @@ object Nps : RetirementPlan() {
     override val currency = "INR"
     override val description = "National Pension System, extra deduction beyond section 80C"
     override val accountKeywords = listOf("NPS", "Pension")
+    override val yearStartMonth = 4
     override val source = "Income-tax Act section 80CCD(1B) (incometaxindia.gov.in)"
 
     override val limits = (2015..2026).map { AnnualLimit(it, 5_000_000) }

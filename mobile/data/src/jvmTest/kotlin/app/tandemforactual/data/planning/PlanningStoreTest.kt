@@ -26,6 +26,27 @@ import kotlinx.serialization.json.jsonObject
 
 class PlanningStoreTest {
     @Test
+    fun anAgeFromAnOlderVersionIsDatedByWhenThisDeviceSavedIt(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val in2025 = PlanningStore(db.planningRecordDao(), "budget-1", cipher) { 1_750_000_000_000 }
+                in2025.put("us-401k", RetirementProfile.TYPE, JsonObject(mapOf("age" to JsonPrimitive(49))))
+                val profile = in2025.retirementProfiles().first().single()
+                assertEquals(2025, profile.legacyAgeYear)
+                assertEquals(50, profile.ageIn(2026))
+                val synced = PlanningStore(db.planningRecordDao(), "budget-1", cipher) { 7 }
+                synced.put("us-ira", RetirementProfile.TYPE, JsonObject(mapOf("age" to JsonPrimitive(49))))
+                val undated = synced.retirementProfiles().first().single { it.planId == "us-ira" }
+                assertEquals(null, undated.legacyAgeYear)
+                assertTrue(undated.needsBirthYear)
+            } finally {
+                db.close()
+            }
+        }
+
+    @Test
     fun savesRetirementProfiles(): Unit =
         runBlocking {
             val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
@@ -35,7 +56,7 @@ class PlanningStoreTest {
                     RetirementProfile(
                         "us-401k",
                         "acct-1",
-                        41,
+                        1985,
                         true,
                         500_000,
                         2026,
@@ -46,8 +67,10 @@ class PlanningStoreTest {
                             capMinor = 50_000,
                             vesting = Vesting(listOf(VestingStep(1, 5_000), VestingStep(2, 10_000))),
                             joinedYear = 2022,
+                            joinedMonth = 4,
                         ),
                         mapOf(2027 to 2_500_000L),
+                        roomStart = RoomStart(2026, 700_000),
                     )
                 store.save(profile)
                 store.save(RetirementProfile("us-ira"))
