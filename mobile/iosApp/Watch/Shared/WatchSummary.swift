@@ -153,6 +153,9 @@ struct WatchSummary: Codable, Equatable {
 
     var headlineAmount: String { amount(leadsWithPerDay ? perDay : leftToSpend) }
 
+    /// The headline's name where only a word or two fits, as on complications.
+    var headlineShort: String { leadsWithPerDay ? (daysLeft == 1 ? "Today" : "A day") : "Left to spend" }
+
     var headlineSecondary: String? { leadsWithPerDay ? "\(amount(leftToSpend)) left this month" : perDayText }
 
     var canQuickAdd: Bool { quickAdd?.open == true && state != .none }

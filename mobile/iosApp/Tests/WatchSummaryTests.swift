@@ -47,11 +47,13 @@ final class WatchSummaryTests: XCTestCase {
         XCTAssertEqual(perDay.headlineLabel, "A day · 9 days left")
         XCTAssertEqual(perDay.headlineAmount, "$93.62")
         XCTAssertEqual(perDay.headlineSecondary, "$842.65 left this month")
+        XCTAssertEqual(perDay.headlineShort, "A day")
 
         let month = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9,"pf":false}"#)
         XCTAssertEqual(month.headlineLabel, "Left to spend")
         XCTAssertEqual(month.headlineAmount, "$842.65")
         XCTAssertEqual(month.headlineSecondary, "$93.62 a day · 9 days left")
+        XCTAssertEqual(month.headlineShort, "Left to spend")
 
         XCTAssertEqual(try summary(self.ready).headlineLabel, "Left to spend")
     }

@@ -87,6 +87,19 @@ class WatchSurfacesTest {
     }
 
     @Test
+    fun theTileAndComplicationLeadWithTheSameFigureAsTheGlance() {
+        val split = summary().copy(perDayMinor = 9_362, daysLeft = 9)
+        val tile = texts(leftToSpendLayout(context, device, split))
+        assertTrue(tile.toString(), "A day" in tile && "$93.62" in tile)
+        val monthTile = texts(leftToSpendLayout(context, device, split.copy(perDayFirst = false)))
+        assertTrue(monthTile.toString(), WatchText.LEFT_TO_SPEND in monthTile && "$1,234.56" in monthTile)
+
+        val complication = WatchComplications.leftToSpend(split, null, ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
+        assertEquals("$93", text(complication))
+        assertEquals("A day", complication.title?.getTextAt(context.resources, Instant.now()).toString())
+    }
+
+    @Test
     fun theTileOffersAddOnlyOnceThePhoneAllowsIt() {
         assertFalse("+ Add" in texts(leftToSpendLayout(context, device, null)))
         assertFalse("+ Add" in texts(leftToSpendLayout(context, device, summary().copy(quickAdd = false))))

@@ -40,15 +40,16 @@ fun leftToSpendLayout(
     summary: WatchSummary?,
 ): LayoutElement =
     materialScope(context, device) {
+        val headline = summary?.takeIf { it.state != WatchState.LOCKED }?.let(WatchText::headline)
         primaryLayout(
-            titleSlot = { text(WatchText.LEFT_TO_SPEND.layoutString) },
+            titleSlot = { text((headline?.short ?: WatchText.LEFT_TO_SPEND).layoutString) },
             mainSlot = {
                 val message = message(summary)
-                if (message != null || summary == null) {
+                if (message != null || summary == null || headline == null) {
                     text(message.orEmpty().layoutString, maxLines = 3, typography = Typography.BODY_MEDIUM)
                 } else {
                     rings(summary, summary.categories.take(RINGS)) {
-                        text(summary.money(summary.leftToSpendMinor).layoutString, typography = Typography.DISPLAY_SMALL)
+                        text(summary.money(headline.minor).layoutString, typography = Typography.DISPLAY_SMALL)
                     }
                 }
             },

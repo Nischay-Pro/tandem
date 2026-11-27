@@ -35,9 +35,10 @@ object WatchText {
         val days = summary.daysLeft
         if (perDay != null && days != null) {
             val label = if (days == 1) "Left for today" else "A day · $days days left"
-            return Headline(perDay, label, "${summary.money(summary.leftToSpendMinor)} left this month")
+            val short = if (days == 1) "Today" else "A day"
+            return Headline(perDay, label, "${summary.money(summary.leftToSpendMinor)} left this month", short)
         }
-        return Headline(summary.leftToSpendMinor, LEFT_TO_SPEND, perDay(summary))
+        return Headline(summary.leftToSpendMinor, LEFT_TO_SPEND, perDay(summary), LEFT_TO_SPEND)
     }
 
     /** "Synced 10:42", or null before the phone has synced. */
@@ -103,8 +104,10 @@ object WatchText {
     }
 }
 
+/** [short] titles the tile and complications, where the full [label] doesn't fit. */
 data class Headline(
     val minor: Long?,
     val label: String,
     val secondary: String?,
+    val short: String,
 )
