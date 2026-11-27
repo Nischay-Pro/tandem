@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +37,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -95,31 +93,26 @@ internal fun BudgetTemplatesSheet(
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
         onDismissed = {},
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 680.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            modifier = Modifier.heightIn(max = 680.dp),
+            header = {
                 BudgetTemplatesHeader(mobileSession, onDismiss)
-                SaveTemplateSection(state, mobileSession, currentTemplateAssignments)
-                if (currentTemplateAssignments.size > 500) {
-                    InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
-                }
-                budgetActionFeedbackMessage(mobileSession)
-                if (currentBudgetTemplates.isEmpty()) {
-                    Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                } else {
-                    currentBudgetTemplates.forEach { template ->
-                        BudgetTemplateCard(template, state, mobileSession) {
-                            if (budgetTemplateReplacedCount(template.assignments, currentTemplateAssignments) > 0) {
-                                confirmingTemplate = template
-                            } else {
-                                applyTemplate(template)
-                            }
+            },
+        ) {
+            SaveTemplateSection(state, mobileSession, currentTemplateAssignments)
+            if (currentTemplateAssignments.size > 500) {
+                InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
+            }
+            budgetActionFeedbackMessage(mobileSession)
+            if (currentBudgetTemplates.isEmpty()) {
+                Text("Saved templates will appear here.", color = tandemPalette.muted, fontSize = TandemTypography.body)
+            } else {
+                currentBudgetTemplates.forEach { template ->
+                    BudgetTemplateCard(template, state, mobileSession) {
+                        if (budgetTemplateReplacedCount(template.assignments, currentTemplateAssignments) > 0) {
+                            confirmingTemplate = template
+                        } else {
+                            applyTemplate(template)
                         }
                     }
                 }

@@ -3,12 +3,8 @@
 package app.tandemforactual.ui.core.format
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.ChoiceRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -115,13 +111,10 @@ private fun LanguagePickerContent(
     onDismiss: () -> Unit,
 ) {
     val palette = tandemPalette
-    SurfaceCard(
-        Modifier
-            .fillMaxWidth()
-            .widthIn(max = 460.dp)
-            .padding(horizontal = 16.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+    SheetCard(
+        maxWidth = 460.dp,
+        spacing = TandemSpacing.small,
+        header = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 Icon(Lucide.Languages, contentDescription = null, modifier = Modifier.size(24.dp), tint = palette.accent)
                 Text(
@@ -134,23 +127,24 @@ private fun LanguagePickerContent(
                 )
                 TandemIconButton(Lucide.X, stringResource(Res.string.language_close), sizeDp = 40, modalClose = true, onClick = onDismiss)
             }
+        },
+    ) {
+        ChoiceRow(
+            stringResource(Res.string.settings_language_device),
+            stringResource(Res.string.language_device_detail),
+            selected = controller.current.isBlank(),
+        ) {
+            controller.choose("")
+            onDismiss()
+        }
+        APP_LANGUAGES.forEach { language ->
             ChoiceRow(
-                stringResource(Res.string.settings_language_device),
-                stringResource(Res.string.language_device_detail),
-                selected = controller.current.isBlank(),
+                language.nativeName,
+                language.englishName.takeIf { it != language.nativeName },
+                selected = controller.current == language.tag,
             ) {
-                controller.choose("")
+                controller.choose(language.tag)
                 onDismiss()
-            }
-            APP_LANGUAGES.forEach { language ->
-                ChoiceRow(
-                    language.nativeName,
-                    language.englishName.takeIf { it != language.nativeName },
-                    selected = controller.current == language.tag,
-                ) {
-                    controller.choose(language.tag)
-                    onDismiss()
-                }
             }
         }
     }

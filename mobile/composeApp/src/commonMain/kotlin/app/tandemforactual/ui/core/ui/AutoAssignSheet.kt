@@ -2,12 +2,9 @@
 
 package app.tandemforactual.ui.core.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
@@ -34,13 +31,12 @@ import app.tandemforactual.ui.core.state.planAutoAssign
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
@@ -71,14 +67,12 @@ internal fun AutoAssignSheet(
     val changes = remember(rule, month, history, available) { month?.let { planAutoAssign(rule, it, history, available) }.orEmpty() }
     val scope = rememberCoroutineScope()
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 460.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            maxWidth = 460.dp,
+            header = {
                 TandemModalHeader("Auto-assign", onClose = onDismiss, leadingIcon = Lucide.Sparkles)
-                Text("${state.formatCurrency(available)} left to budget", color = tandemPalette.muted, fontSize = TandemTypography.label)
-                FilterPills(AutoAssignRule.entries.map { it to it.label }, rule, { rule = it })
-                Text(rule.detail, color = tandemPalette.muted, fontSize = TandemTypography.label)
-                AutoAssignPreview(state, changes.map { it.name to it.addedMinor })
-                budgetActionFeedbackMessage(mobileSession)
+            },
+            actions = {
                 TandemActionButton(
                     if (changes.isEmpty()) "Nothing to assign" else "Assign ${state.formatCurrency(changes.sumOf { it.addedMinor })}",
                     TandemActionButtonTone.PRIMARY,
@@ -98,7 +92,13 @@ internal fun AutoAssignSheet(
                         if (applied) onDismiss()
                     }
                 }
-            }
+            },
+        ) {
+            Text("${state.formatCurrency(available)} left to budget", color = tandemPalette.muted, fontSize = TandemTypography.label)
+            FilterPills(AutoAssignRule.entries.map { it to it.label }, rule, { rule = it })
+            Text(rule.detail, color = tandemPalette.muted, fontSize = TandemTypography.label)
+            AutoAssignPreview(state, changes.map { it.name to it.addedMinor })
+            budgetActionFeedbackMessage(mobileSession)
         }
     }
 }

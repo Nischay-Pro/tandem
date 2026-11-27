@@ -3,14 +3,9 @@
 package app.tandemforactual.ui.feature.schedules.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +23,9 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -81,41 +76,32 @@ internal fun ScheduleActionsSheet(
         },
     ) {
         if (selectedSchedule != null) {
-            SurfaceCard(
-                Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 480.dp)
-                    .padding(horizontal = TandemSpacing.large),
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(TandemSpacing.large)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
+            SheetCard(
+                maxWidth = 480.dp,
+                header = {
                     ScheduleSheetHeader(state, mobileSession, selection, dialog, selectedSchedule)
-                    when {
-                        dialog.dialogMode == "delete" -> {
-                            Text(
-                                "Confirm deleting this schedule in the alert.",
-                                color = tandemPalette.muted,
-                                fontSize = TandemTypography.body,
-                            )
-                        }
-                        dialog.dialogMode == "edit" -> editForm()
-                        else ->
-                            ScheduleActionMenu(
-                                state,
-                                mobileSession,
-                                selection,
-                                dialog,
-                                selectedSchedule,
-                                pendingScheduleActions,
-                                pendingActionBlocksChoice,
-                                scope,
-                            )
+                },
+            ) {
+                when {
+                    dialog.dialogMode == "delete" -> {
+                        Text(
+                            "Confirm deleting this schedule in the alert.",
+                            color = tandemPalette.muted,
+                            fontSize = TandemTypography.body,
+                        )
                     }
+                    dialog.dialogMode == "edit" -> editForm()
+                    else ->
+                        ScheduleActionMenu(
+                            state,
+                            mobileSession,
+                            selection,
+                            dialog,
+                            selectedSchedule,
+                            pendingScheduleActions,
+                            pendingActionBlocksChoice,
+                            scope,
+                        )
                 }
             }
         }

@@ -1,16 +1,17 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.core.ui
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -22,8 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -37,24 +36,26 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.format.platformWeekday
 import app.tandemforactual.ui.core.format.transactionIsoDate
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
+import app.tandemforactual.ui.design.buttons.PeriodStepper
+import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SelectableTile
-import app.tandemforactual.ui.design.buttons.TandemActionButton
-import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.buttons.TandemNavigationChevronButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.FieldFrame
+import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
+import app.tandemforactual.ui.design.theme.WindowWidthClass
+import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
+import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.Calendar
-import com.composables.icons.lucide.ChevronLeft
-import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
-import kotlinx.coroutines.flow.first
 
 @Composable
 internal fun DatePickerDialog(
@@ -63,103 +64,132 @@ internal fun DatePickerDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
 ) {
-    val selectedDate = parseIsoDate(initialDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 1, 1)
-    var visibleYear by rememberSaveable(initialDate) { mutableStateOf(selectedDate.first) }
-    var visibleMonth by rememberSaveable(initialDate) { mutableStateOf(selectedDate.second) }
-    val firstDayOffset = (platformWeekday(visibleYear, visibleMonth, 1) - platformFirstWeekday() + 7) % 7
-    val cells = List<Int?>(firstDayOffset) { null } + (1..daysInMonth(visibleYear, visibleMonth)).map { it }
+    val selected = parseIsoDate(initialDate) ?: parseIsoDate(platformTodayIsoDate()) ?: Triple(2026, 1, 1)
+    var visibleYear by rememberSaveable(initialDate) { mutableStateOf(selected.first) }
+    var visibleMonth by rememberSaveable(initialDate) { mutableStateOf(selected.second) }
+    val month =
+        DatePickerMonth(visibleYear, visibleMonth) { step ->
+            val index = visibleYear * 12 + visibleMonth - 1 + step
+            visibleYear = index / 12
+            visibleMonth = index % 12 + 1
+        }
+    val wideWindow = currentWindowSizeInfo().widthClass >= WindowWidthClass.MEDIUM
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
-                TandemModalHeader(
-                    title = "Choose date",
-                    titleSize = TandemTypography.cardTitle,
-                    onClose = onDismiss,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TandemNavigationChevronButton(Lucide.ChevronLeft, "Previous month", onClick = {
-                        if (visibleMonth == 1) {
-                            visibleMonth = 12
-                            visibleYear -= 1
-                        } else {
-                            visibleMonth -= 1
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            if (wideWindow && maxHeight < DATE_PICKER_STACKED_MIN_HEIGHT) {
+                SheetCard(maxWidth = 640.dp, spacing = TandemSpacing.small) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {
+                        Column(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                            DatePickerHeader(onDismiss)
+                            DatePickerStepper(month)
+                            SecondaryButton("Today", Modifier.fillMaxWidth()) { onSelect(platformTodayIsoDate()) }
                         }
-                    })
-                    Text(
-                        formatMonth(visibleYear, visibleMonth),
-                        Modifier.weight(1f),
-                        color = tandemPalette.text,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    TandemNavigationChevronButton(Lucide.ChevronRight, "Next month", onClick = {
-                        if (visibleMonth == 12) {
-                            visibleMonth = 1
-                            visibleYear += 1
-                        } else {
-                            visibleMonth += 1
+                        Column(Modifier.weight(0.58f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                            DatePickerMonthGrid(month, initialDate, onSelect)
                         }
-                    })
-                }
-                Row(Modifier.fillMaxWidth()) {
-                    (0..6).forEach { column ->
-                        val weekday = formatWeekday(visibleYear, visibleMonth, 1 + ((column - firstDayOffset + 7) % 7))
-                        Text(
-                            weekday.take(1),
-                            Modifier.weight(1f),
-                            color = tandemPalette.muted,
-                            textAlign = TextAlign.Center,
-                            fontSize = TandemTypography.caption,
-                        )
                     }
                 }
-                ScheduleDayGrid(visibleYear, visibleMonth, cells, initialDate, onSelect)
-                TandemActionButton("Cancel", TandemActionButtonTone.NEUTRAL, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            } else {
+                SheetCard(
+                    spacing = TandemSpacing.small,
+                    header = { DatePickerHeader(onDismiss) },
+                    actions = { SecondaryButton("Today", Modifier.fillMaxWidth()) { onSelect(platformTodayIsoDate()) } },
+                ) {
+                    DatePickerStepper(month)
+                    DatePickerMonthGrid(month, initialDate, onSelect)
+                }
             }
         }
     }
 }
 
-/** The weeks of the visible month, one tappable cell per day. */
+private val DATE_PICKER_STACKED_MIN_HEIGHT = 560.dp
+
+private class DatePickerMonth(
+    val year: Int,
+    val month: Int,
+    val step: (Int) -> Unit,
+) {
+    val firstDayOffset = (platformWeekday(year, month, 1) - platformFirstWeekday() + 7) % 7
+    val cells: List<Int?> = List<Int?>(firstDayOffset) { null } + (1..daysInMonth(year, month)).map { it }
+}
+
 @Composable
-private fun ScheduleDayGrid(
-    year: Int,
-    month: Int,
-    cells: List<Int?>,
-    initialDate: String,
+private fun DatePickerHeader(onDismiss: () -> Unit) {
+    TandemModalHeader(title = "Choose date", titleSize = TandemTypography.cardTitle, onClose = onDismiss)
+}
+
+@Composable
+private fun DatePickerStepper(month: DatePickerMonth) {
+    PeriodStepper(
+        title = formatMonth(month.year, month.month),
+        previousLabel = "Previous month",
+        nextLabel = "Next month",
+        onPrevious = { month.step(-1) },
+        onNext = { month.step(1) },
+    )
+}
+
+/** The weekday initials and the weeks of the visible month, one tappable cell per day. */
+@Composable
+private fun DatePickerMonthGrid(
+    month: DatePickerMonth,
+    selectedDate: String,
     onSelect: (String) -> Unit,
 ) {
-    cells.chunked(7).forEach { week ->
+    Row(Modifier.fillMaxWidth()) {
+        (0..6).forEach { column ->
+            Text(
+                formatWeekday(month.year, month.month, 1 + ((column - month.firstDayOffset + 7) % 7)),
+                Modifier.weight(1f),
+                color = tandemPalette.muted,
+                textAlign = TextAlign.Center,
+                fontSize = TandemTypography.caption,
+            )
+        }
+    }
+    month.cells.chunked(7).forEach { week ->
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
             week.forEach { day ->
                 if (day == null) {
-                    Spacer(Modifier.weight(1f).height(44.dp))
+                    Spacer(Modifier.weight(1f).height(MIN_TOUCH_TARGET))
                 } else {
-                    val value = transactionIsoDate(year, month, day)
-                    val isSelected = value == initialDate
-                    SelectableTile(
-                        selected = isSelected,
-                        contentDescription = displayTransactionDate(value),
-                        onSelect = { onSelect(value) },
-                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                        shape = CircleShape,
-                        selectedBackground = tandemPalette.accentSurface,
-                        unselectedBackground = Color.Transparent,
-                    ) {
-                        Text(
-                            day.toString(),
-                            color = if (isSelected) tandemPalette.accent else tandemPalette.text,
-                            fontSize = TandemTypography.label,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
+                    DatePickerDayCell(transactionIsoDate(month.year, month.month, day), day, selectedDate, onSelect)
                 }
             }
-            repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(44.dp)) }
+            repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(MIN_TOUCH_TARGET)) }
         }
+    }
+}
+
+@Composable
+private fun RowScope.DatePickerDayCell(
+    isoDate: String,
+    day: Int,
+    selectedDate: String,
+    onSelect: (String) -> Unit,
+) {
+    val selected = selectedDate == isoDate
+    val textColor by animateColorAsState(
+        targetValue = if (selected) tandemPalette.accent else tandemPalette.text,
+        animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+        label = "date-selection-text",
+    )
+    SelectableTile(
+        selected = selected,
+        contentDescription = displayTransactionDate(isoDate),
+        onSelect = { onSelect(isoDate) },
+        modifier = Modifier.weight(1f).heightIn(min = MIN_TOUCH_TARGET),
+        shape = CircleShape,
+        selectedBackground = tandemPalette.accentSurface,
+        unselectedBackground = Color.Transparent,
+    ) {
+        Text(
+            day.toString(),
+            color = textColor,
+            fontSize = TandemTypography.label,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        )
     }
 }
 

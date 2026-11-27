@@ -3,10 +3,7 @@
 package app.tandemforactual.ui.feature.transactions.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,7 +19,6 @@ import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.inputs.transactionAmountInputMagnitude
 import app.tandemforactual.ui.design.templates.FloatingTransactionDeleteAction
 import app.tandemforactual.ui.design.templates.FloatingTransactionSave
-import app.tandemforactual.ui.design.templates.TransactionAmountKeypad
 import app.tandemforactual.ui.design.theme.tandemFadeEnter
 import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -123,9 +119,26 @@ internal fun EditTransactionForm(
     onSaveTransaction: (String?, (Boolean) -> Unit) -> Unit,
     onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
 ) {
+    TransactionFormFrame { layout ->
+        EditTransactionFormContent(state, navigation, mobileSession, liveAccounts, pickers, layout, onSaveTransaction, onDeleteTransaction)
+    }
+}
+
+@Composable
+private fun EditTransactionFormContent(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    liveAccounts: List<LiveAccountSummary>,
+    pickers: TransactionFormPickerState,
+    layout: TransactionFormLayout,
+    onSaveTransaction: (String?, (Boolean) -> Unit) -> Unit,
+    onDeleteTransaction: ((Boolean) -> Unit) -> Unit,
+) {
     val baseline = remember(state.selectedTransactionRecordId) { EditTransactionBaseline(state) }
     val confirmations = rememberTransactionSaveConfirmationState(state.selectedTransactionRecordId)
     val amountEntry = rememberTransactionAmountEntryState(state.selectedTransactionRecordId, keypadVisible = false)
+    CollapseKeypadWhenShort(layout, amountEntry)
     var notesFocused by remember { mutableStateOf(false) }
     val parsedAmount = state.parseAmountMinorUnits(state.transactionAmount)
     val amountMinorUnits = transactionAmountInputMagnitude(parsedAmount ?: state.selectedTransactionAmountMinor)
@@ -137,7 +150,11 @@ internal fun EditTransactionForm(
     }
     val hasChanges = baseline.hasChanges(state, parsedAmount)
     SavedFeedbackTimer(baseline)
-    Column(Modifier.fillMaxSize().imePadding()) {
+    TransactionFormScaffold(
+        layout,
+        amountEntry.keypadVisible,
+        keypad = { TransactionFormKeypad(state, layout, amountEntry.keypadActions(state, editing = true, dismissKeypad), it) },
+    ) {
         TransactionFormPage(amountEntry.keypadVisible || notesFocused, dismissKeypad) {
             TransactionAmountHeader(
                 state,
@@ -163,7 +180,7 @@ internal fun EditTransactionForm(
             }
         }
         EditTransactionActionBar(
-            amountEntry.keypadVisible,
+            amountEntry.keypadVisible && !layout.keypadBeside,
             deleteEnabled = !mobileSession.isSavingTransaction,
             saveVisible = hasChanges || baseline.savedFeedback,
             compactSave = compactSave || baseline.savedFeedback,
@@ -178,15 +195,6 @@ internal fun EditTransactionForm(
                 confirmations.requestSave(state.transactionDate, budgetAmountPreview, saveEditTransaction)
             },
         )
-        if (amountEntry.keypadVisible) {
-            TransactionAmountKeypad(
-                onDigit = { amountEntry.enterEditDigit(state, it) },
-                onDelete = { amountEntry.deleteEditDigit(state) },
-                onOperator = { amountEntry.chooseEditOperator(state, it) },
-                onEquals = { amountEntry.calculateEditAmount(state) },
-                onDone = dismissKeypad,
-            )
-        }
     }
     EditTransactionAccountPicker(state, liveAccounts, pickers)
     TransactionFormDatePicker(state, pickers)

@@ -83,6 +83,41 @@ internal fun calculateAmountMinorUnits(
     return result?.takeIf { it in -MAX_TRANSACTION_AMOUNT_MINOR_UNITS..MAX_TRANSACTION_AMOUNT_MINOR_UNITS }
 }
 
+/** The amount once the decimal separator is typed: what was typed becomes whole units, or null past the largest amount. */
+internal fun startAmountFraction(
+    currentMinorUnits: Long,
+    fractionDigits: Int,
+): Long? {
+    val whole = transactionAmountInputMagnitude(currentMinorUnits)
+    val scale = decimalScale(fractionDigits)
+    return (whole * scale).takeIf { whole <= MAX_TRANSACTION_AMOUNT_MINOR_UNITS / scale }
+}
+
+/** Fills the next fraction place after the decimal separator, from the left. */
+internal fun appendAmountFractionDigit(
+    currentMinorUnits: Long,
+    digit: Int,
+    fractionDigitsTyped: Int,
+    fractionDigits: Int,
+): Long {
+    require(digit in 0..9)
+    val current = transactionAmountInputMagnitude(currentMinorUnits)
+    if (fractionDigitsTyped >= fractionDigits) return current
+    return (current + digit * decimalScale(fractionDigits - 1 - fractionDigitsTyped)).coerceAtMost(MAX_TRANSACTION_AMOUNT_MINOR_UNITS)
+}
+
+/** Clears the last typed fraction place; with none typed, undoes the decimal separator. */
+internal fun removeAmountFractionDigit(
+    currentMinorUnits: Long,
+    fractionDigitsTyped: Int,
+    fractionDigits: Int,
+): Long {
+    val current = transactionAmountInputMagnitude(currentMinorUnits)
+    if (fractionDigitsTyped <= 0) return current / decimalScale(fractionDigits)
+    val place = decimalScale(fractionDigits - fractionDigitsTyped)
+    return current - (current / place % 10) * place
+}
+
 private fun decimalScale(fractionDigits: Int): Long {
     var scale = 1L
     repeat(fractionDigits) { scale *= 10L }

@@ -3,16 +3,12 @@
 package app.tandemforactual.ui.feature.budget.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.copyBudgetMonth
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
@@ -20,7 +16,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -43,23 +39,16 @@ internal fun CopyLastMonthSheet(
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
         onDismissed = {},
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            header = {
                 TandemModalHeader(
                     title = "Copy last month",
                     leadingIcon = Lucide.CalendarDays,
                     enabled = !mobileSession.isPerformingBudgetAction,
                     onClose = { if (!mobileSession.isPerformingBudgetAction) onDismiss() },
                 )
-                Text(
-                    "Replace ${state.selectedMonth} assignments with last month’s amounts?",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.body,
-                )
-                budgetActionFeedbackMessage(mobileSession)
+            },
+            actions = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
                         "Cancel",
@@ -85,7 +74,14 @@ internal fun CopyLastMonthSheet(
                         }
                     }
                 }
-            }
+            },
+        ) {
+            Text(
+                "Replace ${state.selectedMonth} assignments with last month’s amounts?",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.body,
+            )
+            budgetActionFeedbackMessage(mobileSession)
         }
     }
 }

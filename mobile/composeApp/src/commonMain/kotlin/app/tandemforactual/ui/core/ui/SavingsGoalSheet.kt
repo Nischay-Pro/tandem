@@ -32,6 +32,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
@@ -61,19 +62,11 @@ internal fun SavingsGoalSheet(
     var error by remember(visible) { mutableStateOf<String?>(null) }
     val categories = month?.groups.orEmpty().flatMap { it.categories }
     TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = {}) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader(if (goal == null) "New savings goal" else "Savings goal", onClose = onDismiss)
-                TextFieldCard("Name", name, { name = it.take(60) }, TextFieldOptions(placeholder = "Emergency fund"))
-                TextFieldCard("Target", target, { target = it }, settings.amountOptions())
-                TextFieldCard("Target date (optional)", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2027-06-01"))
-                ListRow(
-                    "Track with category",
-                    categories.firstOrNull { it.id == categoryId }?.name ?: "None",
-                    onClick = { choosingCategory = true },
-                )
-                ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
-                error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+            },
+            actions = {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     if (goal != null) {
                         TandemActionButton("Delete", TandemActionButtonTone.DESTRUCTIVE, Modifier.weight(1f)) { onDelete(goal) }
@@ -102,7 +95,18 @@ internal fun SavingsGoalSheet(
                         }
                     }
                 }
-            }
+            },
+        ) {
+            TextFieldCard("Name", name, { name = it.take(60) }, TextFieldOptions(placeholder = "Emergency fund"))
+            TextFieldCard("Target", target, { target = it }, settings.amountOptions())
+            TextFieldCard("Target date (optional)", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2027-06-01"))
+            ListRow(
+                "Track with category",
+                categories.firstOrNull { it.id == categoryId }?.name ?: "None",
+                onClick = { choosingCategory = true },
+            )
+            ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
+            error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
     }
     CategoryChoiceDialog(choosingCategory, categories, onDismiss = { choosingCategory = false }) {
@@ -120,7 +124,7 @@ private fun CategoryChoiceDialog(
     onPick: (String?) -> Unit,
 ) {
     TandemChoiceDialog(visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
+        SurfaceCard(Modifier.padding(horizontal = TandemSpacing.large).widthIn(max = 400.dp).fillMaxWidth()) {
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                 ListRow("None", onClick = { onPick(null) })
                 categories.forEach { category ->

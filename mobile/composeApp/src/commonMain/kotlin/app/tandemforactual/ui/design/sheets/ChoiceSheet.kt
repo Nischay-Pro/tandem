@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +27,6 @@ import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -50,38 +48,42 @@ internal fun ChoiceSheet(
     var chosen by remember(title) { mutableStateOf(initial) }
     var query by remember(title) { mutableStateOf("") }
     TandemTaskSheet(visible = true, onDismissRequest = onDismiss, onDismissed = {}) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.fillMaxWidth().padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            scrollBody = false,
+            header = {
                 TandemModalHeader(title, onClose = onDismiss)
-                if (options.size > 8) TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Filter the list"))
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                    options.filter { query.isBlank() || it.second.contains(query.trim(), ignoreCase = true) }.forEach { (id, label) ->
-                        val selected = id in chosen
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = MIN_TOUCH_TARGET)
-                                .toggleable(value = selected, role = Role.Checkbox) { chosen = if (it) chosen + id else chosen - id }
-                                .padding(vertical = TandemSpacing.medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(label, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
-                            if (selected) Icon(Lucide.Check, null, Modifier.size(18.dp), tint = palette.accent)
-                        }
-                    }
-                }
-                Text(
-                    if (chosen.isEmpty()) "Nothing picked, so all ${title.lowercase()} are included." else "${chosen.size} picked",
-                    color = palette.muted,
-                    fontSize = TandemTypography.caption,
-                )
+            },
+            actions = {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton("Clear", TandemActionButtonTone.NEUTRAL, Modifier.weight(1f), enabled = chosen.isNotEmpty()) {
                         chosen = emptySet()
                     }
                     TandemActionButton("Done", TandemActionButtonTone.PRIMARY, Modifier.weight(1f)) { onDone(chosen) }
                 }
+            },
+        ) {
+            if (options.size > 8) TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Filter the list"))
+            Column(Modifier.weight(1f, fill = false).heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                options.filter { query.isBlank() || it.second.contains(query.trim(), ignoreCase = true) }.forEach { (id, label) ->
+                    val selected = id in chosen
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = MIN_TOUCH_TARGET)
+                            .toggleable(value = selected, role = Role.Checkbox) { chosen = if (it) chosen + id else chosen - id }
+                            .padding(vertical = TandemSpacing.medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(label, Modifier.weight(1f), color = palette.text, fontSize = TandemTypography.body)
+                        if (selected) Icon(Lucide.Check, null, Modifier.size(18.dp), tint = palette.accent)
+                    }
+                }
             }
+            Text(
+                if (chosen.isEmpty()) "Nothing picked, so all ${title.lowercase()} are included." else "${chosen.size} picked",
+                color = palette.muted,
+                fontSize = TandemTypography.caption,
+            )
         }
     }
 }

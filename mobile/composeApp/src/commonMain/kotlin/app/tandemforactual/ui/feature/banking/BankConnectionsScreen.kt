@@ -2,11 +2,8 @@
 
 package app.tandemforactual.ui.feature.banking
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,7 +29,6 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.IntroCard
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -41,6 +37,7 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -181,41 +178,44 @@ private fun ManageBankLinkDialog(
 ) {
     val palette = tandemPalette
     TandemChoiceDialog(visible = managed != null, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SheetCard(
+            maxWidth = 480.dp,
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader(managed?.name.orEmpty(), onClose = onDismiss, leadingIcon = Lucide.Landmark)
-                managed?.failure?.let {
-                    val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
-                    Text(
-                        bankFailureMessage(it, browser),
-                        color = palette.negative,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
-                ListRow(
-                    if (managed != null && BankProviders.forSource(managed.source) is BrowserBankProvider) {
-                        "Sign in at the bank again"
-                    } else {
-                        "Link to a different bank account"
-                    },
-                    "Keeps this budget account and its history",
-                    leading = RowLeading.Icon(Lucide.Link),
-                    onClick = {
-                        val account = managed ?: return@ListRow
-                        onRelink(account)
-                    },
-                )
-                ListRow(
-                    "Unlink",
-                    "Stops syncing. Transactions already imported stay.",
-                    leading = RowLeading.Icon(Lucide.Unlink),
-                    options = ListRowOptions(trailingColor = palette.negative),
-                    onClick = {
-                        val account = managed ?: return@ListRow
-                        onUnlink(account)
-                    },
+            },
+        ) {
+            managed?.failure?.let {
+                val browser = BankProviders.forSource(managed?.source) is BrowserBankProvider
+                Text(
+                    bankFailureMessage(it, browser),
+                    color = palette.negative,
+                    fontSize = TandemTypography.compactBody,
                 )
             }
+            ListRow(
+                if (managed != null && BankProviders.forSource(managed.source) is BrowserBankProvider) {
+                    "Sign in at the bank again"
+                } else {
+                    "Link to a different bank account"
+                },
+                "Keeps this budget account and its history",
+                leading = RowLeading.Icon(Lucide.Link),
+                onClick = {
+                    val account = managed ?: return@ListRow
+                    onRelink(account)
+                },
+            )
+            ListRow(
+                "Unlink",
+                "Stops syncing. Transactions already imported stay.",
+                leading = RowLeading.Icon(Lucide.Unlink),
+                options = ListRowOptions(trailingColor = palette.negative),
+                onClick = {
+                    val account = managed ?: return@ListRow
+                    onUnlink(account)
+                },
+            )
         }
     }
 }

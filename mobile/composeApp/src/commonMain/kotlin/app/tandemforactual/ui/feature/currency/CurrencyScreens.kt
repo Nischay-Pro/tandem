@@ -1,11 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.currency
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.ConvertedTotal
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.rateBetween
@@ -35,7 +30,6 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.IntroCard
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -44,6 +38,7 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.TextFieldCard
@@ -248,27 +243,11 @@ private fun ExchangeRateDialog(
     var date by remember(currency) { mutableStateOf(platformTodayIsoDate()) }
     var error by remember(currency) { mutableStateOf<String?>(null) }
     TandemChoiceDialog(visible = currency != null, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader("$currency to $budgetCurrency", onClose = onDismiss, leadingIcon = Lucide.ArrowLeftRight)
-                Text(
-                    "How many $budgetCurrency one $currency is worth, from your bank or a rate site, and the day you checked.",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
-                TextFieldCard("1 $currency in $budgetCurrency", rate, { rate = it.take(14) }, TextFieldOptions(placeholder = "1.08"))
-                TextFieldCard("As of", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2026-11-21"))
-                if (history.size > 1) {
-                    Text(
-                        "Earlier rates\n" +
-                            history.dropLast(1).takeLast(5).asReversed().joinToString("\n") {
-                                "${formatRate(it.value!!)} $budgetCurrency · ${formatLiveDate(it.asOf)}"
-                            },
-                        color = tandemPalette.muted,
-                        fontSize = TandemTypography.compactBody,
-                    )
-                }
-                error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+            },
+            actions = {
                 TandemActionButton("Save rate", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                     val parsed =
                         rate
@@ -291,7 +270,26 @@ private fun ExchangeRateDialog(
                         onSave(existing, true)
                     }
                 }
+            },
+        ) {
+            Text(
+                "How many $budgetCurrency one $currency is worth, from your bank or a rate site, and the day you checked.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
+            TextFieldCard("1 $currency in $budgetCurrency", rate, { rate = it.take(14) }, TextFieldOptions(placeholder = "1.08"))
+            TextFieldCard("As of", date, { date = it.take(10) }, TextFieldOptions(placeholder = "2026-11-21"))
+            if (history.size > 1) {
+                Text(
+                    "Earlier rates\n" +
+                        history.dropLast(1).takeLast(5).asReversed().joinToString("\n") {
+                            "${formatRate(it.value!!)} $budgetCurrency · ${formatLiveDate(it.asOf)}"
+                        },
+                    color = tandemPalette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
             }
+            error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
     }
 }

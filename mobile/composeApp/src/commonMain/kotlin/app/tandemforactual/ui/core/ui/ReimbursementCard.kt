@@ -2,11 +2,7 @@
 
 package app.tandemforactual.ui.core.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,15 +26,14 @@ import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.CircleCheck
@@ -93,24 +88,12 @@ private fun ReimbursementDialog(
             .filter { it in Reimbursement.claimPlans }
             .mapNotNull(RetirementPlans::byId)
     TandemChoiceDialog(visible = true, onDismissRequest = onClose) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            maxWidth = 480.dp,
+            header = {
                 TandemModalHeader("Expect a reimbursement", onClose = onClose, leadingIcon = Lucide.HandCoins)
-                if (claimPlans.isNotEmpty()) {
-                    FilterPills(claimPlans.map { it.displayName to it.displayName }, from, { name ->
-                        from = name
-                        val plan = claimPlans.first { it.displayName == name }
-                        claimBy = date?.let { Reimbursement.claimDeadline(plan.id, it) }
-                    })
-                }
-                TextFieldCard("Who pays you back", from, { from = it }, TextFieldOptions(placeholder = "e.g. Sam, work"))
-                TextFieldCard("Amount owed", owed, { owed = it }, TextFieldOptions(placeholder = "0.00"))
-                DateField("Claim by", claimBy, "No deadline", { claimBy = it })
-                Text(
-                    "It stays on this budget’s encrypted planning data, not in Actual.",
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.label,
-                )
+            },
+            actions = {
                 TandemActionButton("Track it", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                     val minor = state.parseAmountMinorUnits(owed)?.let { kotlin.math.abs(it) } ?: -amount
                     onClose()
@@ -128,7 +111,23 @@ private fun ReimbursementDialog(
                         )
                     }
                 }
+            },
+        ) {
+            if (claimPlans.isNotEmpty()) {
+                FilterPills(claimPlans.map { it.displayName to it.displayName }, from, { name ->
+                    from = name
+                    val plan = claimPlans.first { it.displayName == name }
+                    claimBy = date?.let { Reimbursement.claimDeadline(plan.id, it) }
+                })
             }
+            TextFieldCard("Who pays you back", from, { from = it }, TextFieldOptions(placeholder = "e.g. Sam, work"))
+            TextFieldCard("Amount owed", owed, { owed = it }, TextFieldOptions(placeholder = "0.00"))
+            DateField("Claim by", claimBy, "No deadline", { claimBy = it })
+            Text(
+                "It stays on this budget’s encrypted planning data, not in Actual.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+            )
         }
     }
 }

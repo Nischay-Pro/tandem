@@ -2,11 +2,8 @@
 
 package app.tandemforactual.ui.feature.transactions.components
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
@@ -27,7 +24,6 @@ import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.inputs.isValidTransferDestination
 import app.tandemforactual.ui.design.inputs.transactionAmountInputMagnitude
 import app.tandemforactual.ui.design.templates.FloatingTransactionSave
-import app.tandemforactual.ui.design.templates.TransactionAmountKeypad
 import app.tandemforactual.ui.feature.transactions.TransactionAccountPickerDialog
 import app.tandemforactual.ui.feature.transactions.receipt.ReceiptScanOverlay
 
@@ -41,7 +37,23 @@ internal fun NewTransactionForm(
     pickers: TransactionFormPickerState,
     onCreateTransaction: (String?) -> Unit,
 ) {
-    val amountEntry = rememberTransactionAmountEntryState(keypadVisible = true)
+    TransactionFormFrame { layout ->
+        NewTransactionFormContent(state, navigation, mobileSession, liveAccounts, pickers, layout, onCreateTransaction)
+    }
+}
+
+@Composable
+private fun NewTransactionFormContent(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    liveAccounts: List<LiveAccountSummary>,
+    pickers: TransactionFormPickerState,
+    layout: TransactionFormLayout,
+    onCreateTransaction: (String?) -> Unit,
+) {
+    val amountEntry = rememberTransactionAmountEntryState(keypadVisible = !layout.keypadStartsClosed)
+    CollapseKeypadWhenShort(layout, amountEntry)
     val confirmations = rememberTransactionSaveConfirmationState()
     var notesFocused by remember { mutableStateOf(false) }
     val compactSave = transactionFormKeyboardHandling(notesFocused, amountEntry.keypadVisible)
@@ -52,7 +64,11 @@ internal fun NewTransactionForm(
         newTransactionTargetIsValid(state, mobileSession, liveAccounts.isOffBudget(state.newTransactionAccountId))
     val receiptScan = rememberTransactionReceiptScan(state, mobileSession) { amountEntry.keypadVisible = false }
     val dismissKeypad = dismissKeypadAction(amountEntry)
-    Column(Modifier.fillMaxSize().imePadding()) {
+    TransactionFormScaffold(
+        layout,
+        amountEntry.keypadVisible,
+        keypad = { TransactionFormKeypad(state, layout, amountEntry.keypadActions(state, editing = false, dismissKeypad), it) },
+    ) {
         TransactionFormPage(amountEntry.keypadVisible || notesFocused, dismissKeypad) {
             TransactionAmountHeader(
                 state,
@@ -77,7 +93,7 @@ internal fun NewTransactionForm(
             }
         }
         NewTransactionActionBar(
-            amountEntry.keypadVisible,
+            amountEntry.keypadVisible && !layout.keypadBeside,
             compactSave,
             saveEnabled =
                 !mobileSession.isSavingTransaction &&
@@ -96,15 +112,6 @@ internal fun NewTransactionForm(
                 confirmations.requestSave(state.transactionDate, budgetAmountPreview, onCreateTransaction)
             },
         )
-        if (amountEntry.keypadVisible) {
-            TransactionAmountKeypad(
-                onDigit = { amountEntry.enterDigit(state, it) },
-                onDelete = { amountEntry.deleteDigit(state) },
-                onOperator = { amountEntry.chooseOperator(state, it) },
-                onEquals = { amountEntry.calculate(state) },
-                onDone = dismissKeypad,
-            )
-        }
     }
     ReceiptScanOverlay(receiptScan.scanningReceipt, receiptScan.receiptPreview)
     NewTransactionAccountPicker(state, liveAccounts, pickers)

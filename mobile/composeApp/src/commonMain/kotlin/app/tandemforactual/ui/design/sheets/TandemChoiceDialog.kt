@@ -8,7 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.tandemforactual.ui.design.theme.TandemMotion
+import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemFadeEnter
 import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -38,7 +40,11 @@ internal fun TandemChoiceDialog(
             // A window that wraps its content is resized by the system on every frame its content animates, which
             // stalls the animation; filling the screen keeps the window still and centres the content instead.
             Box(
-                Modifier.fillMaxSize().imePadding().clickable(remember { MutableInteractionSource() }, null, onClick = onDismissRequest),
+                Modifier
+                    .fillMaxSize()
+                    .clickable(remember { MutableInteractionSource() }, null, onClick = onDismissRequest)
+                    .safeDrawingPadding()
+                    .padding(vertical = TandemSpacing.small),
                 contentAlignment = Alignment.Center,
             ) {
                 AnimatedVisibility(

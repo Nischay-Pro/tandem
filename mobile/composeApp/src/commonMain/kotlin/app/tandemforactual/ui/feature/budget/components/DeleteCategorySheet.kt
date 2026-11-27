@@ -73,9 +73,9 @@ internal fun DeleteCategorySheet(
         if (category != null) {
             SurfaceCard(
                 Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 520.dp)
                     .padding(horizontal = 16.dp)
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth()
                     .heightIn(max = 720.dp),
             ) {
                 Column(
@@ -85,7 +85,7 @@ internal fun DeleteCategorySheet(
                     DeleteCategoryHeader(category, mobileSession) { sheets.showDeleteDialog = false }
                     LabelText("Move transactions to")
                     Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         val destinations: List<Pair<String?, String>> =

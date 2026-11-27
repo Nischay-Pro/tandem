@@ -2,11 +2,7 @@
 
 package app.tandemforactual.ui.feature.rules
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -19,7 +15,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -47,25 +43,16 @@ internal fun AddPayeeSheet(
         },
         onDismissed = {},
     ) {
-        SurfaceCard(
-            Modifier
-                .fillMaxWidth()
-                .widthIn(max = 480.dp)
-                .padding(horizontal = TandemSpacing.large),
-        ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            maxWidth = 480.dp,
+            header = {
                 TandemModalHeader(
                     title = "Add payee",
                     enabled = !mobileSession.isPerformingBudgetAction,
                     onClose = { if (!mobileSession.isPerformingBudgetAction) onClose() },
                 )
-                TextFieldCard("Name", name, onNameChange)
-                budgetActionFeedbackMessage(mobileSession)
+            },
+            actions = {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     TandemActionButton(
                         "Cancel",
@@ -100,7 +87,10 @@ internal fun AddPayeeSheet(
                         }
                     }
                 }
-            }
+            },
+        ) {
+            TextFieldCard("Name", name, onNameChange)
+            budgetActionFeedbackMessage(mobileSession)
         }
     }
 }

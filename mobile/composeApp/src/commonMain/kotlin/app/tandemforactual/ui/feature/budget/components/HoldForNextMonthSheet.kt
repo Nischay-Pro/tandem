@@ -3,12 +3,9 @@
 package app.tandemforactual.ui.feature.budget.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -31,13 +28,14 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
+import app.tandemforactual.ui.design.templates.AmountKeypadActions
 import app.tandemforactual.ui.design.templates.InfoBubble
 import app.tandemforactual.ui.design.templates.TransactionAmountField
 import app.tandemforactual.ui.design.templates.TransactionAmountKeypad
@@ -88,20 +86,20 @@ internal fun HoldForNextMonthSheet(
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) closeHoldDialog() },
         onDismissed = { hold.mounted = false },
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            header = {
                 HoldSheetHeader(mobileSession, ::closeHoldDialog)
-                HoldSheetSummary(state, figures)
-                HoldAmountEntry(hold, state, onHideKeypad = {
-                    hold.keypadVisible = false
-                    softwareKeyboard?.hide()
-                })
-                budgetActionFeedbackMessage(mobileSession)
+            },
+            actions = {
                 HoldSheetActions(hold, state, mobileSession, figures, scope, ::closeHoldDialog)
-            }
+            },
+        ) {
+            HoldSheetSummary(state, figures)
+            HoldAmountEntry(hold, state, onHideKeypad = {
+                hold.keypadVisible = false
+                softwareKeyboard?.hide()
+            })
+            budgetActionFeedbackMessage(mobileSession)
         }
     }
 }
@@ -192,11 +190,13 @@ private fun HoldAmountEntry(
     }
     if (hold.keypadVisible) {
         TransactionAmountKeypad(
-            onDigit = { hold.enterDigit(state, it) },
-            onDelete = { hold.deleteDigit() },
-            onOperator = { hold.chooseOperator(state, it) },
-            onEquals = { hold.calculate(state) },
-            onDone = onHideKeypad,
+            AmountKeypadActions(
+                onDigit = { hold.enterDigit(state, it) },
+                onDelete = { hold.deleteDigit() },
+                onOperator = { hold.chooseOperator(state, it) },
+                onEquals = { hold.calculate(state) },
+                onDone = onHideKeypad,
+            ),
         )
     }
 }

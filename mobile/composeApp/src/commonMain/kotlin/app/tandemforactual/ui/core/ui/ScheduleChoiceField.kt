@@ -1,13 +1,7 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.core.ui
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -20,11 +14,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.FieldFrame
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.ChevronDown
@@ -50,23 +43,25 @@ internal fun ScheduleChoiceField(
         Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(18.dp), tint = tandemPalette.muted)
     }
     TandemChoiceDialog(visible = expanded, onDismissRequest = { expanded = false }) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(TandemSpacing.medium)) {
+        SheetCard(
+            maxWidth = 420.dp,
+            header = {
                 TandemModalHeader(
                     title = "Choose $label",
                     titleSize = TandemTypography.cardTitle,
                     onClose = { expanded = false },
                 )
-                options.forEach { (id, name) ->
-                    ListRow(
-                        name,
-                        trailing = if (name == selectedLabel) "✓" else null,
-                        onClick = {
-                            onSelect(id)
-                            expanded = false
-                        },
-                    )
-                }
+            },
+        ) {
+            options.forEach { (id, name) ->
+                ListRow(
+                    name,
+                    trailing = if (name == selectedLabel) "✓" else null,
+                    onClick = {
+                        onSelect(id)
+                        expanded = false
+                    },
+                )
             }
         }
     }
