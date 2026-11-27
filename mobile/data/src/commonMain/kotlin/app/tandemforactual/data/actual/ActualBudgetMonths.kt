@@ -99,6 +99,12 @@ internal class ActualBudgetMonths(
         months: List<String>,
         returned: List<String>,
     ): List<Pair<String, JsonObject>> {
+        val values = cells(months)
+        return returned.map { it to output(it, values.getValue(it)) }
+    }
+
+    /** Every sheet cell of each month, keyed by Actual's cell names (`budget-<id>`, `leftover-<id>`, `to-budget`, …). */
+    fun cells(months: List<String>): Map<String, Map<String, Any?>> {
         load(months)
         val values = HashMap<String, Map<String, Any?>>()
         var previous: Map<String, Any?> = if (tracking) emptyMap() else blankMonth()
@@ -107,7 +113,7 @@ internal class ActualBudgetMonths(
             values[month] = current
             previous = current
         }
-        return returned.map { it to output(it, values.getValue(it)) }
+        return values
     }
 
     private fun load(months: List<String>) {
@@ -242,6 +248,7 @@ internal class ActualBudgetMonths(
         cells["total-spent"] = expenseGroups.sumOf { number(cells["group-sum-amount-${it.id}"]) }
         cells["total-income"] = incomeGroup?.let { cells["group-sum-amount-${it.id}"] } ?: 0L
         cells["total-leftover"] = expenseGroups.sumOf { number(cells["group-leftover-${it.id}"]) }
+        cells["total-saved"] = (incomeGroup?.let { number(cells["group-budget-${it.id}"]) } ?: 0L) - number(cells["total-budgeted"])
         return cells
     }
 

@@ -238,7 +238,7 @@ private class LiveBudgetMonthBuilder(
                         pendingCategoryIds += move.itemId
                     }
                 }
-                BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
+                BudgetReorderKind.APPLY_BUDGET_TEMPLATE, BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
                     payload.assignmentEntries().forEach { (categoryId, amountMinor) ->
                         replayedAssignments[categoryId] = amountMinor
                         effectiveBudgetOverrides[categoryId] = amountMinor
@@ -428,6 +428,7 @@ private val pendingBudgetPlanMutationKinds =
         BudgetReorderKind.SET_CATEGORY_AMOUNT,
         BudgetReorderKind.SET_CATEGORY_CARRYOVER,
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES,
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
         BudgetReorderKind.RESET_BUDGET_HOLD,
         BudgetReorderKind.MOVE_BUDGET_MONEY,

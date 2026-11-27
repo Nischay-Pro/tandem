@@ -1,0 +1,1462 @@
+{
+  "today": "2026-11-15",
+  "scenarios": {
+    "envelope": [
+      {
+        "check": true,
+        "result": {
+          "sticky": true,
+          "message": "template-errors",
+          "pre": "Messy: #template garbage words"
+        }
+      },
+      {
+        "apply": "2026-09",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 26
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [10000, 10000, null],
+          "Streaming": [1759, 1759, null],
+          "Water": [875, 875, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [12246, 12246, null],
+          "Fuel": [15000, 15000, null],
+          "Coffee": [8000, 8000, null],
+          "Gym": [0, 0, null],
+          "Holiday": [15000, 15000, null],
+          "Car": [57857, 57857, null],
+          "Gifts": [2500, 2500, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [50000, 50000, null],
+          "Rainy": [25000, 25000, null],
+          "Spare": [64833, 64833, null],
+          "Biweekly": [0, 0, null],
+          "Kids": [5025, 5025, null],
+          "Nest egg": [0, 100000, 1],
+          "Copycat": [12345, 12345, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [5000, 5000, null],
+          "Extra": [30000, null, null],
+          "Misc": [1201819, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "apply": "2026-10",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 26
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [10000, 10000, null],
+          "Streaming": [1599, 1599, null],
+          "Water": [875, 875, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [10340, 10340, null],
+          "Fuel": [6600, 6600, null],
+          "Coffee": [2900, 2900, null],
+          "Gym": [3000, 3000, null],
+          "Holiday": [15000, 15000, null],
+          "Car": [50714, 50714, null],
+          "Gifts": [2500, 2500, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [52000, 52000, null],
+          "Rainy": [25000, 25000, null],
+          "Spare": [6365, 6365, null],
+          "Biweekly": [9000, 9000, null],
+          "Kids": [4975, 4975, null],
+          "Nest egg": [0, 100000, 1],
+          "Copycat": [7700, 7700, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [5000, 5000, null],
+          "Extra": [0, 0, null],
+          "Misc": [120932, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "note": "Orphan",
+        "text": "no more templates"
+      },
+      {
+        "apply": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 25
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [10000, 10000, null],
+          "Streaming": [1599, 1599, null],
+          "Water": [875, 875, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [1500, 1500, null],
+          "Coffee": [3200, 3200, null],
+          "Gym": [2000, 2000, null],
+          "Holiday": [15000, 15000, null],
+          "Car": [35715, 35715, null],
+          "Gifts": [2500, 2500, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [50000, 50000, null],
+          "Rainy": [25000, 25000, null],
+          "Spare": [7161, 7161, null],
+          "Biweekly": [1000, 1000, null],
+          "Kids": [0, 0, null],
+          "Nest egg": [0, 100000, 1],
+          "Copycat": [12345, 12345, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, 0, null],
+          "Misc": [136064, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "overwrite": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 25
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [10000, 10000, null],
+          "Streaming": [1599, 1599, null],
+          "Water": [875, 875, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [1500, 1500, null],
+          "Coffee": [3200, 3200, null],
+          "Gym": [2000, 2000, null],
+          "Holiday": [15000, 15000, null],
+          "Car": [35715, 35715, null],
+          "Gifts": [2500, 2500, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [50000, 50000, null],
+          "Rainy": [25000, 25000, null],
+          "Spare": [7161, 7161, null],
+          "Biweekly": [1000, 1000, null],
+          "Kids": [0, 0, null],
+          "Nest egg": [0, 100000, 1],
+          "Copycat": [12345, 12345, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, 0, null],
+          "Misc": [136064, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "set": "Nest egg",
+        "month": "2026-12",
+        "amount": 25000
+      },
+      {
+        "apply": "2026-12",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 24
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [10000, 10000, null],
+          "Streaming": [1759, 1759, null],
+          "Water": [875, 875, null],
+          "Groceries": [33725, 33725, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [500, 500, null],
+          "Coffee": [0, 0, null],
+          "Gym": [2000, 2000, null],
+          "Holiday": [15000, 15000, null],
+          "Car": [0, -9286, null],
+          "Gifts": [2500, 2500, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [0, 0, null],
+          "Rainy": [0, 25000, null],
+          "Spare": [0, 0, null],
+          "Biweekly": [0, 0, null],
+          "Kids": [0, 0, null],
+          "Nest egg": [25000, null, null],
+          "Copycat": [7700, 7700, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, 0, null],
+          "Misc": [0, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "single": "Dining",
+        "month": "2027-01",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 1
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [0, null, null],
+          "Phone": [0, null, null],
+          "Insurance": [0, null, null],
+          "Streaming": [0, null, null],
+          "Water": [0, null, null],
+          "Groceries": [0, null, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [0, null, null],
+          "Coffee": [0, null, null],
+          "Gym": [0, null, null],
+          "Holiday": [0, null, null],
+          "Car": [0, null, null],
+          "Gifts": [0, null, null],
+          "Emergency": [0, null, null],
+          "Annual": [0, null, null],
+          "Invest": [0, null, null],
+          "Rainy": [0, null, null],
+          "Spare": [0, null, null],
+          "Biweekly": [0, null, null],
+          "Kids": [0, null, null],
+          "Nest egg": [0, null, null],
+          "Copycat": [0, null, null],
+          "Messy": [0, null, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, null, null],
+          "Misc": [0, null, null],
+          "Hidden": [0, null, null]
+        }
+      },
+      {
+        "multiple": ["Rent", "Car", "Salary", "Hidden"],
+        "month": "2027-01",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 4
+        },
+        "cells": {
+          "Salary": [500000, 500000, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [0, null, null],
+          "Insurance": [0, null, null],
+          "Streaming": [0, null, null],
+          "Water": [0, null, null],
+          "Groceries": [0, null, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [0, null, null],
+          "Coffee": [0, null, null],
+          "Gym": [0, null, null],
+          "Holiday": [0, null, null],
+          "Car": [14459, 61905, null],
+          "Gifts": [0, null, null],
+          "Emergency": [0, null, null],
+          "Annual": [0, null, null],
+          "Invest": [0, null, null],
+          "Rainy": [0, null, null],
+          "Spare": [0, null, null],
+          "Biweekly": [0, null, null],
+          "Kids": [0, null, null],
+          "Nest egg": [0, null, null],
+          "Copycat": [0, null, null],
+          "Messy": [0, null, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, null, null],
+          "Misc": [0, null, null],
+          "Hidden": [99900, 99900, null]
+        }
+      },
+      {
+        "overwrite": "2027-02",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 25
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Bonus": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Phone": [4500, 4500, null],
+          "Insurance": [20000, 20000, null],
+          "Streaming": [1759, 1759, null],
+          "Water": [1750, 1750, null],
+          "Groceries": [0, 0, null],
+          "Dining": [10541, 10541, null],
+          "Fuel": [-1500, -1500, null],
+          "Coffee": [0, 0, null],
+          "Gym": [2000, 2000, null],
+          "Holiday": [18000, 18000, null],
+          "Car": [0, 85628, null],
+          "Gifts": [364, 364, null],
+          "Emergency": [20000, 500000, 1],
+          "Annual": [0, 0, null],
+          "Invest": [0, 0, null],
+          "Rainy": [0, 0, null],
+          "Spare": [0, 0, null],
+          "Biweekly": [0, 0, null],
+          "Kids": [0, 0, null],
+          "Nest egg": [0, 100000, 1],
+          "Copycat": [7700, 7700, null],
+          "Messy": [1000, 1000, null],
+          "Orphan": [0, null, null],
+          "Extra": [0, 0, null],
+          "Misc": [0, null, null],
+          "Hidden": [0, null, null]
+        }
+      }
+    ],
+    "tracking": [
+      {
+        "apply": "2026-10",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 9
+        },
+        "cells": {
+          "Salary": [400000, 400000, null],
+          "Rent": [100000, 100000, null],
+          "Phone": [4500, 4500, null],
+          "Water": [0, 0, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [7300, 7300, null],
+          "Car": [28571, 28571, null],
+          "Invest": [40000, 40000, null],
+          "Misc": [179629, null, null]
+        }
+      },
+      {
+        "apply": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 9
+        },
+        "cells": {
+          "Salary": [400000, 400000, null],
+          "Rent": [100000, 100000, null],
+          "Phone": [4500, 4500, null],
+          "Water": [0, 0, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [7283, 7283, null],
+          "Car": [33333, 33333, null],
+          "Invest": [40000, 40000, null],
+          "Misc": [174884, null, null]
+        }
+      },
+      {
+        "overwrite": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 9
+        },
+        "cells": {
+          "Salary": [400000, 400000, null],
+          "Rent": [100000, 100000, null],
+          "Phone": [4500, 4500, null],
+          "Water": [0, 0, null],
+          "Groceries": [40000, 40000, null],
+          "Dining": [7283, 7283, null],
+          "Car": [33333, 33333, null],
+          "Invest": [40000, 40000, null],
+          "Misc": [974884, null, null]
+        }
+      },
+      {
+        "apply": "2026-12",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 9
+        },
+        "cells": {
+          "Salary": [400000, 400000, null],
+          "Rent": [100000, 100000, null],
+          "Phone": [4500, 4500, null],
+          "Water": [6000, 6000, null],
+          "Groceries": [19000, 19000, null],
+          "Dining": [7283, 7283, null],
+          "Car": [40000, 40000, null],
+          "Invest": [0, 0, null],
+          "Misc": [223217, null, null]
+        }
+      }
+    ],
+    "scarce-rounded": [
+      {
+        "apply": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 7
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [70000, 70000, null],
+          "Food": [30000, 30000, null],
+          "Fun": [20100, 20100, null],
+          "Car": [14300, 14300, null],
+          "Gifts": [10000, 10000, null],
+          "Save": [289393, null, null],
+          "Rest": [96500, null, null]
+        }
+      },
+      {
+        "overwrite": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 7
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [70000, 70000, null],
+          "Food": [30000, 30000, null],
+          "Fun": [20100, 20100, null],
+          "Car": [14300, 14300, null],
+          "Gifts": [10000, 10000, null],
+          "Save": [289393, null, null],
+          "Rest": [96500, null, null]
+        }
+      },
+      {
+        "apply": "2026-12",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 7
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [70000, 70000, null],
+          "Food": [0, 30000, null],
+          "Fun": [0, 20100, null],
+          "Car": [0, 14300, null],
+          "Gifts": [5100, 5100, null],
+          "Save": [0, null, null],
+          "Rest": [0, null, null]
+        }
+      }
+    ],
+    "yen": [
+      {
+        "apply": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 3
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [120000, 120000, null],
+          "Food": [34, 34, null],
+          "Rest": [1979966, null, null]
+        }
+      }
+    ],
+    "editor": [
+      {
+        "apply": "2026-10",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 16
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [50000, 50000, null],
+          "Pct": [60000, 60000, null],
+          "Odd": [0, 0, null],
+          "Phone": [4500, 4500, null],
+          "Daily": [2000, 2000, null],
+          "Once": [2250, 2250, null],
+          "Gone": [0, 0, null],
+          "Done": [0, 0, null],
+          "Split": [8000, 8000, null],
+          "Shared": [0, null, null],
+          "Weekend": [1000, 1000, null],
+          "Trim": [6000, 6000, null],
+          "Late": [0, 0, null],
+          "Tenth": [300, 300, null],
+          "Bimonthly": [2500, 2500, null],
+          "Twice": [6500, 6500, null],
+          "Rest": [3155950, null, null]
+        }
+      },
+      {
+        "apply": "2026-11",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 15
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [50000, 50000, null],
+          "Pct": [60000, 60000, null],
+          "Odd": [0, 0, null],
+          "Phone": [4500, 4500, null],
+          "Daily": [2000, 2000, null],
+          "Once": [2250, 2250, null],
+          "Gone": [0, 0, null],
+          "Done": [0, 0, null],
+          "Split": [8000, 8000, null],
+          "Shared": [0, null, null],
+          "Weekend": [1000, 1000, null],
+          "Trim": [7500, 7500, null],
+          "Late": [3000, null, null],
+          "Tenth": [300, 300, null],
+          "Bimonthly": [0, 0, null],
+          "Twice": [4500, 4500, null],
+          "Rest": [451950, null, null]
+        }
+      },
+      {
+        "apply": "2026-12",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 16
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [0, 0, null],
+          "Pct": [0, 0, null],
+          "Odd": [0, 0, null],
+          "Phone": [4500, 4500, null],
+          "Daily": [4000, 4000, null],
+          "Once": [2250, 2250, null],
+          "Gone": [0, 0, null],
+          "Done": [0, 0, null],
+          "Split": [8000, 8000, null],
+          "Shared": [0, null, null],
+          "Weekend": [2000, 2000, null],
+          "Trim": [7500, 7500, null],
+          "Late": [0, 0, null],
+          "Tenth": [300, 300, null],
+          "Bimonthly": [2500, 2500, null],
+          "Twice": [7500, 7500, null],
+          "Rest": [0, null, null]
+        }
+      },
+      {
+        "overwrite": "2027-01",
+        "result": {
+          "type": "message",
+          "message": "templates-applied",
+          "count": 16
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Rent": [0, 0, null],
+          "Pct": [0, 0, null],
+          "Odd": [0, 0, null],
+          "Phone": [4500, 4500, null],
+          "Daily": [2000, 2000, null],
+          "Once": [2250, 2250, null],
+          "Gone": [0, 0, null],
+          "Done": [0, 0, null],
+          "Split": [8000, 8000, null],
+          "Shared": [0, null, null],
+          "Weekend": [2000, 2000, null],
+          "Trim": [7500, 7500, null],
+          "Late": [0, 0, null],
+          "Tenth": [400, 400, null],
+          "Bimonthly": [0, 0, null],
+          "Twice": [10500, 10500, null],
+          "Rest": [0, null, null]
+        }
+      }
+    ],
+    "editor-errors": [
+      {
+        "check": true,
+        "result": {
+          "type": "message",
+          "message": "templates-check-passed"
+        }
+      },
+      {
+        "apply": "2026-11",
+        "result": {
+          "sticky": true,
+          "message": "template-errors",
+          "pre": "Unknown: Category \"Nope\" is not found in available income categories\n\nGoals: Only one #goal is allowed per category\n\nSpends: Only one spend template is allowed per category\n\nBlank: Schedule template has no scheduleId or name\n\nLost: Schedule Ghost does not exist\n\nInterval: Template repeat interval must be a whole number greater than 0\n\nPeriod: Invalid limit period. Check template syntax\n\nWeekly: Weekly limit requires a start date (YYYY-MM-DD)"
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Weekly": [0, null, null],
+          "Period": [0, null, null],
+          "Interval": [0, null, null],
+          "Lost": [0, null, null],
+          "Blank": [0, null, null],
+          "Spends": [0, null, null],
+          "Goals": [0, null, null],
+          "Unknown": [0, null, null]
+        }
+      }
+    ],
+    "errors": [
+      {
+        "check": true,
+        "result": {
+          "sticky": true,
+          "message": "template-errors",
+          "pre": "Ghost: Schedule \"Nobody\" does not exist\n\nAdjust: #template average 3 months [decrease 150%]\nError: Invalid adjustment percentage (-150%). Must be between -100% and 1000%"
+        }
+      },
+      {
+        "apply": "2026-11",
+        "result": {
+          "sticky": true,
+          "message": "template-errors",
+          "pre": "Mixed: Schedule and By templates must be the same priority level. Fix by setting all Schedule and By templates to priority level 1\n\nDouble: Only one `up to` allowed per category\n\nGhost: Schedule Nobody does not exist\n\nPast: Target month has passed, remove or update the target month"
+        },
+        "cells": {
+          "Salary": [0, null, null],
+          "Past": [0, null, null],
+          "Ghost": [0, null, null],
+          "Double": [0, null, null],
+          "Mixed": [0, null, null],
+          "Adjust": [0, null, null],
+          "Fine": [0, null, null]
+        }
+      }
+    ]
+  },
+  "lines": [
+    {
+      "line": "#template 50",
+      "template": {
+        "type": "simple",
+        "monthly": 50,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template $50.25",
+      "template": {
+        "type": "simple",
+        "monthly": 50.25,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template € 12.5",
+      "template": {
+        "type": "simple",
+        "monthly": 12.5,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template -10",
+      "template": {
+        "type": "simple",
+        "monthly": -10,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 12.",
+      "template": {
+        "type": "simple",
+        "monthly": 12,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 12.345",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template-3 50",
+      "template": {
+        "type": "simple",
+        "monthly": 50,
+        "limit": null,
+        "priority": 3,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template-x 50",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template -2",
+      "template": {
+        "type": "simple",
+        "monthly": -2,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 0 up to 600",
+      "template": {
+        "type": "simple",
+        "monthly": 0,
+        "limit": {
+          "amount": 600,
+          "hold": null,
+          "period": "monthly",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 400 up to 600",
+      "template": {
+        "type": "simple",
+        "monthly": 400,
+        "limit": {
+          "amount": 600,
+          "hold": null,
+          "period": "monthly",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 400 up to 600 hold",
+      "template": {
+        "type": "simple",
+        "monthly": 400,
+        "limit": {
+          "amount": 600,
+          "hold": true,
+          "period": "monthly",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 400 up to 600hold",
+      "template": {
+        "type": "simple",
+        "monthly": 400,
+        "limit": {
+          "amount": 600,
+          "hold": true,
+          "period": "monthly",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template up to 5 per day",
+      "template": {
+        "type": "simple",
+        "monthly": null,
+        "limit": {
+          "amount": 5,
+          "hold": null,
+          "period": "daily",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template up to 5 per day hold",
+      "template": {
+        "type": "simple",
+        "monthly": null,
+        "limit": {
+          "amount": 5,
+          "hold": true,
+          "period": "daily",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template up to 20 per week starting 2026-01-05",
+      "template": {
+        "type": "simple",
+        "monthly": null,
+        "limit": {
+          "amount": 20,
+          "hold": null,
+          "period": "weekly",
+          "start": "2026-01-05"
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template up to 20 per week starting 2026-01-05 hold",
+      "template": {
+        "type": "simple",
+        "monthly": null,
+        "limit": {
+          "amount": 20,
+          "hold": true,
+          "period": "weekly",
+          "start": "2026-01-05"
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template up to 20 per week",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 50 garbage",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#templates 50",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 10% of all income",
+      "template": {
+        "type": "percentage",
+        "percent": 10,
+        "previous": false,
+        "category": "all income",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 12.5% of previous Salary",
+      "template": {
+        "type": "percentage",
+        "percent": 12.5,
+        "previous": true,
+        "category": "Salary",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 5 % of Available funds",
+      "template": {
+        "type": "percentage",
+        "percent": 5,
+        "previous": false,
+        "category": "Available funds",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10% of previousSalary",
+      "template": {
+        "type": "percentage",
+        "percent": 10,
+        "previous": true,
+        "category": "Salary",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10% of previous",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 10%",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template-2 10% ofSalary",
+      "template": {
+        "type": "percentage",
+        "percent": 10,
+        "previous": false,
+        "category": "Salary",
+        "priority": 2,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every day starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "day",
+          "amount": 1
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every 3 days starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "day",
+          "amount": 3
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every week starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "week",
+          "amount": 1
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every 2 weeks starting 2026-01-01 up to 30",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "week",
+          "amount": 2
+        },
+        "starting": "2026-01-01",
+        "limit": {
+          "amount": 30,
+          "hold": null,
+          "period": "monthly",
+          "start": null
+        },
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every 2 months starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "month",
+          "amount": 2
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every year starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "year",
+          "amount": 1
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every 2 years starting 2026-01-01",
+      "template": {
+        "type": "periodic",
+        "amount": 10,
+        "period": {
+          "period": "year",
+          "amount": 2
+        },
+        "starting": "2026-01-01",
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 10 repeat every month starting 2026-01-01",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 10 repeat every weeks starting 2026-01-01",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 10 repeat every 2 weeks starting 2026-01",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12",
+      "template": {
+        "type": "by",
+        "amount": 500,
+        "month": "2026-12",
+        "from": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 repeat every month",
+      "template": {
+        "type": "by",
+        "amount": 500,
+        "month": "2026-12",
+        "annual": false,
+        "from": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 repeat every 3 months",
+      "template": {
+        "type": "by",
+        "amount": 500,
+        "month": "2026-12",
+        "annual": false,
+        "repeat": 3,
+        "from": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 repeat every year",
+      "template": {
+        "type": "by",
+        "amount": 500,
+        "month": "2026-12",
+        "annual": true,
+        "from": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 repeat every 2 years",
+      "template": {
+        "type": "by",
+        "amount": 500,
+        "month": "2026-12",
+        "annual": true,
+        "repeat": 2,
+        "from": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 repeat every months",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 spend from 2026-03",
+      "template": {
+        "type": "spend",
+        "amount": 500,
+        "month": "2026-12",
+        "from": "2026-03",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 spend from 2026-03 repeat every year",
+      "template": {
+        "type": "spend",
+        "amount": 500,
+        "month": "2026-12",
+        "annual": true,
+        "from": "2026-03",
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template 500 by 2026-12 garbage",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template 500 by 26-12",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template schedule Rent",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": null
+      }
+    },
+    {
+      "line": "#template schedule  Rent  bill ",
+      "template": {
+        "type": "schedule",
+        "name": "Rent  bill",
+        "priority": 0,
+        "directive": "template",
+        "full": null
+      }
+    },
+    {
+      "line": "#template schedule full Rent",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": true
+      }
+    },
+    {
+      "line": "#template schedule fullRent",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": true
+      }
+    },
+    {
+      "line": "#template schedule Rent [increase 10%]",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": null,
+        "adjustment": 10,
+        "adjustmentType": "percent"
+      }
+    },
+    {
+      "line": "#template schedule Rent [decrease 5]",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": null,
+        "adjustment": -5,
+        "adjustmentType": "fixed"
+      }
+    },
+    {
+      "line": "#template schedule Rent[Increase 2.5 %]",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 0,
+        "directive": "template",
+        "full": null,
+        "adjustment": 2.5,
+        "adjustmentType": "percent"
+      }
+    },
+    {
+      "line": "#template schedule Rent [increase abc]",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template schedule [increase 10%]",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template schedule Rent [weird] bill",
+      "template": {
+        "type": "schedule",
+        "name": "Rent [weird] bill",
+        "priority": 0,
+        "directive": "template",
+        "full": null
+      }
+    },
+    {
+      "line": "#template-1 schedule Rent",
+      "template": {
+        "type": "schedule",
+        "name": "Rent",
+        "priority": 1,
+        "directive": "template",
+        "full": null
+      }
+    },
+    {
+      "line": "#template remainder",
+      "template": {
+        "type": "remainder",
+        "priority": null,
+        "directive": "template",
+        "weight": 1,
+        "limit": null
+      }
+    },
+    {
+      "line": "#template remainder 3",
+      "template": {
+        "type": "remainder",
+        "priority": null,
+        "directive": "template",
+        "weight": 3,
+        "limit": null
+      }
+    },
+    {
+      "line": "#template remainder3 up to 100",
+      "template": {
+        "type": "remainder",
+        "priority": null,
+        "directive": "template",
+        "weight": 3,
+        "limit": {
+          "amount": 100,
+          "hold": null,
+          "period": "monthly",
+          "start": null
+        }
+      }
+    },
+    {
+      "line": "#template-2 remainder",
+      "template": {
+        "type": "remainder",
+        "priority": null,
+        "directive": "template",
+        "weight": 1,
+        "limit": null
+      }
+    },
+    {
+      "line": "#template average 3 months",
+      "template": {
+        "type": "average",
+        "numMonths": 3,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template average 6",
+      "template": {
+        "type": "average",
+        "numMonths": 6,
+        "priority": 0,
+        "directive": "template"
+      }
+    },
+    {
+      "line": "#template average 3 months [increase 20%]",
+      "template": {
+        "type": "average",
+        "numMonths": 3,
+        "priority": 0,
+        "directive": "template",
+        "adjustment": 20,
+        "adjustmentType": "percent"
+      }
+    },
+    {
+      "line": "#template average 3 months [decrease 15]",
+      "template": {
+        "type": "average",
+        "numMonths": 3,
+        "priority": 0,
+        "directive": "template",
+        "adjustment": -15,
+        "adjustmentType": "fixed"
+      }
+    },
+    {
+      "line": "#template average 3 months [bump 5]",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template average 0 months",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template copy from 2 months ago",
+      "template": {
+        "type": "copy",
+        "priority": 0,
+        "directive": "template",
+        "lookBack": 2,
+        "limit": null
+      }
+    },
+    {
+      "line": "#template copy from 2 months ago up to 50",
+      "template": {
+        "type": "copy",
+        "priority": 0,
+        "directive": "template",
+        "lookBack": 2,
+        "limit": {
+          "amount": 50,
+          "hold": null,
+          "period": "monthly",
+          "start": null
+        }
+      }
+    },
+    {
+      "line": "#template copy from 0 months ago",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#goal 1000",
+      "template": {
+        "type": "goal",
+        "amount": 1000,
+        "priority": null,
+        "directive": "goal"
+      }
+    },
+    {
+      "line": "#Goal 1000",
+      "template": null
+    },
+    {
+      "line": "#goal $1000",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#goal1000",
+      "template": {
+        "type": "goal",
+        "amount": 1000,
+        "priority": null,
+        "directive": "goal"
+      }
+    },
+    {
+      "line": "#goal 10 up to 20",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template",
+      "template": {
+        "type": "error"
+      }
+    },
+    {
+      "line": "#template\t50",
+      "template": {
+        "type": "simple",
+        "monthly": 50,
+        "limit": null,
+        "priority": 0,
+        "directive": "template"
+      }
+    }
+  ]
+}

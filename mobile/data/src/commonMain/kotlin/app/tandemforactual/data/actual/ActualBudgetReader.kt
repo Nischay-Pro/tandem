@@ -76,6 +76,15 @@ class ActualBudgetReader(
         return budgetMonths(today, preferences, categoryGroups(categories())).firstOrNull { it.first == month }?.second
     }
 
+    /** Each created month's sheet cells, as Actual's budget spreadsheet holds them for the goal templates. */
+    internal fun budgetCells(
+        today: String,
+        tracking: Boolean,
+    ): Map<String, Map<String, Any?>> {
+        val months = ActualBudgetMonths(db, categoryGroups(categories()), tracking)
+        return months.cells(months.createdMonths(ActualMonths.fromIsoDate(today)))
+    }
+
     private fun budgetMonths(
         today: String,
         preferences: Map<String, String?>,

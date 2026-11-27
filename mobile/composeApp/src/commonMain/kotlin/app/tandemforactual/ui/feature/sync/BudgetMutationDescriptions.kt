@@ -71,6 +71,9 @@ internal fun budgetMutationChangeTitle(
             "Apply budget template${count?.let { " to $it ${if (it == 1) "category" else "categories"}" }.orEmpty()}" +
                 month?.let { " · $it" }.orEmpty()
         }
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES ->
+            (if (payload?.booleanValue("force") == true) "Overwrite with budget templates" else "Apply budget templates") +
+                month?.let { " · $it" }.orEmpty()
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Hold ${target ?: "money"} for next month${month?.let { " · from $it" }.orEmpty()}"
         BudgetReorderKind.RESET_BUDGET_HOLD -> "Release money held for next month${month?.let { " · $it" }.orEmpty()}"
         BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME ->
@@ -173,6 +176,7 @@ internal fun budgetMutationPendingSummary(
         -> "Delete"
         BudgetReorderKind.COPY_BUDGET_MONTH -> "Copy last month"
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Apply template"
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES -> "Apply templates"
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Hold ${payload?.longValue("amountMinor")?.let(state::formatCurrency) ?: "money"}"
         BudgetReorderKind.RESET_BUDGET_HOLD -> "Release hold"
         BudgetReorderKind.CLOSE_ACCOUNT -> "Close account"

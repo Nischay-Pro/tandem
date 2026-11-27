@@ -7,6 +7,7 @@ import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.budget.BudgetEdits
+import app.tandemforactual.ui.core.session.goalTemplateCategoryIds
 import app.tandemforactual.ui.core.session.optionalString
 import app.tandemforactual.ui.core.session.requirePayload
 import app.tandemforactual.ui.core.session.requiredAssignments
@@ -48,6 +49,7 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.SET_CATEGORY_CARRYOVER,
         BudgetReorderKind.COPY_BUDGET_MONTH,
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES,
         -> Dispatched(sendAssignmentEdit(request))
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
         BudgetReorderKind.RESET_BUDGET_HOLD,
@@ -186,6 +188,24 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
                     request.budgetId,
                     payload.requiredString("month"),
                     assignments,
+                    request.encryptionPassword,
+                    request.operationId,
+                )
+            }
+        }
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
+            val payload = request.requirePayload()
+            host.feedback.performBudgetAction(
+                request.budgetId,
+                request.encryptionPassword,
+                "Couldn’t apply the budget’s templates.",
+                null,
+            ) {
+                host.apiClient.applyBudgetGoalTemplates(
+                    request.budgetId,
+                    payload.requiredString("month"),
+                    payload.requiredBoolean("force"),
+                    payload.goalTemplateCategoryIds(),
                     request.encryptionPassword,
                     request.operationId,
                 )

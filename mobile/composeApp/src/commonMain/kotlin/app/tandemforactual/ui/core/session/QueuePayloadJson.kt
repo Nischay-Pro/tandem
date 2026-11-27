@@ -39,6 +39,9 @@ internal fun JsonObject.requiredAssignments(): List<Pair<String, Long>> =
             categoryId to amountMinor
         }.orEmpty()
 
+internal fun JsonObject.goalTemplateCategoryIds(): List<String>? =
+    (this["categoryIds"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+
 internal fun JsonObject.requiredStatementItems(): List<StatementImportItem> =
     (this["transactions"] as? JsonArray)
         ?.mapNotNull { element ->

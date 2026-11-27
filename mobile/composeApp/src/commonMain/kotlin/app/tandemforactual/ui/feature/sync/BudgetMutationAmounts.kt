@@ -156,6 +156,7 @@ internal fun budgetMutationTitle(
         "SET_CATEGORY_CARRYOVER" -> "Update overspending rollover · $itemName"
         "COPY_BUDGET_MONTH" -> "Copy assignments · $itemName"
         "APPLY_BUDGET_TEMPLATE" -> "Apply template · $itemName"
+        "APPLY_GOAL_TEMPLATES" -> "Apply templates · $itemName"
         "HOLD_BUDGET_NEXT_MONTH" -> "Hold money · $itemName"
         "RESET_BUDGET_HOLD" -> "Reset hold · $itemName"
         "MOVE_BUDGET_MONEY" -> "Move money · $itemName"

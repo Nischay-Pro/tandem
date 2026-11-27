@@ -99,6 +99,7 @@ internal fun BudgetTemplatesSheet(
                 BudgetTemplatesHeader(mobileSession, onDismiss)
             },
         ) {
+            GoalTemplatesSection(state, mobileSession, currentTemplateAssignments, onApplied = onDismiss)
             SaveTemplateSection(state, mobileSession, currentTemplateAssignments)
             if (currentTemplateAssignments.size > 500) {
                 InlineMessage("This plan has more than 500 categories and cannot be saved as a template.", InlineMessageKind.INFO)
