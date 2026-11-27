@@ -110,6 +110,7 @@ internal fun ManagePayeesScreen(
         selectedDefaultCategoryId,
         selectedDefaultCategoryLabel,
         state,
+        navigation,
         mobileSession,
         scope,
     ) {
