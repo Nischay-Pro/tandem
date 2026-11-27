@@ -36,10 +36,20 @@ import app.tandemforactual.ui.core.state.formatLiveDate
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageState
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageSummary
+import app.tandemforactual.ui.core.usage.UsageTarget
+import app.tandemforactual.ui.core.usage.WhereUsedRow
+import app.tandemforactual.ui.core.usage.WhereUsedSheet
+import app.tandemforactual.ui.core.usage.isChecking
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.buttons.PrimaryButton
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.SegmentedSelector
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
+import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -177,13 +187,12 @@ private fun RuleEditorContent(
                     }
                 }
             }
-            if (ruleId.isNotBlank()) {
-                SecondaryButton("Delete rule", modifier = Modifier.fillMaxWidth(), enabled = canEdit && !busy) { confirmDelete = true }
-            }
+            if (ruleId.isNotBlank()) RuleManageActions(state, mobileSession, ruleId, canEdit && !busy) { confirmDelete = true }
         }
     }
     if (confirmDelete) {
-        DeleteRuleDialog(busy, onDismiss = { confirmDelete = false }) {
+        val usage = rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.RULE, ruleId)
+        DeleteRuleDialog(busy, usage, onDismiss = { confirmDelete = false }) {
             scope.launch {
                 val deleted = mobileSession.budgetEdits.deleteBudgetRule(state.selectedBudgetId, ruleId, password)
                 confirmDelete = false
@@ -191,6 +200,27 @@ private fun RuleEditorContent(
             }
         }
     }
+}
+
+/** The where-used row and the delete button under a saved rule. */
+@Composable
+private fun RuleManageActions(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    ruleId: String,
+    canDelete: Boolean,
+    onDelete: () -> Unit,
+) {
+    var showUsage by remember(ruleId) { mutableStateOf(false) }
+    SurfaceCard { WhereUsedRow { showUsage = true } }
+    SecondaryButton("Delete rule", modifier = Modifier.fillMaxWidth(), enabled = canDelete, onClick = onDelete)
+    WhereUsedSheet(
+        visible = showUsage,
+        mobileSession = mobileSession,
+        target = UsageTarget(state.selectedBudgetId, UsageSubject.RULE, ruleId, "this rule"),
+        links = UsageLinks(),
+        onDismiss = { showUsage = false },
+    )
 }
 
 private suspend fun saveRule(
@@ -309,6 +339,7 @@ private fun RuleActionsCard(
 @Composable
 private fun DeleteRuleDialog(
     busy: Boolean,
+    usage: UsageState,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -317,7 +348,8 @@ private fun DeleteRuleDialog(
         message = "Actual will stop applying it to new and imported transactions. Transactions it already changed stay as they are.",
         confirmLabel = "Delete",
         dismissLabel = "Keep rule",
-        enabled = !busy,
+        enabled = !busy && !usage.isChecking,
+        content = { UsageSummary(usage, UsageSubject.RULE) },
         dismissEnabled = !busy,
         onDismissRequest = onDismiss,
         onConfirm = onConfirm,

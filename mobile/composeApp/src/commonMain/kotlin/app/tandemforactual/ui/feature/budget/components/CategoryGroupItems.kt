@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.usage.WhereUsedRow
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.Badge
@@ -95,6 +96,11 @@ internal fun LazyListScope.categoryGroupHeaderItems(
     item(key = "category-group-summary:${group.id}") {
         val hero = categoryGroupHero(group, context.isTrackingBudget) { state.formatCurrency(it) }
         AmountHero(hero.first, state.formatCurrency(hero.second), hero.third)
+    }
+    if (context.isLiveBudget) {
+        item(key = "category-group-usage:${group.id}") {
+            SurfaceCard { WhereUsedRow { context.screen.showUsageSheet = true } }
+        }
     }
 }
 
