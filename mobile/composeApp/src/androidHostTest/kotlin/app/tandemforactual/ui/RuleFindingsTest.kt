@@ -7,12 +7,12 @@ import androidx.compose.ui.test.performClick
 import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.RuleFindingKind
 import app.tandemforactual.data.actual.RuleSeverity
+import app.tandemforactual.ui.core.format.RuleText
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.feature.checkup.RuleFindingDialog
 import app.tandemforactual.ui.feature.checkup.RuleFindingsSection
-import app.tandemforactual.ui.core.format.RuleText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.serialization.json.JsonObject

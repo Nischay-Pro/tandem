@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.RuleFindingKind
 import app.tandemforactual.data.actual.RuleSeverity
+import app.tandemforactual.ui.core.format.RuleText
+import app.tandemforactual.ui.core.format.ruleFieldLabel
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -29,8 +31,6 @@ import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.core.format.RuleText
-import app.tandemforactual.ui.core.format.ruleFieldLabel
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.GitMerge
