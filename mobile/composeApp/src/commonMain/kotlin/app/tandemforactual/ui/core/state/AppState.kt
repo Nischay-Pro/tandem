@@ -91,6 +91,7 @@ internal class AppState {
     var selectedTransactionCategoryName by mutableStateOf("")
     var selectedConflictOperationId by mutableStateOf("")
     var ruleEditorRuleId by mutableStateOf<String?>(null)
+    var rulesReferenceFilter by mutableStateOf<RulesReferenceFilter?>(null)
     var pointerInputSequence by mutableStateOf(0)
     var serverUrl by mutableStateOf("")
     var recentServerUrls by mutableStateOf("")
@@ -254,6 +255,7 @@ internal class AppState {
         categoryIconOverrides = ""
         activitySearchQuery = ""
         activitySearchFilters = emptyList()
+        rulesReferenceFilter = null
         activitySearchCache = null
         activitySearchResultCache = null
         scrollPositions.clear()
