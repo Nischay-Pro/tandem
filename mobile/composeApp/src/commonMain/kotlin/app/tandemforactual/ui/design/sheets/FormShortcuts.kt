@@ -19,36 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import app.tandemforactual.ui.core.keyboard.SHORTCUTS
+import app.tandemforactual.ui.core.keyboard.ShortcutAction
+import app.tandemforactual.ui.core.keyboard.ShortcutScope
+import app.tandemforactual.ui.core.keyboard.keyPress
+import app.tandemforactual.ui.core.keyboard.match
 
-internal enum class FormKey { SAVE, ENTER, ESCAPE }
-
-/** ⌘S or ⌘Enter (Ctrl elsewhere) saves from anywhere; a bare Enter or Esc only when nothing focused handled it. */
-internal fun formKey(
-    key: Key,
-    command: Boolean,
-    otherModifier: Boolean,
-): FormKey? =
-    when {
-        command && (key == Key.S || key == Key.Enter || key == Key.NumPadEnter) -> FormKey.SAVE
-        command || otherModifier -> null
-        key == Key.Enter || key == Key.NumPadEnter -> FormKey.ENTER
-        key == Key.Escape -> FormKey.ESCAPE
-        else -> null
-    }
-
-private fun KeyEvent.formKey(): FormKey? =
-    if (type == KeyEventType.KeyDown) formKey(key, isMetaPressed || isCtrlPressed, isAltPressed || isShiftPressed) else null
+/** The form rows of the shortcut table: save keys beat the focused field, Enter and Esc only reach a form it declined. */
+private fun KeyEvent.formAction(scope: ShortcutScope): ShortcutAction? = SHORTCUTS.match(keyPress(), scope)?.action
 
 /** The primary actions on screen in one sheet; the keyboard saves only when exactly one is showing. */
 internal class FormSubmitActions {
@@ -115,11 +96,11 @@ internal fun FormShortcutHost(
     CompositionLocalProvider(LocalFormSubmitActions provides actions) {
         Box(
             modifier
-                .onPreviewKeyEvent { event -> event.formKey() == FormKey.SAVE && actions.submit() }
+                .onPreviewKeyEvent { event -> event.formAction(ShortcutScope.TEXT_FIELD) == ShortcutAction.SAVE && actions.submit() }
                 .onKeyEvent { event ->
-                    when (event.formKey()) {
-                        FormKey.ENTER -> actions.submit()
-                        FormKey.ESCAPE -> {
+                    when (event.formAction(ShortcutScope.EDITOR)) {
+                        ShortcutAction.SUBMIT -> actions.submit()
+                        ShortcutAction.CLOSE -> {
                             val close = currentOnEscape.value
                             close?.invoke()
                             close != null
