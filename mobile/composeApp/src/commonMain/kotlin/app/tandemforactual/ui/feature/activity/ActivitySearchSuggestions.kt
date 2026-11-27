@@ -18,6 +18,7 @@ internal fun activitySearchSuggestions(
     query: String,
     records: List<ActivitySearchRecord>,
     currencyCode: String? = null,
+    numberFormat: String? = null,
     formatAmount: (Long) -> String = { formatCurrency(it) },
 ): List<ActivitySearchFilter> {
     val value = query.trim()
@@ -42,7 +43,7 @@ internal fun activitySearchSuggestions(
     }
     suggestions.addRecordMatches(records, dateLabel)
     suggestions.addDateMatches(records, dateLabel)
-    if (!explicitDatePrefix) suggestions.addAmounts(value, currencyCode, formatAmount)
+    if (!explicitDatePrefix) suggestions.addAmounts(value, currencyCode, numberFormat, formatAmount)
     if (explicitDatePrefix) return suggestions.items
     suggestions.addStatus(value, records)
     return suggestions.items
@@ -171,9 +172,10 @@ private fun ActivitySearchSuggestionList.addDateMatches(
 private fun ActivitySearchSuggestionList.addAmounts(
     value: String,
     currencyCode: String?,
+    numberFormat: String?,
     formatAmount: (Long) -> String,
 ) {
-    parseActivitySearchAmount(value, currencyCode)?.let { amount ->
+    parseActivitySearchAmount(value, currencyCode, numberFormat)?.let { amount ->
         val amountText = formatAmount(amount)
         add(ActivitySearchField.OUTFLOW_IS, amount.toString(), "Spending is: $amountText")
         add(ActivitySearchField.OUTFLOW_AT_LEAST, amount.toString(), "Spending at least: $amountText")

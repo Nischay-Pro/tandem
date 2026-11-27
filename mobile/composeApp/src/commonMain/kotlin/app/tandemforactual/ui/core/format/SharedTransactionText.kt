@@ -8,10 +8,13 @@ internal data class SharedTransactionText(
     val original: String,
 )
 
+private const val CURRENCY_CODES = "USD|EUR|GBP|INR|CAD|AUD|NZD|JPY|CHF|SEK|NOK|DKK|PLN|BRL|MXN|ZAR|SGD|HKD|CNY|KRW"
+private const val SHARED_NUMBER = """\d{1,3}(?:[,.'’\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?"""
 private val amountPattern =
-    Regex("""(?:[$€£₹¥]|USD|EUR|GBP|INR|CAD|AUD)\s?(\d{1,3}(?:[,\s]\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE)
+    Regex("""(?:R\$|CHF|[$€£₹¥₩]|\b(?:$CURRENCY_CODES))\s?($SHARED_NUMBER)""", RegexOption.IGNORE_CASE)
 private val trailingCurrencyPattern =
-    Regex("""(\d{1,3}(?:[,\s]\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s?(?:USD|EUR|GBP|INR|CAD|AUD)\b""", RegexOption.IGNORE_CASE)
+    Regex("""($SHARED_NUMBER)\s?(?:€|zł|kr|$CURRENCY_CODES)(?![A-Za-z])""", RegexOption.IGNORE_CASE)
+private val sharedFraction = Regex("""[.,](\d{1,2})$""")
 private val payeePattern =
     Regex(
         """\b(?:at|to|from|@)\s+([A-Za-z0-9&'.*\- ]{2,40}?)(?=\s+(?:on|for|using|with|via|card|ending|ref|\d)|[.,;:!\n]|$)""",
@@ -23,11 +26,7 @@ internal fun parseSharedTransactionText(text: String): SharedTransactionText? {
     val trimmed = text.trim().take(MAX_SHARED_TEXT)
     if (trimmed.isEmpty()) return null
     val amountText = (amountPattern.find(trimmed) ?: trailingCurrencyPattern.find(trimmed))?.groupValues?.get(1)
-    val amountMinor =
-        amountText
-            ?.replace(",", "")
-            ?.replace(" ", "")
-            ?.toBigDecimalOrNullCompat()
+    val amountMinor = amountText?.let(::sharedAmountHundredths)
     val payee =
         payeePattern
             .findAll(trimmed)
@@ -36,13 +35,17 @@ internal fun parseSharedTransactionText(text: String): SharedTransactionText? {
     return SharedTransactionText(amountMinor, incomeWords.containsMatchIn(trimmed), payee, trimmed)
 }
 
-/** Converts "1234.5" into minor units without floating-point rounding. */
-private fun String.toBigDecimalOrNullCompat(): Long? {
-    val parts = split('.')
-    if (parts.size > 2 || parts[0].isEmpty() || !parts[0].all(Char::isDigit)) return null
-    val fraction = parts.getOrNull(1).orEmpty()
-    if (fraction.length > 2 || !fraction.all(Char::isDigit)) return null
-    return parts[0].toLongOrNull()?.let { it * 100 + fraction.padEnd(2, '0').ifEmpty { "00" }.toLong() }
+/**
+ * Reads “1,234.50”, “1.234,50”, “1 234,50” or “1’234.50” as hundredths: a mark followed by one or two digits at the end
+ * is the decimal mark and every other mark groups thousands.
+ */
+private fun sharedAmountHundredths(text: String): Long? {
+    val fraction = sharedFraction.find(text)
+    val wholeText = if (fraction != null) text.substring(0, fraction.range.first) else text
+    val whole = wholeText.filter(Char::isDigit).toLongOrNull() ?: return null
+    val cents = fraction?.let { it.groupValues[1].padEnd(2, '0').toLong() } ?: 0L
+    if (whole > (Long.MAX_VALUE - cents) / 100) return null
+    return whole * 100 + cents
 }
 
 /** Picks the existing payee whose name best matches the hint, ignoring case and punctuation. */

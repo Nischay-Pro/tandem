@@ -18,6 +18,17 @@ internal fun parseIsoDate(value: String): Triple<Int, Int, Int>? {
     return Triple(year, month, day).takeIf { year > 0 && month in 1..12 && day in 1..daysInMonth(year, month) }
 }
 
+/** The calendar day before an ISO date, or null when [value] isn't one. */
+internal fun previousIsoDate(value: String): String? {
+    val (year, month, day) = parseIsoDate(value) ?: return null
+    return when {
+        day > 1 -> transactionIsoDate(year, month, day - 1)
+        month > 1 -> transactionIsoDate(year, month - 1, daysInMonth(year, month - 1))
+        year > 1 -> transactionIsoDate(year - 1, 12, 31)
+        else -> null
+    }
+}
+
 internal fun daysInMonth(
     year: Int,
     month: Int,

@@ -12,7 +12,7 @@ internal const val MAX_STATEMENT_IMPORT_CHARS = 10_000_000
 internal const val MAX_STATEMENT_IMPORT_BYTES = 10_000_000
 
 internal fun decodeStatementBytes(bytes: ByteArray): String =
-    runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }
+    decodeUtf16(bytes) ?: runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }
         .getOrElse {
             val windows1252 =
                 mapOf(
@@ -51,6 +51,28 @@ internal fun decodeStatementBytes(bytes: ByteArray): String =
                 }
             }
         }
+
+/** Text saved as UTF-16, as spreadsheet apps' “Unicode text” exports are, told apart by its byte-order mark or its zero bytes. */
+private fun decodeUtf16(bytes: ByteArray): String? {
+    if (bytes.size < 2) return null
+    val first = bytes[0].toInt() and 0xFF
+    val second = bytes[1].toInt() and 0xFF
+    val bigEndian =
+        when {
+            first == 0xFE && second == 0xFF -> true
+            first == 0xFF && second == 0xFE -> false
+            bytes.size >= 4 && first != 0 && second == 0 && bytes[3].toInt() == 0 -> false
+            bytes.size >= 4 && first == 0 && second != 0 && bytes[2].toInt() == 0 -> true
+            else -> return null
+        }
+    val start = if (first + second == 0xFE + 0xFF) 2 else 0
+    val units = (bytes.size - start) / 2
+    return CharArray(units) { index ->
+        val high = bytes[start + index * 2].toInt() and 0xFF
+        val low = bytes[start + index * 2 + 1].toInt() and 0xFF
+        (if (bigEndian) (high shl 8) or low else (low shl 8) or high).toChar()
+    }.concatToString()
+}
 
 @Composable
 internal expect fun rememberStatementFilePicker(onPicked: (PickedStatementFile) -> Unit): () -> Unit

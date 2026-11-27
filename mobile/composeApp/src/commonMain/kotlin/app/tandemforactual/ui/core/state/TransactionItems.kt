@@ -18,6 +18,7 @@ internal fun liveUncategorizedItems(
     categoryRecords: List<BudgetRecordEntity>,
     displaySettings: BudgetDisplaySettings?,
     merchantIconMatcher: MerchantIconMatcherPack?,
+    todayIso: String = platformTodayIsoDate(),
 ): List<TransactionItem> {
     val offBudget = accountRecords.filter { it.recordBody().isOffBudgetAccount() }.map { it.recordId }.toSet()
     return buildLiveTransactionItems(
@@ -27,6 +28,7 @@ internal fun liveUncategorizedItems(
         categoryRecords,
         displaySettings,
         merchantIconMatcher,
+        todayIso,
     ).uncategorized()
 }
 

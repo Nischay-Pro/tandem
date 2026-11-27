@@ -31,7 +31,21 @@ class SharedTransactionTextTest {
         assertNull(plain.amountMinor)
         assertNull(plain.payeeHint)
         assertEquals("Dinner with friends", plain.original)
-        assertEquals(1_234L, parseSharedTransactionText("Charged $12.345 at Shop")!!.amountMinor)
+        assertEquals(1_234_500L, parseSharedTransactionText("Charged $12.345 at Shop")!!.amountMinor)
+    }
+
+    @Test
+    fun readsAmountsWrittenWithOtherSeparatorsAndCurrencies() {
+        assertEquals(123_450L, parseSharedTransactionText("Kartenzahlung 1.234,50 € bei REWE")!!.amountMinor)
+        assertEquals(1_250L, parseSharedTransactionText("Paiement de 12,50 EUR chez Carrefour")!!.amountMinor)
+        assertEquals(123_456L, parseSharedTransactionText("Achat 1 234,56 € chez Fnac")!!.amountMinor)
+        assertEquals(123_450L, parseSharedTransactionText("Zahlung CHF 1'234.50 an Migros")!!.amountMinor)
+        assertEquals(123_450L, parseSharedTransactionText("Zahlung CHF 1’234.50 an Coop")!!.amountMinor)
+        assertEquals(4_590L, parseSharedTransactionText("Compra de R$ 45,90 em Padaria")!!.amountMinor)
+        assertEquals(150_000L, parseSharedTransactionText("¥1,500 paid at Lawson")!!.amountMinor)
+        assertEquals(150_000L, parseSharedTransactionText("Paid 1500 JPY at Lawson")!!.amountMinor)
+        assertEquals(29_900L, parseSharedTransactionText("Kortköp 299 kr hos ICA")!!.amountMinor)
+        assertEquals(1_234_567L, parseSharedTransactionText("Sent $12,345.67 to Landlord")!!.amountMinor)
     }
 
     @Test

@@ -20,16 +20,34 @@ internal fun parseMoney(
 ): Long {
     val trimmed = value.trim()
     if (trimmed.isBlank()) throw StatementImportParseException("An amount is missing. Enter an amount for this row.")
+    val (negative, unsigned) = signedAmountText(trimmed)
+    if (unsigned.any { !it.isAmountMark() && !it.isWhitespace() }) throw invalidAmount(trimmed)
+    val numeric = withoutApostropheGrouping(unsigned.filter { it.isAmountMark() }, trimmed)
+    if (numeric.isBlank()) throw invalidAmount(value)
+    val decimalSeparator = decimalSeparatorOf(numeric, currencyFractionDigits, numberFormat, trimmed)
+    val split = decimalSeparator?.let(numeric::lastIndexOf) ?: -1
+    val wholeText = if (split >= 0) numeric.substring(0, split) else numeric
+    val wholeDigits = wholeText.filter(Char::isDigit)
+    val fractionDigits = if (split >= 0) numeric.substring(split + 1).filter(Char::isDigit).take(currencyFractionDigits) else ""
+    val scale = decimalScale(currencyFractionDigits)
+    val normalizedFraction = fractionDigits.padEnd(currencyFractionDigits, '0')
+    val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
+    val fraction = normalizedFraction.toLongOrNull() ?: 0L
+    if (whole > (Long.MAX_VALUE - fraction) / scale) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
+    val hundredths = toStoredHundredths((whole * scale) + fraction, currencyFractionDigits)
+    return if (negative) -hundredths else hundredths
+}
+
+private fun Char.isAmountMark(): Boolean = isDigit() || this == '.' || this == ',' || this in apostropheMarks
+
+/** Whether the amount is negative, and its text without currency, sign or debit/credit markers. */
+private fun signedAmountText(trimmed: String): Pair<Boolean, String> {
     val currencyFree = stripCurrencyMarkers(trimmed)
     val parenthesized = currencyFree.startsWith('(') && currencyFree.endsWith(')')
     var unsigned = currencyFree.removeSurrounding("(", ")").trim()
-    val trailingMarker =
-        Regex("(?i)\\s*(DR|CR)\\.?$")
-            .find(unsigned)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.uppercase()
-    if (trailingMarker != null) unsigned = unsigned.dropLast(Regex("(?i)\\s*(DR|CR)\\.?$").find(unsigned)?.value?.length ?: 0).trim()
+    val markerMatch = debitCreditMarker.find(unsigned)
+    val trailingMarker = markerMatch?.groupValues?.getOrNull(1)?.uppercase()
+    if (markerMatch != null) unsigned = unsigned.dropLast(markerMatch.value.length).trim()
     val trailingMinus = unsigned.endsWith('-') || unsigned.endsWith('−')
     if (trailingMinus) unsigned = unsigned.dropLast(1).trim()
     val leadingMinus = unsigned.startsWith('-') || unsigned.startsWith('−')
@@ -39,59 +57,79 @@ internal fun parseMoney(
     if ((trailingMarker == "CR" || leadingPlus) && (parenthesized || trailingMinus || leadingMinus)) {
         throw StatementImportParseException("This amount has conflicting signs. Use a single sign.")
     }
-    val negative = parenthesized || trailingMinus || leadingMinus || trailingMarker == "DR"
-    if (unsigned.any { !it.isDigit() && it != '.' && it != ',' && !it.isWhitespace() }) throw invalidAmount(trimmed)
-    val numeric = unsigned.filter { it.isDigit() || it == '.' || it == ',' }
-    if (numeric.isBlank()) throw invalidAmount(value)
+    return (parenthesized || trailingMinus || leadingMinus || trailingMarker == "DR") to unsigned
+}
+
+/** Swiss-style “1’234.50”: apostrophes may only group thousands, and are dropped once checked. */
+private fun withoutApostropheGrouping(
+    numeric: String,
+    original: String,
+): String {
+    if (numeric.none { it in apostropheMarks }) return numeric
+    if (!apostropheGrouped.matches(numeric)) throw invalidAmount(original, "Check its separators.")
+    return numeric.filterNot { it in apostropheMarks }
+}
+
+/** The decimal mark in [numeric], or null when every mark groups thousands. */
+private fun decimalSeparatorOf(
+    numeric: String,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
+    original: String,
+): Char? {
     val lastSeparator = maxOf(numeric.lastIndexOf('.'), numeric.lastIndexOf(','))
+    if (lastSeparator < 0) return null
+    val mark = numeric[lastSeparator]
+    val fraction = numeric.substring(lastSeparator + 1)
     val separators = numeric.count { it == '.' || it == ',' }
-    val fractionLength = if (lastSeparator >= 0) numeric.length - lastSeparator - 1 else 0
-    val decimalSeparator =
-        when {
-            lastSeparator < 0 -> null
-            numeric.contains('.') && numeric.contains(',') -> {
-                if (fractionLength !in 1..currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
-                numeric[lastSeparator]
-            }
-            separators > 1 -> {
-                if (!isGroupedInteger(numeric)) throw invalidAmount(trimmed, "Check its separators.")
-                null
-            }
-            fractionLength in 1..currencyFractionDigits -> {
-                if (fractionLength == 3 && separators == 1) {
-                    when {
-                        numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) ->
-                            throw invalidAmount(trimmed, "This amount is ambiguous. Remove the grouping mark or include the decimal mark.")
-                        numeric[lastSeparator] == decimalSeparatorFor(numberFormat) -> numeric[lastSeparator]
-                        else -> throw invalidAmount(trimmed, "Check its separators.")
-                    }
-                } else {
-                    numeric[lastSeparator]
-                }
-            }
-            fractionLength == 3 && currencyFractionDigits == 0 -> {
-                when {
-                    numeric[lastSeparator] == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> null
-                    numeric[lastSeparator] == decimalSeparatorFor(numberFormat) ->
-                        throw invalidAmount(trimmed, "Check its decimal places.")
-                    else -> throw invalidAmount(trimmed, "Check its separators.")
-                }
-            }
-            fractionLength == 3 && currencyFractionDigits != 3 -> throw invalidAmount(trimmed, "Check its decimal places.")
-            else -> throw invalidAmount(trimmed, "Check its decimal places.")
+    return when {
+        numeric.contains('.') && numeric.contains(',') -> {
+            if (!fitsFraction(fraction, currencyFractionDigits)) throw invalidAmount(original, "Check its decimal places.")
+            mark
         }
-    val split = decimalSeparator?.let(numeric::lastIndexOf) ?: -1
-    val wholeText = if (split >= 0) numeric.substring(0, split) else numeric
-    val wholeDigits = wholeText.filter(Char::isDigit)
-    val fractionDigits = if (split >= 0) numeric.substring(split + 1).filter(Char::isDigit) else ""
-    if (fractionDigits.length > currencyFractionDigits) throw invalidAmount(trimmed, "Check its decimal places.")
-    val scale = decimalScale(currencyFractionDigits)
-    val normalizedFraction = fractionDigits.padEnd(currencyFractionDigits, '0')
-    val whole = wholeDigits.toLongOrNull() ?: throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val fraction = normalizedFraction.toLongOrNull() ?: 0L
-    if (whole > (Long.MAX_VALUE - fraction) / scale) throw StatementImportParseException("This amount is too large. Use a smaller amount.")
-    val hundredths = toStoredHundredths((whole * scale) + fraction, currencyFractionDigits)
-    return if (negative) -hundredths else hundredths
+        separators > 1 -> {
+            if (!isGroupedInteger(numeric)) throw invalidAmount(original, "Check its separators.")
+            null
+        }
+        fraction.length == 3 -> threeDigitGroupOrDecimal(numeric, mark, currencyFractionDigits, numberFormat, original)
+        fitsFraction(fraction, currencyFractionDigits) -> mark
+        else -> throw invalidAmount(original, "Check its decimal places.")
+    }
+}
+
+/** A fraction the currency can hold, allowing zeros past its own decimals such as “1500.00” for yen. */
+private fun fitsFraction(
+    fraction: String,
+    currencyFractionDigits: Int,
+): Boolean =
+    fraction.length in 1..currencyFractionDigits ||
+        (fraction.length in 1..STORED_AMOUNT_DIGITS && fraction.drop(currencyFractionDigits).all { it == '0' })
+
+/**
+ * “1,234” or “1.234”: three decimals only for a currency that has them, otherwise a thousands group unless it uses the
+ * budget's own decimal mark.
+ */
+private fun threeDigitGroupOrDecimal(
+    numeric: String,
+    mark: Char,
+    currencyFractionDigits: Int,
+    numberFormat: String?,
+    original: String,
+): Char? {
+    val budgetDecimal = decimalSeparatorFor(numberFormat)
+    if (currencyFractionDigits >= 3) {
+        return when {
+            mark == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) ->
+                throw invalidAmount(original, "This amount is ambiguous. Remove the grouping mark or include the decimal mark.")
+            mark == budgetDecimal -> mark
+            else -> throw invalidAmount(original, "Check its separators.")
+        }
+    }
+    return when {
+        budgetDecimal == null || mark == budgetDecimal -> throw invalidAmount(original, "Check its decimal places.")
+        isGroupedInteger(numeric) -> null
+        else -> throw invalidAmount(original, "Check its separators.")
+    }
 }
 
 /**
@@ -130,10 +168,21 @@ private fun groupingSeparatorFor(numberFormat: String?): Char? =
         else -> null
     }
 
+private val apostropheMarks = setOf('\'', '’')
+private val apostropheGrouped = Regex("^\\d{1,3}(?:['’]\\d{3})+(?:[.,]\\d+)?$")
+private val debitCreditMarker = Regex("(?i)\\s*(DR|CR)\\.?$")
+private val currencyCodes =
+    Regex(
+        "(?i)\\b(?:USD|CAD|EUR|GBP|INR|AUD|NZD|JPY|CHF|SGD|HKD|BRL|MXN|SEK|NOK|DKK|PLN|CZK|HUF|ZAR|CNY|KRW|TRY|ILS|THB|PHP|" +
+            "IDR|MYR|ARS|CLP|COP)\\b",
+    )
+private val currencyWords = Regex("(?i)R\\$|kr\\.?|zł|Kč|Fr\\.")
+private val currencySymbols = setOf('$', '€', '£', '₹', '¥', '₩', '₺', '₽', '₱', '₪', '₫', '฿', '₦', '₴')
+
 private fun stripCurrencyMarkers(value: String): String =
-    value
-        .replace(Regex("(?i)\\b(?:USD|CAD|EUR|GBP|INR|AUD|NZD|JPY|CHF|SGD|HKD)\\b"), "")
-        .filterNot { it in setOf('$', '€', '£', '₹', '¥', '₩') }
+    currencyWords
+        .replace(currencyCodes.replace(value, ""), "")
+        .filterNot { it in currencySymbols }
         .trim()
 
 private fun isGroupedInteger(value: String): Boolean {
@@ -158,30 +207,48 @@ internal fun parseStatementDate(
     }
     val monthNamed = parseMonthNamedDate(dateText)
     if (monthNamed != null) return monthNamed.also { validateDate(it, value) }
-    val numeric =
-        Regex("^(\\d{1,2})[./\\\\-](\\d{1,2})[./\\\\-](\\d{2,4})$").matchEntire(numericText)
-            ?: throw invalidDate(value)
-    val first = numeric.groupValues[1].toIntOrNull() ?: throw invalidDate(value)
-    val second = numeric.groupValues[2].toIntOrNull() ?: throw invalidDate(value)
-    var year = numeric.groupValues[3].trimEnd('\'').toIntOrNull() ?: throw invalidDate(value)
-    if (year < 100) year += if (year < 50) 2000 else 1900
-    val month =
-        if (first > 12) {
-            second
-        } else if (order == StatementDateOrder.MONTH_DAY_YEAR) {
-            first
-        } else {
-            second
-        }
-    val day =
-        if (first > 12) {
-            first
-        } else if (order == StatementDateOrder.MONTH_DAY_YEAR) {
-            second
-        } else {
-            first
-        }
-    return formatIsoDate(year, month, day).also { validateDate(it, value) }
+    val numeric = numericDate(dateText) ?: throw invalidDate(value)
+    val month = if (order == StatementDateOrder.MONTH_DAY_YEAR) numeric.first else numeric.second
+    val day = if (order == StatementDateOrder.MONTH_DAY_YEAR) numeric.second else numeric.first
+    return formatIsoDate(numeric.year, month, day).also { validateDate(it, value) }
+}
+
+/**
+ * The day/month order for a whole statement: the order its unambiguous dates show, or [selected] when every date reads
+ * either way. A statement that shows both orders can't be read reliably.
+ */
+internal fun statementDateOrderFor(
+    dates: List<String>,
+    selected: StatementDateOrder,
+): StatementDateOrder {
+    val numericDates = dates.mapNotNull { numericDate(it.trim().substringBefore('T').trim()) }
+    val dayFirst = numericDates.any { it.first in 13..31 && it.second in 1..12 }
+    val monthFirst = numericDates.any { it.second in 13..31 && it.first in 1..12 }
+    return when {
+        dayFirst && monthFirst ->
+            throw StatementImportParseException("This statement mixes day-first and month-first dates. Check the dates in the file.")
+        dayFirst -> StatementDateOrder.DAY_MONTH_YEAR
+        monthFirst -> StatementDateOrder.MONTH_DAY_YEAR
+        else -> selected
+    }
+}
+
+private data class NumericDate(
+    val first: Int,
+    val second: Int,
+    val year: Int,
+)
+
+private val spaceAfterDateSeparator = Regex("([./\\\\'-])\\s+")
+private val numericDatePattern = Regex("^(\\d{1,2})[./\\\\-](\\d{1,2})([./\\\\'-])(\\d{2,4})$")
+
+/** “31/10/2026”, “10-31-26” or Quicken's “10/31'26” and “1/ 5'26”, before deciding which number is the month. */
+private fun numericDate(dateText: String): NumericDate? {
+    val compact = spaceAfterDateSeparator.replace(dateText, "\$1").substringBefore(' ')
+    val match = numericDatePattern.matchEntire(compact) ?: return null
+    var year = match.groupValues[4].toIntOrNull() ?: return null
+    if (year < 100) year += if (match.groupValues[3] == "'" || year < 50) 2000 else 1900
+    return NumericDate(match.groupValues[1].toInt(), match.groupValues[2].toInt(), year)
 }
 
 private fun parseMonthNamedDate(value: String): String? {

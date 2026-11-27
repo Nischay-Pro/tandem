@@ -23,11 +23,12 @@ internal fun parseQif(
     var firstSkippedReason: String? = null
     val generatedIds = mutableMapOf<String, Int>()
     val usedIds = mutableSetOf<String>()
+    val fileDateOrder = statementDateOrderFor(records.map { it['D'].orEmpty() }, dateOrder)
     val transactions =
         records.mapIndexedNotNull { index, fields ->
             val rowNumber = index + 1
             try {
-                val date = parseStatementDate(fields['D'].orEmpty(), dateOrder)
+                val date = parseStatementDate(fields['D'].orEmpty(), fileDateOrder)
                 val amount = parseMoney(fields['T'].orEmpty(), currencyFractionDigits, numberFormat)
                 if (amount == 0L) {
                     skipped++
@@ -109,5 +110,31 @@ private fun ofxField(
         .find(record)
         ?.groupValues
         ?.getOrNull(1)
+        ?.let(::decodeOfxEntities)
         ?.trim()
         .orEmpty()
+
+private val ofxEntity = Regex("&(#[xX][0-9a-fA-F]{1,6}|#\\d{1,7}|amp|lt|gt|quot|apos|nbsp);")
+
+/** OFX is SGML, so “AT&amp;T” in a payee is AT&T. */
+internal fun decodeOfxEntities(value: String): String =
+    ofxEntity.replace(value) { match ->
+        val name = match.groupValues[1]
+        when {
+            name.startsWith("#x", ignoreCase = true) -> name.drop(2).toIntOrNull(16)?.let(::codePointText)
+            name.startsWith("#") -> name.drop(1).toIntOrNull()?.let(::codePointText)
+            else -> namedOfxEntities[name]
+        } ?: match.value
+    }
+
+private val namedOfxEntities = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
+
+private fun codePointText(codePoint: Int): String? =
+    when {
+        codePoint !in 1..0x10FFFF || codePoint in 0xD800..0xDFFF -> null
+        codePoint < 0x10000 -> codePoint.toChar().toString()
+        else -> {
+            val offset = codePoint - 0x10000
+            charArrayOf((0xD800 + (offset shr 10)).toChar(), (0xDC00 + (offset and 0x3FF)).toChar()).concatToString()
+        }
+    }

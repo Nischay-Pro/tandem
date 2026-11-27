@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.observeAccountActivityRecords
 import app.tandemforactual.ui.core.session.observeClearedAccountBalance
@@ -77,6 +78,7 @@ internal fun AccountActivityEffects(
     liveAccount: LiveAccountSummary?,
     merchantIconMatcher: MerchantIconMatcherPack?,
 ) {
+    val todayIso = rememberTodayIsoDate()
     LaunchedEffect(
         mobileSession.databaseGeneration,
         state.selectedBudgetId,
@@ -87,6 +89,7 @@ internal fun AccountActivityEffects(
         mobileSession.categoryRecords,
         mobileSession.budgetDisplaySettings,
         merchantIconMatcher,
+        todayIso,
     ) {
         val accountId = liveAccount?.id ?: return@LaunchedEffect
         val accountActivityFlow =
@@ -107,6 +110,7 @@ internal fun AccountActivityEffects(
                         mobileSession.categoryRecords,
                         mobileSession.budgetDisplaySettings,
                         merchantIconMatcher,
+                        todayIso,
                     ).filterNot(TransactionItem::isSplitParent)
                 }
             val nextActivity =

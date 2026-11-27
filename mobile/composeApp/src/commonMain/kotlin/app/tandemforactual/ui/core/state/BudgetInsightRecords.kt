@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.observeActivitySearchRecords
 
@@ -94,9 +95,10 @@ internal fun rememberMonthTransactions(
     val records = rememberBudgetTransactions(state, mobileSession)
     val names = mobileSession.rememberRecordNames()
     val accountRecords = mobileSession.accountRecords
-    return remember(records, names, accountRecords, state.selectedMonthId) {
+    val todayIso = rememberTodayIsoDate()
+    return remember(records, names, accountRecords, state.selectedMonthId, todayIso) {
         val offBudget = accountRecords.filter { it.recordBody().isOffBudgetAccount() }.mapTo(mutableSetOf()) { it.recordId }
-        monthTransactionItems(records.orEmpty(), state.selectedMonthId, names, offBudget)
+        monthTransactionItems(records.orEmpty(), state.selectedMonthId, names, offBudget, todayIso)
     }
 }
 
