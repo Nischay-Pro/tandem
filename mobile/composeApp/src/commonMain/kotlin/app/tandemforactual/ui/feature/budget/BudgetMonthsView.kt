@@ -52,6 +52,9 @@ internal class BudgetMonthsView(
     private val categories = summaries.mapValues { (_, month) -> month.groups.flatMap { it.categories }.associateBy { it.id } }
     private val groups = summaries.mapValues { (_, month) -> month.groups.associateBy { it.id } }
     private val toBudget = summaries.mapValues { (_, month) -> month.toBudgetMinor }
+    private val monthSummaries = summaries
+
+    fun summary(monthId: String): LiveBudgetMonthSummary? = monthSummaries[monthId]
 
     fun category(
         monthId: String,

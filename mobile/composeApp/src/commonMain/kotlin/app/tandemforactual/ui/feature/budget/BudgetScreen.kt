@@ -327,7 +327,7 @@ private fun LazyListScope.budgetMonthItems(
             BudgetPinnedCategoriesSection(state, context.navigation, pinnedCategories, pinnedSectionKey, pinnedExpanded, sectionSpacing)
         }
     }
-    if (months.available) item(key = "budget-months-toggle") { BudgetMonthsToggle(months) }
+    if (months.available) item(key = "budget-months-toggle") { BudgetMonthsToggle(months, state) }
     if (months.sideBySide) {
         budgetMonthsTableItems(context, months, month.displayGroups)
     } else {

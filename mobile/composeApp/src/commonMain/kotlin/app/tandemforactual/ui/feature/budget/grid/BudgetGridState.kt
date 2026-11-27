@@ -26,6 +26,9 @@ internal class BudgetGridState {
     var draftInvalid by mutableStateOf(false)
         private set
 
+    /** Which figures each cell shows. */
+    var value by mutableStateOf(GridValue.ALL)
+
     /** Set when the focused cell should take keyboard focus as soon as it is on screen. */
     var focusRequested by mutableStateOf(false)
 
