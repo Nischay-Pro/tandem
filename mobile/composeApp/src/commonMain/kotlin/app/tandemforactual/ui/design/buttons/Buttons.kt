@@ -314,6 +314,7 @@ private fun TandemButtonLabel(
                 fontSize = TandemTypography.action,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     } else {
@@ -323,6 +324,7 @@ private fun TandemButtonLabel(
             fontSize = TandemTypography.action,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -356,6 +358,7 @@ internal fun SegmentedSelector(
                     fontSize = TandemTypography.caption,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -226,6 +226,7 @@ private fun CategoryIconPicker(
                             color = tandemPalette.text,
                             fontSize = TandemTypography.micro,
                             maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

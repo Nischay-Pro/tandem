@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui.app
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isTab
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemBackButton
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.buttons.TandemModalCloseButton
@@ -156,14 +158,18 @@ private fun StandardAppHeader(
         HeaderMenuButton(route, onOpenMenu)
         Column(
             modifier =
-                Modifier.weight(1f).clickable(
-                    interactionSource = null,
-                    indication = null,
-                    enabled = route.isTab() && route != AppRoute.ACCOUNTS,
-                    role = Role.Button,
-                    onClickLabel = "Choose budget",
-                    onClick = onBudget,
-                ),
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = MIN_TOUCH_TARGET)
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        enabled = route.isTab() && route != AppRoute.ACCOUNTS,
+                        role = Role.Button,
+                        onClickLabel = "Choose budget",
+                        onClick = onBudget,
+                    ),
+            verticalArrangement = Arrangement.Center,
         ) {
             if (headerTitle.isNotBlank()) {
                 Text(

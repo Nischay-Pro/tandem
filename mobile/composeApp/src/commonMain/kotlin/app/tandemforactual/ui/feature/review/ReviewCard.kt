@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.AccountIconTile
@@ -140,7 +141,13 @@ private fun ReviewCardFace(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
             AccountIconTile(item.account)
-            Text(item.account, color = palette.muted, fontSize = TandemTypography.compactBody, maxLines = 1)
+            Text(
+                item.account,
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         Spacer(Modifier.weight(1f))
         Detail(Lucide.CalendarDays, item.dateLabel)
@@ -163,9 +170,24 @@ private fun ReviewCardFace(
                             .padding(TandemSpacing.xxSmall),
                 )
             }
-            Text(item.payee, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(
+                item.payee,
+                color = palette.text,
+                fontSize = TandemTypography.cardTitle,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        if (item.notes.isNotBlank()) Text(item.notes, color = palette.muted, fontSize = TandemTypography.compactBody, maxLines = 2)
+        if (item.notes.isNotBlank()) {
+            Text(
+                item.notes,
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Spacer(Modifier.weight(1f))
         footer()
     }
@@ -178,7 +200,7 @@ private fun Detail(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
         Icon(icon, null, Modifier.size(16.dp), tint = tandemPalette.muted)
-        Text(text, color = tandemPalette.muted, fontSize = TandemTypography.compactBody, maxLines = 1)
+        Text(text, color = tandemPalette.muted, fontSize = TandemTypography.compactBody, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -254,6 +276,13 @@ private fun ReviewChip(
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(16.dp), tint = color)
-        Text(label, color = tandemPalette.text, fontSize = TandemTypography.label, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            label,
+            color = tandemPalette.text,
+            fontSize = TandemTypography.label,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

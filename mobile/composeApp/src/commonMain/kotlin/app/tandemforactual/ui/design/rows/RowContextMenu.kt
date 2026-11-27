@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.inputs.onSecondaryClick
@@ -107,6 +108,13 @@ private fun RowMenuItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(action.icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = iconTint)
-        Text(action.label, color = tint, fontSize = TandemTypography.compactBody, fontWeight = FontWeight.Medium, maxLines = 2)
+        Text(
+            action.label,
+            color = tint,
+            fontSize = TandemTypography.compactBody,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

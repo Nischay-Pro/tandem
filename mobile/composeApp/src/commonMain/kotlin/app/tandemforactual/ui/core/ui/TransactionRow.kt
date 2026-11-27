@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.formatSignedCurrency
 import app.tandemforactual.ui.core.state.TransactionItem
@@ -259,6 +260,7 @@ private fun ActivityTransactionAmount(
             fontSize = TandemTypography.compactBody,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             fractionDigits = fractionDigits,
         )
         return
@@ -273,5 +275,6 @@ private fun ActivityTransactionAmount(
         fontSize = TandemTypography.compactBody,
         fontWeight = FontWeight.SemiBold,
         maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
     )
 }

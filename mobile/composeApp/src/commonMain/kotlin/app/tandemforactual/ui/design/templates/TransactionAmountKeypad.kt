@@ -4,6 +4,7 @@ package app.tandemforactual.ui.design.templates
 
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +33,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
 
@@ -68,15 +72,27 @@ internal fun TransactionAmountKeypad(
                 .focusable(),
         color = tandemPalette.surface,
     ) {
-        Row(
-            Modifier.fillMaxSize().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium),
-            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
-        ) {
-            AmountKeypadDigits(actions, decimalSeparator, Modifier.weight(3.15f).fillMaxHeight())
-            AmountKeypadOperators(actions, Modifier.weight(1f).fillMaxHeight())
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val gap = TandemSpacing.extraSmall
+            val sidePadding =
+                ((maxWidth - KEYPAD_NARROW_WIDTH) / 4 + TandemSpacing.small).coerceIn(TandemSpacing.small, TandemSpacing.large)
+            val rowsHeight = MIN_TOUCH_TARGET * 4 + gap * 3
+            val endPadding = ((maxHeight - rowsHeight) / 2).coerceIn(TandemSpacing.xxSmall, TandemSpacing.medium)
+            val inner = maxWidth - sidePadding * 2 - gap
+            val operatorsWidth = maxOf(inner / KEYPAD_WEIGHTS, MIN_TOUCH_TARGET * 2 + gap).coerceAtMost(inner / 2)
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = sidePadding, vertical = endPadding),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                AmountKeypadDigits(actions, decimalSeparator, Modifier.weight(1f).fillMaxHeight())
+                AmountKeypadOperators(actions, Modifier.width(operatorsWidth).fillMaxHeight())
+            }
         }
     }
 }
+
+private val KEYPAD_NARROW_WIDTH = 280.dp
+private const val KEYPAD_WEIGHTS = 4.15f
 
 @Composable
 private fun AmountKeypadDigits(

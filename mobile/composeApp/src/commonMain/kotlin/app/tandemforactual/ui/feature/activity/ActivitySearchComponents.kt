@@ -70,6 +70,7 @@ internal fun ActivitySearchFilterChip(
             color = palette.accent,
             fontSize = TandemTypography.caption,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Icon(
             Lucide.X,
@@ -154,6 +155,6 @@ internal fun ActivitySearchQuickFilter(
             modifier = Modifier.size(14.dp),
             tint = palette.accent,
         )
-        Text(filter.label, color = palette.text, fontSize = TandemTypography.caption, maxLines = 1)
+        Text(filter.label, color = palette.text, fontSize = TandemTypography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

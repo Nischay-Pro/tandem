@@ -170,6 +170,7 @@ private fun CategoryRingLegend(categories: List<CategorySpendingPoint>) {
                             color = palette.muted,
                             fontSize = TandemTypography.caption,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

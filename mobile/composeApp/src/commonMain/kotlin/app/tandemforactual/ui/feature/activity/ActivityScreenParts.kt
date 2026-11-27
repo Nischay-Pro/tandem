@@ -2,6 +2,7 @@
 
 package app.tandemforactual.ui.feature.activity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.DropdownMenu
@@ -19,6 +20,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.search.ActivitySortOrder
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.ChevronDown
@@ -36,7 +38,7 @@ internal fun ActivitySortControl(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { expanded = true }) {
+        TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = MIN_TOUCH_TARGET)) {
             Text("Sort: ${selected.label}", color = tandemPalette.text, fontSize = TandemTypography.caption)
             Icon(
                 Lucide.ChevronDown,

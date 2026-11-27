@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
@@ -108,7 +110,9 @@ internal fun ListRow(
         if (leading != RowLeading.None) {
             ListRowLeadingTile(title, leading, options, titleColor)
         }
-        ListRowText(title, subtitle, trailing, options, titleColor, stackTrailing, subtitleContent, trailingContent)
+        ListRowBody(trailingContent.takeUnless { stackTrailing }) {
+            ListRowText(title, subtitle, trailing, options, titleColor, stackTrailing, subtitleContent, trailingContent)
+        }
         ListRowTrailing(trailing, options, stackTrailing, showChevron = onClick != null && options.showChevron, trailingContent)
     }
 }
@@ -191,9 +195,49 @@ private fun ListRowLeadingTile(
     }
 }
 
+/** The title column with [trailing] beside it, or under it once the two no longer fit side by side. */
+@Composable
+private fun RowScope.ListRowBody(
+    trailing: (@Composable () -> Unit)?,
+    text: @Composable () -> Unit,
+) {
+    Layout(
+        content = {
+            Box { text() }
+            if (trailing != null) Box { trailing() }
+        },
+        modifier = Modifier.weight(1f),
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val gap = TandemLayout.listRowGap.roundToPx()
+        val value = measurables.getOrNull(1)?.measure(Constraints(maxWidth = width, maxHeight = constraints.maxHeight))
+        val beside = value == null || value.width + gap <= width - LIST_ROW_MIN_TITLE_WIDTH.roundToPx()
+        val textWidth = if (value != null && beside) width - value.width - gap else width
+        val label = measurables[0].measure(Constraints(textWidth, textWidth, 0, constraints.maxHeight))
+        val under = TandemSpacing.extraSmall.roundToPx()
+        val height =
+            when {
+                value == null -> label.height
+                beside -> maxOf(label.height, value.height)
+                else -> label.height + under + value.height
+            }.coerceAtLeast(constraints.minHeight)
+        layout(width, height) {
+            if (value == null || beside) {
+                label.place(0, (height - label.height) / 2)
+                value?.place(width - value.width, (height - value.height) / 2)
+            } else {
+                label.place(0, 0)
+                value.place(width - value.width, label.height + under)
+            }
+        }
+    }
+}
+
+private val LIST_ROW_MIN_TITLE_WIDTH = 112.dp
+
 /** Title, subtitle and (at large font scales) stacked trailing content of a list row. */
 @Composable
-private fun RowScope.ListRowText(
+private fun ListRowText(
     title: String,
     subtitle: String?,
     trailing: String?,
@@ -204,7 +248,7 @@ private fun RowScope.ListRowText(
     trailingContent: (@Composable () -> Unit)?,
 ) {
     val palette = tandemPalette
-    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
         if (options.animateChanges) {
             AnimatedStatusText(
                 title,
@@ -212,6 +256,7 @@ private fun RowScope.ListRowText(
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         } else {
             Text(
@@ -220,6 +265,7 @@ private fun RowScope.ListRowText(
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (subtitleContent != null) {
@@ -231,6 +277,7 @@ private fun RowScope.ListRowText(
                     palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = options.subtitleMaxLines,
+                    overflow = TextOverflow.Ellipsis,
                     fractionDigits = 2,
                 )
             } else {
@@ -239,6 +286,7 @@ private fun RowScope.ListRowText(
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = options.subtitleMaxLines,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -267,6 +315,7 @@ private fun ListRowStackedTrailing(
                 fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 fractionDigits = 2,
             )
         } else {
@@ -276,6 +325,7 @@ private fun ListRowStackedTrailing(
                 fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -291,9 +341,7 @@ private fun ListRowTrailing(
     trailingContent: (@Composable () -> Unit)?,
 ) {
     val palette = tandemPalette
-    if (!stackTrailing && trailingContent != null) {
-        trailingContent()
-    } else if (trailing != null && !stackTrailing) {
+    if (trailingContent == null && trailing != null && !stackTrailing) {
         val effectiveColor = if (options.muted) palette.muted else options.trailingColor ?: palette.muted
         Box(Modifier.trailingWidthCap(), contentAlignment = Alignment.CenterEnd) {
             if (options.animateChanges) {
@@ -303,6 +351,7 @@ private fun ListRowTrailing(
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     fractionDigits = 2,
                 )
             } else {

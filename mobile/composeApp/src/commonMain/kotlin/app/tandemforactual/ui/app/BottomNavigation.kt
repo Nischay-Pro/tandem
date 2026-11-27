@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Text
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -38,6 +40,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -160,15 +163,26 @@ private fun RowScope.BottomNavigationTab(
     ) {
         NavigationGlyph(route, tabColor, iconScale)
         CompositionLocalProvider(LocalDensity provides labelDensity) {
-            Text(
+            BasicText(
                 label,
-                color = tabColor,
-                fontSize = TandemTypography.micro,
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                style =
+                    LocalTextStyle.current.merge(
+                        TextStyle(fontSize = TandemTypography.micro, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal),
+                    ),
+                color = { tabColor },
                 maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
+                overflow = TextOverflow.Ellipsis,
+                autoSize =
+                    TextAutoSize.StepBased(
+                        minFontSize = TandemTypography.micro * NARROW_LABEL_SCALE,
+                        maxFontSize = TandemTypography.micro,
+                        stepSize = TandemTypography.micro * LABEL_STEP_SCALE,
+                    ),
             )
         }
     }
 }
+
+/** A tab label shrinks this far before it's cut short, so every tab reads whole in a narrow split-screen window. */
+private const val NARROW_LABEL_SCALE = 0.8f
+private const val LABEL_STEP_SCALE = 0.05f

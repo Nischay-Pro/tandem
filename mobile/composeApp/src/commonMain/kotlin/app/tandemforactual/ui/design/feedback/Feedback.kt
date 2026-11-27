@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.money.amountAnnotatedString
@@ -196,7 +197,14 @@ internal fun Badge(
             .background(animatedColor.copy(alpha = 0.13f))
             .padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
     ) {
-        AnimatedStatusText(label, color, fontSize = TandemTypography.micro, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        AnimatedStatusText(
+            label,
+            color,
+            fontSize = TandemTypography.micro,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

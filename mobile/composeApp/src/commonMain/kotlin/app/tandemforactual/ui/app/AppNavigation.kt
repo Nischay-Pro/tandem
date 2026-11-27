@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
@@ -140,6 +141,7 @@ internal fun HeaderMenuAction(
             fontSize = TandemTypography.compactBody,
             fontWeight = FontWeight.Medium,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

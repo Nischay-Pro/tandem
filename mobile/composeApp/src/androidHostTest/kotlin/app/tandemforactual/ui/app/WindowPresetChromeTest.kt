@@ -71,6 +71,26 @@ class WindowPresetChromeTest {
     @Config(qualifiers = WindowPresets.BOOK_FOLD)
     fun unfoldedFoldable() = assertPrimaryActionsFit()
 
+    @Test
+    @Config(qualifiers = WindowPresets.TABLET_THIRD)
+    fun tabletThird() = assertPrimaryActionsFit()
+
+    @Test
+    @Config(qualifiers = WindowPresets.TALL_TABLET_THIRD)
+    fun tallTabletThird() = assertPrimaryActionsFit()
+
+    @Test
+    @Config(qualifiers = WindowPresets.FOLD_HALF)
+    fun foldableHalf() = assertPrimaryActionsFit()
+
+    @Test
+    @Config(qualifiers = WindowPresets.FLOATING)
+    fun floatingWindow() = assertPrimaryActionsFit()
+
+    @Test
+    @Config(qualifiers = WindowPresets.VERY_NARROW)
+    fun veryNarrowWindow() = assertPrimaryActionsFit()
+
     private fun assertPrimaryActionsFit() {
         val screen = mutableStateOf(InterfaceMode.MINIMAL to AppRoute.HOME)
         lateinit var window: WindowSizeInfo
@@ -131,9 +151,12 @@ private fun addsFromHeader(
 ) = window.compactHeight && route == AppRoute.BUDGET
 
 @Composable
-private fun PresetChrome(
+internal fun PresetChrome(
     window: WindowSizeInfo,
     route: AppRoute,
+    showBack: Boolean = false,
+    state: AppState = AppState(),
+    content: @Composable () -> Unit = {},
 ) {
     val openMenu: (() -> Unit)? = if (window.usesRail) null else ({})
     val addTransaction: (() -> Unit)? = if (addsFromHeader(window, route)) ({}) else null
@@ -142,8 +165,8 @@ private fun PresetChrome(
         Column(Modifier.weight(1f).fillMaxHeight()) {
             AppHeader(
                 route = route,
-                state = AppState(),
-                showBack = false,
+                state = state,
+                showBack = showBack,
                 onBack = {},
                 onSync = {},
                 syncStatus = MainCloudStatus.OFF,
@@ -159,7 +182,7 @@ private fun PresetChrome(
                 onAddTransaction = addTransaction,
                 onOpenMenu = openMenu,
             )
-            Box(Modifier.weight(1f).fillMaxWidth())
+            Box(Modifier.weight(1f).fillMaxWidth()) { content() }
             if (!window.usesRail) {
                 Box(Modifier.fillMaxWidth().height(TandemLayout.bottomBarHeight), contentAlignment = Alignment.BottomCenter) {
                     BottomNavigation(route, {})

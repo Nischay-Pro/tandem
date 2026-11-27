@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -213,6 +214,7 @@ private fun SectionCardLayout(
                             fontSize = TandemTypography.label,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     if (collapse != null) SectionCollapseChevron(title, collapse)
@@ -249,6 +251,7 @@ private fun RowScope.SectionTitleText(
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         if (detail != null) {
             if (animateDetail) {
@@ -257,6 +260,7 @@ private fun RowScope.SectionTitleText(
                     palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
                 )
             } else {
                 Text(
@@ -264,6 +268,7 @@ private fun RowScope.SectionTitleText(
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

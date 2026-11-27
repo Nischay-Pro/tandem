@@ -1,15 +1,19 @@
 @file:Suppress("ktlint:standard:function-naming")
 
 package app.tandemforactual.ui.feature.accounts
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -138,18 +143,22 @@ private fun AccountFilterChip(
 ) {
     val palette = tandemPalette
     val shape = CircleShape
-    Row(
+    val interactions = remember { MutableInteractionSource() }
+    Box(
         Modifier
-            .clip(shape)
-            .background(if (selected) palette.accent else palette.surface)
-            .border(1.dp, if (selected) palette.accent else palette.border, shape)
-            .clickable(role = Role.Button, onClickLabel = "$label accounts", onClick = onClick)
-            .semantics { this.selected = selected }
-            .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
+            .heightIn(min = MIN_TOUCH_TARGET)
+            .clickable(interactions, null, role = Role.Button, onClickLabel = "$label accounts", onClick = onClick)
+            .semantics { this.selected = selected },
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
+            Modifier
+                .clip(shape)
+                .background(if (selected) palette.accent else palette.surface)
+                .border(1.dp, if (selected) palette.accent else palette.border, shape)
+                .indication(interactions, LocalIndication.current)
+                .padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.small),
             color = if (selected) palette.accentContent else palette.text,
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.Medium,

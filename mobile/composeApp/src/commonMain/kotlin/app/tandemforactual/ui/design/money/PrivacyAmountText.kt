@@ -6,6 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,10 +26,12 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import kotlinx.coroutines.delay
@@ -45,7 +50,24 @@ internal fun PrivacyAmountText(
     fractionDigits: Int = 2,
 ) {
     val resolvedColor = if (color == Color.Unspecified) tandemPalette.text else color
-    if (!privacyModeEnabled) {
+    if (!privacyModeEnabled && maxLines == 1 && fontSize.isSp) {
+        BasicText(
+            amountAnnotatedString(text, fractionDigits),
+            modifier,
+            style =
+                LocalTextStyle.current.merge(
+                    TextStyle(
+                        color = resolvedColor,
+                        fontSize = fontSize,
+                        fontWeight = fontWeight,
+                        textAlign = textAlign ?: TextAlign.Unspecified,
+                    ),
+                ),
+            overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = fontSize * AMOUNT_MIN_SCALE, maxFontSize = fontSize, stepSize = 0.5.sp),
+        )
+    } else if (!privacyModeEnabled) {
         Text(
             text = amountAnnotatedString(text, fractionDigits),
             modifier = modifier,
@@ -60,6 +82,9 @@ internal fun PrivacyAmountText(
         MaskedAmountText(text, modifier, resolvedColor, fontSize, fontWeight, textAlign, maxLines, overflow, fractionDigits)
     }
 }
+
+/** A one-line amount shrinks to this share of its size before it's cut short, so a long figure stays whole. */
+private const val AMOUNT_MIN_SCALE = 0.7f
 
 /** Tap/hover reveal state of a masked amount. */
 private class PrivacyRevealState {

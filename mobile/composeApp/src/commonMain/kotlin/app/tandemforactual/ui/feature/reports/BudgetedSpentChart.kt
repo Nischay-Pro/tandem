@@ -113,6 +113,7 @@ internal fun BudgetedSpentValueBar(
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Canvas(Modifier.fillMaxWidth().height(6.dp)) {

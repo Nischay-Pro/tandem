@@ -208,6 +208,7 @@ private fun BudgetCategoryProgressCard(
                         fontSize = TandemTypography.compactBody,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         if (overspent) "over" else "remaining",

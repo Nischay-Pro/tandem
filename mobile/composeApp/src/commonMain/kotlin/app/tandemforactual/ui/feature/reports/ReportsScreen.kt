@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -236,6 +238,7 @@ private fun ReportCardHeader(
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = MIN_TOUCH_TARGET)
             .clip(RoundedCornerShape(TandemShapes.medium))
             .clickable(role = Role.Button, onClickLabel = "Open ${kind.title}", onClick = onSeeAll)
             .padding(vertical = TandemSpacing.extraSmall),

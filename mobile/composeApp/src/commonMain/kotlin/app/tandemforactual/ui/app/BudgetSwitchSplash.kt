@@ -13,8 +13,11 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.InterfaceMode
+import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
 import app.tandemforactual.ui.design.theme.TandemBrandMark
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -123,6 +127,7 @@ internal fun BudgetSwitchSplash(
                         letterSpacing = 3.sp,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     return@Column
                 }
@@ -184,39 +189,59 @@ internal fun AdvancedModeSwitch(
         }
         return
     }
+    LabeledModeSwitch(advanced, modifier) {
+        state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL)
+    }
+}
+
+/** The labelled pill: a feather for Minimal and a chart for Advanced, with the thumb behind the active one. */
+@Composable
+private fun LabeledModeSwitch(
+    advanced: Boolean,
+    modifier: Modifier,
+    onToggle: (Boolean) -> Unit,
+) {
+    val palette = tandemPalette
     val pillThumb by animateDpAsState(
         if (advanced) 36.dp else 0.dp,
         tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
         label = "mode-thumb",
     )
+    val interactions = remember { MutableInteractionSource() }
     Box(
         modifier
-            .width(76.dp)
-            .height(40.dp)
-            .clip(CircleShape)
-            .background(palette.surface)
-            .border(1.dp, palette.border, CircleShape)
-            .toggleable(value = advanced, role = Role.Switch) {
-                state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL)
-            }.semantics { contentDescription = "Advanced mode" }
-            .padding(2.dp),
+            .height(MIN_TOUCH_TARGET)
+            .toggleable(advanced, interactions, null, role = Role.Switch, onValueChange = onToggle)
+            .semantics { contentDescription = "Advanced mode" },
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             Modifier
-                .offset(x = pillThumb)
-                .size(36.dp)
+                .width(76.dp)
+                .height(40.dp)
                 .clip(CircleShape)
-                .background(palette.text),
-        )
-        Row(Modifier.fillMaxSize()) {
-            listOf(Lucide.Feather to !advanced, Lucide.ChartCandlestick to advanced).forEach { (icon, on) ->
-                val tint by animateColorAsState(
-                    if (on) palette.background else palette.muted,
-                    tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                    label = "mode-icon",
-                )
-                Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
+                .background(palette.surface)
+                .border(1.dp, palette.border, CircleShape)
+                .indication(interactions, LocalIndication.current)
+                .padding(2.dp),
+        ) {
+            Box(
+                Modifier
+                    .offset(x = pillThumb)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(palette.text),
+            )
+            Row(Modifier.fillMaxSize()) {
+                listOf(Lucide.Feather to !advanced, Lucide.ChartCandlestick to advanced).forEach { (icon, on) ->
+                    val tint by animateColorAsState(
+                        if (on) palette.background else palette.muted,
+                        tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                        label = "mode-icon",
+                    )
+                    Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
+                    }
                 }
             }
         }
