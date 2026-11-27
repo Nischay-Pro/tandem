@@ -87,6 +87,7 @@ internal fun AboutScreen(
             DividerLine()
             ListRow("Open-source license", "GNU AGPL-3.0-or-later")
         }
+        ConnectedServicesSection()
         CrashReportsSection()
         SurfaceCard {
             ListRow(
