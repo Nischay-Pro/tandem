@@ -301,6 +301,12 @@
     <string name="watch_quick_add_short">Quick add</string>
     <string name="watch_quick_add_detail">An amount, a category, and optionally a recent payee, to the account you used last. Each one goes to the open budget like any other new transaction, and Change History names the watch. An encrypted budget takes them only after you unlock it in Tandem.</string>
     <string name="watch_after_unlock">Send summary only after unlock</string>
+    <string name="watch_per_day_first">Lead with an amount a day</string>
+    <string name="watch_per_day_first_detail">The watch shows what’s left split over the rest of the month first, such as $93 a day. Turn this off to lead with the month’s total.</string>
+    <string name="watch_bill_on_glance">Next bill on the glance</string>
+    <string name="watch_bill_on_glance_detail">Shows the next bill under left to spend, as well as on the bills page.</string>
+    <string name="watch_categories_on_glance">Categories on the glance</string>
+    <string name="watch_categories_on_glance_detail">Lists your pinned categories under left to spend. Turn this off for just the headline; complications can still follow a category.</string>
     <string name="watch_after_unlock_detail">With app lock on, the watch gets new numbers only after you unlock Tandem, and shows Locked until then. Turn this off to let background syncs update it too. An encrypted budget always waits for you to unlock it.</string>
     <string name="watch_pinned">Pinned categories</string>
     <string name="watch_pinned_detail">Up to 6, in the order you pick them. With none picked, the watch shows the first 6.</string>

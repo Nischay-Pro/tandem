@@ -39,6 +39,7 @@ import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
+import app.tandemforactual.watch.WatchBill
 import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
@@ -121,7 +122,11 @@ private fun GlanceScreen(
                     )
                 }
             }
-            summary?.categories?.forEach { category ->
+            val nextBill = summary?.takeIf { it.nextBillOnGlance && it.state != WatchState.LOCKED }?.bills?.firstOrNull()
+            if (summary != null && nextBill != null) {
+                item(key = "next-bill") { NextBillPanel(summary, nextBill, Modifier.transformedHeight(this, spec)) }
+            }
+            summary?.categories?.takeIf { summary.categoriesOnGlance }?.forEach { category ->
                 item(key = category.id) {
                     CategoryCard(
                         summary,
@@ -158,19 +163,34 @@ private fun LeftToSpend(
             summary == null -> Hint(WatchText.NO_BUDGET)
             summary.state == WatchState.LOCKED -> Hint(WatchText.LOCKED)
             else -> {
-                val left = summary.leftToSpendMinor
+                val headline = WatchText.headline(summary)
                 Text(
-                    summary.money(left),
+                    summary.money(headline.minor),
                     style = MaterialTheme.typography.displayMedium,
-                    color = if ((left ?: 0) < 0) WearColors.over else MaterialTheme.colorScheme.onSurface,
+                    color = if ((headline.minor ?: 0) < 0) WearColors.over else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                 )
-                Text(WatchText.LEFT_TO_SPEND, style = MaterialTheme.typography.labelMedium, color = WearColors.muted)
+                Text(headline.label, style = MaterialTheme.typography.labelMedium, color = WearColors.muted)
+                headline.secondary?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = WearColors.muted, textAlign = TextAlign.Center)
+                }
                 WatchText.synced(summary)?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NextBillPanel(
+    summary: WatchSummary,
+    bill: WatchBill,
+    modifier: Modifier,
+) {
+    Panel(modifier) {
+        LabelledRow("Next: ${bill.name}", WatchText.billAmount(summary, bill.amountMinor))
+        Text(WatchText.billDate(bill.date), style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
     }
 }
 

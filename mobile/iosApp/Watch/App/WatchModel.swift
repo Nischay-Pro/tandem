@@ -16,9 +16,15 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
         queue = WatchAdditionQueue.load(from: defaults)
         summary = WatchSummaryStore.load(from: WatchSummaryStore.fileURL())
         super.init()
+        #if DEBUG
+        if let demo = WatchScreenshot.summary { summary = demo }
+        #endif
     }
 
     func activate() {
+        #if DEBUG
+        if WatchScreenshot.summary != nil { return }
+        #endif
         guard let session else { return }
         session.delegate = self
         session.activate()

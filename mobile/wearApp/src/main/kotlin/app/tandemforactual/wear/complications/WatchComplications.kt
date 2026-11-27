@@ -27,10 +27,11 @@ object WatchComplications {
         val category =
             summary.categories.firstOrNull { it.id == categoryId }
                 ?: summary.categories.firstOrNull().takeIf { type == ComplicationType.RANGED_VALUE }
-        val left = category?.leftMinor ?: summary.leftToSpendMinor.takeIf { category == null }
+        val headline = WatchText.headline(summary)
+        val left = category?.leftMinor ?: headline.minor.takeIf { category == null }
         val text = shown(summary, left)
-        val title = category?.name ?: "Left"
-        val description = plain("${category?.name ?: WatchText.LEFT_TO_SPEND}: ${if (summary.amountsShown) text else "hidden"}")
+        val title = category?.name ?: if (headline.short == WatchText.LEFT_TO_SPEND) "Left" else headline.short
+        val description = plain("${category?.name ?: headline.label}: ${if (summary.amountsShown) text else "hidden"}")
         if (type == ComplicationType.RANGED_VALUE && category != null) {
             val budgeted = (category.budgetedMinor ?: 0).coerceAtLeast(1).toFloat()
             val value = if (summary.amountsShown) (left ?: 0).coerceIn(0, budgeted.toLong()).toFloat() else 0f

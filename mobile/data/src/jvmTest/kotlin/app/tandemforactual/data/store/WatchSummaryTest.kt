@@ -52,7 +52,7 @@ class WatchSummaryTest {
         var settings = WatchSettings()
         (1..8).forEach { settings = settings.pinning("c$it", true) }
         assertEquals((1..6).map { "c$it" }, settings.pinnedCategoryIds)
-        settings = settings.pinning("c2", false)
+        settings = settings.pinning("c2", false).copy(perDayFirst = false, nextBillOnGlance = true, categoriesOnGlance = false)
         assertEquals(listOf("c1", "c3", "c4", "c5", "c6"), settings.pinnedCategoryIds)
         assertEquals(settings, WatchSettings.from(settings.toPreferences()))
         assertEquals(WatchSettings(), WatchSettings.from(emptyMap()))
@@ -132,6 +132,7 @@ class WatchSummaryTest {
             val hidden = decode(watchSummaryJson(repository, open + ("privacyModeEnabled" to "true"), TODAY, NOW, false, format))
             assertEquals("hidden", hidden.text("s"))
             assertNull(hidden["l"])
+            assertNull(hidden["pd"])
             val hiddenFood = hidden.getValue("c").jsonArray[0].jsonObject
             assertEquals("Food", hiddenFood.text("n"))
             assertNull(hiddenFood["l"])
@@ -149,6 +150,18 @@ class WatchSummaryTest {
 
             assertEquals("ready", ready.text("s"))
             assertEquals("E32000", ready.text("l"))
+            assertEquals("E6400", ready.text("pd"))
+            assertEquals("5", ready.text("dl"))
+            assertEquals("true", ready.text("pf"))
+            val monthFirst = pinned + WatchSettings(perDayFirst = false).toPreferences()
+            val monthly = decode(watchSummaryJson(repository, monthFirst, TODAY, NOW, opened = false, format))
+            assertEquals("false", monthly.text("pf"))
+            assertEquals("false", ready.text("gb"))
+            assertEquals("true", ready.text("gc"))
+            val billNoCategories = pinned + WatchSettings(nextBillOnGlance = true, categoriesOnGlance = false).toPreferences()
+            val glance = decode(watchSummaryJson(repository, billNoCategories, TODAY, NOW, opened = false, format))
+            assertEquals("true", glance.text("gb"))
+            assertEquals("false", glance.text("gc"))
             assertEquals("E-50", ready.text("r"))
             assertEquals("true", ready.getValue("ro").jsonPrimitive.content)
             val categories = ready.getValue("c").jsonArray.map { it.jsonObject }
@@ -170,6 +183,15 @@ class WatchSummaryTest {
             assertEquals(listOf("savings", "checking"), quickAdd.getValue("a").jsonArray.map { it.jsonObject.text("i") })
             assertEquals(listOf("Corner Café"), quickAdd.getValue("p").jsonArray.map { it.jsonPrimitive.content })
         }
+
+    @Test
+    fun theDailyAllowanceSplitsWhatIsLeftOverTheRestOfTheMonth() {
+        assertEquals(DailyAllowance(6_400, 5), dailyAllowance(32_000, "2026-11-26"))
+        assertEquals(DailyAllowance(1_000, 1), dailyAllowance(1_000, "2026-12-31"))
+        assertEquals(DailyAllowance(1_034, 29), dailyAllowance(30_000, "2028-02-01"))
+        assertEquals(DailyAllowance(-500, 3), dailyAllowance(-500, "2026-11-28"))
+        assertEquals(DailyAllowance(0, 28), dailyAllowance(0, "2027-02-01"))
+    }
 
     @Test
     fun everyRefusalNamesItsReason() {
