@@ -14,6 +14,47 @@ class QuickActionEventsTest {
         QuickActionEvents.consumeReceiptScan()
         QuickActionEvents.consumeDestination()
         QuickActionEvents.consumeSharedText()
+        QuickActionEvents.consumeQuickAddDraft()
+    }
+
+    @Test
+    fun addLinksCarryAnAmountAndPayeeOnce() {
+        assertTrue(QuickActionEvents.openLink("app.tandemforactual://open/add-transaction?amount=12.5&payee=Caf%C3%A9%20%26%20Bar#x"))
+        assertTrue(QuickActionEvents.consumeAddTransaction())
+        val draft = QuickActionEvents.consumeQuickAddDraft()
+        assertEquals(QuickAddDraft("12.5", "Café & Bar"), draft)
+        assertNull(QuickActionEvents.consumeQuickAddDraft())
+        assertTrue(QuickActionEvents.openLink(QuickAction.ADD_TRANSACTION.link))
+        assertNull(QuickActionEvents.consumeQuickAddDraft())
+        QuickActionEvents.openLink("app.tandemforactual://open/add-transaction?payee=Cafe")
+        QuickActionEvents.shareText("Paid 4.50")
+        assertNull(QuickActionEvents.consumeQuickAddDraft())
+        QuickActionEvents.openLink("app.tandemforactual://open/add-transaction?payee=Cafe")
+        QuickActionEvents.open(QuickAction.SCAN_RECEIPT)
+        assertNull(QuickActionEvents.consumeQuickAddDraft())
+    }
+
+    @Test
+    fun quickAddAmountsUseTheCurrencysDecimals() {
+        assertEquals(1_250L, QuickAddDraft("12.5", null).amountMinor(2))
+        assertEquals(1_250L, QuickAddDraft(" -12.50 ", null).amountMinor(2))
+        assertEquals(1_235L, QuickAddDraft("12.345", null).amountMinor(2))
+        assertEquals(1_234L, QuickAddDraft("12.344", null).amountMinor(2))
+        assertEquals(13L, QuickAddDraft("12.5", null).amountMinor(0))
+        assertEquals(12_000L, QuickAddDraft("12", null).amountMinor(3))
+        assertNull(QuickAddDraft("12,50", null).amountMinor(2))
+        assertNull(QuickAddDraft("abc", null).amountMinor(2))
+        assertNull(QuickAddDraft(null, "Cafe").amountMinor(2))
+    }
+
+    @Test
+    fun badlyEncodedOrBlankParametersAreDropped() {
+        assertNull(QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction?payee=%E"))
+        assertNull(QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction?payee=%zz"))
+        assertNull(QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction?amount=&payee=%20"))
+        assertNull(QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction"))
+        assertEquals(100, QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction?payee=${"a".repeat(150)}")?.payee?.length)
+        assertEquals("a+b", percentDecode("a+b"))
     }
 
     @Test
