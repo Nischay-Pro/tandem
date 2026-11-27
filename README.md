@@ -24,7 +24,7 @@ connection returns. Actual remains the source of truth.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/foldable-two-pane-dark.webp">
-    <img src="docs/images/screenshots/foldable-two-pane-light.webp" alt="Activity and a transaction side by side on an unfolded Pixel 11 Pro Fold" width="640">
+    <img src="docs/images/screenshots/foldable-two-pane-light.webp" alt="Activity and a transaction side by side on an unfolded foldable" width="640">
   </picture>
 </p>
 <p align="center"><em>On tablets and unfolded foldables, the list and the details sit side by side.</em></p>

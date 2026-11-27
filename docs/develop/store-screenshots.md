@@ -47,5 +47,24 @@ Upload each to the matching device section in App Store Connect.
 
 ## README images
 
-The images in `docs/images/screenshots/` come from these captures, converted
-to WebP. Replace them only when the app's look changes.
+The images in `docs/images/screenshots/` come from these captures. Replace them
+only when the app's look changes.
+
+1. **Run the workflow** with `both`.
+2. **Download every artifact** into an empty folder:
+   `gh run download <run id> -D <folder>`.
+3. **Build the images:**
+   `uv run scripts/screenshots/readme-images.py <folder>`.
+
+The script needs [Pillow](https://python-pillow.org) for WebP, which `uv`
+installs for it. Without `uv`, install Pillow and run it with `python3`. It
+writes light and dark versions of each image:
+
+- **Hero:** iPhone Budget, Android Activity, iPhone Reports, and Android
+  category, side by side.
+- **Foldable:** Activity on the unfolded `foldable-1-1` inner display.
+- **iPad:** Accounts.
+- **Category:** the iPhone category screen.
+
+**Check:** open every image. Each should show the demo budget in the right
+light or dark mode. If a screen changed, update its README alt text.
