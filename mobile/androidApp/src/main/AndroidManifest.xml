@@ -100,12 +100,60 @@
         android:value="@string/tasker_special_use"
         tools:replace="android:value" />
     </service>
+    <activity
+      android:name=".tasker.TaskerOverspentActivity"
+      android:exported="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/tasker_overspent_event"
+      android:theme="@style/Theme.Tandem.App"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
+      </intent-filter>
+    </activity>
+    <activity
+      android:name=".tasker.TaskerScheduleDueActivity"
+      android:exported="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/tasker_schedule_due_event"
+      android:theme="@style/Theme.Tandem.App"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
+      </intent-filter>
+    </activity>
+    <activity
+      android:name=".tasker.TaskerSyncFailedActivity"
+      android:exported="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/tasker_sync_failed_event"
+      android:theme="@style/Theme.Tandem.App"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
+      </intent-filter>
+    </activity>
+    <activity
+      android:name=".tasker.TaskerOverBudgetActivity"
+      android:exported="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/tasker_over_budget_state"
+      android:theme="@style/Theme.Tandem.App"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+      </intent-filter>
+    </activity>
     <service
       android:name="com.joaomgcd.taskerpluginlibrary.condition.IntentServiceCondition"
-      tools:node="remove" />
-    <receiver
-      android:name="com.joaomgcd.taskerpluginlibrary.condition.BroadcastReceiverCondition"
-      tools:node="remove" />
+      android:exported="true"
+      android:foregroundServiceType="specialUse"
+      tools:ignore="ExportedService">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="@string/tasker_special_use_condition"
+        tools:replace="android:value" />
+    </service>
     <service
       android:name=".QuickAddTileService"
       android:exported="true"

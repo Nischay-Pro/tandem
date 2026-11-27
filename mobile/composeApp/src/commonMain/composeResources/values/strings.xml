@@ -235,7 +235,7 @@
     <string name="automation_writes">Allow automation apps to add transactions</string>
     <string name="automation_writes_detail">Apps can add a transaction to the open budget with an amount, payee, category, account, date, notes and cleared state. Actual’s rules run on it, a notification offers Undo, and Change History names the app. Apps can’t change or delete anything.</string>
     <string name="automation_reads">Allow automation apps to read balances</string>
-    <string name="automation_reads_detail">Apps can read a month’s left to spend, budgeted, spent and ready to assign amounts, for the whole budget or one category, and an account’s balance. They can’t see transactions, payees or notes, and get nothing while app lock or Hide budget amounts is on.</string>
+    <string name="automation_reads_detail">Apps can read a month’s left to spend, budgeted, spent and ready to assign amounts, for the whole budget or one category, and an account’s balance. After each background sync they’re also told when a category goes over budget, a schedule is due today or a sync fails. They can’t see transactions, payees or notes, and get no budget numbers or names while app lock or Hide budget amounts is on.</string>
     <string name="theme_mode_system">System</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>

@@ -139,12 +139,110 @@ class TaskerReadBudgetActivity : TaskerSettingsActivity<TaskerReadBudgetInput, T
             ),
         initial = input.values().mapValues { it.value.orEmpty() },
         notice =
-            if (!AutomationAccess.readsAllowed(preferences)) {
-                "Reading budget numbers is off. Turn it on in Tandem under Settings → Automation, or this action fails."
-            } else if (preferences["biometricLockEnabled"] == "true" || preferences["privacyModeEnabled"] == "true") {
-                "App lock or Hide budget amounts is on in Tandem, so this action returns an error instead of numbers."
-            } else {
-                lockedNotice(choices)
-            },
+            readNotice(preferences, "this action fails", "this action returns an error instead of numbers") ?: lockedNotice(choices),
+    )
+}
+
+private fun readNotice(
+    preferences: Map<String, String>,
+    whenOff: String,
+    whenHidden: String?,
+): String? =
+    if (!AutomationAccess.readsAllowed(preferences)) {
+        "Reading budget numbers is off. Turn it on in Tandem under Settings → Automation, or $whenOff."
+    } else if (whenHidden != null && (preferences["biometricLockEnabled"] == "true" || preferences["privacyModeEnabled"] == "true")) {
+        "App lock or Hide budget amounts is on in Tandem, so $whenHidden."
+    } else {
+        null
+    }
+
+private fun categoryField(
+    choices: AutomationChoices?,
+    variables: List<String>,
+) = AutomationSetupField("category", "Category (optional)", "Blank for any category", choices?.categories.orEmpty() + variables)
+
+private const val AFTER_SYNC = "Tandem checks after each background sync, so turn on Schedule background sync in Tandem."
+
+class TaskerOverspentActivity : TaskerSettingsActivity<TaskerCategoryInput, TaskerOverspentOutput, TaskerOverspentRunner>() {
+    override val helper by lazy { TaskerOverspentHelper(this) }
+    override var input = TaskerCategoryInput()
+
+    override fun inputFrom(values: Map<String, String>) = TaskerCategoryInput(values["category"]?.takeIf(String::isNotBlank))
+
+    override fun content(
+        preferences: Map<String, String>,
+        choices: AutomationChoices?,
+        variables: List<String>,
+    ) = AutomationSetupContent(
+        title = "Category overspent",
+        intro =
+            "Fires once when a category goes over budget this month, and again only if it recovers and goes over later. " +
+                "Results: %tandem_category and %tandem_overspent_by. $AFTER_SYNC",
+        fields = listOf(categoryField(choices, variables)),
+        initial = mapOf("category" to input.category.orEmpty()),
+        notice = readNotice(preferences, "this event never fires", "this event doesn’t fire") ?: lockedNotice(choices),
+    )
+}
+
+class TaskerScheduleDueActivity : TaskerSettingsActivity<Unit, TaskerScheduleDueOutput, TaskerScheduleDueRunner>() {
+    override val helper by lazy { TaskerScheduleDueHelper(this) }
+    override var input = Unit
+
+    override fun inputFrom(values: Map<String, String>) = Unit
+
+    override fun content(
+        preferences: Map<String, String>,
+        choices: AutomationChoices?,
+        variables: List<String>,
+    ) = AutomationSetupContent(
+        title = "Schedule due today",
+        intro =
+            "Fires once for each schedule whose next payment is today. Results: %tandem_schedule_name, " +
+                "%tandem_amount (negative for money out) and %tandem_due_date. $AFTER_SYNC",
+        fields = emptyList(),
+        initial = emptyMap(),
+        notice = readNotice(preferences, "this event never fires", "this event doesn’t fire"),
+    )
+}
+
+class TaskerSyncFailedActivity : TaskerSettingsActivity<Unit, TaskerSyncFailedOutput, TaskerSyncFailedRunner>() {
+    override val helper by lazy { TaskerSyncFailedHelper(this) }
+    override var input = Unit
+
+    override fun inputFrom(values: Map<String, String>) = Unit
+
+    override fun content(
+        preferences: Map<String, String>,
+        choices: AutomationChoices?,
+        variables: List<String>,
+    ) = AutomationSetupContent(
+        title = "Sync failed",
+        intro =
+            "Fires when a background sync fails, once until a sync works again. Result: %tandem_error, " +
+                "which says what to do next. It names no amounts, so it fires even while app lock or Hide budget amounts is on.",
+        fields = emptyList(),
+        initial = emptyMap(),
+        notice = readNotice(preferences, "this event never fires", null),
+    )
+}
+
+class TaskerOverBudgetActivity : TaskerSettingsActivity<TaskerCategoryInput, TaskerOverspentOutput, TaskerOverBudgetRunner>() {
+    override val helper by lazy { TaskerOverBudgetHelper(this) }
+    override var input = TaskerCategoryInput()
+
+    override fun inputFrom(values: Map<String, String>) = TaskerCategoryInput(values["category"]?.takeIf(String::isNotBlank))
+
+    override fun content(
+        preferences: Map<String, String>,
+        choices: AutomationChoices?,
+        variables: List<String>,
+    ) = AutomationSetupContent(
+        title = "Category over budget",
+        intro =
+            "True while the category, or any category when blank, is over budget this month on this device. " +
+                "Results: %tandem_category (names, comma-separated) and %tandem_overspent_by (in total).",
+        fields = listOf(categoryField(choices, variables)),
+        initial = mapOf("category" to input.category.orEmpty()),
+        notice = readNotice(preferences, "this state is never true", "this state is never true") ?: lockedNotice(choices),
     )
 }

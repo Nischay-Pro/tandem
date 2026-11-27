@@ -93,6 +93,50 @@ data class LocalAlert(
     val message: String,
 )
 
+/** A schedule's next payment: [key] is the schedule id and date, so a moved or skipped one counts as new. */
+data class DueSchedule(
+    val key: String,
+    val scheduleId: String,
+    val name: String,
+    val date: String,
+    val amountMinor: Long?,
+)
+
+/** Open schedules whose next payment falls from [from] through [through], soonest first. */
+suspend fun dueSchedules(
+    repository: LocalBudgetRepository,
+    budgetId: String,
+    from: String,
+    through: String,
+): List<DueSchedule> =
+    repository
+        .findRecords(budgetId, "schedule")
+        .mapNotNull { record ->
+            val body = record.body() ?: return@mapNotNull null
+            if ((body["completed"] as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
+            val next = (body["next_date"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            if (next < from || next > through) return@mapNotNull null
+            val name = (body["name"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: "A scheduled payment"
+            DueSchedule("${record.recordId}@$next", record.recordId, name, next, (body["amount"] as? JsonPrimitive)?.longOrNull)
+        }.sortedBy { it.date }
+
+/** The schedules in [due] not yet announced under [key]; remembers [due] as announced. */
+suspend fun unannouncedSchedules(
+    preferences: AppPreferencesStore,
+    key: String,
+    due: List<DueSchedule>,
+): List<DueSchedule> {
+    val announced =
+        preferences
+            .read()[key]
+            .orEmpty()
+            .split(',')
+            .filter(String::isNotEmpty)
+            .toSet()
+    preferences.putValue(key, due.joinToString(",") { it.key })
+    return due.filterNot { it.key in announced }
+}
+
 /**
  * Schedules due from today through [NotificationPolicy.billLeadDays] days ahead that haven't been announced for that
  * date yet. A skipped or moved schedule announces again for its new date.
@@ -105,36 +149,20 @@ suspend fun upcomingBillsAlert(
     policy: NotificationPolicy,
     formatAmount: (Long) -> String,
 ): LocalAlert? {
-    val last = ActualDates.addDays(today, policy.billLeadDays)
-    val due =
-        repository
-            .findRecords(budgetId, "schedule")
-            .mapNotNull { record ->
-                val body = record.body() ?: return@mapNotNull null
-                if ((body["completed"] as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
-                val next = (body["next_date"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-                if (next < today || next > last) return@mapNotNull null
-                val name = (body["name"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: "A scheduled payment"
-                Triple("${record.recordId}@$next", name, (body["amount"] as? JsonPrimitive)?.longOrNull)
-            }.sortedBy { it.first.substringAfter('@') }
-    val key = "internal:announced-bills:$budgetId"
-    val announced =
-        preferences
-            .read()[key]
-            .orEmpty()
-            .split(',')
-            .filter(String::isNotEmpty)
-            .toSet()
-    preferences.putValue(key, due.joinToString(",") { it.first })
-    val fresh = due.filterNot { it.first in announced }
+    val due = dueSchedules(repository, budgetId, today, ActualDates.addDays(today, policy.billLeadDays))
+    val fresh = unannouncedSchedules(preferences, "internal:announced-bills:$budgetId", due)
     if (fresh.isEmpty()) return null
     val message =
         if (fresh.size == 1) {
-            val (_, name, amount) = fresh.single()
-            val money = amount?.takeUnless { policy.hideAmounts }?.let { " for ${formatAmount(kotlin.math.abs(it))}" }.orEmpty()
-            "$name is due soon$money."
+            val only = fresh.single()
+            val money =
+                only.amountMinor
+                    ?.takeUnless { policy.hideAmounts }
+                    ?.let { " for ${formatAmount(kotlin.math.abs(it))}" }
+                    .orEmpty()
+            "${only.name} is due soon$money."
         } else {
-            "${fresh[0].second} and ${fresh.size - 1} more are due in the next ${policy.billLeadDays} days."
+            "${fresh[0].name} and ${fresh.size - 1} more are due in the next ${policy.billLeadDays} days."
         }
     return LocalAlert(AlertKind.UPCOMING_BILLS, "Upcoming bills", message)
 }
