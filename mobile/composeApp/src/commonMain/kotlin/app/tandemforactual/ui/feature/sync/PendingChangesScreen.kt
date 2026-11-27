@@ -348,6 +348,7 @@ private fun pendingScheduleSummary(
             "skip" -> "Skip"
             "post" -> "Post"
             "edit" -> "Edit"
+            "create" -> "New schedule"
             "delete" -> "Delete"
             else -> null
         },

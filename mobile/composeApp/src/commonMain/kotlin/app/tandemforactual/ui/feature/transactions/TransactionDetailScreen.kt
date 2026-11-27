@@ -41,6 +41,7 @@ import app.tandemforactual.ui.core.state.findSplit
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.loadSplitForEdit
 import app.tandemforactual.ui.core.state.recordName
+import app.tandemforactual.ui.core.state.selectedTransactionScheduleSeed
 import app.tandemforactual.ui.core.ui.ReimbursementCard
 import app.tandemforactual.ui.core.ui.TransactionSyncNotice
 import app.tandemforactual.ui.core.ui.transactionSyncOperations
@@ -119,6 +120,12 @@ internal fun TransactionDetailScreen(
             SecondaryButton("Add again", enabled = !state.readOnlyMode) {
                 navigation.newTransaction(draft.accountId)
                 state.applyAddAgain(draft)
+            }
+        }
+        state.selectedTransactionScheduleSeed()?.let { seed ->
+            SecondaryButton("Make this a schedule", enabled = !state.readOnlyMode) {
+                state.pendingScheduleSeed = seed
+                navigation.open(AppRoute.SCHEDULES)
             }
         }
     }

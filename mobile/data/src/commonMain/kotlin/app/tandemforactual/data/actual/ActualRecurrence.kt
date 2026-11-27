@@ -1,5 +1,6 @@
 package app.tandemforactual.data.actual
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -236,6 +237,19 @@ internal object ActualRecurrence {
         return if (config.skipWeekend && !noSkipWeekend) skipWeekend(date, config.weekendSolveMode) else date
     }
 
+    /** `schedule/get-upcoming-dates`: the first [count] occurrences on or after [from], each moved off a weekend when asked. */
+    fun upcoming(
+        config: RecurConfig,
+        from: Day,
+        count: Int,
+    ): List<Day> =
+        rules(config)
+            .flatMap { occurrences(it, from).take(count).toList() }
+            .distinct()
+            .sorted()
+            .take(count)
+            .map { if (config.skipWeekend) skipWeekend(it, config.weekendSolveMode) else it }
+
     /** `getNextDateAfter`: the next weekday-adjusted date strictly after [after], looking a few occurrences ahead. */
     fun nextDateAfter(
         config: RecurConfig,
@@ -286,3 +300,20 @@ internal object ActualRecurrence {
             else -> null
         }
 }
+
+/**
+ * The next [count] dates a schedule's date rule falls on from [today], as `YYYY-MM-DD`: a one-time date on or after
+ * [today], or the occurrences of a repeating rule. A rule Actual couldn't read has no dates.
+ */
+fun upcomingScheduleDates(
+    dateJson: String,
+    today: String,
+    count: Int,
+): List<String> =
+    runCatching {
+        when (val value = Json.parseToJsonElement(dateJson)) {
+            is JsonObject -> ActualRecurrence.upcoming(RecurConfig.parse(value), Day.parse(today), count).map(Day::toString)
+            is JsonPrimitive -> listOf(value.content).filter { value.isString && isIsoDate(it) && it >= today }
+            else -> emptyList()
+        }
+    }.getOrDefault(emptyList())
