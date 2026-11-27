@@ -104,13 +104,14 @@ internal fun PageLazyColumn(
     modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
+    contentWidth: Dp = TandemLayout.readableContentWidth,
     content: LazyListScope.() -> Unit,
 ) {
     val routeListState = LocalRouteLazyListState.current ?: rememberLazyListState()
     BoxWithConstraints(modifier.fillMaxSize()) {
         PageLazyColumnContent(
             verticalSpacing,
-            readablePadding(maxWidth, horizontalPadding, TandemLayout.readableContentWidth),
+            readablePadding(maxWidth, horizontalPadding, contentWidth),
             Modifier.fillMaxSize(),
             routeListState,
             isRefreshing,

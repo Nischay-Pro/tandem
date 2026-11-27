@@ -3,7 +3,7 @@
 package app.tandemforactual.ui.feature.budget
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -52,6 +52,8 @@ import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.CollapsibleSectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
+import app.tandemforactual.ui.design.theme.TandemLayout
+import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.design.theme.tandemRevealEnter
 import app.tandemforactual.ui.design.theme.tandemRevealExit
@@ -59,12 +61,14 @@ import app.tandemforactual.ui.feature.budget.components.BudgetGroupListContext
 import app.tandemforactual.ui.feature.budget.components.BudgetMonthEmptyCard
 import app.tandemforactual.ui.feature.budget.components.BudgetMonthLoadingCard
 import app.tandemforactual.ui.feature.budget.components.BudgetMonthSummaryCard
+import app.tandemforactual.ui.feature.budget.components.BudgetMonthsToggle
 import app.tandemforactual.ui.feature.budget.components.BudgetPinnedCategoriesSection
 import app.tandemforactual.ui.feature.budget.components.BudgetReorderActions
 import app.tandemforactual.ui.feature.budget.components.BudgetScreenDock
 import app.tandemforactual.ui.feature.budget.components.BudgetScreenSheets
 import app.tandemforactual.ui.feature.budget.components.HoldSheetFigures
 import app.tandemforactual.ui.feature.budget.components.budgetGroupItems
+import app.tandemforactual.ui.feature.budget.components.budgetMonthsTableItems
 import app.tandemforactual.ui.feature.budget.components.budgetOverviewItems
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetReorderState
 import app.tandemforactual.ui.feature.budget.components.rememberBudgetScreenDialogs
@@ -106,13 +110,7 @@ internal fun BudgetScreen(
     val displayGroups = rememberOrderedGroups(state, mobileSession, groups, reorder.groupDrag)
     val readyToAssignMinor = liveBudgetMonth?.toBudgetMinor ?: 0
     val hold = rememberHoldSheetState(state.selectedBudgetId, state.selectedMonthId, readyToAssignMinor)
-    val holdFigures =
-        HoldSheetFigures(
-            readyToAssignMinor = readyToAssignMinor,
-            assignmentPresentation = presentBudgetAssignment(readyToAssignMinor),
-            heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L,
-            heldPending = liveBudgetMonth?.heldForNextMonthPending == true,
-        )
+    val holdFigures = holdSheetFigures(liveBudgetMonth, readyToAssignMinor)
     val context =
         BudgetGroupListContext(
             state = state,
@@ -126,10 +124,11 @@ internal fun BudgetScreen(
             billsDueMinor = billsStillDue(liveSchedules, platformTodayIsoDate()),
         )
     BudgetScrollToSummaryEffect(state)
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         BudgetList(
             context = context,
             month = BudgetListMonth(liveBudgetMonth, groups, displayGroups, holdFigures),
+            months = rememberBudgetMonthsView(state, mobileSession, liveBudgetMonth, maxWidth - TandemSpacing.screen * 2),
             liveTransactions = liveTransactions,
             liveSchedules = liveSchedules,
             onSyncNow = onSyncNow,
@@ -149,6 +148,17 @@ internal fun BudgetScreen(
     BudgetScreenSheets(dialogs, hold, state, mobileSession, groups, displayGroups, holdFigures, isLiveBudget, isTrackingBudget, scope)
     AutoAssignSheet(dialogs.showAutoAssign, state, mobileSession, liveBudgetMonth) { dialogs.showAutoAssign = false }
 }
+
+private fun holdSheetFigures(
+    liveBudgetMonth: LiveBudgetMonthSummary?,
+    readyToAssignMinor: Long,
+): HoldSheetFigures =
+    HoldSheetFigures(
+        readyToAssignMinor = readyToAssignMinor,
+        assignmentPresentation = presentBudgetAssignment(readyToAssignMinor),
+        heldForNextMonthMinor = liveBudgetMonth?.heldForNextMonthMinor?.coerceAtLeast(0) ?: 0L,
+        heldPending = liveBudgetMonth?.heldForNextMonthPending == true,
+    )
 
 private class BudgetListMonth(
     val liveBudgetMonth: LiveBudgetMonthSummary?,
@@ -211,6 +221,7 @@ private fun BudgetScrollToSummaryEffect(state: AppState) {
 private fun BudgetList(
     context: BudgetGroupListContext,
     month: BudgetListMonth,
+    months: BudgetMonthsView,
     liveTransactions: List<TransactionItem>,
     liveSchedules: List<LiveScheduleSummary>,
     onSyncNow: () -> Unit,
@@ -238,6 +249,7 @@ private fun BudgetList(
         horizontalPadding = if (context.compact) 16.dp else 20.dp,
         isRefreshing = isLiveBudget && mobileSession.isSyncing,
         onRefresh = onSyncNow.takeIf { isLiveBudget },
+        contentWidth = if (months.sideBySide) BudgetMonthsMaxWidth else TandemLayout.readableContentWidth,
     ) {
         budgetOverviewItems(
             state,
@@ -261,7 +273,7 @@ private fun BudgetList(
         } else if (isLiveBudget && liveBudgetMonth == null && !isTrackingBudget) {
             item(key = "budget-month-loading") { BudgetMonthLoadingCard(state.selectedMonth) }
         } else {
-            budgetMonthItems(context, month, pinnedCategories, sectionSpacing, onOpenHold, onAutoAssign)
+            budgetMonthItems(context, month, months, pinnedCategories, sectionSpacing, onOpenHold, onAutoAssign)
         }
         budgetActivityItems(context, liveTransactions, liveSchedules, recentTransactions, sectionSpacing)
     }
@@ -270,6 +282,7 @@ private fun BudgetList(
 private fun LazyListScope.budgetMonthItems(
     context: BudgetGroupListContext,
     month: BudgetListMonth,
+    months: BudgetMonthsView,
     pinnedCategories: List<Pair<LiveCategoryGroupSummary, LiveCategorySummary>>,
     sectionSpacing: Dp,
     onOpenHold: () -> Unit,
@@ -301,8 +314,13 @@ private fun LazyListScope.budgetMonthItems(
             BudgetPinnedCategoriesSection(state, context.navigation, pinnedCategories, pinnedSectionKey, pinnedExpanded, sectionSpacing)
         }
     }
-    month.displayGroups.forEach { group ->
-        budgetGroupItems(group, month.displayGroups, context)
+    if (months.available) item(key = "budget-months-toggle") { BudgetMonthsToggle(months) }
+    if (months.sideBySide) {
+        budgetMonthsTableItems(context, months, month.displayGroups)
+    } else {
+        month.displayGroups.forEach { group ->
+            budgetGroupItems(group, month.displayGroups, context)
+        }
     }
 }
 
