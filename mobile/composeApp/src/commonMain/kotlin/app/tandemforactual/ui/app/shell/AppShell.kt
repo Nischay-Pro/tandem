@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.AppLanguageController
+import app.tandemforactual.ui.core.format.ProvideTodayIsoDate
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.theme.SystemReduceMotionEnabled
 import app.tandemforactual.ui.design.theme.TandemTheme
@@ -53,20 +54,22 @@ internal fun AppShell(env: ShellEnvironment) {
     BudgetSessionEffects(ctx)
     RouteSyncEffect(ctx, automaticSyncRequest)
     val isAppInForeground by env.appInForeground.collectAsState()
-    ForegroundEffects(ctx, isAppInForeground)
-    PeriodicSyncEffects(ctx, isAppInForeground)
-    LiveDataEffects(ctx)
-    LiveBudgetMonthEffect(ctx)
-    OpenIdReturnEffect(state, mobileSession, ctx.navigation)
-    env.screenshotScript?.let { ScreenshotScriptEffect(ctx, it) }
-    TandemTheme(
-        state.theme,
-        state.accent,
-        reduceMotion,
-        animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
-        language = AppLanguageController(state.appLanguage) { state.appLanguage = it },
-        interfaceMode = state.interfaceMode,
-    ) {
-        ShellFrame(ctx, isAppInForeground)
+    ProvideTodayIsoDate(isAppInForeground) {
+        ForegroundEffects(ctx, isAppInForeground)
+        PeriodicSyncEffects(ctx, isAppInForeground)
+        LiveDataEffects(ctx)
+        LiveBudgetMonthEffect(ctx)
+        OpenIdReturnEffect(state, mobileSession, ctx.navigation)
+        env.screenshotScript?.let { ScreenshotScriptEffect(ctx, it) }
+        TandemTheme(
+            state.theme,
+            state.accent,
+            reduceMotion,
+            animateThemeChanges = state.settingsStorageReady || appPreferencesStore == null,
+            language = AppLanguageController(state.appLanguage) { state.appLanguage = it },
+            interfaceMode = state.interfaceMode,
+        ) {
+            ShellFrame(ctx, isAppInForeground)
+        }
     }
 }

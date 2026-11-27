@@ -423,6 +423,32 @@ class ActivitySearchTest {
     }
 
     @Test
+    fun amountSearchReadsTheHundredthsActualStoresForEveryCurrency() {
+        val yenPurchase = record(amount = -150_000)
+        assertEquals(150_000L, parseActivitySearchAmount("1,500", "JPY", "comma-dot"))
+        assertEquals(150_000L, parseActivitySearchAmount("¥1500", "JPY"))
+        assertEquals(150_000L, parseActivitySearchAmount("1.500", "JPY", "dot-comma"))
+        assertTrue(matchesActivitySearch(yenPurchase, prepareActivitySearch("1,500", emptyList(), "JPY", "comma-dot")))
+        assertFalse(matchesActivitySearch(yenPurchase, prepareActivitySearch("15", emptyList(), "JPY", "comma-dot")))
+        val spending =
+            activitySearchSuggestions("1,500", listOf(yenPurchase), "JPY", "comma-dot")
+                .first { it.field == ActivitySearchField.OUTFLOW_IS }
+        assertTrue(matchesActivitySearch(yenPurchase, "", listOf(spending)))
+    }
+
+    @Test
+    fun amountSearchUsesTheBudgetDecimalMarkForAThreeDigitGroup() {
+        assertEquals(123_400L, parseActivitySearchAmount("1.234", "EUR", "dot-comma"))
+        assertEquals(123_400L, parseActivitySearchAmount("1,234"))
+        assertNull(parseActivitySearchAmount("1.234", "USD", "comma-dot"))
+        assertEquals(123_450L, parseActivitySearchAmount("1'234.50", "CHF", "apostrophe-dot"))
+        assertEquals(123_450L, parseActivitySearchAmount("CHF 1’234.50", "CHF", "apostrophe-dot"))
+        assertEquals(4_590L, parseActivitySearchAmount("R$ 45,90", "BRL", "dot-comma"))
+        assertEquals(123_456L, parseActivitySearchAmount("1 234,56", "EUR", "space-comma"))
+        assertEquals(1_200L, parseActivitySearchAmount("12."))
+    }
+
+    @Test
     fun wordsThatContainThreeLettersAreNotTreatedAsCurrencyCodes() {
         assertNull(parseActivitySearchAmount("Gas 20", "USD"))
         assertNull(parseActivitySearchAmount("mar 2026", "USD"))

@@ -26,7 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -218,7 +218,7 @@ private fun ColumnScope.ActivitySearchResultList(
     selection: ActivitySelectionState,
     resultsListState: LazyListState,
 ) {
-    val todayIso = platformTodayIsoDate()
+    val todayIso = rememberTodayIsoDate()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     LazyColumn(
         state = resultsListState,

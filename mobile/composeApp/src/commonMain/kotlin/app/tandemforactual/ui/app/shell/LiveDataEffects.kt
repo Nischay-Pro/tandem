@@ -5,6 +5,7 @@ package app.tandemforactual.ui.app.shell
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.session.budget.accountClosedOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountNameOverridesFor
 import app.tandemforactual.ui.core.session.budget.accountRecordsWithPendingCreates
@@ -43,47 +44,8 @@ internal fun LiveDataEffects(ctx: ShellContext) {
                 mobileSession.budgetDisplaySettingsBudgetId == state.selectedBudgetId
             }
     }
-    val transactionRecords = mobileSession.transactionRecords
-    val activityTransactionRecords = mobileSession.activity.activityTransactionRecords
-    val activityTransactionRecordsVersion = mobileSession.activity.activityTransactionRecordsVersion
     val accountRecords = mobileSession.budgetQueue.accountRecordsWithPendingCreates(state.selectedBudgetId, mobileSession.accountRecords)
-    val payeeRecords = mobileSession.payeeRecords
-    val categoryRecords = mobileSession.categoryRecords
-    val displaySettings = mobileSession.budgetDisplaySettings
-    LaunchedEffect(transactionRecords, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher) {
-        shell.liveTransactions =
-            withContext(Dispatchers.Default) {
-                buildLiveTransactionItems(
-                    transactionRecords,
-                    accountRecords,
-                    payeeRecords,
-                    categoryRecords,
-                    displaySettings,
-                    shell.merchantIconMatcher,
-                )
-            }
-    }
-    LaunchedEffect(
-        activityTransactionRecordsVersion,
-        accountRecords,
-        payeeRecords,
-        categoryRecords,
-        displaySettings,
-        shell.merchantIconMatcher,
-    ) {
-        val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
-        shell.liveActivityTransactions =
-            withContext(Dispatchers.Default) {
-                buildLiveTransactionItems(
-                    activityTransactionRecordsSnapshot,
-                    accountRecords,
-                    payeeRecords,
-                    categoryRecords,
-                    displaySettings,
-                    shell.merchantIconMatcher,
-                )
-            }
-    }
+    LiveTransactionEffects(ctx, accountRecords)
     UncategorizedEffect(ctx, accountRecords)
     val accountNameOverrides = mobileSession.budgetQueue.accountNameOverridesFor(state.selectedBudgetId)
     val accountClosedOverrides = mobileSession.budgetQueue.accountClosedOverridesFor(state.selectedBudgetId)
@@ -105,6 +67,68 @@ internal fun LiveDataEffects(ctx: ShellContext) {
         shell.liveSchedules =
             withContext(Dispatchers.Default) {
                 liveScheduleSummaries(schedules, payees, accountRecords, pendingScheduleActions)
+            }
+    }
+}
+
+/** The live transaction and activity lists, rebuilt when their records change or the day turns over. */
+@Composable
+private fun LiveTransactionEffects(
+    ctx: ShellContext,
+    accountRecords: List<BudgetRecordEntity>,
+) {
+    val shell = ctx.shell
+    val mobileSession = ctx.mobileSession
+    val transactionRecords = mobileSession.transactionRecords
+    val activityTransactionRecords = mobileSession.activity.activityTransactionRecords
+    val activityTransactionRecordsVersion = mobileSession.activity.activityTransactionRecordsVersion
+    val payeeRecords = mobileSession.payeeRecords
+    val categoryRecords = mobileSession.categoryRecords
+    val displaySettings = mobileSession.budgetDisplaySettings
+    val todayIso = rememberTodayIsoDate()
+    LaunchedEffect(
+        transactionRecords,
+        accountRecords,
+        payeeRecords,
+        categoryRecords,
+        displaySettings,
+        shell.merchantIconMatcher,
+        todayIso,
+    ) {
+        shell.liveTransactions =
+            withContext(Dispatchers.Default) {
+                buildLiveTransactionItems(
+                    transactionRecords,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    shell.merchantIconMatcher,
+                    todayIso,
+                )
+            }
+    }
+    LaunchedEffect(
+        activityTransactionRecordsVersion,
+        accountRecords,
+        payeeRecords,
+        categoryRecords,
+        displaySettings,
+        shell.merchantIconMatcher,
+        todayIso,
+    ) {
+        val activityTransactionRecordsSnapshot = activityTransactionRecords.toList()
+        shell.liveActivityTransactions =
+            withContext(Dispatchers.Default) {
+                buildLiveTransactionItems(
+                    activityTransactionRecordsSnapshot,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    shell.merchantIconMatcher,
+                    todayIso,
+                )
             }
     }
 }
@@ -183,10 +207,19 @@ private fun UncategorizedEffect(
     val payeeRecords = mobileSession.payeeRecords
     val categoryRecords = mobileSession.categoryRecords
     val displaySettings = mobileSession.budgetDisplaySettings
-    LaunchedEffect(records, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher) {
+    val todayIso = rememberTodayIsoDate()
+    LaunchedEffect(records, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher, todayIso) {
         shell.liveUncategorized =
             withContext(Dispatchers.Default) {
-                liveUncategorizedItems(records, accountRecords, payeeRecords, categoryRecords, displaySettings, shell.merchantIconMatcher)
+                liveUncategorizedItems(
+                    records,
+                    accountRecords,
+                    payeeRecords,
+                    categoryRecords,
+                    displaySettings,
+                    shell.merchantIconMatcher,
+                    todayIso,
+                )
             }
     }
 }

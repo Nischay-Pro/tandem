@@ -250,6 +250,22 @@ class IosLocaleFormattingTest {
     }
 
     @Test
+    fun iosHiddenFractionsRoundHalfAwayFromZeroWithoutNegativeZero() {
+        val hidden = settings("comma-dot").copy(hideFraction = true)
+        assertEquals("$3", platformFormatCurrency(250, hidden))
+        assertEquals("-$3", platformFormatCurrency(-250, hidden))
+        assertEquals("$0", platformFormatCurrency(-40, hidden))
+        assertEquals("1,501", platformFormatDecimal(150_050, settings("comma-dot", fractionDigits = 0)))
+        assertFalse(platformFormatReportCurrency(-40, "USD", 0).contains("-"))
+    }
+
+    @Test
+    fun iosMonthLabelsUseGregorianYears() {
+        assertTrue(platformFormatMonth(2026, 11, abbreviated = false).contains("2026"))
+        assertTrue(platformFormatMonth(2026, 11, abbreviated = true).contains("2026"))
+    }
+
+    @Test
     fun transactionDetailsAndListsShareTheSystemDateFormatter() {
         val isoDate = "2026-11-07"
         val localizedDate = formatLiveDate(isoDate)

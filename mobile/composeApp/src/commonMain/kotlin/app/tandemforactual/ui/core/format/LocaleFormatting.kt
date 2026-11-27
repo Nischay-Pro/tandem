@@ -114,7 +114,27 @@ internal fun parseAmountMinorUnits(
 internal fun formatSignedCurrency(
     minorUnits: Long,
     displaySettings: BudgetDisplaySettings? = null,
-): String = if (minorUnits > 0) "+${formatCurrency(minorUnits, displaySettings)}" else formatCurrency(minorUnits, displaySettings)
+): String {
+    val formatted = formatCurrency(minorUnits, displaySettings)
+    val showsAmount = formatted.any { (it.digitToIntOrNull() ?: 0) != 0 }
+    return if (minorUnits > 0 && showsAmount) "+$formatted" else formatted
+}
+
+/** Hundredths rounded half away from zero to [visibleDigits] decimals, the way Actual rounds what it shows. */
+internal fun roundForDisplay(
+    hundredths: Long,
+    visibleDigits: Int,
+): Long {
+    if (visibleDigits >= STORED_AMOUNT_DIGITS) return hundredths
+    val step = if (visibleDigits <= 0) 100L else 10L
+    val remainder = hundredths % step
+    val truncated = hundredths - remainder
+    return when {
+        remainder * 2 >= step -> truncated + step
+        remainder * 2 <= -step -> truncated - step
+        else -> truncated
+    }
+}
 
 internal fun formatDate(date: CalendarDate): String = platformFormatDate(date.year, date.month, date.day, includeYear = true)
 
@@ -125,10 +145,11 @@ internal fun formatMomentAtEpochMilliseconds(
     nowEpochMilliseconds: Long,
 ): String {
     val day = platformIsoDateAtEpochMilliseconds(epochMilliseconds)
+    val today = platformIsoDateAtEpochMilliseconds(nowEpochMilliseconds)
     val time = platformFormatTimeAtEpochMilliseconds(epochMilliseconds)
     return when (day) {
-        platformIsoDateAtEpochMilliseconds(nowEpochMilliseconds) -> "today at $time"
-        platformIsoDateAtEpochMilliseconds(nowEpochMilliseconds - 86_400_000L) -> "yesterday at $time"
+        today -> "today at $time"
+        previousIsoDate(today) -> "yesterday at $time"
         else -> "${platformFormatDateAtEpochMilliseconds(epochMilliseconds)} at $time"
     }
 }

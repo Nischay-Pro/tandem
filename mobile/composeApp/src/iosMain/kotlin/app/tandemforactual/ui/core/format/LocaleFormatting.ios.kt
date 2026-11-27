@@ -6,6 +6,7 @@ import kotlin.math.abs
 import kotlin.math.pow
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCalendar
+import platform.Foundation.NSCalendarIdentifierGregorian
 import platform.Foundation.NSCalendarUnitHour
 import platform.Foundation.NSCalendarUnitMinute
 import platform.Foundation.NSCalendarUnitWeekday
@@ -42,11 +43,13 @@ internal actual fun platformFormatCurrency(
                 numberStyle = NSNumberFormatterCurrencyStyle
             }
         }) { formatter ->
-            formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 100.0)) ?: ""
+            val shown = roundForDisplay(minorUnits, formatter.maximumFractionDigits.toInt())
+            formatter.stringFromNumber(NSNumber(shown.toDouble() / 100.0)) ?: ""
         }
     }
     val fractionDigits = displaySettings.currencyFractionDigits()
-    val amount = formatBudgetNumber(abs(minorUnits.toDouble()), displaySettings, fractionDigits)
+    val shown = roundForDisplay(minorUnits, if (displaySettings.hideFraction) 0 else fractionDigits)
+    val amount = formatBudgetNumber(abs(shown.toDouble()), displaySettings, fractionDigits)
     val symbol = displaySettings.currencySymbol
     val separator = if (displaySettings.currencySpaceBetweenAmountAndSymbol) "\u202F" else ""
     val formatted =
@@ -55,7 +58,7 @@ internal actual fun platformFormatCurrency(
         } else {
             "$symbol$separator$amount"
         }
-    return if (minorUnits < 0) "-$formatted" else formatted
+    return if (shown < 0) "-$formatted" else formatted
 }
 
 internal actual fun platformFormatReportCurrency(
@@ -82,7 +85,8 @@ internal actual fun platformFormatReportCurrency(
             maximumFractionDigits = digits.toULong()
         }
     }) { formatter ->
-        formatter.stringFromNumber(NSNumber(minorUnits.toDouble() / 10.0.pow(STORED_AMOUNT_DIGITS.toDouble()))) ?: ""
+        val shown = roundForDisplay(minorUnits, digits)
+        formatter.stringFromNumber(NSNumber(shown.toDouble() / 10.0.pow(STORED_AMOUNT_DIGITS.toDouble()))) ?: ""
     }
 }
 
@@ -124,7 +128,10 @@ private fun formatBudgetNumber(
     displaySettings: BudgetDisplaySettings?,
     fractionDigits: Int,
     hideFraction: Boolean = displaySettings?.hideFraction == true,
-): String = formatBudgetNumber(minorUnits.toDouble(), displaySettings, fractionDigits, hideFraction)
+): String {
+    val visibleDigits = if (hideFraction) 0 else fractionDigits
+    return formatBudgetNumber(roundForDisplay(minorUnits, visibleDigits).toDouble(), displaySettings, fractionDigits, hideFraction)
+}
 
 private fun formatBudgetNumber(
     minorUnits: Double,
@@ -202,7 +209,7 @@ internal actual fun platformFormatTimeOfDay(minuteOfDay: Int): String {
             hour = (minuteOfDay / 60).toLong()
             minute = (minuteOfDay % 60).toLong()
         }
-    val date = NSCalendar.currentCalendar.dateFromComponents(components) ?: NSDate()
+    val date = IosFormatterCache.withGregorian { it.dateFromComponents(components) } ?: NSDate()
     val locale = NSLocale.currentLocale
     return withDateFormatter("time:$locale:short", {
         NSDateFormatter().apply {
@@ -229,6 +236,7 @@ private fun formatIsoDate(date: NSDate): String {
     return withDateFormatter("date:iso", {
         NSDateFormatter().apply {
             this.locale = locale
+            calendar = gregorianCalendar()
             dateFormat = "yyyy-MM-dd"
         }
     }) { it.stringFromDate(date) }
@@ -244,6 +252,7 @@ internal actual fun platformFormatMonth(
     return withDateFormatter("month:$locale:$pattern", {
         NSDateFormatter().apply {
             this.locale = locale
+            calendar = gregorianCalendar()
             dateFormat = pattern
         }
     }) { it.stringFromDate(calendarDate(year, month, 1)) }
@@ -302,6 +311,7 @@ internal actual fun platformWeekdayName(
     return withDateFormatter("weekday:$locale", {
         NSDateFormatter().apply {
             this.locale = locale
+            calendar = gregorianCalendar()
             dateFormat = "EEEEE"
         }
     }) { it.stringFromDate(calendarDate(year, month, day)) }
@@ -316,6 +326,7 @@ internal actual fun platformFullWeekdayName(
     return withDateFormatter("weekday-full:$locale", {
         NSDateFormatter().apply {
             this.locale = locale
+            calendar = gregorianCalendar()
             dateFormat = "EEEE"
         }
     }) { it.stringFromDate(calendarDate(year, month, day)) }
@@ -325,6 +336,18 @@ private object IosFormatterCache {
     private val lock = NSRecursiveLock()
     private val numbers = linkedMapOf<String, NSNumberFormatter>()
     private val dates = linkedMapOf<String, NSDateFormatter>()
+    private var gregorian: NSCalendar? = null
+
+    fun <T> withGregorian(use: (NSCalendar) -> T): T {
+        lock.lock()
+        try {
+            val calendar = gregorian ?: gregorianCalendar().also { gregorian = it }
+            calendar.timeZone = NSCalendar.currentCalendar.timeZone
+            return use(calendar)
+        } finally {
+            lock.unlock()
+        }
+    }
 
     fun <T> withNumber(
         key: String,
@@ -391,5 +414,8 @@ private fun calendarDate(
             this.day = day.toLong()
             hour = 12
         }
-    return NSCalendar.currentCalendar.dateFromComponents(components) ?: NSDate()
+    return IosFormatterCache.withGregorian { it.dateFromComponents(components) } ?: NSDate()
 }
+
+/** Dates are stored and computed in the Gregorian calendar whatever calendar the phone shows. */
+private fun gregorianCalendar(): NSCalendar = NSCalendar(calendarIdentifier = NSCalendarIdentifierGregorian)

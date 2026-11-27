@@ -16,7 +16,7 @@ actual object LocalAppLocale {
     actual infix fun provides(value: String?): ProvidedValue<*> {
         val configuration = LocalConfiguration.current
         val device = deviceLocale ?: Locale.getDefault().also { deviceLocale = it }
-        val locale = value?.let(Locale::forLanguageTag) ?: device
+        val locale = value?.let { appLocale(it, device) } ?: device
         Locale.setDefault(locale)
         configuration.setLocale(locale)
         val resources = LocalContext.current.resources
@@ -24,4 +24,21 @@ actual object LocalAppLocale {
         resources.updateConfiguration(configuration, resources.displayMetrics)
         return LocalConfiguration.provides(configuration)
     }
+}
+
+/** The chosen app language in the device's region, so currency, dates and numbers still follow where the phone is. */
+internal fun appLocale(
+    languageTag: String,
+    device: Locale,
+): Locale {
+    val chosen = Locale.forLanguageTag(languageTag)
+    if (chosen.country.isNotEmpty() || device.country.isEmpty()) return chosen
+    return runCatching {
+        Locale
+            .Builder()
+            .setLocale(chosen)
+            .setRegion(device.country)
+            .apply { device.unicodeLocaleKeys.forEach { key -> setUnicodeLocaleKeyword(key, device.getUnicodeLocaleType(key)) } }
+            .build()
+    }.getOrDefault(chosen)
 }

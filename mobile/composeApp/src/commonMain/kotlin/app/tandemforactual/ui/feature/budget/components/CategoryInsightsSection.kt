@@ -11,7 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.daysInMonth
 import app.tandemforactual.ui.core.format.formatCurrency
-import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryAmount
 import app.tandemforactual.ui.core.session.budgetMonthBody
@@ -46,7 +46,7 @@ internal fun CategoryInsightsSection(
     category: LiveCategorySummary,
     isTrackingBudget: Boolean,
 ) {
-    val today = remember { platformTodayIsoDate() }
+    val today = rememberTodayIsoDate()
     val monthId = state.selectedMonthId
     val isCurrentMonth = monthId == today.take(7)
     val pace =
