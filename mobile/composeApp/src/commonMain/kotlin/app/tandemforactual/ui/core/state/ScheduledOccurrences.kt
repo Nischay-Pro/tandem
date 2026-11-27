@@ -55,7 +55,8 @@ internal fun scheduledOccurrences(
         }.sortedWith(compareBy({ it.date }, { it.schedule.name.lowercase() }))
 }
 
-private fun dayNumber(iso: String): Long? = parseIsoDate(iso)?.let { (year, month, day) -> calendarDayNumber(CalendarDate(year, month, day)) }
+private fun dayNumber(iso: String): Long? =
+    parseIsoDate(iso)?.let { (year, month, day) -> calendarDayNumber(CalendarDate(year, month, day)) }
 
 private fun linkedTransactionDates(records: List<BudgetRecordEntity>): Map<String, List<String>> =
     records
