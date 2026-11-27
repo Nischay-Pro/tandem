@@ -4,14 +4,15 @@ package app.tandemforactual.ui.feature.accounts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.ui.core.importing.statementLedgerRange
 import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.budget.previewStatementImportTransactions
+import app.tandemforactual.ui.core.session.budget.statementLedger
 import app.tandemforactual.ui.core.session.userFacingMessage
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import kotlinx.coroutines.CancellationException
 
-/** Starts a dropped or shared statement, re-parses it when its options change, then loads the server import preview. */
+/** Starts a dropped or shared statement, re-parses it when its options change, then reads the account to match it against. */
 @Composable
 internal fun StatementImportEffects(
     statementImport: StatementImportState,
@@ -39,49 +40,49 @@ internal fun StatementImportEffects(
     ) {
         parseStatement(statementImport, state, liveAccount, currencyFractionDigits, numberFormat)
     }
+    LaunchedEffect(statementImport.parseResult, statementImport.ledger) { statementImport.actions = emptyMap() }
     LaunchedEffect(
         statementImport.parseResult,
-        statementImport.importPreviewRetry,
+        statementImport.ledgerRetry,
         state.serverUrl,
         state.selectedBudgetId,
         state.encryptedPassword,
         liveAccount?.id,
     ) {
-        loadStatementImportPreview(statementImport, state, mobileSession, liveAccount)
+        loadStatementLedger(statementImport, state, mobileSession, liveAccount)
     }
 }
 
-private suspend fun loadStatementImportPreview(
+private suspend fun loadStatementLedger(
     statementImport: StatementImportState,
     state: AppState,
     mobileSession: TandemMobileSession,
     liveAccount: LiveAccountSummary?,
 ) {
-    val parsed = statementImport.parseResult
-    if (parsed == null || liveAccount == null) {
-        statementImport.importPreview = null
-        statementImport.importPreviewError = null
-        statementImport.importPreviewLoading = false
+    val range = statementImport.parseResult?.transactions?.let(::statementLedgerRange)
+    statementImport.ledger = null
+    statementImport.ledgerError = null
+    if (range == null || liveAccount == null) {
+        statementImport.ledgerLoading = false
         return
     }
-    statementImport.importPreview = null
-    statementImport.importPreviewError = null
-    statementImport.importPreviewLoading = true
+    statementImport.ledgerLoading = true
     try {
-        statementImport.importPreview =
-            mobileSession.budgetEdits.previewStatementImportTransactions(
+        statementImport.ledger =
+            mobileSession.budgetEdits.statementLedger(
                 state.selectedBudgetId,
                 liveAccount.id,
-                parsed.transactions.flatMap { listOfNotNull(it.importedId, it.bankId) }.distinct(),
+                range.first,
+                range.second,
                 state.encryptedPassword.takeIf(String::isNotBlank),
             )
     } catch (error: CancellationException) {
         throw error
     } catch (error: TandemApiException) {
-        statementImport.importPreviewError = error.userFacingMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED)
+        statementImport.ledgerError = error.userFacingMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED)
     } catch (_: Exception) {
-        statementImport.importPreviewError = STATEMENT_IMPORT_CONNECTION_REQUIRED
+        statementImport.ledgerError = STATEMENT_IMPORT_CONNECTION_REQUIRED
     } finally {
-        statementImport.importPreviewLoading = false
+        statementImport.ledgerLoading = false
     }
 }

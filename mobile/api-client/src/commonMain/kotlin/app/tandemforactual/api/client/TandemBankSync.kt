@@ -117,16 +117,52 @@ suspend fun TandemApiClient.importBudgetAccountTransactions(
     transactions: List<StatementImportItem>,
     encryptionPassword: String?,
     idempotencyKeyOverride: String? = null,
+    reviewed: Boolean = false,
 ): StatementImportSummary {
     val result =
         edit(budgetId, encryptionPassword) { edits ->
             edits.importTransactions(
                 accountId,
-                transactions.map { ImportRow(it.date, it.amountMinor, it.payeeName, it.notes, it.importedId) },
+                transactions.map {
+                    ImportRow(
+                        it.date,
+                        it.amountMinor,
+                        it.payeeName,
+                        it.notes,
+                        it.importedId,
+                        cleared = true.takeIf { reviewed },
+                        matchId = it.matchId,
+                    )
+                },
+                reviewed,
             )
         }
     return StatementImportSummary(result.added.size, result.updated.size, 0)
 }
+
+/** The account's transactions between two dates, read from this device's copy of the budget, for statement matching. */
+suspend fun TandemApiClient.budgetAccountLedger(
+    budgetId: String,
+    accountId: String,
+    from: String,
+    to: String,
+    encryptionPassword: String?,
+): List<StatementLedgerTransaction> =
+    call {
+        budget(budgetId, encryptionPassword).ledger(accountId, from, to).map {
+            StatementLedgerTransaction(
+                it.id,
+                it.date,
+                it.amount,
+                it.payeeName,
+                it.importedPayee,
+                it.notes,
+                it.importedId,
+                it.cleared,
+                it.reconciled,
+            )
+        }
+    }
 
 @Suppress("UNUSED_PARAMETER")
 suspend fun TandemApiClient.previewBudgetAccountStatementImport(

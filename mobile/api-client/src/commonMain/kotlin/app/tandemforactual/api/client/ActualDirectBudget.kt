@@ -8,6 +8,7 @@ import app.tandemforactual.data.actual.ActualChangeHistory
 import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
+import app.tandemforactual.data.actual.ActualImport
 import app.tandemforactual.data.actual.ActualMessageStore
 import app.tandemforactual.data.actual.ActualRuleDiagnostics
 import app.tandemforactual.data.actual.ActualRuleEngine
@@ -19,6 +20,7 @@ import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.LedgerTransaction
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
 import app.tandemforactual.data.actual.RuleFinding
@@ -228,6 +230,12 @@ class ActualDirectBudget private constructor(
                     ).map { it["imported_id"] as String }
             }
         }
+
+    suspend fun ledger(
+        accountId: String,
+        from: String,
+        to: String,
+    ): List<LedgerTransaction> = locked { ActualImport(writer).ledger(accountId, from, to) }
 
     val deviceNode: String get() = clock.clock.timestamp.node
 
