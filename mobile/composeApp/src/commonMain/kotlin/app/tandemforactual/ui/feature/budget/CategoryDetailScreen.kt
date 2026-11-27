@@ -22,6 +22,7 @@ import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.categoryIconChoice
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isCategoryPinned
+import app.tandemforactual.ui.core.state.isTrackingBudget
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.togglePinnedCategory
 import app.tandemforactual.ui.design.buttons.SecondaryButton
@@ -41,6 +42,7 @@ import app.tandemforactual.ui.feature.budget.components.DeleteCategoryConfirmati
 import app.tandemforactual.ui.feature.budget.components.DeleteCategorySheet
 import app.tandemforactual.ui.feature.budget.components.EditCategorySheet
 import app.tandemforactual.ui.feature.budget.components.MoveMoneySheet
+import app.tandemforactual.ui.feature.budget.components.categoryPlanTitle
 import app.tandemforactual.ui.feature.budget.components.rememberCategoryDetailSheetState
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -64,7 +66,7 @@ internal fun CategoryDetailScreen(
         )
         return
     }
-    val isTrackingBudget = isLiveBudget && state.budgetDisplaySettings?.budgetType == "tracking"
+    val isTrackingBudget = state.isTrackingBudget
     val sheets =
         rememberCategoryDetailSheetState(
             state.selectedBudgetId,
@@ -186,12 +188,9 @@ private fun CategoryDetailContent(
             ) { onEdit() }
         }
     }
-    AmountHero(
-        if (isTrackingBudget) "Activity" else "Available",
-        state.formatCurrency(if (isTrackingBudget) category.activityMinor else category.balanceMinor),
-        if (isTrackingBudget) "For the selected month" else "${state.formatCurrency(category.assignedMinor)} assigned",
-    )
-    CategoryInsightsSection(state, mobileSession, category, isTrackingBudget)
+    val hero = categoryHero(category, model.currentIncomeType, isTrackingBudget) { state.formatCurrency(it) }
+    AmountHero(hero.first, state.formatCurrency(hero.second), hero.third)
+    CategoryInsightsSection(state, mobileSession, category, isTrackingBudget, model.currentIncomeType)
     CategoryThisMonthSection(
         state,
         navigation,
@@ -202,6 +201,7 @@ private fun CategoryDetailContent(
         isLiveBudget,
         isTrackingBudget,
         scope,
+        model.currentIncomeType,
     )
     if (isLiveBudget) CategoryNoteSection(state, mobileSession, category, scope)
     if (isLiveBudget) {
@@ -225,12 +225,13 @@ private fun CategoryDetailSheets(
 ) {
     val category = model.category
     AssignedAmountSheet(
-        visible = sheets.showAssignedAmountDialog && category != null && isLiveBudget && !isTrackingBudget,
+        visible = sheets.showAssignedAmountDialog && category != null && isLiveBudget,
         state = state,
         mobileSession = mobileSession,
         category = category,
         sheets = sheets,
         scope = scope,
+        title = categoryPlanTitle(model.currentIncomeType, isTrackingBudget) ?: "Assigned",
     )
     MoveMoneySheet(
         visible = sheets.showMoveMoneyDialog && category != null && isLiveBudget && !isTrackingBudget,
@@ -264,3 +265,17 @@ private fun CategoryDetailSheets(
         DeleteCategoryConfirmation(state, navigation, mobileSession, category, model.deleteDestinations, sheets, scope)
     }
 }
+
+/** The category page's headline: what's left of the plan, or for income what came in. */
+internal fun categoryHero(
+    category: LiveCategorySummary,
+    isIncome: Boolean,
+    isTrackingBudget: Boolean,
+    format: (Long) -> String,
+): Triple<String, Long, String> =
+    when {
+        isIncome && isTrackingBudget -> Triple("Received", category.activityMinor, "${format(category.assignedMinor)} expected")
+        isIncome -> Triple("Received", category.activityMinor, "For the selected month")
+        isTrackingBudget -> Triple("Remaining", category.balanceMinor, "${format(category.assignedMinor)} budgeted")
+        else -> Triple("Available", category.balanceMinor, "${format(category.assignedMinor)} assigned")
+    }

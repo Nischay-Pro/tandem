@@ -43,14 +43,16 @@ private struct ReadyToAssignView: View {
     private var status: WidgetSnapshot.Status { entry.snapshot?.status(on: entry.date) ?? .noBudget }
     private var ready: String { entry.snapshot?.readyToAssign ?? "—" }
     private var negative: Bool { entry.snapshot?.readyToAssignNegative == true }
+    private var label: String { entry.snapshot?.readyLabel ?? "Ready to assign" }
+    private var inline: String { entry.snapshot?.readyLabel == nil ? "\(ready) to assign" : "\(ready) saved" }
 
     var body: some View {
         switch family {
         case .accessoryInline:
-            Text(status == .ready ? "\(ready) to assign" : WidgetStatusMessage.text(for: status))
+            Text(status == .ready ? inline : WidgetStatusMessage.text(for: status))
         case .accessoryRectangular:
             VStack(alignment: .leading) {
-                Text("Ready to assign").font(.caption)
+                Text(label).font(.caption)
                 if status == .ready {
                     Text(ready).font(.headline)
                 } else {
@@ -79,7 +81,7 @@ private struct ReadyToAssignView: View {
                     .foregroundStyle(negative ? Color.red : Color.primary)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
-                Text("Ready to assign").font(.caption).foregroundStyle(.secondary)
+                Text(label).font(.caption).foregroundStyle(.secondary)
             }
             if family == .systemMedium {
                 Spacer()

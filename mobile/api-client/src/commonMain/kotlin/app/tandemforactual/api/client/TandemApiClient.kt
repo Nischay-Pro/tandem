@@ -29,6 +29,7 @@ import app.tandemforactual.data.actual.reopenAccount
 import app.tandemforactual.data.actual.resetBudgetHold
 import app.tandemforactual.data.actual.setBudgetAmount
 import app.tandemforactual.data.actual.setBudgetCarryover
+import app.tandemforactual.data.actual.setBudgetType
 import app.tandemforactual.data.actual.setCategoryNote
 import app.tandemforactual.data.actual.setOrders
 import app.tandemforactual.data.actual.setPayeeDefaultCategory
@@ -528,6 +529,14 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) = edit(budgetId, encryptionPassword) { it.setBudgetCarryover(categoryId, month, enabled) }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setBudgetType(
+        budgetId: String,
+        type: String,
+        encryptionPassword: String?,
+        idempotencyKeyOverride: String? = null,
+    ) = edit(budgetId, encryptionPassword) { it.setBudgetType(type) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun copyBudgetMonth(

@@ -295,8 +295,9 @@ private class LiveBudgetMonthBuilder(
                             if (isHidden || category.booleanValue("deleted") == true) return@mapNotNull null
                             val originalAssigned = category.longValue("budgeted") ?: category.longValue("assigned") ?: 0
                             val assigned = effectiveBudgetOverrides[categoryId] ?: originalAssigned
-                            assignedDelta += assigned - originalAssigned
-                            val activity = category.longValue("activity") ?: category.longValue("spent") ?: 0
+                            if (group.isIncomeGroup() != true) assignedDelta += assigned - originalAssigned
+                            val activity =
+                                category.longValue("activity") ?: category.longValue("spent") ?: category.longValue("received") ?: 0
                             val originalBalance = category.longValue("balance") ?: (originalAssigned + activity)
                             LiveCategorySummary(
                                 id = categoryId,
@@ -315,8 +316,7 @@ private class LiveBudgetMonthBuilder(
                     name = categoryGroupNameOverrides[groupId] ?: groupNames[groupId] ?: group.stringValue("name") ?: groupId,
                     categories = categories,
                     isIncome =
-                        group.booleanValue("is_income")
-                            ?: group.booleanValue("isIncome")
+                        group.isIncomeGroup()
                             ?: categoryGroupRecords
                                 .firstOrNull { it.recordId == groupId }
                                 ?.recordBody()
@@ -419,6 +419,8 @@ private class LiveBudgetMonthBuilder(
         }
     }
 }
+
+private fun JsonObject.isIncomeGroup(): Boolean? = booleanValue("is_income") ?: booleanValue("isIncome")
 
 private fun parseQueuedBudgetPayload(payload: String): JsonObject? =
     runCatching { Json.parseToJsonElement(payload) as? JsonObject }.getOrNull()

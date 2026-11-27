@@ -326,6 +326,8 @@ class TandemApiClientTest {
             client.resetBudgetHold("group", "2026-11", null)
             client.setBudgetCategoryAmount("group", groceries, "2026-11", 900_000, null)
             client.moveMoneyBetweenCategories("group", "2026-11", groceries, dining, 100, null)
+            client.setBudgetType("group", "tracking", null)
+            client.setBudgetType("group", "envelope", null)
             client.deleteBudgetCategory("group", flights, null, null)
             client.setBudgetOrder("group", buildJsonObject { put("categories", JsonArray(emptyList())) }, null, "key")
             client.createBudgetRule(

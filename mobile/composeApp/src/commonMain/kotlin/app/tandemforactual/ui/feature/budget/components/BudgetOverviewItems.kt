@@ -31,7 +31,6 @@ import app.tandemforactual.ui.design.templates.Heading
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.feature.budget.budgetPendingChangeBannerItems
 import com.composables.icons.lucide.CalendarDays
-import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.Lucide
 
 /** Alerts, overview heading, hints and month actions at the top of the budget list. */
@@ -40,7 +39,6 @@ internal fun LazyListScope.budgetOverviewItems(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
     isLiveBudget: Boolean,
-    isTrackingBudget: Boolean,
     liveBudgetMonth: LiveBudgetMonthSummary?,
     groupReorderStatus: BudgetReorderStatus,
     onCopyLastMonth: () -> Unit,
@@ -88,20 +86,9 @@ internal fun LazyListScope.budgetOverviewItems(
             }
         }
     }
-    if (isLiveBudget && !isTrackingBudget && liveBudgetMonth != null) {
+    if (isLiveBudget && liveBudgetMonth != null) {
         item(key = "budget-copy-last-month") {
             BudgetMonthActionsCard(state, mobileSession, onCopyLastMonth, onPlanTemplates)
-        }
-    }
-    if (isTrackingBudget) {
-        item(key = "budget-tracking-mode") {
-            SurfaceCard {
-                ListRow(
-                    "Tracking budget",
-                    "Actual does not assign money to categories in this budget.",
-                    leading = RowLeading.Icon(Lucide.ChartNoAxesCombined),
-                )
-            }
         }
     }
 }
