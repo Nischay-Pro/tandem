@@ -7,6 +7,7 @@ import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import app.tandemforactual.watch.WatchBill
 import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
@@ -30,6 +31,13 @@ class ToBudgetComplicationService : SuspendingComplicationDataSourceService() {
     override fun getPreviewData(type: ComplicationType): ComplicationData = WatchComplications.toBudget(PREVIEW, null)
 }
 
+class NextBillComplicationService : SuspendingComplicationDataSourceService() {
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData =
+        WatchComplications.nextBill(WatchStore.load(this).summary.value, request.complicationType, openApp(this))
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData = WatchComplications.nextBill(PREVIEW, type, null)
+}
+
 private fun openApp(context: Context): PendingIntent =
     PendingIntent.getActivity(
         context,
@@ -47,4 +55,5 @@ private val PREVIEW =
         toBudgetMinor = 12_000,
         leftToSpendMinor = 42_000,
         categories = listOf(WatchCategory("preview", "Groceries", budgetedMinor = 50_000, spentMinor = 20_000, leftMinor = 30_000)),
+        bills = listOf(WatchBill("Internet", "2026-12-01", -6_000)),
     )
