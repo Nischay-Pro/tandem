@@ -29,6 +29,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.Trash2
 
@@ -41,6 +42,7 @@ internal fun TransactionSelectionFloatingBar(
     onToggleAll: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
 ) {
     SurfaceCard(modifier) {
         Row(
@@ -75,6 +77,16 @@ internal fun TransactionSelectionFloatingBar(
                     color = tandemPalette.accent,
                     fontSize = TandemTypography.label,
                     fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (onEdit != null) {
+                TandemIconButton(
+                    Lucide.Pencil,
+                    "Edit selected transactions",
+                    enabled = canDelete && !isWorking,
+                    tint = tandemPalette.accent,
+                    containerColor = tandemPalette.accentSurface,
+                    onClick = onEdit,
                 )
             }
             TandemIconButton(

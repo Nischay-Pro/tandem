@@ -64,8 +64,18 @@ class ActualTransactionOperations(
         action: String,
         patch: JsonObject,
         baseSnapshot: JsonObject?,
+        group: String? = null,
     ): OperationOutcome =
-        find(operationId) ?: writer.batch {
+        find(operationId) ?: writer.inGroup(group) { submitNow(operationId, transactionId, action, patch, baseSnapshot) }
+
+    private fun submitNow(
+        operationId: String,
+        transactionId: String,
+        action: String,
+        patch: JsonObject,
+        baseSnapshot: JsonObject?,
+    ): OperationOutcome =
+        writer.batch {
             val outcome =
                 when (action) {
                     "create" -> create(operationId, transactionId, patch)
@@ -336,6 +346,10 @@ class ActualTransactionOperations(
             if (payeeChanged && fields["payee"] != null && payee == null) return "payee-not-found"
             (payee?.get("transfer_acct") as String?)?.let { transfer -> transferIssue(accountId, transfer, accounts)?.let { return it } }
         }
+        val schedule = fields["schedule"] as String?
+        if (schedule != null && db.first("SELECT id FROM schedules WHERE id = ? AND tombstone = 0", schedule) == null) {
+            return "schedule-not-found"
+        }
         return (fields["category"] as String?)?.let(::categoryIssue)
     }
 
@@ -571,7 +585,7 @@ class ActualTransactionOperations(
     }
 }
 
-private val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled")
+private val EDIT_FIELDS = listOf("account", "amount", "date", "payee", "category", "notes", "cleared", "reconciled", "schedule")
 private val SPLIT_EDIT_FIELDS = setOf("amount", "payee", "category", "notes")
 private val LINE_FIELDS = setOf("account", "date", "cleared", "reconciled")
 private val STRUCTURE = listOf("transferId", "isParent", "isChild", "parentId")

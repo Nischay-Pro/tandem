@@ -12,6 +12,7 @@ class ActualWriter(
     private var moment: Long? = null
     private var batchDepth = 0
     private var clockUnsaved = false
+    private var group: Pair<String, Long>? = null
 
     fun uuid(): String = newId()
 
@@ -74,6 +75,34 @@ class ActualWriter(
         }
     }
 
+    /**
+     * Stamps [block] with the moment the last write of [key] used, while nothing else has written since, so a bulk
+     * action sent one write at a time still reads as one change in the history.
+     */
+    fun <T> inGroup(
+        key: String?,
+        block: () -> T,
+    ): T {
+        val last = group
+        val pinned =
+            last?.second?.takeIf {
+                key != null && last.first == key && moment == null && clock.clock.timestamp.millis == it && now() - it < GROUP_WINDOW_MILLIS
+            }
+        val result =
+            if (pinned == null) {
+                block()
+            } else {
+                moment = pinned
+                try {
+                    block()
+                } finally {
+                    moment = null
+                }
+            }
+        group = key?.let { it to clock.clock.timestamp.millis }
+        return result
+    }
+
     /** The moment to stamp with, moved on a millisecond once its counter is full so a large batch can't overflow it. */
     private fun nextMillis(): Long {
         var pinned = moment ?: return now()
@@ -97,6 +126,10 @@ class ActualWriter(
             }
         store.apply(messages, clock, deferUnknownSchema = false, save = batchDepth == 0)
         if (batchDepth > 0) clockUnsaved = true
+    }
+
+    private companion object {
+        const val GROUP_WINDOW_MILLIS = 10 * 60 * 1_000L
     }
 }
 
