@@ -2,19 +2,9 @@
 
 package app.tandemforactual.ui.app.shell
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BudgetSwitchSplash
@@ -30,9 +20,8 @@ import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.FeedbackMessage
 import app.tandemforactual.ui.design.feedback.FeedbackMessageView
 import app.tandemforactual.ui.design.feedback.FeedbackPresentation
+import app.tandemforactual.ui.design.feedback.NoticeHost
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
-import app.tandemforactual.ui.design.theme.TandemSpacing
-import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.feature.auth.AppLockGate
 import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
 import kotlinx.coroutines.delay
@@ -84,49 +73,36 @@ internal fun ShellOverlays(
 private fun UndoNotice(ctx: ShellContext) {
     val mobileSession = ctx.mobileSession
     val undoNotice = mobileSession.transactions.undoNotice
-    val undoAboveTabBar = !currentWindowSizeInfo().usesRail
     LaunchedEffect(undoNotice?.id) {
         val shown = undoNotice ?: return@LaunchedEffect
         delay(UNDO_NOTICE_MILLIS)
         mobileSession.transactions.dismissUndoNotice(shown.id)
     }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(start = TandemSpacing.large, end = TandemSpacing.large, bottom = if (undoAboveTabBar) 104.dp else 24.dp),
-        contentAlignment = Alignment.BottomCenter,
-    ) {
-        AnimatedVisibility(
-            visible = undoNotice != null,
-            enter = fadeIn() + slideInVertically { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
-        ) {
-            val notice = undoNotice ?: return@AnimatedVisibility
-            SurfaceCard(Modifier.widthIn(max = 560.dp)) {
-                FeedbackMessageView(
-                    FeedbackMessage(
-                        text = notice.message,
-                        kind = notice.kind,
-                        title = notice.title,
-                        detail = notice.detail,
-                        actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() || notice.undo != null },
-                        onAction = {
-                            ctx.coroutineScope.launch {
-                                val undo = notice.undo
-                                if (undo == null) {
-                                    mobileSession.transactions.undoTransactionDeletes(notice)
-                                } else {
-                                    mobileSession.transactions.dismissUndoNotice(notice.id)
-                                    undo()
-                                }
+    NoticeHost(visible = undoNotice != null) {
+        val notice = undoNotice ?: return@NoticeHost
+        SurfaceCard(Modifier.widthIn(max = 560.dp)) {
+            FeedbackMessageView(
+                FeedbackMessage(
+                    text = notice.message,
+                    kind = notice.kind,
+                    title = notice.title,
+                    detail = notice.detail,
+                    actionLabel = "Undo".takeIf { notice.transactionIds.isNotEmpty() || notice.undo != null },
+                    onAction = {
+                        ctx.coroutineScope.launch {
+                            val undo = notice.undo
+                            if (undo == null) {
+                                mobileSession.transactions.undoTransactionDeletes(notice)
+                            } else {
+                                mobileSession.transactions.dismissUndoNotice(notice.id)
+                                undo()
                             }
-                        },
-                        onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
-                    ),
-                    FeedbackPresentation.BANNER,
-                )
-            }
+                        }
+                    },
+                    onDismiss = { mobileSession.transactions.dismissUndoNotice(notice.id) },
+                ),
+                FeedbackPresentation.BANNER,
+            )
         }
     }
 }

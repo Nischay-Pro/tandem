@@ -42,6 +42,7 @@ import app.tandemforactual.ui.design.feedback.FeedbackMessageOwner
 import app.tandemforactual.ui.design.feedback.FieldErrorMessage
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
+import app.tandemforactual.ui.design.feedback.reservesNoticeSpace
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
@@ -254,7 +255,7 @@ internal fun TransactionFormActionBar(
     keypadVisible: Boolean,
     content: @Composable RowScope.() -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth().padding(bottom = if (keypadVisible) 0.dp else 12.dp)) {
+    Box(Modifier.fillMaxWidth().reservesNoticeSpace().padding(bottom = if (keypadVisible) 0.dp else 12.dp)) {
         Row(
             Modifier.fillMaxWidth().background(tandemPalette.surface).padding(horizontal = 18.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
