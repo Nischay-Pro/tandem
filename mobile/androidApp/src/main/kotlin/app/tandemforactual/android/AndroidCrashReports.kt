@@ -17,14 +17,6 @@ class AndroidCrashReports(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "unknown"
 
-    fun install() {
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            runCatching { record(thread.name, error) }
-            previous?.uncaughtException(thread, error)
-        }
-    }
-
     internal fun record(
         threadName: String,
         error: Throwable,
