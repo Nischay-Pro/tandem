@@ -116,7 +116,12 @@ private fun BudgetEquationText(
     fun amount(term: EquationTerm) = if (state.privacyModeEnabled) "•••" else state.formatCurrency(term.minor)
     val sum =
         equation.terms.mapIndexed { index, term ->
-            val sign = if (term.subtract) "− " else if (index > 0) "+ " else ""
+            val sign =
+                when {
+                    term.subtract -> "− "
+                    index > 0 -> "+ "
+                    else -> ""
+                }
             "$sign${term.label} ${amount(term)}"
         }
     Text(
