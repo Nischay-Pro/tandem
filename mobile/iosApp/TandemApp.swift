@@ -126,6 +126,8 @@ private final class TandemAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         IosBackgroundSyncScheduler.shared.register()
+        TandemAutomationNotifications.shared.install()
+        TandemAppShortcuts.updateAppShortcutParameters()
         return true
     }
 

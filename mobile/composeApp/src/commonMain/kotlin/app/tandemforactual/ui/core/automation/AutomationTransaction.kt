@@ -40,7 +40,16 @@ data class AutomationTransactionInput(
     val notes: String? = null,
     val cleared: String? = null,
     val externalId: String? = null,
+    val amountFormat: AutomationAmountFormat = AutomationAmountFormat.BUDGET,
 )
+
+enum class AutomationAmountFormat {
+    /** Written the way the budget shows amounts, read with the keypad's parser. */
+    BUDGET,
+
+    /** A dot as the decimal mark and no grouping, the way Shortcuts and Siri hand over numbers. */
+    PLAIN,
+}
 
 data class AutomatedTransaction(
     val transactionId: String,
@@ -120,7 +129,11 @@ private suspend fun resolveTransaction(
     settings: BudgetDisplaySettings?,
     todayIso: String,
 ): ResolvedTransaction {
-    val amount = automationAmount(input.amount, settings)
+    val amount =
+        when (input.amountFormat) {
+            AutomationAmountFormat.BUDGET -> automationAmount(input.amount, settings)
+            AutomationAmountFormat.PLAIN -> automationPlainAmount(input.amount, settings)
+        }
     val account = automationAccount(repository.findRecords(budgetId, "account"), automationInput(input.account))
     val payeeText = automationInput(input.payee)
     val payee = payeeText?.let { automationPayee(repository.findRecords(budgetId, "payee"), it) }
@@ -152,6 +165,42 @@ internal fun automationAmount(
     val amount =
         parseAmountMinorUnits(value, settings)
             ?: throw AutomationException(AutomationErrorCode.AMOUNT, transactionAmountInputError(value, settings))
+    return checkedAmount(amount, settings)
+}
+
+private val PLAIN_AMOUNT = Regex("""^([+-])(\d{1,12})(?:\.(\d{1,6}))?$""")
+
+/** A signed amount written with a dot, such as "-12.4"; more decimals than the budget's currency has are refused. */
+internal fun automationPlainAmount(
+    text: String?,
+    settings: BudgetDisplaySettings?,
+): Long {
+    val value =
+        automationInput(text)?.replace('−', '-')
+            ?: throw AutomationException(AutomationErrorCode.AMOUNT, "Enter an amount, such as -12.40.")
+    val match =
+        PLAIN_AMOUNT.matchEntire(value)
+            ?: throw AutomationException(
+                AutomationErrorCode.AMOUNT,
+                "Start the amount with - for money out or + for money in, such as -12.40.",
+            )
+    val (sign, whole, fraction) = match.destructured
+    val digits = (settings?.currencyFractionDigits ?: 2).coerceIn(0, 2)
+    val kept = fraction.trimEnd('0')
+    if (kept.length > digits) {
+        throw AutomationException(
+            AutomationErrorCode.AMOUNT,
+            if (digits == 0) "Use a whole amount, without decimals." else "Use at most $digits decimal places.",
+        )
+    }
+    val magnitude = whole.toLong() * 100 + kept.padEnd(2, '0').toLong()
+    return checkedAmount(if (sign == "-") -magnitude else magnitude, settings)
+}
+
+private fun checkedAmount(
+    amount: Long,
+    settings: BudgetDisplaySettings?,
+): Long {
     if (amount == 0L) throw AutomationException(AutomationErrorCode.AMOUNT, "Enter an amount other than zero.")
     if (amount == Long.MIN_VALUE || kotlin.math.abs(amount) > MAX_TRANSACTION_AMOUNT_MINOR_UNITS) {
         throw AutomationException(

@@ -7,6 +7,7 @@ import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.findRecords
 import app.tandemforactual.data.store.readAccountBalance
 import app.tandemforactual.data.store.readBudgetDisplaySettings
+import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.state.longValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.stringValue
@@ -30,7 +31,38 @@ data class AutomationBudgetNumbers(
 ) {
     /** Each number as plain decimal text that automation apps can do maths with, such as "-12.40"; blank when unknown. */
     fun text(minor: Long?): String = minor?.let { automationDecimal(it, displaySettings?.currencyFractionDigits ?: 2) }.orEmpty()
+
+    /** Left to spend as Siri says and shows it, for [categoryName] or, without one, the whole month. */
+    fun leftToSpend(categoryName: String?): AutomationLeftToSpend {
+        val left = leftToSpendMinor ?: 0L
+        val amount = formatCurrency(kotlin.math.abs(left), displaySettings)
+        val sentence =
+            when {
+                categoryName == null && left < 0 -> "This month is $amount over budget."
+                categoryName == null -> "$amount left to spend this month."
+                left < 0 -> "$categoryName is $amount over budget."
+                else -> "$amount left for $categoryName."
+            }
+        val budgeted = formatCurrency(budgetedMinor ?: 0L, displaySettings)
+        val spent = formatCurrency(spentMinor ?: 0L, displaySettings)
+        return AutomationLeftToSpend(
+            amountText = amount,
+            overspent = left < 0,
+            sentence = sentence,
+            detail = "$budgeted budgeted · $spent spent",
+            value = text(left),
+        )
+    }
 }
+
+/** [value] is plain decimal text for Shortcuts to do maths with; the rest is formatted the way Tandem shows amounts. */
+data class AutomationLeftToSpend(
+    val amountText: String,
+    val overspent: Boolean,
+    val sentence: String,
+    val detail: String,
+    val value: String,
+)
 
 private val MONTH = Regex("^[0-9]{4}-(0[1-9]|1[0-2])$")
 

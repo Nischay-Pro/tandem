@@ -1,0 +1,143 @@
+package app.tandemforactual.ui.core.automation
+
+import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.platform.iosTandemDatabase
+import kotlin.time.Clock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/** A transaction Shortcuts or Siri added; [repeated] when its external ID was already used, so nothing new was added. */
+data class IosAutomationAdded(
+    val budgetId: String,
+    val transactionId: String,
+    val summary: String,
+    val repeated: Boolean,
+)
+
+data class IosAutomationFailure(
+    val code: Int,
+    val message: String,
+)
+
+/** What undoing an automated transaction did; [syncNeeded] when its deletion still has to reach Actual. */
+data class IosAutomationUndone(
+    val message: String,
+    val syncNeeded: Boolean,
+)
+
+/**
+ * Shortcuts and Siri reach the open budget only through here, under the same Settings → Automation rules as Tasker.
+ * Every call answers exactly once through its callback and never throws into Swift.
+ */
+object IosAutomation {
+    const val SOURCE = "Shortcuts"
+
+    private const val UNEXPECTED_FAILURE = "Tandem couldn’t open this budget. Open Tandem and try again."
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Adds a transaction through the outbox; [amount] is signed plain decimal text, such as "-12.4". */
+    fun add(
+        amount: String,
+        payee: String?,
+        category: String?,
+        account: String?,
+        date: String?,
+        notes: String?,
+        cleared: Boolean,
+        externalId: String?,
+        completion: (IosAutomationAdded?, IosAutomationFailure?) -> Unit,
+    ) = answer(completion) {
+        val target = openTarget(AutomationKind.WRITE)
+        val input =
+            AutomationTransactionInput(
+                amount = amount,
+                payee = payee,
+                category = category,
+                account = account,
+                date = date,
+                notes = notes,
+                cleared = cleared.toString(),
+                externalId = externalId,
+                amountFormat = AutomationAmountFormat.PLAIN,
+            )
+        val now = Clock.System.now().toEpochMilliseconds()
+        val added = addAutomatedTransaction(iosTandemDatabase, target.budgetId, input, SOURCE, platformTodayIsoDate(), now)
+        IosAutomationAdded(target.budgetId, added.transactionId, added.summary, added.repeated)
+    }
+
+    /** This month's left to spend from this device's copy, for [categoryId] or the whole budget. */
+    fun leftToSpend(
+        categoryId: String?,
+        categoryName: String?,
+        completion: (AutomationLeftToSpend?, IosAutomationFailure?) -> Unit,
+    ) = answer(completion) {
+        val target = openTarget(AutomationKind.READ)
+        readAutomationBudget(iosTandemDatabase, target.budgetId, AutomationReadInput(category = categoryId), platformTodayIsoDate())
+            .leftToSpend(categoryName?.takeIf { categoryId != null })
+    }
+
+    /** Accounts and categories to offer; empty while both opt-ins are off or the budget is encrypted. */
+    fun records(completion: (AutomationRecords) -> Unit) {
+        scope.launch {
+            val records =
+                runCatching {
+                    val target = automationNamesTarget(AppPreferencesStore(iosTandemDatabase).read())
+                    target?.let { automationRecords(iosTandemDatabase, it.budgetId) }
+                }.getOrNull()
+            completion(records ?: AutomationRecords(emptyList(), emptyList()))
+        }
+    }
+
+    fun undo(
+        budgetId: String,
+        transactionId: String,
+        completion: (IosAutomationUndone) -> Unit,
+    ) {
+        scope.launch {
+            val result =
+                runCatching {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    undoAutomatedTransaction(iosTandemDatabase, budgetId, transactionId, now)
+                }.getOrNull()
+            completion(
+                when (result) {
+                    AutomationUndo.REMOVED -> IosAutomationUndone("Transaction removed.", syncNeeded = false)
+                    AutomationUndo.DELETING ->
+                        IosAutomationUndone("Transaction removed. Tandem deletes it in Actual on the next sync.", syncNeeded = true)
+                    else ->
+                        IosAutomationUndone("Open Tandem to remove this transaction. It changed after it was added.", syncNeeded = false)
+                },
+            )
+        }
+    }
+
+    private suspend fun openTarget(kind: AutomationKind): AutomationTarget {
+        val target = automationTarget(AppPreferencesStore(iosTandemDatabase).read(), kind)
+        if (target.encrypted) {
+            throw AutomationException(
+                AutomationErrorCode.BUDGET_LOCKED,
+                "This budget is encrypted, so Shortcuts and Siri can’t open it. Open Tandem to use it.",
+            )
+        }
+        return target
+    }
+
+    private fun <T : Any> answer(
+        completion: (T?, IosAutomationFailure?) -> Unit,
+        block: suspend () -> T,
+    ) {
+        scope.launch {
+            val outcome = runCatching { block() }
+            val failure =
+                outcome.exceptionOrNull()?.let { error ->
+                    (error as? AutomationException)?.let { IosAutomationFailure(it.code, it.message.orEmpty()) }
+                        ?: IosAutomationFailure(AutomationErrorCode.SAVE_FAILED, UNEXPECTED_FAILURE)
+                }
+            completion(outcome.getOrNull(), failure)
+        }
+    }
+}

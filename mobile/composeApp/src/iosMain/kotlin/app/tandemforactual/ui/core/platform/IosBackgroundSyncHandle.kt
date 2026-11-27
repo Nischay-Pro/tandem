@@ -46,12 +46,18 @@ private data class IosBackgroundSyncAlerts(
     val overspendingMessage: String? = null,
 )
 
-/** Swift's BGTaskScheduler host calls this and completes its task from the callback. */
-fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int, String?) -> Unit): IosBackgroundSyncHandle {
+/**
+ * Swift's BGTaskScheduler host calls this and completes its task from the callback; [afterAutomation] syncs once even
+ * with scheduled sync off, after Shortcuts or Siri added a transaction.
+ */
+fun startIosBackgroundBudgetSync(
+    afterAutomation: Boolean,
+    completion: (Boolean, Boolean, Int, Int, String?) -> Unit,
+): IosBackgroundSyncHandle {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val job =
         scope.launch {
-            val alerts = runSelectedBudgetBackgroundSync()
+            val alerts = runSelectedBudgetBackgroundSync(afterAutomation)
             runCatching {
                 completion(
                     alerts.taskSucceeded,
@@ -66,7 +72,7 @@ fun startIosBackgroundBudgetSync(completion: (Boolean, Boolean, Int, Int, String
     return IosBackgroundSyncHandle(job)
 }
 
-private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
+private suspend fun runSelectedBudgetBackgroundSync(afterAutomation: Boolean): IosBackgroundSyncAlerts {
     val database =
         try {
             iosTandemDatabase
@@ -81,7 +87,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
     var overspendingAlertsEnabled = false
     return try {
         val preferences = AppPreferencesStore(database).read()
-        if (preferences["backgroundSyncEnabled"] != "true") {
+        if (preferences["backgroundSyncEnabled"] != "true" && !afterAutomation) {
             return IosBackgroundSyncAlerts(taskSucceeded = true)
         }
         val policy = NotificationPolicy.read(preferences)

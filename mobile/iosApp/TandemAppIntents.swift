@@ -33,6 +33,28 @@ struct TandemAppShortcuts: AppShortcutsProvider {
                 "Log a purchase in \(.applicationName)",
             ]
         )
+        AppShortcut(
+            intent: LogTransactionIntent(),
+            phrases: [
+                "Add expense in \(.applicationName)",
+                "Log an expense in \(.applicationName)",
+                "Log a transaction in \(.applicationName)",
+            ]
+        )
+        AppShortcut(
+            intent: LeftToSpendIntent(),
+            phrases: [
+                "How much is left for \(\.$category) in \(.applicationName)",
+                "How much is left to spend in \(.applicationName)",
+            ]
+        )
+        AppShortcut(
+            intent: OpenFeatureIntent(),
+            phrases: [
+                "Open \(\.$feature) in \(.applicationName)",
+                "Show \(\.$feature) in \(.applicationName)",
+            ]
+        )
     }
 }
 

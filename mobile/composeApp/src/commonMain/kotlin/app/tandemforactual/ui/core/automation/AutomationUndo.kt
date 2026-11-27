@@ -76,24 +76,49 @@ data class AutomationChoices(
     val payees: List<String>,
 )
 
+/** An account or category an assistant offers by name and sends back by id. */
+data class AutomationRecord(
+    val id: String,
+    val name: String,
+)
+
+data class AutomationRecords(
+    val accounts: List<AutomationRecord>,
+    val categories: List<AutomationRecord>,
+)
+
 suspend fun automationChoices(
     database: TandemDatabase,
     budgetId: String,
 ): AutomationChoices {
     val repository = LocalBudgetRepository(database) { 0L }
-
-    suspend fun names(
-        recordType: String,
-        keep: (kotlinx.serialization.json.JsonObject?) -> Boolean,
-    ) = repository
-        .findRecords(budgetId, recordType)
-        .filter { keep(it.recordBody()) }
-        .mapNotNull { it.recordName() }
-        .distinct()
-        .sortedBy { it.lowercase() }
     return AutomationChoices(
-        accounts = names("account") { it?.booleanValue("closed") != true },
-        categories = names("category") { it?.booleanValue("hidden") != true },
-        payees = names("payee") { it?.stringValue("transfer_acct") == null },
+        accounts = repository.offered(budgetId, "account").map { it.name }.distinct(),
+        categories = repository.offered(budgetId, "category").map { it.name }.distinct(),
+        payees = repository.offered(budgetId, "payee").map { it.name }.distinct(),
     )
 }
+
+/** Open accounts and visible categories, for Shortcuts and Siri to offer. */
+suspend fun automationRecords(
+    database: TandemDatabase,
+    budgetId: String,
+): AutomationRecords {
+    val repository = LocalBudgetRepository(database) { 0L }
+    return AutomationRecords(repository.offered(budgetId, "account"), repository.offered(budgetId, "category"))
+}
+
+private suspend fun LocalBudgetRepository.offered(
+    budgetId: String,
+    recordType: String,
+): List<AutomationRecord> =
+    findRecords(budgetId, recordType)
+        .filter { record ->
+            val body = record.recordBody()
+            when (recordType) {
+                "payee" -> body?.stringValue("transfer_acct") == null
+                "category" -> body?.booleanValue("hidden") != true
+                else -> body?.booleanValue("closed") != true
+            }
+        }.mapNotNull { record -> record.recordName()?.let { AutomationRecord(record.recordId, it) } }
+        .sortedBy { it.name.lowercase() }

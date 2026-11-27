@@ -40,6 +40,7 @@ final class IosBackgroundSyncScheduler {
     private let defaults: UserDefaults
     private let enabledKey = "tandem.backgroundSyncEnabled"
     private let unmeteredOnlyKey = "tandem.backgroundSyncWifiOnly"
+    private let afterAutomationKey = "tandem.syncAfterAutomation"
 
     init(taskScheduler: IosBackgroundTaskScheduling, defaults: UserDefaults) {
         self.taskScheduler = taskScheduler
@@ -72,6 +73,18 @@ final class IosBackgroundSyncScheduler {
         }
     }
 
+    /// One sync soon after Shortcuts or Siri changed the budget, even with scheduled sync off.
+    func requestAfterAutomation() {
+        defaults.set(true, forKey: afterAutomationKey)
+        let request = BGAppRefreshTaskRequest(identifier: taskIdentifier)
+        request.earliestBeginDate = nil
+        do {
+            try taskScheduler.submit(request)
+        } catch {
+            NSLog("Tandem background refresh could not be scheduled: %@", String(describing: error))
+        }
+    }
+
     private func scheduleIfEnabled() {
         guard defaults.bool(forKey: enabledKey) else {
             taskScheduler.cancel(identifier: taskIdentifier)
@@ -91,8 +104,10 @@ final class IosBackgroundSyncScheduler {
     }
 
     private func run(_ task: BGAppRefreshTask) {
+        let afterAutomation = defaults.bool(forKey: afterAutomationKey)
+        defaults.removeObject(forKey: afterAutomationKey)
         scheduleIfEnabled()
-        guard defaults.bool(forKey: enabledKey) else {
+        guard defaults.bool(forKey: enabledKey) || afterAutomation else {
             task.setTaskCompleted(success: true)
             return
         }
@@ -124,7 +139,7 @@ final class IosBackgroundSyncScheduler {
 
             guard runGate.claim() else { return }
             monitor.cancel()
-            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync { taskSucceeded, syncFailed, conflictCount, rejectedCount, overspendingMessage in
+            let handle = IosBackgroundSyncHandleKt.startIosBackgroundBudgetSync(afterAutomation: afterAutomation) { taskSucceeded, syncFailed, conflictCount, rejectedCount, overspendingMessage in
                 if syncFailed.boolValue {
                     IosBudgetNotifications.shared.syncFailed()
                 }

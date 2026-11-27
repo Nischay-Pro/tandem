@@ -92,6 +92,16 @@ final class IosBackgroundSyncSchedulerTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: "tandem.backgroundSyncEnabled"))
     }
 
+    func testAnAutomatedEntryAsksForOneSyncEvenWithScheduledSyncOff() throws {
+        scheduler.requestAfterAutomation()
+
+        let request = try XCTUnwrap(taskScheduler.submittedRequests.first as? BGAppRefreshTaskRequest)
+        XCTAssertEqual(request.identifier, "app.tandemforactual.ios.background-sync")
+        XCTAssertNil(request.earliestBeginDate)
+        XCTAssertTrue(defaults.bool(forKey: "tandem.syncAfterAutomation"))
+        XCTAssertFalse(defaults.bool(forKey: "tandem.backgroundSyncEnabled"))
+    }
+
     func testTandemAppHostLaunchesInTheSimulator() {
         XCTAssertEqual(Bundle.main.bundleIdentifier, "app.tandemforactual.ios")
         XCTAssertNotNil(Bundle.main.executableURL)
