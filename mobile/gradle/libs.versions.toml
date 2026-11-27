@@ -34,6 +34,7 @@ baselineProfile = "1.5.0"
 macrobenchmark = "1.5.0"
 profileInstaller = "1.4.1"
 taskerPluginLibrary = "0.4.10"
+appfunctions = "1.0.0"
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -52,6 +53,7 @@ room3 = { id = "androidx.room3", version.ref = "room3" }
 
 [libraries]
 robolectricSdk = { module = "org.robolectric:android-all-instrumented", version = "17-robolectric-16653203-i7" }
+robolectricSdk35 = { module = "org.robolectric:android-all-instrumented", version = "15-robolectric-14663667-2-i7" }
 ktorClientMock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktorClientJava = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktorClientOkhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
@@ -82,6 +84,10 @@ windowManager = { module = "androidx.window:window", version.ref = "windowManage
 windowTesting = { module = "androidx.window:window-testing", version.ref = "windowManager" }
 desugarJdkLibs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 workRuntimeKtx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
+appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
+appfunctionsCompiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
+appfunctionsTesting = { module = "androidx.appfunctions:appfunctions-testing", version.ref = "appfunctions" }
+workTesting = { module = "androidx.work:work-testing", version.ref = "workManager" }
 taskerPluginLibrary = { module = "com.joaomgcd:taskerpluginlibrary", version.ref = "taskerPluginLibrary" }
 junit = { module = "junit:junit", version.ref = "junit" }
 composeRuntimeAndroid = { module = "androidx.compose.runtime:runtime", version.ref = "jetpackCompose" }
