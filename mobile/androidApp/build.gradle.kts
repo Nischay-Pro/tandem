@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.baselineProfile)
   alias(libs.plugins.jetbrainsCompose)
   alias(libs.plugins.composeCompiler)
+  alias(libs.plugins.ksp)
   alias(libs.plugins.ktlint)
 }
 
@@ -80,6 +81,10 @@ android {
     buildConfig = true
   }
 
+  testOptions {
+    unitTests.isIncludeAndroidResources = true
+  }
+
   baselineProfile {
     saveInSrc = true
   }
@@ -102,6 +107,8 @@ dependencies {
   implementation(libs.sqlcipher)
   implementation(libs.profileInstaller)
   implementation(libs.taskerPluginLibrary)
+  implementation(libs.appfunctions)
+  ksp(libs.appfunctionsCompiler)
   implementation(libs.composeRuntimeAndroid)
   implementation(libs.composeUiAndroid)
   implementation(libs.composeFoundationAndroid)
@@ -109,24 +116,30 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.robolectric)
   testImplementation(libs.windowTesting)
+  testImplementation(libs.appfunctionsTesting)
+  testImplementation(libs.workTesting)
+  testImplementation(libs.sqliteFramework)
   androidTestImplementation(libs.androidxTestRunner)
   androidTestImplementation(libs.androidxTestExtJunit)
   add("baselineProfile", project(":baselineprofile"))
 }
 
 val robolectricSdk by configurations.creating { isTransitive = false }
+val robolectricSdk35 by configurations.creating { isTransitive = false }
 
 dependencies {
   robolectricSdk(libs.robolectricSdk)
+  robolectricSdk35(libs.robolectricSdk35)
 }
 
 val prepareRobolectricSdk by tasks.registering(Sync::class) {
-  from(robolectricSdk)
+  from(robolectricSdk, robolectricSdk35)
   into(layout.buildDirectory.dir("robolectric-sdk"))
 }
 
 tasks.withType<Test>().configureEach {
   jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+  systemProperty("kotlinx.coroutines.stacktrace.recovery", "false")
   dependsOn(prepareRobolectricSdk)
   val sdkDirectory = prepareRobolectricSdk.map { it.destinationDir.absolutePath }
   jvmArgumentProviders.add(

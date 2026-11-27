@@ -2,6 +2,7 @@ package app.tandemforactual.android
 
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.VisibleForTesting
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
@@ -17,6 +18,11 @@ internal object TandemProcess {
         database ?: synchronized(this) {
             database ?: openTandemDatabase(tandemDatabaseBuilder(context.applicationContext)).also { database = it }
         }
+
+    @VisibleForTesting
+    fun useDatabase(database: TandemDatabase) {
+        this.database = database
+    }
 
     /** Wraps the default handler once per process, however many times the Activity is created. */
     fun installCrashHandler(record: (threadName: String, error: Throwable) -> Unit): Boolean {

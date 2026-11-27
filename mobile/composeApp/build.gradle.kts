@@ -138,13 +138,15 @@ ktlint {
 }
 
 val robolectricSdk by configurations.creating { isTransitive = false }
+val robolectricSdk35 by configurations.creating { isTransitive = false }
 
 dependencies {
   robolectricSdk(libs.robolectricSdk)
+  robolectricSdk35(libs.robolectricSdk35)
 }
 
 val prepareRobolectricSdk by tasks.registering(Sync::class) {
-  from(robolectricSdk)
+  from(robolectricSdk, robolectricSdk35)
   into(layout.buildDirectory.dir("robolectric-sdk"))
 }
 

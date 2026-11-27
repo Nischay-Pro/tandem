@@ -1,3 +1,4 @@
 <resources>
   <bool name="tandem_light_system_bars">true</bool>
+  <bool name="tandem_app_functions">false</bool>
 </resources>
