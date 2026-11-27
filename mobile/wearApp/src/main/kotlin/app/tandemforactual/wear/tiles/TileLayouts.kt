@@ -21,7 +21,6 @@ import androidx.wear.protolayout.types.layoutString
 import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
-import app.tandemforactual.watch.money
 import app.tandemforactual.wear.MainActivity
 import app.tandemforactual.wear.data.WatchText
 
@@ -40,15 +39,16 @@ fun leftToSpendLayout(
     summary: WatchSummary?,
 ): LayoutElement =
     materialScope(context, device) {
+        val headline = summary?.takeIf { it.state != WatchState.LOCKED }?.let(WatchText::headline)
         primaryLayout(
-            titleSlot = { text(WatchText.LEFT_TO_SPEND.layoutString) },
+            titleSlot = { text((headline?.short ?: WatchText.LEFT_TO_SPEND).layoutString) },
             mainSlot = {
                 val message = message(summary)
-                if (message != null || summary == null) {
+                if (message != null || summary == null || headline == null) {
                     text(message.orEmpty().layoutString, maxLines = 3, typography = Typography.BODY_MEDIUM)
                 } else {
                     rings(summary, summary.categories.take(RINGS)) {
-                        text(WatchText.shortAmount(summary, summary.leftToSpendMinor).layoutString, typography = Typography.TITLE_LARGE)
+                        text(WatchText.shortAmount(summary, headline.minor).layoutString, typography = Typography.TITLE_LARGE)
                     }
                 }
             },

@@ -21,6 +21,26 @@ object WatchText {
     const val LEFT_TO_SPEND = "Left to spend"
     const val TO_BUDGET = "To budget"
 
+    /** "$93.62 a day · 9 days left", or "$93.62 for today" on the month's last day; null while amounts can't be shown. */
+    fun perDay(summary: WatchSummary): String? {
+        val minor = summary.perDayMinor?.takeIf { summary.amountsShown } ?: return null
+        val days = summary.daysLeft ?: return null
+        val amount = summary.money(minor)
+        return if (days == 1) "$amount for today" else "$amount a day · $days days left"
+    }
+
+    /** The glance's large figure, its label and the other figure in small type, led by an amount a day unless the phone says otherwise. */
+    fun headline(summary: WatchSummary): Headline {
+        val perDay = summary.perDayMinor?.takeIf { summary.amountsShown && summary.perDayFirst }
+        val days = summary.daysLeft
+        if (perDay != null && days != null) {
+            val label = if (days == 1) "Left for today" else "A day · $days days left"
+            val short = if (days == 1) "Today" else "A day"
+            return Headline(perDay, label, "${summary.money(summary.leftToSpendMinor)} left this month", short)
+        }
+        return Headline(summary.leftToSpendMinor, LEFT_TO_SPEND, perDay(summary), LEFT_TO_SPEND)
+    }
+
     /** "Synced 10:42", or null before the phone has synced. */
     fun synced(
         summary: WatchSummary,
@@ -83,3 +103,11 @@ object WatchText {
         return if (summary.money.symbolAfter) "$sign$number$symbol" else "$sign$symbol$number"
     }
 }
+
+/** [short] titles the tile and complications, where the full [label] doesn't fit. */
+data class Headline(
+    val minor: Long?,
+    val label: String,
+    val secondary: String?,
+    val short: String,
+)

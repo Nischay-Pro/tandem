@@ -32,6 +32,45 @@ final class WatchSummaryTests: XCTestCase {
         XCTAssertNil(summary.statusMessage)
     }
 
+    func testPerDaySplitsWhatIsLeftAndHidesWithTheAmounts() throws {
+        let split = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9}"#)
+        XCTAssertEqual(split.perDayText, "$93.62 a day · 9 days left")
+        let lastDay = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","pd":"$10.00","dl":1}"#)
+        XCTAssertEqual(lastDay.perDayText, "$10.00 for today")
+        let hidden = try summary(#"{"v":1,"s":"hidden","g":1,"b":"Home","pd":"$10.00","dl":3}"#)
+        XCTAssertNil(hidden.perDayText)
+        XCTAssertNil(try summary(self.ready).perDayText)
+    }
+
+    func testTheGlanceLeadsWithTheAmountADayUnlessTheIPhoneSaysOtherwise() throws {
+        let perDay = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9,"pf":true}"#)
+        XCTAssertEqual(perDay.headlineLabel, "A day · 9 days left")
+        XCTAssertEqual(perDay.headlineAmount, "$93.62")
+        XCTAssertEqual(perDay.headlineSecondary, "$842.65 left this month")
+        XCTAssertEqual(perDay.headlineShort, "A day")
+
+        let month = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9,"pf":false}"#)
+        XCTAssertEqual(month.headlineLabel, "Left to spend")
+        XCTAssertEqual(month.headlineAmount, "$842.65")
+        XCTAssertEqual(month.headlineSecondary, "$93.62 a day · 9 days left")
+        XCTAssertEqual(month.headlineShort, "Left to spend")
+
+        XCTAssertEqual(try summary(self.ready).headlineLabel, "Left to spend")
+    }
+
+    func testTheGlanceShowsTheNextBillAndCategoriesAsTheIPhoneIsSet() throws {
+        let plain = try summary(ready)
+        XCTAssertNil(plain.glanceNextBill)
+        XCTAssertTrue(plain.categoriesOnGlance)
+
+        let billOnly = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","u":[{"n":"Water","d":"2026-11-27","a":"$40.00"}],"gb":true,"gc":false}"#)
+        XCTAssertEqual(billOnly.glanceNextBill?.name, "Water")
+        XCTAssertFalse(billOnly.categoriesOnGlance)
+
+        let locked = try summary(#"{"v":1,"s":"locked","g":1,"b":"Home","u":[{"n":"Water","d":"2026-11-27"}],"gb":true}"#)
+        XCTAssertNil(locked.glanceNextBill)
+    }
+
     func testSummariesOverTheLimitOrFromAnotherVersionAreIgnored() {
         XCTAssertNil(WatchSummary.decode(nil))
         XCTAssertNil(WatchSummary.decode(Data(#"{"v":2,"s":"ready","g":1}"#.utf8)))

@@ -11,11 +11,18 @@ struct GlanceView: View {
                     LeftToSpendHeader(summary: summary)
                 }
                 .listRowBackground(Color.clear)
+                if let bill = summary.glanceNextBill {
+                    Section {
+                        NextBillRow(bill: bill, summary: summary)
+                    }
+                }
                 PendingAdditions()
-                Section {
-                    ForEach(summary.categories ?? []) { category in
-                        NavigationLink(value: category) {
-                            CategoryRow(category: category, summary: summary)
+                if summary.categoriesOnGlance {
+                    Section {
+                        ForEach(summary.categories ?? []) { category in
+                            NavigationLink(value: category) {
+                                CategoryRow(category: category, summary: summary)
+                            }
                         }
                     }
                 }
@@ -30,21 +37,51 @@ struct GlanceView: View {
     }
 }
 
+private struct NextBillRow: View {
+    let bill: WatchSummary.Bill
+    let summary: WatchSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Next: \(bill.name)")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(summary.amount(bill.amount))
+                    .font(.headline)
+                    .monospacedDigit()
+                    .privacySensitive()
+            }
+            Text(WatchDates.relative(bill.date, now: Date()))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct LeftToSpendHeader: View {
     let summary: WatchSummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Left to spend")
+            Text(summary.headlineLabel)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text(summary.amount(summary.leftToSpend))
+            Text(summary.headlineAmount)
                 .font(.system(size: 34, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .foregroundStyle(summary.showsAmounts && summary.leftToSpendNegative == true ? Color.tandemOver : .primary)
                 .privacySensitive()
+            if let secondary = summary.headlineSecondary {
+                Text(secondary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .privacySensitive()
+            }
             Text(summary.syncedText())
                 .font(.caption2)
                 .foregroundStyle(.secondary)
