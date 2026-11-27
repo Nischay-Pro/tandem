@@ -112,11 +112,16 @@ class ActualDirectBudget private constructor(
 
     /** Runs Actual's schedule service once a day after a successful sync, then uploads anything it changed. */
     private suspend fun runSchedules(today: String) {
+        if (runSchedulesLocally(today)) synchronize()
+    }
+
+    /** Actual's `advanceSchedulesAfterSync`: false when today's run already happened and nothing was saved since. */
+    private fun runSchedulesLocally(today: String): Boolean {
         db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
-        if (db.first("SELECT value FROM tandem_prefs WHERE id = 'lastScheduleRun'")?.get("value") == today) return
+        if (db.first("SELECT value FROM tandem_prefs WHERE id = 'lastScheduleRun'")?.get("value") == today) return false
         ActualBudgetEdits(writer, { today }).schedules.runService(syncSuccess = true)
         db.execute("INSERT OR REPLACE INTO tandem_prefs (id, value) VALUES ('lastScheduleRun', ?)", today)
-        synchronize()
+        return true
     }
 
     /** Builds the mobile cache projection at the same checkpoint as the completed CRDT sync. */
@@ -281,6 +286,7 @@ class ActualDirectBudget private constructor(
             synchronize()
             runSchedules(today)
             val result = writer.atOneMoment { block(ActualBudgetEdits(writer, { today })) }
+            runSchedulesLocally(today)
             syncWhenPossible()
             result
         }

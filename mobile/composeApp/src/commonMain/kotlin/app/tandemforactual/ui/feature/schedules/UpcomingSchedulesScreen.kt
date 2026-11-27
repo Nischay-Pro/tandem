@@ -6,24 +6,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.app.ListDetailPanes
 import app.tandemforactual.ui.core.format.amountLabel
-import app.tandemforactual.ui.core.format.parseIsoDate
+import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
-import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
+import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatTransactionListDate
-import app.tandemforactual.ui.core.state.parseAmountMinorUnits
-import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
@@ -34,23 +35,25 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.schedules.components.ScheduleActionsPane
 import app.tandemforactual.ui.feature.schedules.components.ScheduleActionsSheet
+import app.tandemforactual.ui.feature.schedules.components.ScheduleCreatePane
+import app.tandemforactual.ui.feature.schedules.components.ScheduleCreateSheet
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDeleteConfirmationDialog
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDialogState
+import app.tandemforactual.ui.feature.schedules.components.ScheduleDraftValues
 import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDatePicker
 import app.tandemforactual.ui.feature.schedules.components.ScheduleEditDraft
 import app.tandemforactual.ui.feature.schedules.components.ScheduleEditForm
 import app.tandemforactual.ui.feature.schedules.components.ScheduleSelectionState
-import app.tandemforactual.ui.feature.schedules.components.editedScheduleFields
-import app.tandemforactual.ui.feature.schedules.components.rememberScheduleDateValue
-import app.tandemforactual.ui.feature.schedules.components.rememberScheduleEditDraft
+import app.tandemforactual.ui.feature.schedules.components.scheduleDraftValues
 import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import com.composables.icons.lucide.Plus
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 @Composable
@@ -66,6 +69,105 @@ internal fun UpcomingSchedulesScreen(
     // after Back returns to an earlier Upcoming bills route entry.
     val selection = remember(state.selectedBudgetId) { ScheduleSelectionState() }
     val dialog = remember(state.selectedBudgetId, selection.selectedScheduleId) { ScheduleDialogState() }
+    ScheduleOpenRequests(state, schedules, selection, dialog)
+    val selectedSchedule = schedules.firstOrNull { it.id == selection.selectedScheduleId }
+    val dateValue =
+        remember(selectedSchedule?.id, selectedSchedule?.dateValueJson) {
+            selectedSchedule?.dateValueJson?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+        }
+    val editDraft =
+        rememberSaveable(state.selectedBudgetId, selection.selectedScheduleId, saver = ScheduleEditDraft.Saver) {
+            val categoryId = selectedSchedule?.let { scheduleCategoryId(mobileSession.ruleRecords, it.ruleId) }
+            ScheduleEditDraft(
+                selectedSchedule?.let { scheduleDraftValues(it, dateValue, categoryId, state::formatAmount) } ?: ScheduleDraftValues(),
+            )
+        }
+    val createDraft =
+        rememberSaveable(state.selectedBudgetId, selection.createKey, saver = ScheduleEditDraft.Saver) {
+            ScheduleEditDraft(selection.createValues)
+        }
+    val scope = rememberCoroutineScope()
+    val options = rememberScheduleFormOptions(accounts, payeeRecords, mobileSession.categoryRecords, selectedSchedule)
+    val editForm: @Composable () -> Unit = {
+        ScheduleEditForm(
+            state,
+            mobileSession,
+            editDraft,
+            options,
+            "Save schedule",
+            onSave = {
+                if (selectedSchedule != null) {
+                    saveScheduleEdit(state, mobileSession, scope, editDraft, dateValue as? JsonObject, selectedSchedule, selection)
+                }
+            },
+            onCancel = { dialog.dialogMode = "menu" },
+        )
+    }
+    val createForm: @Composable () -> Unit = {
+        ScheduleEditForm(
+            state,
+            mobileSession,
+            createDraft,
+            options,
+            "Add schedule",
+            onSave = { saveNewSchedule(state, mobileSession, scope, createDraft, selection) },
+            onCancel = { selection.creating = false },
+        )
+    }
+    ListDetailPanes(
+        detailKey = if (selection.creating) "new-schedule" else selectedSchedule?.id?.takeIf { selection.showScheduleEditor },
+        emptyTitle = "Choose a bill",
+        emptyMessage = "Post it, skip it or change it here.",
+        list = { detailInPane ->
+            UpcomingScheduleList(state, mobileSession, schedules, selection, dialog, detailInPane)
+            if (!detailInPane) {
+                ScheduleActionsSheet(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
+                ScheduleCreateSheet(mobileSession, selection, createForm)
+            }
+        },
+        detail = {
+            when {
+                selection.creating -> ScheduleCreatePane(mobileSession, selection, createForm)
+                selectedSchedule != null -> ScheduleActionsPane(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
+            }
+        },
+    )
+    if (dialog.showDeleteScheduleConfirmation && selectedSchedule != null) {
+        ScheduleDeleteDialog(state, mobileSession, selectedSchedule, selection, dialog)
+    }
+    ScheduleEditDatePicker(if (selection.creating) createDraft else editDraft)
+}
+
+@Composable
+private fun ScheduleDeleteDialog(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    schedule: LiveScheduleSummary,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+) {
+    val scope = rememberCoroutineScope()
+    ScheduleDeleteConfirmationDialog(
+        mobileSession,
+        schedule,
+        onDismissRequest = {
+            if (!mobileSession.isPerformingBudgetAction) {
+                dialog.showDeleteScheduleConfirmation = false
+                dialog.dialogMode = "menu"
+            }
+        },
+        onConfirm = { deleteSchedule(state, mobileSession, scope, schedule, selection, dialog) },
+    )
+}
+
+/** Opens a schedule another screen asked for, or a new schedule made from a transaction. */
+@Composable
+private fun ScheduleOpenRequests(
+    state: AppState,
+    schedules: List<LiveScheduleSummary>,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+) {
     LaunchedEffect(state.pendingScheduleToOpenId, schedules) {
         val requestedId = state.pendingScheduleToOpenId ?: return@LaunchedEffect
         if (schedules.any { it.id == requestedId }) {
@@ -75,53 +177,11 @@ internal fun UpcomingSchedulesScreen(
             state.pendingScheduleToOpenId = null
         }
     }
-    val selectedSchedule = schedules.firstOrNull { it.id == selection.selectedScheduleId }
-    val dateValue = rememberScheduleDateValue(selectedSchedule)
-    val draft = rememberScheduleEditDraft(state, selection.selectedScheduleId, selectedSchedule, dateValue)
-    val scope = rememberCoroutineScope()
-    val accountOptions = rememberScheduleAccountOptions(accounts)
-    val payeeOptions = rememberSchedulePayeeOptions(payeeRecords, selectedSchedule)
-    val editForm: @Composable () -> Unit = {
-        ScheduleEditForm(
-            state,
-            mobileSession,
-            draft,
-            accountOptions,
-            payeeOptions,
-            onSave = {
-                if (selectedSchedule != null) {
-                    saveScheduleEdit(state, mobileSession, scope, draft, dateValue as? JsonObject, selectedSchedule, selection)
-                }
-            },
-            onCancel = { dialog.dialogMode = "menu" },
-        )
+    LaunchedEffect(state.pendingScheduleSeed) {
+        val seed = state.pendingScheduleSeed ?: return@LaunchedEffect
+        selection.startCreating(scheduleDraftValues(seed, state::formatAmount), seed.transactionId)
+        state.pendingScheduleSeed = null
     }
-    ListDetailPanes(
-        detailKey = selectedSchedule?.id?.takeIf { selection.showScheduleEditor },
-        emptyTitle = "Choose a bill",
-        emptyMessage = "Post it, skip it or change it here.",
-        list = { detailInPane ->
-            UpcomingScheduleList(state, mobileSession, schedules, selection, dialog, detailInPane)
-            if (!detailInPane) ScheduleActionsSheet(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
-        },
-        detail = {
-            if (selectedSchedule != null) ScheduleActionsPane(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
-        },
-    )
-    if (dialog.showDeleteScheduleConfirmation && selectedSchedule != null) {
-        ScheduleDeleteConfirmationDialog(
-            mobileSession,
-            selectedSchedule,
-            onDismissRequest = {
-                if (!mobileSession.isPerformingBudgetAction) {
-                    dialog.showDeleteScheduleConfirmation = false
-                    dialog.dialogMode = "menu"
-                }
-            },
-            onConfirm = { deleteSchedule(state, mobileSession, scope, selectedSchedule, selection, dialog) },
-        )
-    }
-    ScheduleEditDatePicker(draft)
 }
 
 /** The upcoming bills; in a pane layout the open one is marked and back closes it. */
@@ -134,19 +194,27 @@ private fun UpcomingScheduleList(
     dialog: ScheduleDialogState,
     detailInPane: Boolean,
 ) {
-    val openId = selection.selectedScheduleId.takeIf { detailInPane && selection.showScheduleEditor }
+    val openId = selection.selectedScheduleId.takeIf { detailInPane && selection.showScheduleEditor && !selection.creating }
     TandemBackHandler(
-        enabled = openId != null,
+        enabled = detailInPane && (openId != null || selection.creating),
         onBack = {
             if (!mobileSession.isPerformingBudgetAction) {
                 selection.showScheduleEditor = false
+                selection.creating = false
                 dialog.dialogMode = "menu"
             }
         },
         onBackProgress = { _, _ -> },
     )
     PageLazyColumn {
+        item(key = "upcoming-schedules-header") {
+            ScheduleCountRow(schedules.size, canAdd = !state.readOnlyMode) {
+                mobileSession.feedback.clearBudgetActionMessage()
+                selection.startCreating(ScheduleDraftValues(date = platformTodayIsoDate(), endDate = platformTodayIsoDate()))
+            }
+        }
         upcomingScheduleItems(state, mobileSession, schedules, openId) { schedule ->
+            selection.creating = false
             selection.selectedScheduleId = schedule.id
             selection.showScheduleEditor = true
             dialog.dialogMode = "menu"
@@ -155,27 +223,30 @@ private fun UpcomingScheduleList(
     }
 }
 
+/** How many schedules there are, and the button to add one. */
 @Composable
-private fun rememberSchedulePayeeOptions(
-    payeeRecords: List<BudgetRecordEntity>,
-    selectedSchedule: LiveScheduleSummary?,
-): List<Pair<String, String>> =
-    remember(payeeRecords, selectedSchedule?.payeeId) {
-        val names =
-            payeeRecords
-                .mapNotNull { record ->
-                    record.recordName()?.let { record.recordId to it }
-                }.toMap()
-                .toMutableMap()
-        selectedSchedule?.payeeId?.let { id -> if (id !in names) names[id] = id }
-        names.entries.sortedBy { it.value.lowercase() }.map { it.key to it.value }
+private fun ScheduleCountRow(
+    count: Int,
+    canAdd: Boolean,
+    onAdd: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.small), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            if (count == 1) "1 schedule" else "${formatInteger(count)} schedules",
+            modifier = Modifier.weight(1f),
+            color = tandemPalette.muted,
+            fontSize = TandemTypography.caption,
+        )
+        TandemIconButton(
+            Lucide.Plus,
+            "Add schedule",
+            enabled = canAdd,
+            tint = tandemPalette.accent,
+            containerColor = tandemPalette.accentSurface,
+            onClick = onAdd,
+        )
     }
-
-@Composable
-private fun rememberScheduleAccountOptions(accounts: List<LiveAccountSummary>): List<Pair<String, String>> =
-    remember(accounts) {
-        accounts.filterNot(LiveAccountSummary::closed).sortedBy { it.name.lowercase() }.map { it.id to it.name }
-    }
+}
 
 /** One card per upcoming schedule with its pending-action notices, or an empty state. */
 private fun LazyListScope.upcomingScheduleItems(
@@ -190,7 +261,7 @@ private fun LazyListScope.upcomingScheduleItems(
             SurfaceCard {
                 EmptyState(
                     "No upcoming bills",
-                    "Schedules added in Actual will appear here.",
+                    "Add a schedule for rent, subscriptions or pay, and Tandem shows when each one is due.",
                     modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
                 )
             }
@@ -198,33 +269,12 @@ private fun LazyListScope.upcomingScheduleItems(
     } else {
         items(schedules.size, key = { index -> schedules[index].id }) { index ->
             val schedule = schedules[index]
-            val pendingActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
             SurfaceCard(highlighted = schedule.id == openId) {
-                pendingActions.forEach { pendingAction ->
-                    InlineMessage(
-                        text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
-                        kind =
-                            if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
-                                InlineMessageKind.WARNING
-                            } else {
-                                InlineMessageKind.INFO
-                            },
-                        actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction),
-                        onAction =
-                            if (mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction) != null) {
-                                { mobileSession.schedules.performScheduleActionStatusAction(pendingAction) }
-                            } else {
-                                null
-                            },
-                    )
-                }
+                SchedulePendingNotices(state, mobileSession, schedule)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ListRow(
                         schedule.name,
-                        listOfNotNull(
-                            formatTransactionListDate(schedule.nextDate),
-                            schedule.accountName,
-                        ).joinToString(" · "),
+                        listOfNotNull(formatTransactionListDate(schedule.nextDate), schedule.accountName).joinToString(" · "),
                         schedule.amountLabel(state),
                         leading = RowLeading.Icon(Lucide.CalendarDays),
                         onClick = { onOpen(schedule) },
@@ -245,92 +295,24 @@ private fun LazyListScope.upcomingScheduleItems(
     }
 }
 
-/** Validates the draft and, when it is valid, sends the edit and closes the sheet once saved. */
-private fun saveScheduleEdit(
+@Composable
+private fun SchedulePendingNotices(
     state: AppState,
     mobileSession: TandemMobileSession,
-    scope: CoroutineScope,
-    draft: ScheduleEditDraft,
-    dateConfig: JsonObject?,
-    selectedSchedule: LiveScheduleSummary,
-    selection: ScheduleSelectionState,
+    schedule: LiveScheduleSummary,
 ) {
-    val amountMinor = state.parseAmountMinorUnits(draft.amountDraft)
-    val amountMaxMinor = state.parseAmountMinorUnits(draft.amountMaxDraft)
-    val interval = draft.intervalDraft.toIntOrNull()
-    val occurrences = draft.endOccurrencesDraft.toIntOrNull()
-    val dateIsValid = parseIsoDate(draft.dateDraft) != null
-    val endDateIsValid = draft.endModeDraft != "on_date" || parseIsoDate(draft.endDateDraft) != null
-    val amountRangeIsInvalid =
-        draft.amountRuleDraft == "isbetween" &&
-            amountMinor != null &&
-            amountMaxMinor != null &&
-            amountMinor > amountMaxMinor
-    val intervalIsInvalid =
-        draft.frequencyDraft != "once" && (interval == null || interval !in 1..999)
-    val repeatCountIsInvalid =
-        draft.frequencyDraft != "once" &&
-            draft.endModeDraft == "after_n_occurrences" &&
-            (occurrences == null || occurrences !in 1..100_000)
-    val endBeforeStart = draft.endModeDraft == "on_date" && draft.endDateDraft < draft.dateDraft
-    val validationError =
-        when {
-            draft.nameDraft.isBlank() -> "name" to "Enter a schedule name."
-            draft.accountIdDraft.isBlank() -> "account" to "Choose an account."
-            draft.payeeIdDraft.isBlank() -> "payee" to "Choose a payee."
-            amountMinor == null -> "amount" to "Enter a valid amount."
-            draft.amountRuleDraft == "isbetween" && amountMaxMinor == null ->
-                "maximum" to "Enter a valid maximum amount."
-            amountRangeIsInvalid -> "maximum" to "The maximum must be at least the minimum."
-            intervalIsInvalid -> "interval" to "Repeat interval must be between 1 and 999."
-            repeatCountIsInvalid -> "occurrences" to "Enter a valid number of repeats."
-            !dateIsValid -> "startDate" to "Choose a valid start date."
-            !endDateIsValid -> "endDate" to "Choose a valid end date."
-            endBeforeStart -> "endDate" to "The end date must be on or after the start date."
-            else -> null
-        }
-    draft.editErrorField = validationError?.first
-    draft.editError = validationError?.second
-    if (draft.editError == null) {
-        val fields = draft.editedScheduleFields(dateConfig, amountMinor, amountMaxMinor, interval, occurrences)
-        scope.launch {
-            val saved =
-                mobileSession.schedules.manageBudgetSchedule(
-                    state.selectedBudgetId,
-                    selectedSchedule.id,
-                    "edit",
-                    null,
-                    state.encryptedPassword.takeIf { it.isNotBlank() },
-                    fields,
-                )
-            if (saved) selection.showScheduleEditor = false
-        }
-    }
-}
-
-private fun deleteSchedule(
-    state: AppState,
-    mobileSession: TandemMobileSession,
-    scope: CoroutineScope,
-    selectedSchedule: LiveScheduleSummary,
-    selection: ScheduleSelectionState,
-    dialog: ScheduleDialogState,
-) {
-    scope.launch {
-        val deleted =
-            mobileSession.schedules.manageBudgetSchedule(
-                state.selectedBudgetId,
-                selectedSchedule.id,
-                "delete",
-                null,
-                state.encryptedPassword.takeIf { it.isNotBlank() },
-            )
-        if (deleted) {
-            dialog.showDeleteScheduleConfirmation = false
-            selection.showScheduleEditor = false
-        } else {
-            dialog.showDeleteScheduleConfirmation = false
-            dialog.dialogMode = "menu"
-        }
+    mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id).forEach { pendingAction ->
+        val actionLabel = mobileSession.schedules.scheduleActionStatusActionLabel(pendingAction)
+        InlineMessage(
+            text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
+            kind =
+                if (pendingAction.status in setOf("uncertain", "conflict", "rejected")) {
+                    InlineMessageKind.WARNING
+                } else {
+                    InlineMessageKind.INFO
+                },
+            actionLabel = actionLabel,
+            onAction = if (actionLabel != null) ({ mobileSession.schedules.performScheduleActionStatusAction(pendingAction) }) else null,
+        )
     }
 }

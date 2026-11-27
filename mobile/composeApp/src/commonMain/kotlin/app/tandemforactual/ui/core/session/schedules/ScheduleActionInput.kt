@@ -35,11 +35,11 @@ internal suspend fun ScheduleActionController.manageBudgetSchedule(
         host.reportBudgetActionMessage("Refresh the schedule before posting or skipping it.")
         return false
     }
-    if (action !in setOf("post", "skip", "edit", "delete")) {
+    if (action !in setOf("post", "skip", "edit", "create", "delete")) {
         host.reportBudgetActionMessage("This schedule action isn’t supported.")
         return false
     }
-    if (action == "edit" && fields == null) {
+    if (action in setOf("edit", "create") && fields == null) {
         host.reportBudgetActionMessage("Couldn’t save this schedule on this device. Try again.")
         return false
     }

@@ -484,6 +484,35 @@ class LiveBudgetModelsTest {
         assertEquals("2026-11-20", upcoming.single().nextDate)
         assertEquals(165_000L, upcoming.single().amountMinor)
     }
+
+    @Test
+    fun showsAScheduleCreatedOnThisDeviceUntilActualHasIt() {
+        val queued =
+            listOf(
+                scheduleAction(
+                    id = "create-gym",
+                    recordId = "gym",
+                    action = "create",
+                    patchJson =
+                        """{"fields":{"accountId":"checking","payeeId":"club","amountOp":"isbetween",""" +
+                            """"amountRangeMinor":{"num1":-5000,"num2":-4000},"postsTransaction":true,""" +
+                            """"date":{"frequency":"monthly","start":"2026-12-03"}}}""",
+                ),
+                scheduleAction(id = "create-broken", recordId = "broken", action = "create", patchJson = """{"fields":{}}"""),
+            )
+        val payees = listOf(record(type = "payee", id = "club", name = "Climbing club"))
+        val accounts = listOf(record(type = "account", id = "checking", name = "Household Checking"))
+
+        val gym = liveScheduleSummaries(emptyList(), payees, accounts, queued).single()
+
+        assertEquals("Climbing club", gym.name)
+        assertEquals("2026-12-03", gym.nextDate)
+        assertEquals(-5_000L to -4_000L, gym.amountRangeMinor)
+        assertEquals("Household Checking", gym.accountName)
+        assertTrue(gym.postsTransaction)
+        val confirmed = record(type = "schedule", id = "gym", json = """{"id":"gym","name":"Gym","next_date":"2026-12-03"}""")
+        assertEquals("Gym", liveScheduleSummaries(listOf(confirmed), payees, accounts, queued).single().name)
+    }
 }
 
 private fun scheduleAction(

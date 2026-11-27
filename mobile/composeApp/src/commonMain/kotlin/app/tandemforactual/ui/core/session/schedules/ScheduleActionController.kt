@@ -37,7 +37,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Schedule actions (post, skip, edit, delete) saved on the device and sent to Actual in order once there's a connection. */
+/** Schedule actions (post, skip, edit, create, delete) saved on the device and sent to Actual in order once there's a connection. */
 internal class ScheduleActionController(
     internal val host: SessionHost,
 ) {
@@ -219,7 +219,7 @@ internal class ScheduleActionController(
         val validAction =
             when (request.action) {
                 "post", "skip" -> !expectedNextDate.isNullOrBlank()
-                "edit" -> fields != null
+                "edit", "create" -> fields != null
                 "delete" -> true
                 else -> false
             }

@@ -436,6 +436,27 @@ class TandemApiClientTest {
             assertFailsWith<IllegalArgumentException> { client.manageBudgetSchedule("group", schedule.id, "post", null, null) }
             assertFailsWith<TandemApiException> { client.manageBudgetSchedule("group", schedule.id, "explode", null, null) }
             client.manageBudgetSchedule("group", schedule.id, "delete", null, null)
+            client.manageBudgetSchedule(
+                "group",
+                "created-schedule",
+                "create",
+                "Gym",
+                null,
+                buildJsonObject {
+                    put("accountId", checking)
+                    put("amountOp", "is")
+                    put("amountMinor", -4_550)
+                    put("date", "2026-11-21")
+                    put("categoryId", dining)
+                    put("postsTransaction", true)
+                },
+            )
+            val posted =
+                budget
+                    .snapshot("2026-11-21")
+                    .records
+                    .filter { it.type == "transaction" && it.body["amount"] == JsonPrimitive(-4_550) }
+            assertEquals(listOf(JsonPrimitive(dining)), posted.map { it.body["category"] })
             client.runBudgetBankSync("group", null)
             client.edit("group") { it.linkBankAccount(checking, "simpleFin", "SF-1", "org", "Credit Union") }
             server.bankDownload =

@@ -75,6 +75,7 @@ internal class AppState {
     var selectedCategoryGroupId by mutableStateOf("")
     var selectedCategoryId by mutableStateOf("")
     var pendingScheduleToOpenId by mutableStateOf<String?>(null)
+    var pendingScheduleSeed by mutableStateOf<ScheduleSeed?>(null)
     var categoryEditRequested by mutableStateOf(false)
     var selectedTransactionRecordId by mutableStateOf("")
     var selectedCustomReportId by mutableStateOf("")
@@ -217,6 +218,7 @@ internal class AppState {
         selectedMonth = currentMonthLabel()
         selectedMonthId = currentMonthId()
         pendingScheduleToOpenId = null
+        pendingScheduleSeed = null
         categoryEditRequested = false
         selectedTransactionRecordId = ""
         selectedTransactionAccountId = ""
