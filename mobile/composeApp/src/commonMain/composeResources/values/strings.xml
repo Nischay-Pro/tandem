@@ -5,6 +5,7 @@
     <string name="nav_activity">Activity</string>
     <string name="nav_reports">Reports</string>
     <string name="nav_settings">Settings</string>
+    <string name="nav_layout">Layout</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_appearance_detail">Theme, accent color, and motion</string>
     <string name="settings_language">Language</string>

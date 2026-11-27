@@ -4,14 +4,15 @@ package app.tandemforactual.ui.app
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -54,8 +57,12 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.generated.resources.Res
+import app.tandemforactual.ui.generated.resources.nav_layout
+import com.composables.icons.lucide.LayoutDashboard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Menu
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun SideNavigationRail(
@@ -68,8 +75,7 @@ internal fun SideNavigationRail(
     onOpenMenu: (() -> Unit)? = null,
 ) {
     val palette = tandemPalette
-    val items =
-        navigationTabs()
+    val items = navigationTabs()
     BoxWithConstraints(
         modifier
             .width(TandemLayout.railWidth)
@@ -82,83 +88,96 @@ internal fun SideNavigationRail(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .heightIn(min = maxHeight)
-                    .padding(vertical = TandemSpacing.extraSmall),
+                    .padding(vertical = TandemSpacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
         ) {
-            RailItems(items, selected, selectTab, onOpenMenu)
-            if (layouts.size > 1) WorkspaceLayoutButton(layouts, layout, onLayout)
+            if (onOpenMenu != null) {
+                TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
+                Spacer(Modifier.height(TandemSpacing.small))
+            }
+            items.forEach { (route, label) ->
+                val active = route == selected
+                RailItem(
+                    label = label,
+                    active = active,
+                    role = Role.Tab,
+                    contentDescription = label,
+                    onClick = { selectTab(route) },
+                    colorLabel = "rail-tab-color-${route.name.lowercase()}",
+                ) { color, scale -> NavigationGlyph(route, color, scale) }
+            }
+            if (layouts.size > 1) {
+                Spacer(Modifier.weight(1f))
+                WorkspaceLayoutItem(layouts, layout, onLayout)
+            }
         }
     }
 }
 
 @Composable
-private fun RailItems(
-    items: List<Pair<AppRoute, String>>,
-    selected: AppRoute,
-    selectTab: (AppRoute) -> Unit,
-    onOpenMenu: (() -> Unit)?,
+private fun RailItem(
+    label: String,
+    active: Boolean,
+    role: Role,
+    contentDescription: String,
+    onClick: () -> Unit,
+    colorLabel: String,
+    glyph: @Composable (Color, Float) -> Unit,
 ) {
     val palette = tandemPalette
-    if (onOpenMenu != null) TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
-    items.forEach { (route, label) ->
-        val active = route == selected
-        val tabColor by
-            animateColorAsState(
-                targetValue = if (active) palette.accent else palette.muted,
-                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                label = "rail-tab-color-${route.name.lowercase()}",
-            )
-        val iconScale by
-            animateFloatAsState(
-                targetValue = if (active) 1.08f else 1f,
-                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-                label = "rail-tab-icon-scale-${route.name.lowercase()}",
-            )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 52.dp)
-                    .clip(RoundedCornerShape(TandemShapes.medium))
-                    .pointerHighlight(tandemPalette.text, RoundedCornerShape(TandemShapes.medium), tandemReduceMotion)
-                    .selectable(
-                        selected = active,
-                        role = Role.Tab,
-                        onClick = { selectTab(route) },
-                    ).semantics(mergeDescendants = true) {
-                        contentDescription = label
-                        this.selected = active
-                    }.padding(vertical = TandemSpacing.xxSmall),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+    val tint by
+        animateColorAsState(
+            targetValue = if (active) palette.accent else palette.muted,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+            label = colorLabel,
+        )
+    val iconScale by
+        animateFloatAsState(
+            targetValue = if (active) 1.08f else 1f,
+            animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+            label = "$colorLabel-scale",
+        )
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 52.dp)
+                .clip(RoundedCornerShape(TandemShapes.medium))
+                .pointerHighlight(palette.text, RoundedCornerShape(TandemShapes.medium), tandemReduceMotion)
+                .selectable(selected = active, role = role, onClick = onClick)
+                .semantics(mergeDescendants = true) {
+                    this.contentDescription = contentDescription
+                    if (role == Role.Tab) selected = active
+                }.padding(vertical = TandemSpacing.xxSmall),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+    ) {
+        Box(
+            Modifier
+                .size(width = 56.dp, height = 32.dp)
+                .clip(CircleShape)
+                .background(if (active) palette.accentSurface else Color.Transparent),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(if (active) palette.accentSurface else Color.Transparent),
-                contentAlignment = Alignment.Center,
-            ) {
-                NavigationGlyph(route, tabColor, iconScale)
-            }
-            CompositionLocalProvider(LocalDensity provides navigationLabelDensity(LocalDensity.current)) {
-                Text(
-                    label,
-                    color = tabColor,
-                    fontSize = TandemTypography.micro,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            glyph(tint, iconScale)
+        }
+        CompositionLocalProvider(LocalDensity provides navigationLabelDensity(LocalDensity.current)) {
+            Text(
+                label,
+                color = tint,
+                fontSize = TandemTypography.micro,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
 
 @Composable
-private fun WorkspaceLayoutButton(
+private fun WorkspaceLayoutItem(
     layouts: List<WorkspaceLayout>,
     layout: WorkspaceLayout,
     onLayout: (WorkspaceLayout) -> Unit,
@@ -166,36 +185,28 @@ private fun WorkspaceLayoutButton(
     val palette = tandemPalette
     var expanded by remember { mutableStateOf(false) }
     Box {
-        Box(
-            Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(if (layout != WorkspaceLayout.SINGLE) palette.accentSurface else Color.Transparent)
-                .clickable(onClickLabel = "Choose how many screens to show") { expanded = true }
-                .semantics { contentDescription = "Screen layout: ${layout.label}" },
-            contentAlignment = Alignment.Center,
-        ) {
+        RailItem(
+            label = stringResource(Res.string.nav_layout),
+            active = layout != WorkspaceLayout.SINGLE,
+            role = Role.Button,
+            contentDescription = "Screen layout: ${layout.label}",
+            onClick = { expanded = true },
+            colorLabel = "rail-layout-color",
+        ) { tint, scale ->
             Icon(
-                layout.icon,
+                if (layout == WorkspaceLayout.SINGLE) Lucide.LayoutDashboard else layout.icon,
                 null,
-                tint =
-                    if (layout !=
-                        WorkspaceLayout.SINGLE
-                    ) {
-                        palette.accent
-                    } else {
-                        palette.muted
-                    },
-                modifier = Modifier.size(22.dp),
+                tint = tint,
+                modifier = Modifier.size(22.dp).scale(scale),
             )
         }
-        androidx.compose.material.DropdownMenu(
+        DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(palette.surface),
         ) {
             layouts.forEach { option ->
-                androidx.compose.material.DropdownMenuItem(onClick = {
+                DropdownMenuItem(onClick = {
                     expanded = false
                     onLayout(option)
                 }) {
