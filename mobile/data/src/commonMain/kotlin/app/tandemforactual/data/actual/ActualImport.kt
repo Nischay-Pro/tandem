@@ -86,18 +86,7 @@ class ActualImport(
                         }
                 }
             }
-        for (pass in 0..1) {
-            for (step in steps) {
-                if (step.match != null) continue
-                step.match =
-                    step.fuzzy.firstOrNull {
-                        (it["id"] as String) !in matched &&
-                            (it["parent_id"] as String?) !in exactParents &&
-                            (pass == 1 || it["payee"] == step.trans["payee"])
-                    }
-                step.match?.let { matched += it["id"] as String }
-            }
-        }
+        matchFuzzy(steps, matched, exactParents)
         val added = mutableListOf<Map<String, Any?>>()
         val addedIds = mutableListOf<String>()
         val updated = mutableListOf<Map<String, Any?>>()
@@ -126,6 +115,26 @@ class ActualImport(
             transactions.batchUpdate(added = sorted, updated = updated)
         }
         return ImportResult(addedIds, updated.map { it["id"] as String }, outcomes)
+    }
+
+    /** Actual's two fuzzy passes: first a candidate with the same payee, then any unmatched candidate. */
+    private fun matchFuzzy(
+        steps: List<Step>,
+        matched: MutableSet<String>,
+        exactParents: Set<String>,
+    ) {
+        for (pass in 0..1) {
+            for (step in steps) {
+                if (step.match != null) continue
+                step.match =
+                    step.fuzzy.firstOrNull {
+                        (it["id"] as String) !in matched &&
+                            (it["parent_id"] as String?) !in exactParents &&
+                            (pass == 1 || it["payee"] == step.trans["payee"])
+                    }
+                step.match?.let { matched += it["id"] as String }
+            }
+        }
     }
 
     /** A new row, or a split parent and its children when a rule split it, as `addTransactions` writes them. */
