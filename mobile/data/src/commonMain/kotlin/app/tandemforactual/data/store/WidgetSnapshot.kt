@@ -52,6 +52,7 @@ private fun JsonObjectBuilder.putAmounts(
         put("readyToAssign", format(it, settings))
         put("readyToAssignNegative", it < 0)
     }
+    if (summary.tracking) put("readyLabel", summary.headline)
     summary.spentMinor?.let { put("spent", format(it, settings)) }
     putJsonArray("categories") {
         categories.forEach { category ->

@@ -90,6 +90,7 @@ internal fun BankConnectionsScreen(
             relinking = ui.relinkFor != null,
             onLoad = actions::loadAccounts,
             onLink = actions::pickProviderAccount,
+            onSetUpSimpleFin = actions::openSimpleFinSetup,
         )
     }
     ManageBankLinkDialog(ui.managing, onDismiss = { ui.managing = null }, onRelink = actions::relink, onUnlink = actions::confirmUnlink)
@@ -113,6 +114,12 @@ internal fun BankConnectionsScreen(
         ui.browserProvider = null
         actions.pickProviderAccount(provider, providerAccount)
     }
+    SimpleFinSetupSheet(
+        ui.simpleFinSetup,
+        onDismiss = { ui.simpleFinSetup = null },
+        onSave = actions::saveSimpleFinToken,
+        onRemove = actions::removeSimpleFinBudgetToken,
+    )
     LinkBankAccountDialog(
         ui.linking,
         liveAccounts,

@@ -1,0 +1,24 @@
+!Type:Bank
+D11/ 3'26
+T-48.17
+PTRADER JOES
+MGroceries
+^
+D11/ 2'26
+T2,450.00
+PACME PAYROLL
+^
+D10/31'26
+T-150.00
+N1042
+PJ PLUMBER
+LHome:Repairs
+^
+D11/ 3'26
+T-60.00
+PCOSTCO
+SGroceries
+$-40.00
+SHousehold
+$-20.00
+^

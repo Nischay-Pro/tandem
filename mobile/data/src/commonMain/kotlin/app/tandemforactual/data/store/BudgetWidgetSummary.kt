@@ -5,7 +5,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-/** What a home-screen widget shows for the selected budget; amounts are null when unknown or hidden. */
+/**
+ * What a home-screen widget shows for the selected budget; amounts are null when unknown or hidden.
+ * For a tracking budget, [readyToAssignMinor] is what was saved this month and [headline] says so.
+ */
 data class BudgetWidgetSummary(
     val budgetName: String,
     val readyToAssignMinor: Long?,
@@ -13,7 +16,10 @@ data class BudgetWidgetSummary(
     val amountsHidden: Boolean,
     val displaySettings: BudgetDisplaySettings?,
     val locked: Boolean = false,
-)
+    val tracking: Boolean = false,
+) {
+    val headline: String get() = if (tracking) "Saved this month" else "Ready to assign"
+}
 
 private val WIDGET_CLOSING_PREFERENCES = listOf("biometricLockEnabled", "selectedBudgetEncrypted")
 
@@ -42,6 +48,16 @@ fun budgetMonthTotals(budgetMonthJson: String): Pair<Long?, Long?> {
     return long("toBudget") to long("totalSpent")?.let { (-it).coerceAtLeast(0) }
 }
 
+/** A tracking month's savings, Actual's `real-saved`: income received less net spending. */
+fun trackingSavedMinor(budgetMonthJson: String): Long? {
+    val month = runCatching { Json.parseToJsonElement(budgetMonthJson) as? JsonObject }.getOrNull() ?: return null
+
+    fun long(name: String) = (month[name] as? JsonPrimitive)?.longOrNull
+    val income = long("totalIncome") ?: return null
+    val spent = long("totalSpent") ?: return null
+    return income + spent
+}
+
 /** Null when no budget is open. Amounts are for the month of [todayIso] and stay hidden while app lock, privacy mode or encryption protects the budget. */
 suspend fun budgetWidgetSummary(
     repository: LocalBudgetRepository,
@@ -53,7 +69,10 @@ suspend fun budgetWidgetSummary(
         return BudgetWidgetSummary(budget.name, null, null, amountsHidden = true, displaySettings = null, locked = budget.locked)
     }
     val record = repository.findRecord(budget.id, "budget-month", todayIso.take(7))
-    val (ready, spent) = (record?.localJson ?: record?.remoteJson)?.let(::budgetMonthTotals) ?: (null to null)
+    val json = record?.localJson ?: record?.remoteJson
+    val (ready, spent) = json?.let(::budgetMonthTotals) ?: (null to null)
     val settings = repository.readBudgetDisplaySettings(budget.id)
-    return BudgetWidgetSummary(budget.name, ready, spent, amountsHidden = false, displaySettings = settings)
+    val tracking = settings?.budgetType == "tracking"
+    val headline = if (tracking) json?.let(::trackingSavedMinor) else ready
+    return BudgetWidgetSummary(budget.name, headline, spent, amountsHidden = false, displaySettings = settings, tracking = tracking)
 }

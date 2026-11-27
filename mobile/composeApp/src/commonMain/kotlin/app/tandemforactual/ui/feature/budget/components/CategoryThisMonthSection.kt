@@ -52,7 +52,7 @@ import com.composables.icons.lucide.WalletCards
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** "This month" card with the category's assigned amount, activity, overspending rollover and icon. */
+/** "This month" card with the category's planned amount, activity, rollover and icon. */
 @Composable
 internal fun CategoryThisMonthSection(
     state: AppState,
@@ -64,25 +64,27 @@ internal fun CategoryThisMonthSection(
     isLiveBudget: Boolean,
     isTrackingBudget: Boolean,
     scope: CoroutineScope,
+    isIncome: Boolean = false,
 ) {
     SectionCard("This month") {
-        if (!isTrackingBudget) {
-            AssignedAmountRow(state, mobileSession, category, isLiveBudget) {
+        val planTitle = categoryPlanTitle(isIncome, isTrackingBudget)
+        if (planTitle != null) {
+            AssignedAmountRow(state, mobileSession, category, isLiveBudget, planTitle) {
                 sheets.assignedAmountDraft = state.formatAmount(category.assignedMinor)
                 mobileSession.feedback.clearBudgetActionMessage()
                 sheets.showAssignedAmountDialog = true
             }
+            DividerLine()
         }
-        if (!isTrackingBudget) DividerLine()
         ListRow(
             "Activity",
             "${state.selectedMonth} · ${state.formatCurrency(category.activityMinor)}",
             leading = RowLeading.Icon(Lucide.Receipt),
             onClick = { openCategoryActivity(state, navigation, category.id, category.name) },
         )
-        if (isLiveBudget && !isTrackingBudget) {
+        if (isLiveBudget) {
             DividerLine()
-            RolloverRow(state, mobileSession, category, scope)
+            RolloverRow(state, mobileSession, category, scope, isTrackingBudget)
         }
         if (isLiveBudget && !isTrackingBudget) {
             DividerLine()
@@ -109,12 +111,28 @@ internal fun CategoryThisMonthSection(
             state.categoryIconChoice(category.id) ?: "Automatic",
             leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
         )
-        if (!isTrackingBudget) {
+        if (!isIncome) {
             DividerLine()
-            ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+            if (isTrackingBudget) {
+                ListRow("Remaining", "Budgeted plus activity and any rollover", state.formatCurrency(category.balanceMinor))
+            } else {
+                ListRow("Available", "Assigned plus activity", state.formatCurrency(category.balanceMinor))
+            }
         }
     }
 }
+
+/** The name of a category's monthly plan; envelope income has none because income isn't assigned. */
+internal fun categoryPlanTitle(
+    isIncome: Boolean,
+    isTrackingBudget: Boolean,
+): String? =
+    when {
+        isIncome && isTrackingBudget -> "Expected"
+        isIncome -> null
+        isTrackingBudget -> "Budgeted"
+        else -> "Assigned"
+    }
 
 @Composable
 internal fun RolloverRow(
@@ -122,10 +140,15 @@ internal fun RolloverRow(
     mobileSession: TandemMobileSession,
     category: LiveCategorySummary,
     scope: CoroutineScope,
+    isTrackingBudget: Boolean = false,
 ) {
     ToggleRow(
-        "Roll overspending into next month",
-        "When this category goes over, the shortfall carries into next month’s balance instead of coming out of money to budget",
+        if (isTrackingBudget) "Roll the balance into next month" else "Roll overspending into next month",
+        if (isTrackingBudget) {
+            "What’s left over, or overspent, carries into next month’s balance for this category"
+        } else {
+            "When this category goes over, the shortfall carries into next month’s balance instead of coming out of money to budget"
+        },
         checked = category.carryover,
         enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
         leadingIcon = Lucide.RefreshCw,
@@ -148,6 +171,7 @@ private fun AssignedAmountRow(
     mobileSession: TandemMobileSession,
     category: LiveCategorySummary,
     isLiveBudget: Boolean,
+    title: String,
     onClick: () -> Unit,
 ) {
     Row(
@@ -157,7 +181,7 @@ private fun AssignedAmountRow(
             .clickable(
                 enabled = isLiveBudget && !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
                 role = Role.Button,
-                onClickLabel = "Edit assigned amount",
+                onClickLabel = "Edit ${title.lowercase()} amount",
                 onClick = onClick,
             ).padding(
                 horizontal = TandemLayout.listRowHorizontalInset,
@@ -181,7 +205,7 @@ private fun AssignedAmountRow(
             )
         }
         Text(
-            "Assigned",
+            title,
             modifier = Modifier.weight(1f),
             color = tandemPalette.text,
             fontSize = TandemTypography.body,
@@ -198,7 +222,7 @@ private fun AssignedAmountRow(
         if (isLiveBudget) {
             Icon(
                 Lucide.Pencil,
-                contentDescription = "Edit assigned amount",
+                contentDescription = "Edit ${title.lowercase()} amount",
                 modifier = Modifier.size(19.dp),
                 tint = if (state.readOnlyMode) tandemPalette.muted else tandemPalette.accent,
             )

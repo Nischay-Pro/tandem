@@ -11,7 +11,11 @@ import app.tandemforactual.data.actual.SyncResponse
 import app.tandemforactual.data.database.ActualBudgetFiles
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
@@ -38,6 +42,9 @@ internal class FakeActualServer {
             """"org":{"name":"Credit Union","domain":"cu.example"}},{"id":"SF-10","name":"Plain","org":{"id":"org-1"}},""" +
             """{"name":"Bare"}]}}"""
     var syncFailure: String? = null
+    var admin = true
+    val secrets = mutableMapOf<String, String>()
+    val simpleFinFileIds = mutableListOf<String?>()
     var failUploads = false
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
@@ -67,6 +74,7 @@ internal class FakeActualServer {
     val http =
         HttpClient(
             MockEngine { request ->
+                if (request.url.encodedPath.startsWith("/secret")) return@MockEngine respondSecret(this, request)
                 bankRoutes[request.url.encodedPath]?.let { body ->
                     lastOrigin = request.headers["Origin"]
                     return@MockEngine respond(body)
@@ -82,7 +90,7 @@ internal class FakeActualServer {
                         }
                     "/account/validate" ->
                         if (request.headers["x-actual-token"] == "session") {
-                            respond("""{"status":"ok","data":{"validated":true}}""")
+                            respond("""{"status":"ok","data":{"validated":true,"permission":"${if (admin) "ADMIN" else "BASIC"}"}}""")
                         } else {
                             respond("""{"status":"error","reason":"unauthorized"}""", HttpStatusCode.Unauthorized)
                         }
@@ -164,14 +172,66 @@ internal class FakeActualServer {
                             }
                         respond(SyncProtocol.encode(reply))
                     }
-                    "/simplefin/transactions" -> respond(bankDownload)
-                    "/simplefin/status" -> respond("""{"status":"ok","data":{"configured":$simpleFinConfigured}}""")
-                    "/simplefin/accounts" -> respond(simpleFinAccounts)
+                    "/simplefin/transactions" -> respond(bankDownload).also { simpleFinFileIds += request.headers["x-actual-file-id"] }
+                    "/simplefin/status" -> respond(simpleFinStatus(request.headers["x-actual-file-id"]))
+                    "/simplefin/accounts" -> {
+                        val fileId = request.headers["x-actual-file-id"]
+                        simpleFinFileIds += fileId
+                        respond(if (budgetCredentials(fileId) == null) simpleFinAccounts else BUDGET_SIMPLEFIN_ACCOUNTS)
+                    }
                     else -> error("Unexpected path ${request.url.encodedPath}")
                 }
             },
         )
 }
+
+private fun FakeActualServer.budgetCredentials(fileId: String?) =
+    fileId?.takeIf { "simplefin_token:$it" in secrets || "simplefin_accessKey:$it" in secrets }
+
+/** Picks the budget's own SimpleFIN token over the server's, as Actual 26.11 does. */
+private fun FakeActualServer.simpleFinStatus(fileId: String?): String {
+    simpleFinFileIds += fileId
+    val own = budgetCredentials(fileId)
+    val configured = if (own != null) "simplefin_token:$own" in secrets else simpleFinConfigured || "simplefin_token" in secrets
+    val source =
+        when {
+            own != null -> "\"per-budget-file\""
+            configured -> "\"global\""
+            else -> "null"
+        }
+    return """{"status":"ok","data":{"configured":$configured,"source":$source}}"""
+}
+
+/** Actual's `/secret` routes: budget owners manage their budget's secrets, only admins the server-wide ones. */
+private suspend fun FakeActualServer.respondSecret(
+    scope: MockRequestHandleScope,
+    request: HttpRequestData,
+): HttpResponseData {
+    val fileId = request.headers["x-actual-file-id"]
+    val name =
+        if (request.method == HttpMethod.Delete) {
+            request.url.encodedPath.substringAfterLast('/')
+        } else {
+            Regex("\"name\":\"([^\"]+)\"").find((request.body as TextContent).text)!!.groupValues[1]
+        }
+    val denied =
+        when {
+            fileId != null && fileId != "file" -> "file-access-denied"
+            fileId == null && !admin -> "not-admin"
+            else -> null
+        }
+    if (denied != null) return scope.respond("""{"status":"error","reason":"$denied"}""", HttpStatusCode.Forbidden)
+    val key = fileId?.let { "$name:$it" } ?: name
+    if (request.method == HttpMethod.Delete) {
+        secrets.remove(key)
+    } else {
+        secrets[key] = Regex("\"value\":\"([^\"]+)\"").find((request.body as TextContent).text)!!.groupValues[1]
+    }
+    return scope.respond("""{"status":"ok"}""")
+}
+
+private const val BUDGET_SIMPLEFIN_ACCOUNTS =
+    """{"status":"ok","data":{"accounts":[{"id":"SF-B","name":"Budget Card","org":{"name":"Budget Bank","domain":"bb.example"}}]}}"""
 
 private fun b64(bytes: ByteArray) =
     java.util.Base64

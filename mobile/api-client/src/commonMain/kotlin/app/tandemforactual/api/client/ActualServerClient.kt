@@ -13,6 +13,7 @@ import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
 import app.tandemforactual.data.regions.global.bank.BrowserLink
 import app.tandemforactual.data.regions.global.bank.BrowserLinkStatus
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -160,6 +161,10 @@ class ActualServerClient(
             )
         }
 
+    /** The live file holding the budget whose sync group is [groupId]. */
+    suspend fun budgetFile(groupId: String): ActualRemoteFile =
+        listFiles().firstOrNull { !it.deleted && it.groupId == groupId } ?: throw ActualServerException("budget-unavailable")
+
     suspend fun fileInfo(fileId: String): ActualFileInfo {
         val data =
             json(
@@ -239,13 +244,63 @@ class ActualServerClient(
         },
     )
 
-    /** Whether the provider is set up on the server, through its standard `status` route. */
-    suspend fun bankConfigured(provider: BankProvider): Boolean =
-        (bankPost(provider.statusRoute, "{}")["configured"] as? JsonPrimitive)?.content == "true"
+    /** Whether the provider is set up for the budget and whose credentials it uses, through its standard `status` route. */
+    suspend fun bankStatus(
+        provider: BankProvider,
+        fileId: String,
+    ): BankProviderStatus {
+        val data = bankPost(provider.statusRoute, "{}", fileId)
+        val configured = (data["configured"] as? JsonPrimitive)?.content == "true"
+        val source =
+            when (data.text("source")) {
+                "per-budget-file" -> BankCredentialSource.BUDGET
+                "global" -> BankCredentialSource.SERVER
+                else -> BankCredentialSource.SERVER.takeIf { configured }
+            }
+        return BankProviderStatus(configured, source)
+    }
 
-    /** The provider's accounts the server can see, through its standard `accounts` route. */
-    suspend fun bankAccounts(provider: BankProvider): List<BankProviderAccount> =
-        provider.parseAccounts(bankPost(provider.accountsRoute, "{}"))
+    /** The provider's accounts the budget can see, through its standard `accounts` route. */
+    suspend fun bankAccounts(
+        provider: BankProvider,
+        fileId: String,
+    ): List<BankProviderAccount> = provider.parseAccounts(bankPost(provider.accountsRoute, "{}", fileId))
+
+    /** Stores a bank provider secret for one budget, or for the whole server when [fileId] is null, like Actual's `secret-set`. */
+    suspend fun setSecret(
+        name: String,
+        value: String,
+        fileId: String?,
+    ) {
+        json(
+            http.post("$base/secret") {
+                auth()
+                fileId?.let { header("x-actual-file-id", it) }
+                contentType(ContentType.Application.Json)
+                setBody(
+                    buildJsonObject {
+                        put("name", name)
+                        put("value", value)
+                    }.toString(),
+                )
+            },
+        )
+    }
+
+    suspend fun removeSecret(
+        name: String,
+        fileId: String?,
+    ) {
+        json(
+            http.delete("$base/secret/$name") {
+                auth()
+                fileId?.let { header("x-actual-file-id", it) }
+            },
+        )
+    }
+
+    /** Whether the signed-in user is an admin, who alone may set server-wide bank credentials. */
+    suspend fun isAdmin(): Boolean = json(http.get("$base/account/validate") { auth() })["data"]?.jsonObject?.text("permission") == "ADMIN"
 
     /** Asks the Actual server for an account's transactions from its bank provider; the server holds the provider secrets. */
     suspend fun bankTransactions(
@@ -300,13 +355,13 @@ class ActualServerClient(
     private suspend fun bankPost(
         route: String,
         body: String,
-        fileId: String? = null,
+        fileId: String,
     ): JsonObject {
         val data =
             json(
                 http.post("$base/$route") {
                     auth()
-                    fileId?.let { header("x-actual-file-id", it) }
+                    header("x-actual-file-id", fileId)
                     contentType(ContentType.Application.Json)
                     setBody(body)
                 },

@@ -28,6 +28,7 @@ struct WidgetSnapshot: Codable, Equatable {
     let readyToAssignNegative: Bool?
     let spent: String?
     let categories: [Category]?
+    var readyLabel: String? = nil
 
     /// What a widget can show on [date]: amounts from an earlier month wait until the app writes this month's.
     func status(on date: Date, calendar: Calendar = .current) -> Status {

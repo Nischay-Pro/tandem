@@ -211,6 +211,47 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun trackingIncomeReadsReceivedAndItsPlanStaysOutOfBudgetedSpending() {
+        val month =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json =
+                    """{"month":"2026-11","toBudget":null,"totalBudgeted":2500,"totalSpent":-2000,"totalIncome":4500,""" +
+                        """"categoryGroups":[{"id":"income","is_income":true,"categories":[{"id":"salary","budgeted":5000,""" +
+                        """"received":4500,"balance":500}]},{"id":"home","is_income":false,"categories":[{"id":"rent",""" +
+                        """"budgeted":2500,"spent":-2000,"balance":500}]}]}""",
+            )
+        val summary =
+            requireNotNull(
+                liveBudgetMonthSummary(
+                    monthRecord = month,
+                    categoryRecords = emptyList(),
+                    categoryGroupRecords = emptyList(),
+                    pendingBudgetMutations =
+                        listOf(
+                            queuedBudgetMutation(
+                                BudgetReorderKind.SET_CATEGORY_AMOUNT,
+                                itemId = "salary",
+                                payload = """{"month":"2026-11","amountMinor":6000}""",
+                            ),
+                        ),
+                ),
+            )
+
+        val salary =
+            summary.groups
+                .first { it.isIncome }
+                .categories
+                .single()
+        assertEquals(6_000L, salary.assignedMinor)
+        assertEquals(4_500L, salary.activityMinor)
+        assertEquals(1_500L, salary.balanceMinor)
+        assertEquals(2_500L, summary.totalBudgetedMinor)
+        assertEquals(3_500L, trackingMonthFigures(summary.groups).plannedSavingsMinor)
+    }
+
+    @Test
     fun projectsQueuedOfflineBudgetChangesAndClearsPendingMarksAfterSync() {
         val originalMonth =
             record(
