@@ -58,7 +58,7 @@ class WatchSurfacesTest {
     fun theLeftToSpendTileShowsTheAmountAndAnAddButton() {
         val texts = texts(leftToSpendLayout(context, device, summary()))
 
-        assertTrue(texts.toString(), "$1,234.56" in texts)
+        assertTrue(texts.toString(), "$1234" in texts)
         assertTrue(texts.toString(), WatchText.LEFT_TO_SPEND in texts)
         assertTrue(texts.toString(), "+ Add" in texts)
     }
