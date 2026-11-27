@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.tandemforactual.android.tasker.recheckTaskerStates
 import app.tandemforactual.android.tasker.sendToTasker
+import app.tandemforactual.android.watch.PhoneWatch
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
@@ -152,6 +153,7 @@ class BackgroundBudgetSyncWorker(
                 if (budgetDatabase !== database) budgetDatabase.close()
             }
             TandemWidgets.refresh(applicationContext)
+            PhoneWatch.publish(applicationContext, afterUnlock = false)
             Result.success()
         } catch (error: CancellationException) {
             throw error

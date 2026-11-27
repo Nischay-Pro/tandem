@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
+import app.tandemforactual.android.watch.PhoneWatch
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.KeyboardCommands
@@ -136,6 +137,7 @@ class MainActivity : FragmentActivity() {
         notificationPermissionEnabled = hasNotificationPermission()
         BudgetSystemNotifications.initialize(applicationContext)
         AutomaticBackupScheduler.ensureScheduled(applicationContext)
+        PhoneWatch.start(applicationContext)
         val database = TandemProcess.database(applicationContext)
         showApp(database)
     }
@@ -311,6 +313,7 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         appInForeground.value = true
         AppVisibility.visible = true
+        PhoneWatch.checkPairing(this)
         if (!networkCallbackRegistered) {
             syncSignalState.onNetworkStarted(connectivityManager.activeNetwork)
             connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -322,6 +325,7 @@ class MainActivity : FragmentActivity() {
         appInForeground.value = false
         AppVisibility.visible = false
         TandemWidgets.refresh(this)
+        PhoneWatch.refresh(this)
         if (networkCallbackRegistered) {
             connectivityManager.unregisterNetworkCallback(networkCallback)
             networkCallbackRegistered = false

@@ -99,6 +99,7 @@ kotlin {
     }
     commonMain.dependencies {
       implementation(project(":data"))
+      implementation(project(":watch-protocol"))
       implementation(libs.room3Runtime)
       implementation(project(":api-client"))
       implementation("org.jetbrains.compose.runtime:runtime:1.12.2")

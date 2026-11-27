@@ -123,8 +123,7 @@ internal object AutomationCalls {
         block: suspend (TandemDatabase) -> T,
     ): T {
         val main = TandemProcess.database(context)
-        val key = runCatching { AndroidDeviceCredentialStore(context, BACKGROUND_KEY_STORE).read() }.getOrNull()
-        val database = automationDatabase(target, main, key) { id, password -> AndroidEncryptedBudgetVault(context).open(id, password) }
+        val database = open(context, target)
         return try {
             block(database)
         } finally {
@@ -132,8 +131,19 @@ internal object AutomationCalls {
         }
     }
 
+    /** [target]'s database without asking for anything; the caller closes it unless it's the main one. */
+    suspend fun open(
+        context: Context,
+        target: AutomationTarget,
+    ): TandemDatabase {
+        val key = runCatching { AndroidDeviceCredentialStore(context, BACKGROUND_KEY_STORE).read() }.getOrNull()
+        return automationDatabase(target, TandemProcess.database(context), key) { id, password ->
+            AndroidEncryptedBudgetVault(context).open(id, password)
+        }
+    }
+
     /** The same sync Tandem schedules, run once over the user's chosen network; the worker holds the sync lock. */
-    private suspend fun requestSync(context: Context) {
+    suspend fun requestSync(context: Context) {
         val preferences = preferences(context)
         val network = SyncNetwork.restore(preferences["syncNetwork"], preferences["syncOnWifi"]?.toBooleanStrictOrNull()) ?: SyncNetwork.ANY
         WorkManager

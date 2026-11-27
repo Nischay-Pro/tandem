@@ -19,6 +19,7 @@ import app.tandemforactual.ui.core.session.AutomaticBackupResult
 import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.planning.ExchangeRateFetching
+import app.tandemforactual.ui.core.watch.WatchSettings
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.ThemeMode
 
@@ -134,6 +135,7 @@ internal class AppState {
     /** Whether automation apps such as Tasker may add transactions, and separately read budget numbers. */
     var automationWritesEnabled by mutableStateOf(false)
     var automationReadsEnabled by mutableStateOf(false)
+    var watchSettings by mutableStateOf(WatchSettings())
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)
@@ -296,7 +298,7 @@ internal class AppState {
             "syncOnOpen" to syncOnOpen.toString(),
             "appLanguage" to appLanguage,
             "backgroundSyncEnabled" to backgroundSyncEnabled.toString(),
-        ) + automaticBackup.toPreferences() + exchangeRateFetching.toPreferences() +
+        ) + automaticBackup.toPreferences() + exchangeRateFetching.toPreferences() + watchSettings.toPreferences() +
             mapOf(
                 "syncNetwork" to syncNetwork.name,
                 "hasCompletedSyncOnboarding" to hasCompletedSyncOnboarding.toString(),
@@ -338,6 +340,7 @@ internal class AppState {
         automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
         automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
         exchangeRateFetching = ExchangeRateFetching.from(saved)
+        watchSettings = WatchSettings.from(saved)
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
         menuPins = saved["menuPins"] ?: menuPins

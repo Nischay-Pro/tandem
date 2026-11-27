@@ -95,6 +95,8 @@ dependencies {
   implementation(project(":composeApp"))
   implementation(project(":data"))
   implementation(project(":api-client"))
+  implementation(project(":watch-protocol"))
+  implementation(project(":wearable-play"))
   implementation(libs.room3Runtime)
   implementation(libs.coroutinesCore)
   implementation(libs.workRuntimeKtx)

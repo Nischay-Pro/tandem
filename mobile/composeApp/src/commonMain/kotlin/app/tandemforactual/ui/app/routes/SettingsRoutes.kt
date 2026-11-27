@@ -14,6 +14,7 @@ import app.tandemforactual.ui.feature.settings.NotificationsScreen
 import app.tandemforactual.ui.feature.settings.SecurityScreen
 import app.tandemforactual.ui.feature.settings.ServerDeviceScreen
 import app.tandemforactual.ui.feature.settings.SettingsScreen
+import app.tandemforactual.ui.feature.settings.WatchScreen
 
 /** Settings pages that open beside the settings list when both fit. */
 private val settingsPaneRoutes =
@@ -27,6 +28,7 @@ private val settingsPaneRoutes =
         AppRoute.LOCAL_DATA,
         AppRoute.AUTOMATION,
         AppRoute.CONNECTED_SERVICES,
+        AppRoute.WATCH,
         AppRoute.EXPORT,
         AppRoute.ABOUT,
     )
@@ -69,6 +71,10 @@ internal val settingsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
         AppRoute.CONNECTED_SERVICES to
             @Composable { ctx ->
                 ConnectedServicesScreen(ctx.state, ctx.navigation)
+            },
+        AppRoute.WATCH to
+            @Composable { ctx ->
+                WatchScreen(ctx.state, ctx.liveBudgetMonth)
             },
         AppRoute.SECURITY_PRIVACY to
             @Composable { ctx ->

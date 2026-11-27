@@ -4,6 +4,7 @@ package app.tandemforactual.ui.feature.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,7 @@ import app.tandemforactual.ui.core.state.InterfaceMode
 import app.tandemforactual.ui.core.state.LocalPaneDetailRoute
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.ui.externalConnectionsStatus
+import app.tandemforactual.ui.core.watch.WatchPairing
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -74,6 +76,7 @@ import app.tandemforactual.ui.generated.resources.settings_server_device
 import app.tandemforactual.ui.generated.resources.settings_server_device_detail
 import app.tandemforactual.ui.generated.resources.settings_sync_preferences
 import app.tandemforactual.ui.generated.resources.settings_sync_preferences_detail
+import app.tandemforactual.ui.generated.resources.watch_title
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
@@ -93,6 +96,7 @@ import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -354,6 +358,17 @@ private fun AutomationConnectionsSection(
             AppRoute.CONNECTED_SERVICES,
             navigation,
         )
+        val watchPaired by WatchPairing.available.collectAsState()
+        if (watchPaired) {
+            DividerLine()
+            SettingsPageRow(
+                stringResource(Res.string.watch_title),
+                watchStatus(state),
+                Lucide.Watch,
+                AppRoute.WATCH,
+                navigation,
+            )
+        }
     }
 }
 

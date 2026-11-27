@@ -15,7 +15,7 @@ class ArchitectureTest {
             .filter { it.packagee?.name?.startsWith(root) == true }
 
     private val allModules =
-        listOf("composeApp", "data", "api-client", "androidApp").flatMap { module ->
+        listOf("composeApp", "data", "api-client", "androidApp", "watch-protocol", "wearable-play", "wearApp").flatMap { module ->
             Konsist.scopeFromProduction(module).files.map { module to it }
         }
 
@@ -103,6 +103,40 @@ class ArchitectureTest {
                 .filter { it.feature() != null }
                 .flatMap { f -> write.findAll(f.text).map { "${f.name} ${it.value.substringBefore('=').trim().trimEnd('+', '-').trim()}" } }
                 .distinct(),
+        )
+    }
+
+    /** Google Play services stays in the module a store build can drop, and in the watch app's Data Layer package. */
+    @Test
+    fun playServicesStayIsolated() {
+        check(
+            "play-services",
+            allModules
+                .filterNot { (module, file) ->
+                    module == "wearable-play" || (module == "wearApp" && file.pkg().startsWith("app.tandemforactual.wear.link"))
+                }.flatMap { (module, file) ->
+                    file.imports
+                        .map { it.name }
+                        .filter { it.startsWith("com.google.android.gms.") }
+                        .map { "$module:${file.name} -> $it" }
+                }.distinct(),
+        )
+    }
+
+    /** The watch app shows what the phone sends; it never reaches the budget, its database or the server. */
+    @Test
+    fun theWatchAppOnlyKnowsTheSummary() {
+        check(
+            "watch-scope",
+            allModules
+                .filter { (module, _) -> module == "wearApp" || module == "watch-protocol" }
+                .flatMap { (module, file) ->
+                    file.imports
+                        .map { it.name }
+                        .filter { it.startsWith("app.tandemforactual.") }
+                        .filterNot { it.startsWith("app.tandemforactual.wear.") || it.startsWith("app.tandemforactual.watch.") }
+                        .map { "$module:${file.name} -> $it" }
+                }.distinct(),
         )
     }
 
