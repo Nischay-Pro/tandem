@@ -17,8 +17,17 @@ private const val USAGE_RULE_ITEM_MATCH = """AS item,
       WHERE (CASE WHEN item.type = 'object' THEN json_extract(item.value, '$.field') END) IN (:fields)
         AND target.value IN (:ids)"""
 
+/** How many transactions use one payee. */
+data class PayeeTransactionCount(
+    val payeeId: String,
+    val transactions: Long,
+)
+
 @Dao
 interface BudgetUsageDao {
+    @Query("SELECT payeeId, COUNT(*) AS transactions $USAGE_LEAF_TRANSACTIONS AND payeeId IS NOT NULL GROUP BY payeeId")
+    suspend fun countTransactionsByPayee(budgetId: String): List<PayeeTransactionCount>
+
     @Query("SELECT COUNT(*) $USAGE_LEAF_TRANSACTIONS AND payeeId = :payeeId")
     suspend fun countPayeeTransactions(
         budgetId: String,

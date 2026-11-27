@@ -15,7 +15,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
-import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -57,6 +56,7 @@ internal fun ManagePayeesScreen(
     val payee = rememberManagePayeeState(state.selectedBudgetId)
     var searchQuery by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     var showAddPayee by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
+    var showCleanup by rememberSaveable(state.selectedBudgetId) { mutableStateOf(false) }
     var newPayeeName by rememberSaveable(state.selectedBudgetId) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val payees = rememberManagedPayees(payeeRecords)
@@ -79,14 +79,9 @@ internal fun ManagePayeesScreen(
         }
         item(key = "manage-payees-summary") {
             PayeeListSummary(
-                if (searchQuery.isBlank()) {
-                    "${formatInteger(
-                        payees.size,
-                    )} payees"
-                } else {
-                    "${formatInteger(visiblePayees.size)} of ${formatInteger(payees.size)} payees"
-                },
+                payeeCountSummary(visiblePayees.size, payees.size, searchQuery.isNotBlank()),
                 addEnabled = !state.readOnlyMode,
+                onCleanUp = { showCleanup = true }.takeIf { payees.size > 1 },
             ) {
                 newPayeeName = ""
                 mobileSession.feedback.clearBudgetActionMessage()
@@ -103,6 +98,7 @@ internal fun ManagePayeesScreen(
     }
 
     AddPayeeSheet(showAddPayee, newPayeeName, { newPayeeName = it }, { showAddPayee = false }, payees, state, mobileSession, scope)
+    PayeeCleanupSheet(showCleanup, payees, state, mobileSession, scope) { showCleanup = false }
     ManagePayeeSheet(
         payee,
         selectedPayee,

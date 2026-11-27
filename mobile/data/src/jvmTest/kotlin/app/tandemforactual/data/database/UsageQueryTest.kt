@@ -7,6 +7,7 @@ import app.tandemforactual.data.store.RecordUsage
 import app.tandemforactual.data.store.accountUsage
 import app.tandemforactual.data.store.categoryGroupUsage
 import app.tandemforactual.data.store.categoryUsage
+import app.tandemforactual.data.store.payeeTransactionCounts
 import app.tandemforactual.data.store.payeeUsage
 import app.tandemforactual.data.store.ruleUsage
 import java.io.File
@@ -48,6 +49,7 @@ class UsageQueryTest {
             assertEquals(RecordUsage(transactions = 4, rules = 3), repository.payeeUsage(BUDGET, "coffee"))
             assertEquals(RecordUsage(transactions = 1, rules = 2), repository.payeeUsage(BUDGET, "rent"))
             assertEquals(RecordUsage(), repository.payeeUsage(BUDGET, "unused"))
+            assertEquals(mapOf("coffee" to 4L, "rent" to 1L), repository.payeeTransactionCounts(BUDGET))
         }
 
     @Test
