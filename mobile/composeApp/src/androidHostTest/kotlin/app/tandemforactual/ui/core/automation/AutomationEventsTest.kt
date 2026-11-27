@@ -40,7 +40,10 @@ class AutomationEventsTest {
             announceAfterSync(database, database, BUDGET, OPEN + ("biometricLockEnabled" to "true"), TODAY, NOW, sent::add)
             assertEquals(emptyList(), sent)
             announceAfterSync(database, database, BUDGET, OPEN, TODAY, NOW, sent::add)
-            assertEquals(listOf(AutomationEventKind.CATEGORY_OVERSPENT, AutomationEventKind.SCHEDULE_DUE), sent.map { it.kind })
+            assertEquals(
+                listOf(AutomationEventKind.CATEGORY_OVERSPENT, AutomationEventKind.CATEGORY_OVERSPENT, AutomationEventKind.SCHEDULE_DUE),
+                sent.map { it.kind },
+            )
         }
 
     @Test
@@ -48,14 +51,15 @@ class AutomationEventsTest {
         withBudget { database ->
             val sent = mutableListOf<AutomationEvent>()
             announceAfterSync(database, database, BUDGET, OPEN, TODAY, NOW, sent::add)
-            val (overspent, due) = sent
-            assertEquals(mapOf("category" to "Groceries", "category_id" to "groceries", "overspent_by" to "20.00"), overspent.values)
+            val (groceries, fuel, due) = sent
+            assertEquals(mapOf("category" to "Groceries", "category_id" to "groceries", "overspent_by" to "20.00"), groceries.values)
+            assertEquals(mapOf("category" to "Fuel", "category_id" to "fuel", "overspent_by" to "5.00"), fuel.values)
             assertEquals(mapOf("schedule" to "Rent", "amount" to "-1500.00", "due_date" to TODAY), due.values)
             announceAfterSync(database, database, BUDGET, OPEN, TODAY, NOW + 1, sent::add)
-            assertEquals(2, sent.size)
+            assertEquals(3, sent.size)
             assertTrue(AppPreferencesStore(database).read().keys.none { it.startsWith("internal:overspent-categories") })
             announceAfterSync(database, database, BUDGET, OPEN, "2026-11-28", NOW + 2, sent::add)
-            assertEquals(listOf("Phone"), sent.drop(2).map { it.values["schedule"] })
+            assertEquals(listOf("Phone"), sent.drop(3).map { it.values["schedule"] })
             assertEquals("", sent.last().values["amount"])
         }
 
