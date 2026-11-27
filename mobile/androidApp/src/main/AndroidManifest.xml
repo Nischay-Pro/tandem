@@ -101,5 +101,51 @@
         android:name="com.samsung.android.appwidget.provider"
         android:resource="@xml/budget_cover_widget_samsung" />
     </receiver>
+    <activity
+      android:name=".WidgetSetupActivity"
+      android:excludeFromRecents="true"
+      android:exported="true"
+      android:taskAffinity=""
+      android:theme="@style/Theme.Tandem.App">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+    <receiver
+      android:name=".CategoryWidget"
+      android:exported="false"
+      android:label="@string/widget_category_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/category_widget_info" />
+    </receiver>
+    <receiver
+      android:name=".CategoryCoverWidget"
+      android:exported="false"
+      android:label="@string/widget_category_cover_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/category_cover_widget_info" />
+      <meta-data
+        android:name="com.samsung.android.appwidget.provider"
+        android:resource="@xml/budget_cover_widget_samsung" />
+    </receiver>
+    <receiver
+      android:name=".QuickAddWidget"
+      android:exported="false"
+      android:label="@string/widget_quick_add_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/quick_add_widget_info" />
+    </receiver>
   </application>
 </manifest>

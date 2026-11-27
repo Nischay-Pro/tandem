@@ -130,7 +130,7 @@ class BackgroundBudgetSyncWorker(
             } finally {
                 if (budgetDatabase !== database) budgetDatabase.close()
             }
-            BudgetWidget.refresh(applicationContext)
+            TandemWidgets.refresh(applicationContext)
             Result.success()
         } catch (error: CancellationException) {
             throw error

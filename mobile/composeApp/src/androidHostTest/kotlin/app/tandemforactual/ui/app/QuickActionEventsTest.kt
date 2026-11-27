@@ -18,6 +18,7 @@ class QuickActionEventsTest {
         QuickActionEvents.consumeQuickAddDraft()
         QuickActionEvents.consumeSharedReceiptPhoto()
         QuickActionEvents.consumeSharedStatement()
+        QuickActionEvents.consumeRequestedAccount()
     }
 
     @Test
@@ -76,6 +77,25 @@ class QuickActionEventsTest {
         assertNull(QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction"))
         assertEquals(100, QuickAddDraft.fromLink("app.tandemforactual://open/add-transaction?payee=${"a".repeat(150)}")?.payee?.length)
         assertEquals("a+b", percentDecode("a+b"))
+    }
+
+    @Test
+    fun addCanStartInAChosenAccount() {
+        QuickActionEvents.requestAddTransaction("checking")
+        assertEquals("checking", QuickActionEvents.consumeRequestedAccount())
+        assertNull(QuickActionEvents.consumeRequestedAccount())
+        assertTrue(QuickActionEvents.openLink("app.tandemforactual://open/add-transaction?from=widget&account=cash#top"))
+        assertEquals("cash", QuickActionEvents.consumeRequestedAccount())
+        assertTrue(QuickActionEvents.openLink("app.tandemforactual://open/add-transaction?account="))
+        assertNull(QuickActionEvents.consumeRequestedAccount())
+        QuickActionEvents.requestAddTransaction(" ")
+        assertNull(QuickActionEvents.consumeRequestedAccount())
+        QuickActionEvents.requestAddTransaction("checking")
+        QuickActionEvents.open(QuickAction.SCAN_RECEIPT)
+        assertNull(QuickActionEvents.consumeRequestedAccount())
+        QuickActionEvents.requestAddTransaction("checking")
+        QuickActionEvents.shareText("Paid 4.50")
+        assertNull(QuickActionEvents.consumeRequestedAccount())
     }
 
     @Test

@@ -3,6 +3,13 @@
   <string name="widget_budget_label">Budget</string>
   <string name="widget_cover_label">Budget for the cover screen</string>
   <string name="widget_budget_description">See what’s ready to assign and add a transaction.</string>
+  <string name="widget_category_label">Left to spend</string>
+  <string name="widget_category_cover_label">Left to spend for the cover screen</string>
+  <string name="widget_category_title">Left to spend</string>
+  <string name="widget_category_description">See what’s left in the categories you pick this month.</string>
+  <string name="widget_quick_add_label">Quick add</string>
+  <string name="widget_quick_add_short">Add</string>
+  <string name="widget_quick_add_description">Start a new transaction in one tap, in an account you pick.</string>
   <string name="shortcut_add_transaction">Add transaction</string>
   <string name="shortcut_scan_receipt">Scan a receipt</string>
   <string name="shortcut_scan_receipt_long">Scan a receipt into a transaction</string>

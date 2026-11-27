@@ -55,6 +55,18 @@ private val FEATURE_ALIASES =
         "account" to QuickAction.ACCOUNTS,
     )
 
+private fun linkParameter(
+    link: String,
+    name: String,
+): String? =
+    link
+        .substringAfter('?', "")
+        .substringBefore('#')
+        .split('&')
+        .firstOrNull { it.substringBefore('=') == name }
+        ?.substringAfter('=', "")
+        ?.takeIf(String::isNotEmpty)
+
 /** Shortcuts ask for a feature here; the app opens it once a budget is ready, behind the app lock. */
 object QuickActionEvents {
     private val mutableAddTransaction = MutableStateFlow(false)
@@ -69,10 +81,13 @@ object QuickActionEvents {
     private var sharedStatement: PickedStatementFile? = null
     private var receiptScan = false
     private var quickAddDraft: QuickAddDraft? = null
+    private var requestedAccountId: String? = null
 
-    fun requestAddTransaction() {
+    /** Opens a new transaction, in [accountId] when that account is open in the budget. */
+    fun requestAddTransaction(accountId: String? = null) {
         receiptScan = false
         quickAddDraft = null
+        requestedAccountId = accountId?.takeIf(String::isNotBlank)
         mutableAddTransaction.value = true
     }
 
@@ -82,6 +97,7 @@ object QuickActionEvents {
             QuickAction.SCAN_RECEIPT -> {
                 receiptScan = true
                 quickAddDraft = null
+                requestedAccountId = null
                 mutableAddTransaction.value = true
             }
             QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> mutableDestination.value = action
@@ -91,8 +107,12 @@ object QuickActionEvents {
     /** Opens the feature a deep link names, returning false for links that aren’t feature links. */
     fun openLink(link: String): Boolean {
         val action = QuickAction.fromLink(link) ?: return false
-        open(action)
-        if (action == QuickAction.ADD_TRANSACTION) quickAddDraft = QuickAddDraft.fromLink(link)
+        if (action == QuickAction.ADD_TRANSACTION) {
+            requestAddTransaction(linkParameter(link, "account"))
+            quickAddDraft = QuickAddDraft.fromLink(link)
+        } else {
+            open(action)
+        }
         return true
     }
 
@@ -101,6 +121,7 @@ object QuickActionEvents {
         sharedText = text
         receiptScan = false
         quickAddDraft = null
+        requestedAccountId = null
         mutableAddTransaction.value = true
     }
 
@@ -109,6 +130,7 @@ object QuickActionEvents {
         sharedReceiptPhoto = reference
         receiptScan = false
         quickAddDraft = null
+        requestedAccountId = null
         mutableAddTransaction.value = true
     }
 
@@ -127,6 +149,8 @@ object QuickActionEvents {
     internal fun consumeQuickAddDraft(): QuickAddDraft? = quickAddDraft.also { quickAddDraft = null }
 
     internal fun consumeReceiptScan(): Boolean = receiptScan.also { receiptScan = false }
+
+    internal fun consumeRequestedAccount(): String? = requestedAccountId.also { requestedAccountId = null }
 
     internal fun consumeAddTransaction(): Boolean {
         val requested = mutableAddTransaction.value
