@@ -149,7 +149,8 @@ private fun BudgetMonthsHeader(
             fontWeight = FontWeight.SemiBold,
         )
         months.monthIds.forEach { monthId ->
-            BudgetMonthHeaderCell(state, monthId, months.toBudget(monthId), focused = months.grid.focus?.monthId == monthId)
+            val focused = months.grid.focus?.monthId == monthId
+            BudgetMonthHeaderCell(state, monthId, months.toBudget(monthId), months.grid.value, focused)
         }
     }
 }
@@ -159,6 +160,7 @@ private fun RowScope.BudgetMonthHeaderCell(
     state: AppState,
     monthId: String,
     toBudgetMinor: Long?,
+    value: GridValue,
     focused: Boolean,
 ) {
     val palette = tandemPalette
@@ -203,7 +205,7 @@ private fun RowScope.BudgetMonthHeaderCell(
             }
         }
         Row {
-            months.grid.value.columns.forEach { column ->
+            value.columns.forEach { column ->
                 Text(
                     column.label,
                     Modifier.weight(1f),
