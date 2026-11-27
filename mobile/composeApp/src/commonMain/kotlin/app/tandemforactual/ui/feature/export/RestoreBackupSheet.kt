@@ -41,11 +41,11 @@ internal fun RestoreBackupSheet(
     currentBudget: String,
 ) {
     val pending = flow.pendingRestore
-    var shown by remember { mutableStateOf<OpenedBackup.Contents?>(null) }
-    if (pending != null) shown = pending
+    val shown = remember { arrayOfNulls<OpenedBackup.Contents>(1) }
+    if (pending != null) shown[0] = pending
     var password by remember(pending) { mutableStateOf("") }
     TandemChoiceDialog(visible = pending != null, onDismissRequest = flow::cancelRestore) {
-        val backup = shown ?: return@TandemChoiceDialog
+        val backup = shown[0] ?: return@TandemChoiceDialog
         val newBudget = flow.restoreTarget == RestoreTarget.NEW_BUDGET && backup.database != null
         SheetCard(
             header = {
