@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="widget_budget_label">Budget</string>
+  <string name="widget_cover_label">Budget for the cover screen</string>
   <string name="widget_budget_description">See what’s ready to assign and add a transaction.</string>
   <string name="shortcut_add_transaction">Add transaction</string>
   <string name="shortcut_scan_receipt">Scan a receipt</string>
