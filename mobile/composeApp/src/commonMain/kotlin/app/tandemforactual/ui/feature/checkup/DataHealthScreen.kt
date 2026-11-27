@@ -197,15 +197,11 @@ private fun visibleRuleFindings(
 @Composable
 private fun rememberRuleTexts(mobileSession: TandemMobileSession): Map<String, RuleText> {
     val rules = mobileSession.ruleRecords
-    val names =
-        remember(mobileSession.accountRecords, mobileSession.categoryRecords, mobileSession.categoryGroupRecords, mobileSession.payeeRecords) {
-            ruleNamesByField(
-                mobileSession.accountRecords,
-                mobileSession.categoryRecords,
-                mobileSession.categoryGroupRecords,
-                mobileSession.payeeRecords,
-            )
-        }
+    val accounts = mobileSession.accountRecords
+    val categories = mobileSession.categoryRecords
+    val groups = mobileSession.categoryGroupRecords
+    val payees = mobileSession.payeeRecords
+    val names = remember(accounts, categories, groups, payees) { ruleNamesByField(accounts, categories, groups, payees) }
     return remember(rules, names) { rules.associate { it.recordId to ruleText(it.recordBody(), names) } }
 }
 
