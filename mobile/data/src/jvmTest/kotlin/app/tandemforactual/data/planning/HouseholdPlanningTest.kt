@@ -85,7 +85,7 @@ class HouseholdPlanningTest {
                         .open(
                             hidden.iv,
                             hidden.ciphertext,
-                            PlanningCipher.identity("b", "open", hidden.schemaVersion, hidden.revision),
+                            PlanningCipher.identity("b", "open", hidden.recordType, hidden.schemaVersion, hidden.revision, deleted = true),
                         ).size,
                 )
                 assertEquals(listOf(false, false), store.savingsGoals().first().map { it.shared })

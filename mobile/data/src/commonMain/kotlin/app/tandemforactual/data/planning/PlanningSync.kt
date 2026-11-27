@@ -113,7 +113,15 @@ class PlanningSync(
         to: PlanningCipher,
     ) {
         for (record in dao.all(budgetId)) {
-            val identity = PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, record.revision)
+            val identity =
+                PlanningCipher.identity(
+                    budgetId,
+                    record.recordId,
+                    record.recordType,
+                    record.schemaVersion,
+                    record.revision,
+                    record.deleted,
+                )
             val plaintext = runCatching { from.open(record.iv, record.ciphertext, identity) }.getOrNull() ?: continue
             val (iv, sealed) = to.seal(plaintext, identity)
             dao.upsert(record.copy(iv = iv, ciphertext = sealed))
@@ -193,7 +201,14 @@ class PlanningSync(
             cipher.open(
                 record.iv,
                 record.ciphertext,
-                PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, record.revision),
+                PlanningCipher.identity(
+                    budgetId,
+                    record.recordId,
+                    record.recordType,
+                    record.schemaVersion,
+                    record.revision,
+                    record.deleted,
+                ),
             )
         var base = record.syncedRevision.takeIf { it > 0 }
         val private =
@@ -206,9 +221,18 @@ class PlanningSync(
         var attempts = 0
         while (attempts++ < 2) {
             val revision = (base ?: 0) + 1
-            val identity = PlanningCipher.identity(budgetId, record.recordId, record.schemaVersion, revision)
+            val identity =
+                PlanningCipher.identity(budgetId, record.recordId, record.recordType, record.schemaVersion, revision, record.deleted)
             val (iv, sealed) = cipher.seal(plaintext, identity)
-            val (sentIv, sent) = if (private) cipher.seal(ByteArray(0), identity) else iv to sealed
+            val (sentIv, sent) =
+                if (private) {
+                    cipher.seal(
+                        ByteArray(0),
+                        PlanningCipher.identity(budgetId, record.recordId, record.recordType, record.schemaVersion, revision, true),
+                    )
+                } else {
+                    iv to sealed
+                }
             val result =
                 transport.put(
                     record.recordId,
