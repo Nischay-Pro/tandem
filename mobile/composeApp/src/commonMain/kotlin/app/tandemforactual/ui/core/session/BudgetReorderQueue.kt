@@ -192,6 +192,7 @@ internal enum class BudgetReorderKind {
     SET_CATEGORY_CARRYOVER,
     COPY_BUDGET_MONTH,
     APPLY_BUDGET_TEMPLATE,
+    APPLY_GOAL_TEMPLATES,
     HOLD_BUDGET_NEXT_MONTH,
     RESET_BUDGET_HOLD,
     MOVE_BUDGET_MONEY,
@@ -279,6 +280,7 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update overspending rollover."
             BudgetReorderKind.COPY_BUDGET_MONTH -> "Couldn’t copy last month’s assignments."
             BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Couldn’t apply this template."
+            BudgetReorderKind.APPLY_GOAL_TEMPLATES -> "Couldn’t apply the budget’s templates."
             BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Couldn’t hold this money for next month."
             BudgetReorderKind.RESET_BUDGET_HOLD -> "Couldn’t reset the next-month hold."
             BudgetReorderKind.MOVE_BUDGET_MONEY -> "Couldn’t move money between categories."

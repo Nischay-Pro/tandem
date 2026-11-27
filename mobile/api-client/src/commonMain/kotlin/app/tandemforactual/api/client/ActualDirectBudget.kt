@@ -18,6 +18,7 @@ import app.tandemforactual.data.actual.ActualSyncResult
 import app.tandemforactual.data.actual.ActualTransactionOperations
 import app.tandemforactual.data.actual.ActualWriter
 import app.tandemforactual.data.actual.ChangeSet
+import app.tandemforactual.data.actual.GoalTemplateEngine
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.LedgerTransaction
@@ -266,6 +267,11 @@ class ActualDirectBudget private constructor(
 
     suspend fun previewRule(rule: JsonObject): List<HealthRow> =
         locked { ActualDataHealth(db).rows(ActualRuleEngine(db) { error("A preview never creates payees") }.preview(rule)) }
+
+    suspend fun <T> goalTemplates(
+        today: String,
+        block: (GoalTemplateEngine) -> T,
+    ): T = locked { block(GoalTemplateEngine(db, today)) }
 
     suspend fun dataHealth(today: String): List<HealthIssue> {
         syncWhenPossible()

@@ -532,6 +532,12 @@ class ActualRuleEngine(
         }
     }
 
+    /** `Rule.execActions` for one rule, ignoring its conditions, as a schedule template runs its schedule's rule. */
+    internal fun execRule(
+        ruleId: String,
+        transaction: Map<String, Any?>,
+    ): Map<String, Any?>? = current().rules.firstOrNull { it.id == ruleId }?.let { rule -> execActions(rule.actions, transaction) { "" } }
+
     /** Ids of the newest transactions a rule's conditions match, newest first, like Actual's rule preview. */
     fun preview(
         wire: JsonObject,

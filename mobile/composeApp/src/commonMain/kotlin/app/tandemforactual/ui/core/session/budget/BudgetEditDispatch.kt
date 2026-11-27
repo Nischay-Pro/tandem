@@ -2,12 +2,15 @@ package app.tandemforactual.ui.core.session.budget
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.applyBudgetGoalTemplates
 import app.tandemforactual.api.client.importBudgetAccountTransactions
 import app.tandemforactual.api.client.setBudgetType
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
+import app.tandemforactual.ui.core.session.budget.BudgetEdits
 import app.tandemforactual.ui.core.session.flag
+import app.tandemforactual.ui.core.session.goalTemplateCategoryIds
 import app.tandemforactual.ui.core.session.optionalString
 import app.tandemforactual.ui.core.session.requirePayload
 import app.tandemforactual.ui.core.session.requiredAssignments
@@ -50,6 +53,7 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.COPY_BUDGET_MONTH,
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
         -> Dispatched(sendAssignmentEdit(request))
+        BudgetReorderKind.APPLY_GOAL_TEMPLATES -> Dispatched(sendGoalTemplates(request))
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
         BudgetReorderKind.RESET_BUDGET_HOLD,
         BudgetReorderKind.MOVE_BUDGET_MONEY,
@@ -195,6 +199,26 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
         }
         else -> error("Not a AssignmentEdit edit: ${request.kind}")
     }
+
+/** Actual's "Apply budget templates", worked out again from the budget as it is when the edit is sent. */
+private suspend fun BudgetEditQueue.sendGoalTemplates(request: QueuedBudgetReorder): Boolean {
+    val payload = request.requirePayload()
+    return host.feedback.performBudgetAction(
+        request.budgetId,
+        request.encryptionPassword,
+        "Couldn’t apply the budget’s templates.",
+        null,
+    ) {
+        host.apiClient.applyBudgetGoalTemplates(
+            request.budgetId,
+            payload.requiredString("month"),
+            payload.requiredBoolean("force"),
+            payload.goalTemplateCategoryIds(),
+            request.encryptionPassword,
+            request.operationId,
+        )
+    }
+}
 
 /** Holding money for next month, resetting a hold, and moving money between categories. */
 private suspend fun BudgetEditQueue.sendMoneyMove(request: QueuedBudgetReorder): Boolean =
