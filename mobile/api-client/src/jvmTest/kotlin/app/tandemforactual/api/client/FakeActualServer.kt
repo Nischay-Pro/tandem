@@ -17,6 +17,7 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import java.io.File
 import kotlin.io.path.createTempDirectory
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -39,10 +40,13 @@ internal class FakeActualServer {
     var failUploads = false
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
-    var syncCalls = 0
+
+    @Volatile var syncCalls = 0
+    var syncGate: CompletableDeferred<Unit>? = null
     var extension = false
     val budgetKey: ActualBudgetKey = ActualBudgetKey.derive("key", "secret", "salt")
     private val sealedArchive = budgetKey.encrypt(archive)
+    private val syncLock = Any()
     private val lockedMessages = linkedMapOf<String, MessageEnvelope>()
     private var lockedMerkle = MerkleTrie.fromJson("{}")
     private val keyTest =
@@ -134,26 +138,27 @@ internal class FakeActualServer {
                         )
                     "/sync/sync" -> {
                         syncCalls++
+                        syncGate?.await()
                         syncFailure?.let { return@MockEngine respond(it, HttpStatusCode.BadRequest) }
                         val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                         if (failUploads && sent.messages.isNotEmpty()) return@MockEngine respond("", HttpStatusCode.ServiceUnavailable)
                         val locked = sent.fileId == "encrypted"
                         val store = if (locked) lockedMessages else messages
-                        for (message in sent.messages) {
-                            if (store.putIfAbsent(message.timestamp, message) == null) {
-                                val stamp = checkNotNull(ActualTimestamp.parse(message.timestamp))
-                                if (locked) lockedMerkle = lockedMerkle.insert(stamp) else merkle = merkle.insert(stamp)
-                            }
-                        }
-                        val sentTimestamps = sent.messages.map { it.timestamp }.toSet()
-                        respond(
-                            SyncProtocol.encode(
+                        val reply =
+                            synchronized(syncLock) {
+                                for (message in sent.messages) {
+                                    if (store.putIfAbsent(message.timestamp, message) == null) {
+                                        val stamp = checkNotNull(ActualTimestamp.parse(message.timestamp))
+                                        if (locked) lockedMerkle = lockedMerkle.insert(stamp) else merkle = merkle.insert(stamp)
+                                    }
+                                }
+                                val sentTimestamps = sent.messages.map { it.timestamp }.toSet()
                                 SyncResponse(
                                     store.values.filter { it.timestamp > sent.since && it.timestamp !in sentTimestamps },
                                     (if (locked) lockedMerkle else merkle).prune().toJson().toString(),
-                                ),
-                            ),
-                        )
+                                )
+                            }
+                        respond(SyncProtocol.encode(reply))
                     }
                     "/simplefin/transactions" -> respond(bankDownload)
                     "/simplefin/status" -> respond("""{"status":"ok","data":{"configured":$simpleFinConfigured}}""")

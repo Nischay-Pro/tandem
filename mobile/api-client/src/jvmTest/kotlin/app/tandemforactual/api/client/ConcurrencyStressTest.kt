@@ -6,12 +6,15 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -126,5 +129,20 @@ class ConcurrencyStressTest {
             val other = signedIn(server).budget("group")
             other.sync()
             assertEquals(budget.transactions().map { it.id to it.body }.toSet(), other.transactions().map { it.id to it.body }.toSet())
+        }
+
+    @Test
+    fun readsDoNotWaitForASyncStuckOnTheServer(): Unit =
+        runBlocking(Dispatchers.Default) {
+            val server = FakeActualServer()
+            val budget = signedIn(server).budget("group")
+            val gate = CompletableDeferred<Unit>()
+            server.syncGate = gate
+            val calls = server.syncCalls
+            val sync = launch { budget.sync() }
+            withTimeout(5_000) { while (server.syncCalls == calls) delay(5) }
+            withTimeout(5_000) { budget.checking() }
+            gate.complete(Unit)
+            sync.join()
         }
 }
