@@ -11,6 +11,7 @@ import app.tandemforactual.ui.core.format.currentMonthId
 import app.tandemforactual.ui.core.format.currentMonthLabel
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.platform.PickedStatementFile
 import app.tandemforactual.ui.core.search.ActivitySearchFilter
 import app.tandemforactual.ui.core.search.ActivitySortOrder
 import app.tandemforactual.ui.core.session.AutomaticBackupResult
@@ -51,6 +52,8 @@ internal class AppState {
     var accountsRequestedAction by mutableStateOf<String?>(null)
     var menuOpen by mutableStateOf(false)
     var receiptScanRequested by mutableStateOf(false)
+    var pendingReceiptPhoto by mutableStateOf<String?>(null)
+    var pendingStatementFile by mutableStateOf<PickedStatementFile?>(null)
     var reportsMonthId by mutableStateOf(currentMonthId())
     var selectedReportKindName by mutableStateOf(ReportKind.SPENDING_BY_CATEGORY.name)
     var reportsBudgetId by mutableStateOf("")

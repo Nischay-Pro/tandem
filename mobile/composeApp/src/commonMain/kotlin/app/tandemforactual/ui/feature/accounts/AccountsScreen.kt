@@ -90,6 +90,7 @@ internal fun AccountsScreen(
         mobileSession.budgetActionMessage?.let {
             item(key = "account-action-message") { budgetActionFeedbackMessage(mobileSession) }
         }
+        if (!closedOnly) pendingStatementItem(state)
         if (state.accountsSearchExpanded && !closedOnly) {
             item(key = "account-search-field") {
                 AccountSearchField(

@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.IntentCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.splashscreen.SplashScreen
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -41,6 +43,7 @@ import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
 import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.app.receiveSharedFile
 import app.tandemforactual.ui.app.separatingVerticalHinge
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
@@ -251,8 +254,15 @@ class MainActivity : FragmentActivity() {
             intent?.action == Intent.ACTION_VIEW ->
                 intent.dataString?.let { link -> if (!QuickActionEvents.openLink(link)) AuthReturnEvents.publish(link) }
             intent?.action == ACTION_ADD_TRANSACTION -> QuickActionEvents.requestAddTransaction()
-            intent?.action == Intent.ACTION_SEND && intent.type == "text/plain" ->
-                intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let(QuickActionEvents::shareText)
+            intent?.action == Intent.ACTION_SEND -> receiveShare(intent)
+        }
+    }
+
+    private fun receiveShare(intent: Intent) {
+        val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+        if (stream != null && receiveSharedFile(this, stream, intent.type, lifecycleScope)) return
+        if (intent.type == "text/plain") {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let(QuickActionEvents::shareText)
         }
     }
 

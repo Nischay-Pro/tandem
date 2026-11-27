@@ -26,6 +26,7 @@ internal class ReceiptScanner(
     val canTakePhoto: Boolean,
     val takePhoto: () -> Unit,
     val choosePhoto: () -> Unit,
+    val readPhoto: (reference: String) -> Unit = {},
 )
 
 /** Opens the camera or photo library and reads the text of the chosen receipt on the device. */

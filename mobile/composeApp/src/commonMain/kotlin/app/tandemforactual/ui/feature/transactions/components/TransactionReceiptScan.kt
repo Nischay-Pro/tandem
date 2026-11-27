@@ -49,7 +49,7 @@ internal class TransactionReceiptScanState {
     }
 }
 
-/** Scans a receipt into the new transaction, also when one was asked for before the form opened. */
+/** Scans a receipt into the new transaction, also when one was asked for, shared or dropped before the form opened. */
 @Composable
 internal fun rememberTransactionReceiptScan(
     state: AppState,
@@ -91,6 +91,13 @@ internal fun rememberTransactionReceiptScan(
             onScanRequested()
             scan.start()
         }
+    }
+    LaunchedEffect(state.pendingReceiptPhoto) {
+        val photo = state.pendingReceiptPhoto ?: return@LaunchedEffect
+        state.pendingReceiptPhoto = null
+        delay(TandemMotion.ROUTE_MILLIS.toLong())
+        onScanRequested()
+        scan.receiptScanner.readPhoto(photo)
     }
     return scan
 }

@@ -2,7 +2,6 @@
 
 package app.tandemforactual.ui.core.platform
 
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -49,16 +48,11 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
     }
 }
 
-private fun readStatementFile(
+internal fun readStatementFile(
     resolver: android.content.ContentResolver,
     uri: android.net.Uri,
 ): PickedStatementFile {
-    val name =
-        runCatching {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
-        }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "statement.csv"
+    val name = resolver.displayName(uri) ?: "statement.csv"
     return try {
         val bytes =
             resolver.openInputStream(uri)?.use(InputStream::readBoundedStatementBytes)

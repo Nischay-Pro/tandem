@@ -43,6 +43,16 @@
         <action android:name="android.intent.action.SEND" />
         <category android:name="android.intent.category.DEFAULT" />
         <data android:mimeType="text/plain" />
+        <data android:mimeType="image/*" />
+        <data android:mimeType="text/csv" />
+        <data android:mimeType="text/comma-separated-values" />
+        <data android:mimeType="application/csv" />
+        <data android:mimeType="application/ofx" />
+        <data android:mimeType="application/x-ofx" />
+        <data android:mimeType="application/x-qfx" />
+        <data android:mimeType="application/vnd.intu.qfx" />
+        <data android:mimeType="application/qif" />
+        <data android:mimeType="application/x-qif" />
       </intent-filter>
     </activity>
     <provider
