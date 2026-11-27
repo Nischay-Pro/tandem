@@ -25,7 +25,7 @@ import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.launch
 
-/** Confirmation sheet that replaces this month's assignments with last month's. */
+/** Confirmation sheet that replaces this month's amounts with last month's. */
 @Composable
 internal fun CopyLastMonthSheet(
     visible: Boolean,
@@ -77,7 +77,7 @@ internal fun CopyLastMonthSheet(
             },
         ) {
             Text(
-                "Replace ${state.selectedMonth} assignments with last month’s amounts?",
+                "Replace ${state.selectedMonth} amounts with last month’s?",
                 color = tandemPalette.muted,
                 fontSize = TandemTypography.body,
             )

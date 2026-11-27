@@ -108,6 +108,7 @@ private fun LazyItemScope.BudgetCategoryItem(
         category = category,
         compact = context.compact,
         modifier = categoryCardModifier,
+        words = budgetCategoryWords(group.isIncome, context.isTrackingBudget),
         reorder =
             BudgetCategoryReorder(
                 isReordering = categoryIsReordering,

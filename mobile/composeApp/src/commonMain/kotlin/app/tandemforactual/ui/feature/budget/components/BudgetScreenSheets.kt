@@ -68,13 +68,13 @@ internal fun BudgetScreenSheets(
     scope: CoroutineScope,
 ) {
     CopyLastMonthSheet(
-        visible = dialogs.showCopyLastMonth && isLiveBudget && !isTrackingBudget,
+        visible = dialogs.showCopyLastMonth && isLiveBudget,
         state = state,
         mobileSession = mobileSession,
         onDismiss = { dialogs.showCopyLastMonth = false },
     )
     BudgetTemplatesSheet(
-        visible = dialogs.showTemplates && isLiveBudget && !isTrackingBudget,
+        visible = dialogs.showTemplates && isLiveBudget,
         state = state,
         mobileSession = mobileSession,
         groups = groups,

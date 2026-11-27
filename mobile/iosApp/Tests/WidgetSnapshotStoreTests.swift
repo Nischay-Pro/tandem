@@ -28,6 +28,13 @@ final class WidgetSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(snapshot.categories?.count, 2)
         XCTAssertEqual(snapshot.status(on: date(2026, 11, 30), calendar: calendar), .ready)
         XCTAssertEqual(snapshot.status(on: date(2026, 12, 1), calendar: calendar), .outdated)
+        XCTAssertNil(snapshot.readyLabel)
+    }
+
+    func testTrackingSummaryCarriesItsLabel() throws {
+        let tracking = #"{"version":1,"month":"2026-11","state":"ready","readyToAssign":"$15.00","readyLabel":"Saved this month"}"#
+        XCTAssertTrue(WidgetSnapshotStore.save(tracking, to: fileURL))
+        XCTAssertEqual(try XCTUnwrap(WidgetSnapshotStore.load(from: fileURL)).readyLabel, "Saved this month")
     }
 
     func testOnlyValidSummariesAreSaved() {

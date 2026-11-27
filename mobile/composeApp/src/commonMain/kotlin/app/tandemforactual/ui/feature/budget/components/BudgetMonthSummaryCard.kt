@@ -174,7 +174,7 @@ private fun BudgetHoldRow(
 }
 
 @Composable
-private fun BudgetStillToSpendRow(
+internal fun BudgetStillToSpendRow(
     state: AppState,
     groups: List<LiveCategoryGroupSummary>,
     isLiveBudget: Boolean,

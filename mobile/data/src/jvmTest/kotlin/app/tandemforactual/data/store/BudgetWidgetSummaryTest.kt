@@ -21,6 +21,66 @@ class BudgetWidgetSummaryTest {
     }
 
     @Test
+    fun trackingSavingsAreIncomeLessSpending() {
+        assertEquals(1_500L, trackingSavedMinor("""{"totalIncome":5000,"totalSpent":-3500}"""))
+        assertEquals(-200L, trackingSavedMinor("""{"totalIncome":0,"totalSpent":-200}"""))
+        assertNull(trackingSavedMinor("""{"totalSpent":-200}"""))
+        assertNull(trackingSavedMinor("""{"totalIncome":5}"""))
+        assertNull(trackingSavedMinor("not json"))
+        assertEquals("Ready to assign", BudgetWidgetSummary("Home", 0, 0, false, null).headline)
+        assertEquals("Saved this month", BudgetWidgetSummary("Home", 0, 0, false, null, tracking = true).headline)
+    }
+
+    @Test
+    fun trackingBudgetsShowWhatWasSavedInsteadOfToBudget() =
+        runBlocking {
+            val database =
+                openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val repository = LocalBudgetRepository(database) { 1L }
+                repository.applyFullSnapshot(
+                    budgetId = "budget",
+                    generation = "generation",
+                    cursor = "1",
+                    expectedCheckpoint = null,
+                    records =
+                        listOf(
+                            RemoteBudgetRecord(
+                                "budget",
+                                "budget-month",
+                                "2026-11",
+                                "r1",
+                                """{"toBudget":null,"totalIncome":5000,"totalSpent":-3500,"categoryGroups":[]}""",
+                                "generation",
+                            ),
+                            RemoteBudgetRecord(
+                                "budget",
+                                "budget-settings",
+                                "display",
+                                "r2",
+                                """{"currencyCode":"EUR","currencySymbol":"€","currencyFractionDigits":2,"budgetType":"tracking"}""",
+                                "generation",
+                            ),
+                        ),
+                )
+                val open = mapOf("selectedBudgetId" to "budget", "selectedBudget" to "Home")
+
+                val summary = budgetWidgetSummary(repository, open, "2026-11-30")!!
+                assertEquals(true, summary.tracking)
+                assertEquals(1_500L, summary.readyToAssignMinor)
+                assertEquals(3_500L, summary.spentMinor)
+                assertNull(budgetWidgetSummary(repository, open, "2027-01-01")!!.readyToAssignMinor)
+                assertEquals(
+                    """{"version":1,"month":"2026-11","state":"ready","budgetName":"Home","readyToAssign":"1500",""" +
+                        """"readyToAssignNegative":false,"readyLabel":"Saved this month","spent":"3500","categories":[]}""",
+                    widgetSnapshotJson(repository, open, "2026-11-30") { minor, _ -> "$minor" },
+                )
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
     fun summaryFollowsTheSelectedBudgetAndPrivacySettings() =
         runBlocking {
             val database =

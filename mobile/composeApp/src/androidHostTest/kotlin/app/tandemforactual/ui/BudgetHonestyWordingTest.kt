@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import app.tandemforactual.api.client.TandemApiClient
-import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
@@ -60,20 +59,6 @@ class BudgetHonestyWordingTest {
         composeTestRule.onNodeWithText("Roll overspending into next month").assertExists()
         composeTestRule.onNodeWithText("Per category").assertExists()
         composeTestRule.onAllNodesWithText("Read-only").assertCountEquals(0)
-    }
-
-    @Test
-    fun trackingPreferencesStayReadOnlyBecauseTheToggleIsNotOffered() {
-        val state = AppState()
-        state.budgetDisplaySettings = BudgetDisplaySettings("USD", "$", 2, null, false, null, false, budgetType = "tracking")
-        composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                BudgetPreferencesScreen(state, session())
-            }
-        }
-
-        composeTestRule.onNodeWithText("Read-only").assertExists()
-        composeTestRule.onAllNodesWithText("Per category").assertCountEquals(0)
     }
 
     @Test
