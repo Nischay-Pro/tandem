@@ -24,10 +24,10 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.CheckBoxRow
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.watch_after_unlock
 import app.tandemforactual.ui.generated.resources.watch_after_unlock_detail
-import app.tandemforactual.ui.generated.resources.watch_after_unlock_title
 import app.tandemforactual.ui.generated.resources.watch_detail
 import app.tandemforactual.ui.generated.resources.watch_pinned
 import app.tandemforactual.ui.generated.resources.watch_pinned_detail
@@ -35,7 +35,6 @@ import app.tandemforactual.ui.generated.resources.watch_pinned_empty
 import app.tandemforactual.ui.generated.resources.watch_quick_add
 import app.tandemforactual.ui.generated.resources.watch_quick_add_detail
 import app.tandemforactual.ui.generated.resources.watch_quick_add_short
-import app.tandemforactual.ui.generated.resources.watch_quick_add_title
 import app.tandemforactual.ui.generated.resources.watch_status_pinned
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
@@ -50,20 +49,21 @@ internal fun WatchScreen(
     val settings = state.watchSettings
     PageColumn {
         BodyText(stringResource(Res.string.watch_detail))
-        OptInCard(
-            stringResource(Res.string.watch_quick_add),
-            settings.quickAddEnabled,
-            { state.watchSettings = state.watchSettings.copy(quickAddEnabled = it) },
-            stringResource(Res.string.watch_quick_add_title),
-            stringResource(Res.string.watch_quick_add_detail),
-        )
-        OptInCard(
-            stringResource(Res.string.watch_after_unlock),
-            settings.summaryAfterUnlock,
-            { state.watchSettings = state.watchSettings.copy(summaryAfterUnlock = it) },
-            stringResource(Res.string.watch_after_unlock_title),
-            stringResource(Res.string.watch_after_unlock_detail),
-        )
+        SurfaceCard {
+            ToggleRow(
+                stringResource(Res.string.watch_quick_add),
+                subtitle = stringResource(Res.string.watch_quick_add_detail),
+                checked = settings.quickAddEnabled,
+                onChange = { state.watchSettings = state.watchSettings.copy(quickAddEnabled = it) },
+            )
+            DividerLine()
+            ToggleRow(
+                stringResource(Res.string.watch_after_unlock),
+                subtitle = stringResource(Res.string.watch_after_unlock_detail),
+                checked = settings.summaryAfterUnlock,
+                onChange = { state.watchSettings = state.watchSettings.copy(summaryAfterUnlock = it) },
+            )
+        }
         PinnedCategories(state, mobileSession)
     }
 }

@@ -158,7 +158,14 @@ class WatchSummaryTest {
             assertEquals("true", food.getValue("o").jsonPrimitive.content)
             assertEquals("112", food.text("p"))
             assertEquals(listOf("Corner Café"), food.getValue("x").jsonArray.map { it.jsonObject.text("n") })
-            assertEquals("Water", ready.getValue("u").jsonArray[0].jsonObject.text("n"))
+            assertEquals(
+                "Water",
+                ready
+                    .getValue("u")
+                    .jsonArray[0]
+                    .jsonObject
+                    .text("n"),
+            )
             val quickAdd = ready.getValue("q").jsonObject
             assertEquals(listOf("savings", "checking"), quickAdd.getValue("a").jsonArray.map { it.jsonObject.text("i") })
             assertEquals(listOf("Corner Café"), quickAdd.getValue("p").jsonArray.map { it.jsonPrimitive.content })
@@ -200,13 +207,37 @@ class WatchSummaryTest {
         assertNull(tiny["c"])
         assertNull(tiny["u"])
         assertEquals("Home", tiny.text("b"))
-        assertEquals(listOf("a"), tiny.getValue("q").jsonObject.getValue("a").jsonArray.map { it.jsonObject.text("i") })
+        assertEquals(
+            listOf("a"),
+            tiny
+                .getValue("q")
+                .jsonObject
+                .getValue("a")
+                .jsonArray
+                .map { it.jsonObject.text("i") },
+        )
 
         val full = decode(encodeWatchSummary(summary))
         assertEquals("true", full.text("lo"))
-        assertEquals("E9", full.getValue("c").jsonArray[0].jsonObject.text("bu"))
+        assertEquals(
+            "E9",
+            full
+                .getValue("c")
+                .jsonArray[0]
+                .jsonObject
+                .text("bu"),
+        )
         assertNull(full.getValue("u").jsonArray[0].jsonObject["a"])
-        assertEquals("r", full.getValue("q").jsonObject.getValue("k").jsonArray[0].jsonObject.text("i"))
+        assertEquals(
+            "r",
+            full
+                .getValue("q")
+                .jsonObject
+                .getValue("k")
+                .jsonArray[0]
+                .jsonObject
+                .text("i"),
+        )
     }
 
     @Test
