@@ -20,6 +20,8 @@ import app.tandemforactual.ui.core.platform.IosDeviceCredentialStore
 import app.tandemforactual.ui.core.platform.IosEncryptedBudgetVault
 import app.tandemforactual.ui.core.platform.IosPrivacyCover
 import app.tandemforactual.ui.core.platform.IosSyncEventSource
+import app.tandemforactual.ui.core.platform.IosWatch
+import app.tandemforactual.ui.core.platform.LocalWatchLink
 import app.tandemforactual.ui.core.platform.SecurityIosKeychainClient
 import app.tandemforactual.ui.core.platform.iosTandemDatabase
 import app.tandemforactual.ui.core.platform.postIosLocalAlert
@@ -91,6 +93,7 @@ private fun createTandemViewController(
                 LocalBackupSecrets provides backupSecrets,
                 LocalBankIcons provides bankIcons,
                 LocalWindowControlsInset provides rememberWindowControlsInset(windowControlsInset),
+                LocalWatchLink provides IosWatch,
             ) {
                 TandemApp(
                     actualBudgetFiles =

@@ -39,3 +39,17 @@ and expense category balances, already formatted, or only the budget's name whil
 app lock, privacy mode or encryption protect it. The widgets read only that file
 and never use the network. Signing for a device needs the App Group enabled for
 `app.tandemforactual.ios.widgets` too.
+
+The `TandemWatch` app (watchOS 10 and later) is embedded in the iPhone app and
+installs only alongside it. It shows left to spend, pinned categories and the
+next bills, and adds transactions typed on the watch. The iPhone sends it a
+summary of at most 2 KB through WatchConnectivity's application context, and the
+watch's additions come back as queued user info transfers, each with an id so a
+repeat adds nothing. The iPhone adds them to the outbox like any automation app,
+and Change History names the watch. Nothing on the watch signs in or reaches the
+server. `TandemWatchComplications` reads the last summary from the watch's copy
+of the App Group. Code in `Watch/Shared` is compiled into the iPhone app too, so
+its tests run in the iPhone simulator job; the watch targets are built there as
+part of the app. Signing for a device needs the App Group enabled for
+`app.tandemforactual.ios.watchkitapp` and
+`app.tandemforactual.ios.watchkitapp.complications`.

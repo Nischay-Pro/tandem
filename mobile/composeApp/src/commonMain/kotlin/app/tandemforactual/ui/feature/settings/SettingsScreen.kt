@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import app.tandemforactual.ui.core.format.APP_LANGUAGES
 import app.tandemforactual.ui.core.format.LanguagePickerSheet
 import app.tandemforactual.ui.core.format.LocalAppLanguage
+import app.tandemforactual.ui.core.platform.watchPaired
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.formatRecoveryKey
 import app.tandemforactual.ui.core.state.AppNavigation
@@ -74,6 +75,7 @@ import app.tandemforactual.ui.generated.resources.settings_server_device
 import app.tandemforactual.ui.generated.resources.settings_server_device_detail
 import app.tandemforactual.ui.generated.resources.settings_sync_preferences
 import app.tandemforactual.ui.generated.resources.settings_sync_preferences_detail
+import app.tandemforactual.ui.generated.resources.watch_title
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.CloudSync
@@ -93,6 +95,7 @@ import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Tags
 import com.composables.icons.lucide.WalletCards
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -354,6 +357,10 @@ private fun AutomationConnectionsSection(
             AppRoute.CONNECTED_SERVICES,
             navigation,
         )
+        if (watchPaired()) {
+            DividerLine()
+            SettingsPageRow(stringResource(Res.string.watch_title), watchStatus(state), Lucide.Watch, AppRoute.WATCH, navigation)
+        }
     }
 }
 

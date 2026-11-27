@@ -52,6 +52,7 @@ internal enum class AppRoute(
     LOCAL_DATA("Local data and storage"),
     AUTOMATION("Automation"),
     CONNECTED_SERVICES("Connected services"),
+    WATCH("Watch"),
     ABOUT("About and help"),
     MERCHANT_ICON_LICENSES("Licenses"),
     CHANGE_HISTORY("Change history"),
