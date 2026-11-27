@@ -231,6 +231,23 @@ class TandemApiClientTest {
         }
 
     @Test
+    fun downloadsAgainWhenTheFirstDownloadNeverFinished(): Unit =
+        runBlocking {
+            val server = FakeActualServer()
+            val files = TempBudgetFiles()
+            files.install("group", ByteArray(0)).close()
+            val client = client(server, files)
+            client.signInWithPassword(url, "test", "Phone")
+            val budget = client.budget("group")
+            assertTrue(budget.snapshot("2026-11-21").records.isNotEmpty())
+            budget.closeNow()
+            files.open("group")!!.let { db ->
+                assertEquals("file", ActualDirectBudget.storedFileId(db))
+                db.close()
+            }
+        }
+
+    @Test
     fun opensBudgetsAndEditsThem(): Unit =
         runBlocking {
             val server = FakeActualServer()
@@ -509,7 +526,8 @@ class TandemApiClientTest {
             val reopened = TandemApiClient(http = server.http, budgetFiles = files, today = { "2026-11-21" })
             reopened.signInWithPassword(url, "test", "Phone")
             files.open("group")!!.apply { execute("DROP TABLE tandem_direct_sync") }.close()
-            assertFailsWith<Exception> { reopened.budget("group") }
+            val healed = reopened.budget("group").also { it.sync() }
+            assertTrue(healed.snapshot("2026-11-21").records.any { it.type == "payee" && it.id == payee })
         }
 
     @Test

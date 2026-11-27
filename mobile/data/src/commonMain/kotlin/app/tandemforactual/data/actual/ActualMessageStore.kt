@@ -168,6 +168,69 @@ class ActualMessageStore(
         )
     }
 
+    /**
+     * Applies messages deferred by an older version whose schema or value format is now known, as Actual does when it
+     * opens a budget. Ones still unknown stay; ones SQLite keeps rejecting are dropped. Returns how many were applied.
+     */
+    fun replayPending(): Int =
+        db.transaction {
+            db.execute(PENDING_MESSAGES_TABLE_SQL)
+            db.execute(
+                """
+                DELETE FROM messages_pending WHERE EXISTS (SELECT 1 FROM messages_crdt c WHERE c.dataset = messages_pending.dataset
+                  AND c.row = messages_pending.row AND c.column = messages_pending.column AND c.timestamp > messages_pending.timestamp)
+                """.trimIndent(),
+            )
+            var waiting =
+                db.query("SELECT dataset, row, column, value FROM messages_pending ORDER BY timestamp").map {
+                    PendingCell(it["dataset"] as String, it["row"] as String, it["column"] as String, it["value"] as String)
+                }
+            var applied = 0
+            while (waiting.isNotEmpty()) {
+                val outcomes = waiting.map { it to replayOne(it) }
+                applied += outcomes.count { it.second == Replay.APPLIED }
+                val failed = outcomes.filter { it.second == Replay.FAILED }.map { it.first }
+                if (failed.size == waiting.size) {
+                    failed.forEach { it.forget() }
+                    break
+                }
+                waiting = failed
+            }
+            applied
+        }
+
+    private data class PendingCell(
+        val dataset: String,
+        val row: String,
+        val column: String,
+        val value: String,
+    )
+
+    private enum class Replay { APPLIED, NEWER_VERSION, FAILED }
+
+    private fun replayOne(cell: PendingCell): Replay {
+        val value = CrdtValue.deserialize(cell.value)
+        if (value is CrdtValue.Unknown) return Replay.NEWER_VERSION
+        val bound: Any? = (value as? CrdtValue.Number)?.value ?: (value as? CrdtValue.Text)?.value
+        try {
+            val exists = db.first("SELECT 1 AS found FROM ${quote(cell.dataset)} WHERE id = ?", cell.row) != null
+            if (exists) {
+                db.execute("UPDATE ${quote(cell.dataset)} SET ${quote(cell.column)} = ? WHERE id = ?", bound, cell.row)
+            } else {
+                db.execute("INSERT INTO ${quote(cell.dataset)} (id, ${quote(cell.column)}) VALUES (?, ?)", cell.row, bound)
+            }
+        } catch (error: Exception) {
+            if (isMissingSchema(error)) return Replay.NEWER_VERSION
+            if (!DETERMINISTIC_SQLITE_ERROR.containsMatchIn(error.message.orEmpty())) throw error
+            return Replay.FAILED
+        }
+        cell.forget()
+        return Replay.APPLIED
+    }
+
+    private fun PendingCell.forget() =
+        db.execute("DELETE FROM messages_pending WHERE dataset = ? AND row = ? AND column = ?", dataset, row, column)
+
     private fun isMissingSchema(error: Exception): Boolean {
         val text = error.message.orEmpty()
         return "no such table" in text || "no such column" in text || "has no column named" in text
@@ -177,6 +240,12 @@ class ActualMessageStore(
         private const val PENDING_MESSAGES_TABLE_SQL =
             "CREATE TABLE IF NOT EXISTS messages_pending (dataset TEXT NOT NULL, row TEXT NOT NULL, column TEXT NOT NULL, " +
                 "timestamp TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (dataset, row, column))"
+
+        private val DETERMINISTIC_SQLITE_ERROR =
+            Regex(
+                "constraint failed|datatype mismatch|cannot store|generated column|string or blob too big|syntax error",
+                RegexOption.IGNORE_CASE,
+            )
 
         fun makeClientId(): String = (1..16).joinToString("") { "0123456789abcdef"[kotlin.random.Random.nextInt(16)].toString() }
 

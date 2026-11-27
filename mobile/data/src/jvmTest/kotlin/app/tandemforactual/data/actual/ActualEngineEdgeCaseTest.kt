@@ -337,6 +337,42 @@ class ActualEngineEdgeCaseTest {
     }
 
     @Test
+    fun deferredMessagesApplyOnceTheirSchemaExists() {
+        val store = crdtDb()
+        val clock = store.loadClock()
+        store.apply(
+            listOf(
+                msg(1000, "future_table", "x", CrdtValue.Text("a")),
+                msg(1100, "payees", "future_column", CrdtValue.Text("b")),
+                msg(1200, "payees", "name", CrdtValue.Unknown("Z:new")),
+                msg(1300, "payees", "strict", CrdtValue.Text("bad"), row = "p3"),
+                msg(1400, "payees", "stale", CrdtValue.Text("old")),
+            ),
+            clock,
+            deferUnknownSchema = true,
+        )
+        assertEquals(5L, store.db.first("SELECT count(*) AS n FROM messages_pending")?.get("n"))
+        assertEquals(0, store.replayPending())
+        assertEquals(5L, store.db.first("SELECT count(*) AS n FROM messages_pending")?.get("n"))
+
+        store.db.execute("CREATE TABLE future_table (id TEXT PRIMARY KEY, x TEXT)")
+        store.db.execute("ALTER TABLE payees ADD COLUMN future_column TEXT")
+        store.db.execute("ALTER TABLE payees ADD COLUMN strict INTEGER CHECK (strict IS NULL OR typeof(strict) = 'integer')")
+        store.db.execute("ALTER TABLE payees ADD COLUMN stale TEXT")
+        store.apply(listOf(msg(1500, "payees", "stale", CrdtValue.Text("new"))), clock, deferUnknownSchema = true)
+
+        assertEquals(2, store.replayPending())
+        assertEquals("a", store.db.first("SELECT x FROM future_table WHERE id = 'p1'")?.get("x"))
+        assertEquals("b", store.db.first("SELECT future_column FROM payees WHERE id = 'p1'")?.get("future_column"))
+        assertEquals("new", store.db.first("SELECT stale FROM payees WHERE id = 'p1'")?.get("stale"))
+        assertNull(store.db.first("SELECT 1 AS found FROM payees WHERE id = 'p3'"))
+        assertEquals(
+            listOf("Z:new"),
+            store.db.query("SELECT value FROM messages_pending").map { it["value"] },
+        )
+    }
+
+    @Test
     fun clockSurvivesBadStoredValues() {
         val store = crdtDb()
         store.db.execute("INSERT INTO messages_clock VALUES (1, 'not json')")
