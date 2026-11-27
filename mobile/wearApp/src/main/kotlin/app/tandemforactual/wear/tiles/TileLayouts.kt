@@ -52,12 +52,7 @@ fun leftToSpendLayout(
                     }
                 }
             },
-            bottomSlot =
-                if (summary?.quickAdd == false) {
-                    null
-                } else {
-                    { textEdgeButton(onClick = openApp(context, quickAdd = true), labelContent = { text("+ Add".layoutString) }) }
-                },
+            bottomSlot = addButton(context).takeUnless { summary?.quickAdd == false },
         )
     }
 
@@ -86,6 +81,9 @@ fun nextBillLayout(
             bottomSlot = { textEdgeButton(onClick = openApp(context, quickAdd = false), labelContent = { text("Open".layoutString) }) },
         )
     }
+
+private fun addButton(context: Context): MaterialScope.() -> LayoutElement =
+    { textEdgeButton(onClick = openApp(context, quickAdd = true), labelContent = { text("+ Add".layoutString) }) }
 
 private fun message(summary: WatchSummary?): String? =
     when {
