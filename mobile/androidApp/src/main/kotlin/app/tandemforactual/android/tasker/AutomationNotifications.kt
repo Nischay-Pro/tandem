@@ -64,8 +64,8 @@ internal object AutomationNotifications {
             Notification
                 .Builder(appContext, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_tandem_notification)
-                .setContentTitle(added.summary)
-                .setContentText("Added by $source. Undo removes it.")
+                .setContentTitle(if (added.sealed) "Transaction saved" else added.summary)
+                .setContentText(if (added.sealed) "From $source. Added when you open Tandem." else "Added by $source. Undo removes it.")
                 .setContentIntent(PendingIntent.getActivity(appContext, id, open, flags))
                 .addAction(Notification.Action.Builder(null, "Undo", PendingIntent.getBroadcast(appContext, id, undo, flags)).build())
                 .setAutoCancel(true)

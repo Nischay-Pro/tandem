@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
+import app.tandemforactual.data.inbox.InboxFile
 import app.tandemforactual.ui.core.session.EncryptedBudgetVault
 import app.tandemforactual.ui.core.session.PendingEncryptedBudget
 import java.security.SecureRandom
@@ -85,14 +86,18 @@ class AndroidEncryptedBudgetVault(
             }
         }
 
+    override fun inboxFile(budgetId: String): InboxFile = AndroidInboxFile.forBudget(appContext, budgetId)
+
     override fun delete(budgetId: String) {
         opened.remove(budgetId)
+        AndroidInboxFile.delete(appContext, budgetId)
         entries.getString(budgetId, null)?.let(VaultEntry::parse)?.let { deleteDatabaseFiles(it.fileName) }
         entries.edit(commit = true) { remove(budgetId) }
     }
 
     override fun deleteAll() {
         opened.clear()
+        AndroidInboxFile.deleteAll(appContext)
         entries.all.values
             .mapNotNull { (it as? String)?.let(VaultEntry::parse) }
             .forEach { deleteDatabaseFiles(it.fileName) }

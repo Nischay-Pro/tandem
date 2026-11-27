@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.core.session
 
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.inbox.InboxFile
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.importBudgetWrites
 
@@ -26,6 +27,9 @@ interface EncryptedBudgetVault {
         budgetId: String,
         password: String,
     ): PendingEncryptedBudget
+
+    /** Where automation seals entries for [budgetId] while it's locked; it outlives the vault's password, not the vault. */
+    fun inboxFile(budgetId: String): InboxFile? = null
 
     fun delete(budgetId: String)
 
@@ -54,10 +58,12 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
     password: String,
     vaultKey: ByteArray? = null,
 ): EncryptedBudgetUnlockResult {
+    sealedInboxSource = null
     val existing = vault.open(budgetId, password, vaultKey)
     if (existing != null) {
         bindEncryptedBudgetDatabase(budgetId, existing)
         removeBudgetFromMainStorage(budgetId)
+        sealedInboxSource = budgetId to vault
         synchronizeInBackground(budgetId, password)
         return EncryptedBudgetUnlockResult.UNLOCKED
     }
@@ -76,6 +82,8 @@ internal suspend fun TandemMobileSession.unlockEncryptedBudget(
         pending.commit()
         writesToReplay.remove(budgetId)
         removeBudgetFromMainStorage(budgetId)
+        sealedInboxSource = budgetId to vault
+        if (applySealedInbox(budgetId, password) > 0) synchronizeInBackground(budgetId, password)
         return EncryptedBudgetUnlockResult.UNLOCKED
     }
     val reachable = isServerReachable

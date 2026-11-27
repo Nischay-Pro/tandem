@@ -59,10 +59,20 @@ data class AutomatedTransaction(
     val categoryName: String?,
     val repeated: Boolean,
     val displaySettings: BudgetDisplaySettings?,
+    val sealed: Boolean = false,
 ) {
-    /** The notification line, such as "Added −€12.40 · Corner Café · Coffee". */
+    /** The notification line, such as "Added −€12.40 · Corner Café · Coffee"; a sealed entry says only when it's added. */
     val summary: String
-        get() = listOfNotNull("Added ${formatCurrency(amountMinor, displaySettings)}", payeeName, categoryName).joinToString(" · ")
+        get() =
+            if (sealed) {
+                SEALED_SUMMARY
+            } else {
+                listOfNotNull("Added ${formatCurrency(amountMinor, displaySettings)}", payeeName, categoryName).joinToString(" · ")
+            }
+
+    companion object {
+        const val SEALED_SUMMARY = "Saved. It will be added when you next open Tandem."
+    }
 }
 
 private class ResolvedTransaction(
@@ -89,6 +99,7 @@ suspend fun addAutomatedTransaction(
     source: String,
     todayIso: String,
     nowEpochMs: Long,
+    transactionId: String = "tandem:${Uuid.random()}",
 ): AutomatedTransaction {
     val repository = LocalBudgetRepository(database) { nowEpochMs }
     val log = AutomationLog(database, budgetId)
@@ -98,7 +109,6 @@ suspend fun addAutomatedTransaction(
         return AutomatedTransaction(earlier.transactionId, earlier.operationId, 0, null, null, repeated = true, settings)
     }
     val resolved = resolveTransaction(repository, budgetId, input, settings, todayIso)
-    val transactionId = "tandem:${Uuid.random()}"
     val operationId = Uuid.random().toString()
     try {
         repository.enqueueWrite(writeRequest(operationId, budgetId, transactionId, resolved, nowEpochMs))

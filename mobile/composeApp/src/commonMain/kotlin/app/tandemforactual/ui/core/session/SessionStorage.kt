@@ -45,6 +45,7 @@ internal suspend fun TandemMobileSession.bindEncryptedBudgetDatabase(
 
 internal suspend fun TandemMobileSession.unbindEncryptedBudgetDatabase() {
     val budgetId = budgetStorage?.budgetId ?: return
+    sealedInboxSource = null
     scheduleActionEncryptionPasswords.remove(budgetId)
     bindEncryptedBudgetDatabase(budgetId, null)
 }
@@ -73,6 +74,7 @@ internal suspend fun TandemMobileSession.removeBudgetFromDevice(
     mainStorage?.repository?.removeBudget(budgetId)
     apiClient.removeBudget(budgetId)
     vault?.delete(budgetId)
+    forgetSealedInboxKeys(budgetId)
     cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
     loadLocalRecords(budgetId)
     return null
@@ -116,6 +118,7 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     password: String? = null,
 ): Int? {
     if (downloadAgainBlocker(budgetId, password) != null) return null
+    if (boundEncryptedBudgetId == budgetId) applySealedInbox(budgetId, replayPassword(budgetId, password))
     val unsent = unsentChangeCount(budgetId)
     val replay = repository?.unsentWrites(budgetId).orEmpty()
     val encrypted = boundEncryptedBudgetId == budgetId
@@ -124,6 +127,7 @@ internal suspend fun TandemMobileSession.downloadBudgetAgain(
     apiClient.retireBudget(budgetId)
     mainStorage?.repository?.removeBudget(budgetId)
     vault?.delete(budgetId)
+    forgetSealedInboxKeys(budgetId)
     if (encrypted) {
         if (!storeReplayInNewVault(budgetId, vault, vaultPassword, replay)) writesToReplay[budgetId] = replay
     } else {
