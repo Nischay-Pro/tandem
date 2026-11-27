@@ -115,17 +115,57 @@ jobs:
           shoot ipad "$(pick 'iPad Pro 13')"
           ls -la "$out"
 
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-screenshots
+          path: |
+            ${{ runner.temp }}/screenshots
+            ${{ runner.temp }}/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  apple_watch:
+    name: Apple Watch screenshots
+    if: ${{ inputs.platforms != 'android' }}
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the simulator app built from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 50); do
+            read -r run_id status conclusion < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push --limit 1 --json databaseId,status,conclusion --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"')
+            if [ "$status" = completed ]; then break; fi
+            sleep 60
+          done
+          if [ "${conclusion:-}" != success ]; then
+            echo "::error::CI for $GITHUB_SHA did not pass (${conclusion:-no run}); capture from a commit whose CI passed."
+            exit 1
+          fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ios-simulator-app --dir "$RUNNER_TEMP"
+          (cd "$RUNNER_TEMP" && unzip -q TandemForActual-simulator.zip)
+          test -d "$RUNNER_TEMP/TandemForActual.app"
+
       - name: Capture Apple Watch screenshots
         run: |
           watch_app="$RUNNER_TEMP/TandemForActual.app/Watch/TandemWatch.app"
           bundle="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$watch_app/Info.plist")"
           out="$RUNNER_TEMP/screenshots"
+          mkdir -p "$out"
           runtime="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="watchOS" and x["isAvailable"]]; print(r[-1]["identifier"] if r else "")')"
           if [ -z "$runtime" ]; then
             echo "::notice::No watchOS simulator runtime on this runner image; skipping Apple Watch screenshots."
             exit 0
           fi
-          summary="$(cat scripts/screenshots/watch-demo-summary.json)"
+          summary="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])), separators=(",", ":")))' scripts/screenshots/watch-demo-summary.json)"
           pick() {
             xcrun simctl list devicetypes -j | python3 -c 'import json,re,sys; t=[d for d in json.load(sys.stdin)["devicetypes"] if re.search(sys.argv[1], d["name"])]; print(t[-1]["identifier"] if t else "")' "$1"
           }
@@ -154,10 +194,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-screenshots
-          path: |
-            ${{ runner.temp }}/screenshots
-            ${{ runner.temp }}/*.log
+          name: apple-watch-screenshots
+          path: ${{ runner.temp }}/screenshots
           if-no-files-found: warn
           retention-days: 14
 
