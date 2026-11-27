@@ -18,6 +18,7 @@ import android.view.KeyboardShortcutGroup
 import android.view.Menu
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -39,6 +40,7 @@ import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
 import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.app.separatingVerticalHinge
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
@@ -109,6 +111,7 @@ class MainActivity : FragmentActivity() {
         splashScreen.setKeepOnScreenCondition {
             !appStartupComplete && SystemClock.uptimeMillis() < splashDeadline
         }
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
         TandemProcess.installCrashHandler(crashReports::record)

@@ -111,6 +111,7 @@ kotlin {
     androidMain.dependencies {
       implementation(libs.activityCompose)
       implementation(libs.litert)
+      implementation(libs.windowManager)
     }
     getByName("androidHostTest") {
       dependencies {
@@ -121,6 +122,7 @@ kotlin {
         implementation(libs.composeUiTestManifest)
         implementation(libs.espressoCore)
         implementation(libs.robolectric)
+        implementation(libs.windowTesting)
         implementation(libs.konsist)
       }
     }

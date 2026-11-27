@@ -1,6 +1,10 @@
 package app.tandemforactual.ui.app.shell
 
+import app.tandemforactual.ui.app.ListDetailChange
+import app.tandemforactual.ui.app.accountDetailKey
+import app.tandemforactual.ui.app.activityDetailKey
 import app.tandemforactual.ui.app.isTransactionForm
+import app.tandemforactual.ui.app.listDetailPage
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -77,6 +81,26 @@ internal class ShellNavigator(
             state.selectedTransactionIsLive = false
             state.selectedTransactionIsTransfer = false
             backStack.add(newRouteEntry(AppRoute.NEW_TRANSACTION))
+        }
+    }
+
+    fun listDetailOpen(list: AppRoute): Boolean =
+        when (list) {
+            AppRoute.ACCOUNTS -> accountDetailKey(state, shell.liveAccounts) != null
+            AppRoute.ACTIVITY -> activityDetailKey(state, shell.liveActivityTransactions) != null
+            else -> false
+        }
+
+    fun showListDetail(change: ListDetailChange) {
+        shell.routeTransitionDirection = 0f
+        when (change) {
+            ListDetailChange.SHOW_PANE -> backStack.removeAt(backStack.lastIndex)
+            ListDetailChange.SHOW_PAGE ->
+                backStack
+                    .last()
+                    .route
+                    .listDetailPage()
+                    ?.let { backStack.add(newRouteEntry(it)) }
         }
     }
 

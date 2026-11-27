@@ -10,7 +10,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -20,10 +19,7 @@ import platform.UIKit.UIAccessibilityIsReduceMotionEnabled
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun TandemSystemBars(
-    isDark: Boolean,
-    background: Color,
-) = Unit
+internal actual fun TandemSystemBars(isDark: Boolean) = Unit
 
 @Composable
 @Suppress("ktlint:standard:function-naming")

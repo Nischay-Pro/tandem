@@ -23,14 +23,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.toSize
+import app.tandemforactual.ui.app.ListDetailContinuityEffect
 import app.tandemforactual.ui.app.WorkspacePanes
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
@@ -52,11 +61,21 @@ internal fun ColumnScope.ShellRouteArea(
     val ctx = chrome.ctx
     val routeTransitionInputBlockedState = rememberUpdatedState(ctx.shell.routeTransitionInputBlocked)
     val transitionInputModifier = Modifier.transitionInputBlocker(ctx.state, routeTransitionInputBlockedState)
+    var routeBounds by remember { mutableStateOf<Rect?>(null) }
+    if (!layout.workspaceActive) {
+        ListDetailContinuityEffect(
+            routeBounds,
+            ctx.backStack.map { it.route },
+            ctx.navigator::listDetailOpen,
+            ctx.navigator::showListDetail,
+        )
+    }
     Box(
         modifier =
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .onGloballyPositioned { routeBounds = Rect(it.positionInWindow(), it.size.toSize()) }
                 .clipToBounds()
                 .then(transitionInputModifier)
                 .tandemEdgeBackGesture(

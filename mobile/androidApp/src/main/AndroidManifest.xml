@@ -3,6 +3,8 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
   <application
     android:allowBackup="false"
     android:dataExtractionRules="@xml/data_extraction_rules"
@@ -15,7 +17,7 @@
       android:name=".MainActivity"
       android:launchMode="singleTask"
       android:windowSoftInputMode="adjustResize"
-      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden|uiMode|locale|layoutDirection|fontScale"
+      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation|touchscreen|uiMode|locale|layoutDirection|fontScale"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
       <intent-filter>
