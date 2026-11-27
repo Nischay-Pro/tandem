@@ -43,8 +43,8 @@ internal fun backupNetworkLabel(network: SyncNetwork): String = if (network == S
 private enum class BackupChoice { SCHEDULE, NETWORK }
 
 /**
- * How often backups run in the background, where they go, and on which networks. The rows after the schedule show only
- * while it's on. Where the platform can't run them yet the section says so instead.
+ * How often backups run in the background, where they go, and which networks WebDAV uploads use; folder backups need
+ * none. The rows after the schedule show only while it's on. Where the platform can't run them yet the section says so instead.
  */
 @Composable
 internal fun AutomaticBackupsSection(
@@ -96,7 +96,7 @@ internal fun AutomaticBackupsSection(
                 DividerLine()
                 ListRow(
                     "Back up using",
-                    backupNetworkLabel(settings.network),
+                    "${backupNetworkLabel(settings.network)} for WebDAV uploads",
                     leading = RowLeading.Icon(Lucide.Wifi),
                     onClick = { choosing = BackupChoice.NETWORK },
                 )

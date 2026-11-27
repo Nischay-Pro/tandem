@@ -130,6 +130,25 @@ class ArchitectureTest {
         )
     }
 
+    @Test
+    fun budgetMathsOracleStaysIndependentOfTheEngine() {
+        val oracle = "app.tandemforactual.data.oracle"
+        val oracleFiles = Konsist.scopeFromModule("data").files.filter { it.pkg() == oracle || it.pkg().startsWith("$oracle.") }
+        if (oracleFiles.isEmpty()) fail("No files found in $oracle")
+        val app = Regex("""\bapp\.tandemforactual\.[\w.]+""")
+        check(
+            "oracle-independence",
+            oracleFiles.flatMap { f ->
+                app
+                    .findAll(f.text)
+                    .map { it.value }
+                    .filterNot { it == oracle || it.startsWith("$oracle.") }
+                    .map { "${f.name} -> $it" }
+            } +
+                allModules.filter { (_, f) -> f.text.contains(oracle) }.map { (m, f) -> "$m:${f.name} -> $oracle" },
+        )
+    }
+
     /** Lines that hold code: blank lines, comments, and a file's package and imports don't count. */
     private fun codeLines(
         text: String,

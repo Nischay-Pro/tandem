@@ -5,11 +5,11 @@ import app.tandemforactual.ui.core.session.AutomaticBackupSettings
 import app.tandemforactual.ui.core.session.AutomaticBackups
 import app.tandemforactual.ui.core.session.BackupDestination
 import app.tandemforactual.ui.core.session.BackupProblem
-import app.tandemforactual.ui.core.session.BackupProblemException
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.automaticBackupSummary
+import app.tandemforactual.ui.core.session.staleBackupNote
 import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -187,12 +187,16 @@ class AutomaticBackupsTest {
     }
 
     @Test
-    fun aMissingWebDavPasswordFailsTheRunWithoutMovingTheLastBackup() =
+    fun aMissingWebDavPasswordFailsTheUploadWithoutMovingTheLastBackup() =
         runBlocking {
-            val result =
-                AutomaticBackupResult.deliver(toFolder = null, toWebDav = { throw BackupProblemException(BackupProblem.WEBDAV_PASSWORD) })
+            val queued = AutomaticBackupResult.deliver(toFolder = null, queueWebDav = {})
+            assertEquals(setOf(BackupDestination.WEBDAV), queued.waiting)
+            val made = queued.preferences(now = 42)
+            assertNull(made[AutomaticBackupSettings.LAST_RUN])
+            assertEquals("42", made[AutomaticBackupSettings.LAST_MADE])
+            val result = queued.uploadFailed(BackupProblem.WEBDAV_PASSWORD)
             assertEquals(AutomaticBackupResult.failed(BackupProblem.WEBDAV_PASSWORD), result)
-            val saved = result.preferences(now = 42)
+            val saved = result.preferences(now = 43)
             assertNull(saved[AutomaticBackupSettings.LAST_RUN])
             val state = AppState()
             state.automaticBackup = on.copy(folder = null, webDavUrl = "https://dav")
@@ -205,20 +209,54 @@ class AutomaticBackupsTest {
         }
 
     @Test
-    fun keepsTheFolderCopyWhenWebDavFailsAndSaysSo() =
+    fun savesToTheFolderAtOnceAndSaysWhenWebDavIsWaitingForTheNetwork() =
         runBlocking {
-            val result = AutomaticBackupResult.deliver(toFolder = {}, toWebDav = { error("503") })
+            val settings = on.copy(webDavUrl = "https://dav")
+            val result = AutomaticBackupResult.deliver(toFolder = {}, queueWebDav = {})
             assertEquals(setOf(BackupDestination.FOLDER), result.savedTo)
-            assertEquals(BackupProblem.WEBDAV, result.problem)
+            assertEquals(setOf(BackupDestination.WEBDAV), result.waiting)
             val saved = result.preferences(now = 42)
             assertEquals("42", saved[AutomaticBackupSettings.LAST_RUN])
             assertEquals(result, AutomaticBackupResult.decode(saved[AutomaticBackupResult.KEY]))
-            val settings = on.copy(webDavUrl = "https://dav")
-            assertEquals("Saved to the folder; WebDAV upload failed", automaticBackupSummary(settings, "today", result))
-            val lost = AutomaticBackupResult.deliver(toFolder = { error("permission revoked") }, toWebDav = null)
+            assertEquals("Saved to the folder; WebDAV upload waiting for Wi-Fi", automaticBackupSummary(settings, "today", result))
+            assertEquals(
+                "Saved to the folder; WebDAV upload waiting for a connection",
+                automaticBackupSummary(settings.copy(network = SyncNetwork.ANY), "today", result),
+            )
+            val webDavOnly = AutomaticBackupResult.deliver(toFolder = null, queueWebDav = {})
+            assertEquals("WebDAV upload waiting for Wi-Fi", automaticBackupSummary(settings.copy(folder = null), null, webDavOnly))
+
+            val failed = result.uploadFailed(BackupProblem.WEBDAV)
+            assertEquals("Saved to the folder; WebDAV upload failed", automaticBackupSummary(settings, "today", failed))
+            val uploaded = failed.uploaded()
+            assertEquals(setOf(BackupDestination.FOLDER, BackupDestination.WEBDAV), uploaded.savedTo)
+            assertEquals("Last backup today", automaticBackupSummary(settings, "today", uploaded))
+            assertEquals("43", uploaded.preferences(now = 43)[AutomaticBackupSettings.LAST_RUN])
+
+            val lost = AutomaticBackupResult.deliver(toFolder = { error("permission revoked") }, queueWebDav = null)
             assertEquals("Last backup failed: Tandem can’t reach the backup folder", automaticBackupSummary(on, "today", lost))
-            val both = AutomaticBackupResult.deliver(toFolder = {}, toWebDav = {})
-            assertEquals("Last backup today", automaticBackupSummary(settings, "today", both))
+            val lostFolder = AutomaticBackupResult.deliver(toFolder = { error("permission revoked") }, queueWebDav = {})
+            assertEquals(
+                "WebDAV upload waiting for Wi-Fi; saving to the folder failed",
+                automaticBackupSummary(settings, "today", lostFolder),
+            )
+        }
+
+    @Test
+    fun backsUpAStaleCopyAndSaysWhenItLastSynced() =
+        runBlocking {
+            assertNull(AutomaticBackups.staleSince(null, 100 * hour))
+            assertNull(AutomaticBackups.staleSince(90 * hour, 100 * hour))
+            assertEquals(70 * hour, AutomaticBackups.staleSince(70 * hour, 100 * hour))
+            val result = AutomaticBackupResult.deliver(toFolder = {}, queueWebDav = null, budgetSyncedAt = 70 * hour)
+            assertEquals(result, AutomaticBackupResult.decode(result.encode()))
+            assertEquals("Backed up the budget as last synced Nov 20", staleBackupNote(result) { "Nov 20" })
+            assertNull(staleBackupNote(result.copy(budgetSyncedAt = null)) { "Nov 20" })
+            assertNull(staleBackupNote(AutomaticBackupResult.failed(BackupProblem.FOLDER).copy(budgetSyncedAt = 1)) { "Nov 20" })
+            assertEquals(
+                AutomaticBackupResult(AutomaticBackupResult.Outcome.SAVED, savedTo = setOf(BackupDestination.FOLDER)),
+                AutomaticBackupResult.decode("SAVED;FOLDER;"),
+            )
         }
 
     @Test

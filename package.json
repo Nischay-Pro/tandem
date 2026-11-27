@@ -11,6 +11,8 @@
     "api:dev": "pnpm --filter @tandem-for-actual/api dev",
     "dev:up": "docker compose -f docker-compose.dev.yml up --build",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
+    "demo:up": "docker compose -f docker-compose.dev.yml run --build --rm demo-seed",
+    "demo:manifest": "node scripts/demo-budget/generate.mjs",
     "api:openapi:generate": "pnpm --filter @tandem-for-actual/api openapi:generate",
     "api:openapi:check": "pnpm --filter @tandem-for-actual/api openapi:check",
     "lint": "eslint .",
