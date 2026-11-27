@@ -20,6 +20,10 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.SelectorItem
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.ui.AccountActionDropdown
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageSummary
+import app.tandemforactual.ui.core.usage.isChecking
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
@@ -43,6 +47,8 @@ internal fun CloseAccountDialog(
     scope: CoroutineScope,
 ) {
     val balances = rememberClosingBalances(state.selectedBudgetId, liveAccount.id, mobileSession)
+    val usage = rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.ACCOUNT, liveAccount.id)
+    val currency = mobileSession.planning.accountCurrencies[liveAccount.id]
     val nonZeroBalance = (balances?.second ?: liveAccount.balanceMinor)?.let { it != 0L } ?: false
     val futureMinor = balances?.let { (today, whole) -> whole - today } ?: 0L
     val transferAccounts =
@@ -62,14 +68,16 @@ internal fun CloseAccountDialog(
         dismissLabel = "Cancel",
         enabled =
             !mobileSession.isPerformingBudgetAction &&
+                !usage.isChecking &&
                 (!nonZeroBalance || transferAccountId.isNotBlank()),
         dismissEnabled = !mobileSession.isPerformingBudgetAction,
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                UsageSummary(usage, UsageSubject.ACCOUNT) { state.formatAccountMoney(it, currency) }
                 if (nonZeroBalance) {
                     CloseAccountTransferFields(
                         futureMinor.takeIf { it != 0L }?.let {
-                            state.formatAccountMoney(it, mobileSession.planning.accountCurrencies[liveAccount.id])
+                            state.formatAccountMoney(it, currency)
                         },
                         transferAccounts,
                         transferAccountId,

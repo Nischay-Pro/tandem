@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.app.routes
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.app.AppMenuItem
@@ -59,6 +60,7 @@ internal val rulesScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
         AppRoute.BUDGET_RULES to
             @Composable { ctx ->
                 with(ctx) {
+                    DisposableEffect(Unit) { onDispose { state.rulesReferenceFilter = null } }
                     ListDetailPanes(
                         detailKey = state.ruleEditorRuleId,
                         emptyTitle = "Choose a rule",
@@ -73,6 +75,8 @@ internal val rulesScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
                                 canAddRules = !state.readOnlyMode,
                                 onOpenRule = { ruleId -> state.ruleEditorRuleId = ruleId },
                                 selectedRuleId = state.ruleEditorRuleId.takeIf { detailInPane },
+                                referenceFilter = state.rulesReferenceFilter,
+                                onClearReferenceFilter = { state.rulesReferenceFilter = null },
                             )
                             if (detailInPane) {
                                 TandemBackHandler(
