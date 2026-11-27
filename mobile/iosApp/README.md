@@ -31,3 +31,11 @@ shared text to the `group.app.tandemforactual.ios` App Group, and the app turns
 it into a prefilled transaction when it next becomes active. Signing for a device
 needs that App Group enabled for both `app.tandemforactual.ios` and
 `app.tandemforactual.ios.share` in the selected team.
+
+The `TandemWidgets` extension (iOS 17 and later) adds "Left to spend", "Ready to
+assign" and "Quick add" widgets. After each sync and whenever the app leaves the
+screen, the app saves a small summary to the same App Group: this month's totals
+and expense category balances, already formatted, or only the budget's name while
+app lock, privacy mode or encryption protect it. The widgets read only that file
+and never use the network. Signing for a device needs the App Group enabled for
+`app.tandemforactual.ios.widgets` too.

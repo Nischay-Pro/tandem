@@ -1,6 +1,7 @@
 import ComposeApp
 import SwiftUI
 import UIKit
+import WidgetKit
 
 @main
 struct TandemApp: App {
@@ -160,11 +161,27 @@ private final class TandemSceneDelegate: NSObject, UIWindowSceneDelegate {
         }
     }
 
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        WidgetRefresh.refresh()
+    }
+
     func windowScene(
         _ windowScene: UIWindowScene,
         performActionFor shortcutItem: UIApplicationShortcutItem,
         completionHandler: @escaping (Bool) -> Void
     ) {
         completionHandler(Self.handle(shortcutItem))
+    }
+}
+
+/// Saves the widgets' summary to the App Group and asks WidgetKit to redraw them; nothing else leaves the app.
+enum WidgetRefresh {
+    static func refresh(then done: @escaping () -> Void = {}) {
+        IosWidgetSnapshotKt.readIosWidgetSnapshot { json in
+            if let json, WidgetSnapshotStore.save(json, to: WidgetSnapshotStore.fileURL()) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            done()
+        }
     }
 }

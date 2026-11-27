@@ -146,7 +146,7 @@ final class IosBackgroundSyncScheduler {
                 IosBudgetNotifications.shared.conflicts(Int32(conflictCount.intValue))
                 IosBudgetNotifications.shared.rejected(Int32(rejectedCount.intValue))
                 if let overspendingMessage { IosBudgetNotifications.shared.overspending(overspendingMessage) }
-                completion.finish(success: taskSucceeded.boolValue)
+                WidgetRefresh.refresh { completion.finish(success: taskSucceeded.boolValue) }
             }
             handleSlot.install(handle)
         }
