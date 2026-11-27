@@ -18,7 +18,7 @@ jobs:
     name: iPhone and iPad screenshots
     if: ${{ inputs.platforms != 'android' }}
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       ACTUAL_URL: http://localhost:5006
       DEMO_PASSWORD: demo-password
@@ -43,12 +43,19 @@ jobs:
       - name: Install the API's dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download the simulator app from the latest green main build
+      - name: Download the simulator app built from this commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
-          test -n "$run_id"
+          for _ in $(seq 1 50); do
+            read -r run_id status conclusion < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push --limit 1 --json databaseId,status,conclusion --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"')
+            if [ "$status" = completed ]; then break; fi
+            sleep 60
+          done
+          if [ "${conclusion:-}" != success ]; then
+            echo "::error::CI for $GITHUB_SHA did not pass (${conclusion:-no run}); capture from a commit whose CI passed."
+            exit 1
+          fi
           gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ios-simulator-app --dir "$RUNNER_TEMP"
           (cd "$RUNNER_TEMP" && unzip -q TandemForActual-simulator.zip)
           test -d "$RUNNER_TEMP/TandemForActual.app"
