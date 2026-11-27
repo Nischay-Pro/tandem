@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,7 +114,7 @@ internal fun RowScope.BudgetGridCell(
 }
 
 @Composable
-private fun BudgetGridCellContent(
+private fun BoxScope.BudgetGridCellContent(
     context: GridCellContext,
     key: GridKey,
     editing: Boolean,
