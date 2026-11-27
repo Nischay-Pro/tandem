@@ -52,7 +52,6 @@ import app.tandemforactual.ui.core.session.budget.moveBudgetMoney
 import app.tandemforactual.ui.core.session.budget.noteOverridesFor
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationsFor
 import app.tandemforactual.ui.core.session.budget.pendingCategoryBudgetOverrides
-import app.tandemforactual.ui.core.session.budget.previewStatementImportTransactions
 import app.tandemforactual.ui.core.session.budget.renameBudgetAccount
 import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
 import app.tandemforactual.ui.core.session.budget.resetBudgetHold
@@ -63,6 +62,7 @@ import app.tandemforactual.ui.core.session.budget.setBudgetCategoryCarryover
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryGroupNote
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryNote
 import app.tandemforactual.ui.core.session.budget.setBudgetMonthNote
+import app.tandemforactual.ui.core.session.budget.statementLedger
 import app.tandemforactual.ui.core.session.schedules.manageBudgetSchedule
 import app.tandemforactual.ui.core.session.transactions.createTransaction
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
@@ -746,8 +746,11 @@ class TandemMobileSessionTest {
                 )
                 assertEquals("Try again", session.feedback.budgetActionMessageActionLabel)
 
-                val preview = session.budgetEdits.previewStatementImportTransactions("budget-1", "account-1", listOf("import-1"), null)
-                assertFalse(preview.serverChecked)
+                assertTrue(
+                    runCatching {
+                        session.budgetEdits.statementLedger("budget-1", "account-1", "2026-11-01", "2026-11-30", null)
+                    }.exceptionOrNull() is TandemApiException,
+                )
                 assertFalse(session.isServerReachable)
                 assertTrue(repository.readBudgetMutationQueue().items.isEmpty())
             } finally {

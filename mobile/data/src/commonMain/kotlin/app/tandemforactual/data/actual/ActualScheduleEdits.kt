@@ -2,6 +2,7 @@ package app.tandemforactual.data.actual
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -14,26 +15,26 @@ private const val SCHEDULE_CHANGED = "This schedule changed in Actual. Refresh i
 
 /** Schedule edits with the gateway's checks and Actual's `schedules/app.ts` and `api/schedule-update` behaviour. */
 class ActualScheduleEdits(
-    private val writer: ActualWriter,
-    private val today: () -> String,
+    internal val writer: ActualWriter,
+    internal val today: () -> String,
     private val transactions: ActualTransactions = ActualTransactions(writer),
 ) {
-    private val db get() = writer.db
+    internal val db get() = writer.db
 
-    private fun fail(
+    internal fun fail(
         message: String,
         code: String? = null,
     ): Nothing = throw ActualEditException(message, code)
 
     private fun changed(): Nothing = fail(SCHEDULE_CHANGED, "schedule_changed")
 
-    private val reader by lazy { ActualBudgetReader(db) }
+    internal val reader by lazy { ActualBudgetReader(db) }
 
-    private fun schedules(): List<JsonObject> = reader.schedules()
+    internal fun schedules(): List<JsonObject> = reader.schedules()
 
     private fun List<JsonObject>.active(id: String): JsonObject? = firstOrNull { it.value("id") == id && it.value("completed") != true }
 
-    private fun List<JsonObject>.nameTaken(
+    internal fun List<JsonObject>.nameTaken(
         id: String,
         name: String,
     ) = any { it.value("id") != id && (it.value("name") as String?)?.trim() == name }
@@ -52,7 +53,10 @@ class ActualScheduleEdits(
         writer.update("schedules", id, mapOf("name" to clean))
     }
 
-    /** [fields] uses the gateway's names: name, accountId, payeeId, amountMinor, amountRangeMinor, amountOp and date. */
+    /**
+     * [fields] uses the gateway's names: name, accountId, payeeId, amountMinor, amountRangeMinor, amountOp and date, plus
+     * categoryId (a "set category" action on the schedule's rule) and postsTransaction.
+     */
     fun edit(
         id: String,
         fields: JsonObject,
@@ -69,7 +73,8 @@ class ActualScheduleEdits(
         if (!name.isNullOrEmpty() && all.nameTaken(id, name)) fail("A schedule with this name already exists")
         val accountId = fields.value("accountId") as String?
         val payeeId = fields.value("payeeId") as String?
-        requireEditTargets(accountId, payeeId)
+        requireEditTargets(accountId, payeeId, fields.value("categoryId") as String?)
+        val posts = fields.value("postsTransaction") as Boolean? ?: (schedule.value("posts_transaction") == true)
         val ruleId = schedule.value("rule") as String
         val rule =
             ActualRules.load(db.query("SELECT * FROM rules WHERE id = ? AND tombstone = 0", ruleId), emptyMap()).firstOrNull()
@@ -77,7 +82,7 @@ class ActualScheduleEdits(
         val old = rule.getValue("conditions").jsonArray.map { it.jsonObject }
         val date = fields["date"]
         val conditions = editedConditions(old, fields, payeeId, accountId, date)
-        val actions = syncAmountActions(conditions, rule.getValue("actions").jsonArray)
+        val actions = withCategory(syncAmountActions(conditions, rule.getValue("actions").jsonArray), fields)
         writer.update(
             "rules",
             ruleId,
@@ -98,23 +103,39 @@ class ActualScheduleEdits(
             "schedules",
             id,
             linkedMapOf(
-                "posts_transaction" to (
-                    if (schedule.value("posts_transaction") ==
-                        true
-                    ) {
-                        1L
-                    } else {
-                        0L
-                    }
-                ),
+                "posts_transaction" to if (posts) 1L else 0L,
                 "name" to (name ?: schedule.value("name")),
             ),
         )
+        if (posts) allowAutoPostingToRunAgainToday()
     }
 
-    private fun requireEditTargets(
+    /** Replaces the rule's plain "set category" actions when [fields] carries a categoryId; null clears them. */
+    internal fun withCategory(
+        actions: JsonArray,
+        fields: JsonObject,
+    ): JsonArray {
+        if ("categoryId" !in fields) return actions
+        val categoryId = fields.value("categoryId") as String?
+        val kept =
+            actions.filterNot {
+                val action = it.jsonObject
+                action.value("op") == "set" && action.value("field") == "category" && action["options"] == null
+            }
+        val added = categoryId?.let { listOf(setAction("category", it)) }.orEmpty()
+        return JsonArray(kept + added)
+    }
+
+    /** `allowAutoPostingToRunAgainToday`: lets the schedule service post a schedule saved after today's run. */
+    internal fun allowAutoPostingToRunAgainToday() {
+        db.execute("CREATE TABLE IF NOT EXISTS tandem_prefs (id TEXT PRIMARY KEY, value TEXT)")
+        db.execute("DELETE FROM tandem_prefs WHERE id = 'lastScheduleRun'")
+    }
+
+    internal fun requireEditTargets(
         accountId: String?,
         payeeId: String?,
+        categoryId: String?,
     ) {
         if (accountId != null) {
             val account = db.first("SELECT closed FROM accounts WHERE id = ? AND tombstone = 0", accountId)
@@ -122,6 +143,9 @@ class ActualScheduleEdits(
         }
         if (payeeId != null && !reader.hasPayee(payeeId)) {
             fail("Choose a payee in this budget")
+        }
+        if (categoryId != null && db.first("SELECT id FROM categories WHERE id = ? AND tombstone = 0", categoryId) == null) {
+            fail("Choose a category in this budget")
         }
     }
 
@@ -393,15 +417,17 @@ class ActualScheduleEdits(
             "payee" to "description",
         )
 
-    private fun internal(item: JsonObject): JsonObject {
+    internal fun internal(item: JsonObject): JsonObject {
         val field = (item["field"] as? JsonPrimitive)?.contentOrNull ?: return item
         return internalFields[field]?.let { JsonObject(item + ("field" to JsonPrimitive(it))) } ?: item
     }
 
-    private fun validate(fields: JsonObject) {
+    internal fun validate(fields: JsonObject) {
         if (fields.isEmpty()) fail("Add at least one schedule change")
         (fields.value("accountId") as String?)?.let { if (it.isBlank()) fail("Choose an account") }
         (fields.value("payeeId") as String?)?.let { if (it.isBlank()) fail("Choose a payee") }
+        fields["categoryId"]?.let { if (it !is JsonNull && (scalar(it) as? String).isNullOrBlank()) fail("Choose a category") }
+        fields["postsTransaction"]?.let { if (scalar(it) !is Boolean) fail("Choose whether the schedule adds transactions") }
         (fields.value("name") as String?)?.let { name ->
             if (name.any { it.code < 0x20 || it.code == 0x7f }) fail("Schedule names must not contain control characters")
         }
@@ -488,3 +514,15 @@ internal fun scheduledAmount(value: JsonElement?): Long =
         }
         else -> 0L
     }
+
+internal fun setAction(
+    field: String,
+    value: String,
+): JsonObject =
+    JsonObject(
+        linkedMapOf(
+            "op" to JsonPrimitive("set"),
+            "field" to JsonPrimitive(field),
+            "value" to JsonPrimitive(value),
+        ),
+    )

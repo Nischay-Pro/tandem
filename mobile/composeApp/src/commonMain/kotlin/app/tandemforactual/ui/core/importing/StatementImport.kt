@@ -1,7 +1,6 @@
 package app.tandemforactual.ui.core.importing
 
 import app.tandemforactual.api.client.StatementImportItem
-import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.ui.core.format.MIN_TRANSACTION_DATE
 import app.tandemforactual.ui.core.format.displayTransactionDate
@@ -34,12 +33,17 @@ internal fun StatementParseResult.toStatementImportItems(): List<StatementImport
         )
     }
 
-/** Whether Actual already has this row: its own id, or the bank's id an earlier import stored as `imported_id`. */
-internal fun StatementImportDraft.isAlreadyIn(preview: StatementImportPreview): Boolean =
-    importedId in preview.existingImportedIds || bankId?.let(preview.existingImportedIds::contains) == true
-
-internal fun StatementParseResult.newRows(preview: StatementImportPreview): StatementParseResult =
-    copy(transactions = transactions.filterNot { it.isAlreadyIn(preview) })
+/** The statement with every amount's sign reversed, for exports that show spending as positive amounts. */
+internal fun StatementParseResult.withFlippedSigns(): StatementParseResult {
+    val ids = StatementImportIds()
+    return copy(
+        transactions =
+            transactions.map { row ->
+                val amount = -row.amountMinor
+                row.copy(amountMinor = amount, importedId = ids.next(row.date, amount, row.payeeName))
+            },
+    )
+}
 
 internal class StatementImportParseException(
     message: String,

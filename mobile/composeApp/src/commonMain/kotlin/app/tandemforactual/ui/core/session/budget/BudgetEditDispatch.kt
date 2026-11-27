@@ -10,7 +10,7 @@ import app.tandemforactual.api.client.setBudgetType
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
-import app.tandemforactual.ui.core.session.budget.BudgetEdits
+import app.tandemforactual.ui.core.session.flag
 import app.tandemforactual.ui.core.session.optionalString
 import app.tandemforactual.ui.core.session.requirePayload
 import app.tandemforactual.ui.core.session.requiredAssignments
@@ -435,6 +435,7 @@ private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder):
                     imported,
                     request.encryptionPassword,
                     request.operationId,
+                    reviewed = payload.flag("reviewed"),
                 )
             }
         }

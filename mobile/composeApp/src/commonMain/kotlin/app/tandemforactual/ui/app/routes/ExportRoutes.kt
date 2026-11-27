@@ -11,7 +11,7 @@ internal val exportScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit> =
         AppRoute.EXPORT to
             @Composable { ctx ->
                 with(ctx) {
-                    ExportScreen(state, mobileSession)
+                    ExportScreen(state, mobileSession, onOpenSelectedBudget)
                 }
             },
     )
