@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -39,13 +38,12 @@ internal fun TandemChoiceDialog(
         ) {
             // A window that wraps its content is resized by the system on every frame its content animates, which
             // stalls the animation; filling the screen keeps the window still and centres the content instead.
-            Box(
+            TabletopAwareBox(
                 Modifier
                     .fillMaxSize()
                     .clickable(remember { MutableInteractionSource() }, null, onClick = onDismissRequest)
                     .safeDrawingPadding()
                     .padding(vertical = TandemSpacing.small),
-                contentAlignment = Alignment.Center,
             ) {
                 AnimatedVisibility(
                     visibleState = visibility,

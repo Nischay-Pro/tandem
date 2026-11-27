@@ -38,6 +38,19 @@ class WindowSizeClassesTest {
     }
 
     @Test
+    fun editorsFloatOnceTheWindowHasRoomAroundThem() {
+        assertFalse(WindowSizeInfo(411f, 891f).floatsEditors)
+        assertFalse(WindowSizeInfo(891f, 411f).floatsEditors)
+        assertTrue(WindowSizeInfo(600f, 960f).floatsEditors)
+        assertTrue(WindowSizeInfo(1_366f, 1_024f).floatsEditors)
+    }
+
+    @Test
+    fun tabletopFoldMeasuresTheFlatHalf() {
+        assertEquals(1_000f, TabletopFold(top = 1_100f, bottom = 1_140f, windowHeight = 2_140f).belowFold)
+    }
+
+    @Test
     fun shortWindowsAreCompactHeightWhateverTheirOrientation() {
         assertTrue(WindowSizeInfo(891f, 411f).compactHeight)
         assertTrue(WindowSizeInfo(260f, 300f).compactHeight)

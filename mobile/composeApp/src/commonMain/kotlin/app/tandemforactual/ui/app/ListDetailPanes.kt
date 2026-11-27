@@ -57,7 +57,10 @@ internal val LocalWindowHinge = staticCompositionLocalOf<WindowHinge?> { null }
 
 private const val MIN_PANE_WIDTH_DP = 280f
 
-/** The list pane's width and the gap to leave, in dp, so the panes meet at the hinge; null when the hinge isn't usable. */
+/**
+ * The list pane's width and the gap to leave, in dp, so the panes meet at the hinge; null when the hinge isn't usable.
+ * The left half is measured from the window edge, so a rail beside the panes counts toward it.
+ */
 internal fun hingeSplit(
     hinge: WindowHinge?,
     containerLeftPx: Float,
@@ -67,7 +70,7 @@ internal fun hingeSplit(
     if (hinge == null || density <= 0f) return null
     val listWidth = (hinge.left - containerLeftPx) / density
     val detailWidth = (containerLeftPx + containerWidthPx - hinge.right) / density
-    if (listWidth < MIN_PANE_WIDTH_DP || detailWidth < MIN_PANE_WIDTH_DP) return null
+    if (hinge.left / density < MIN_PANE_WIDTH_DP || listWidth <= 0f || detailWidth < MIN_PANE_WIDTH_DP) return null
     return listWidth to (hinge.right - hinge.left) / density
 }
 

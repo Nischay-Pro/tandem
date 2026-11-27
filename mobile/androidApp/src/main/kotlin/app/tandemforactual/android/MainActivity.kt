@@ -33,6 +33,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.WindowMetricsCalculator
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.KeyboardCommands
@@ -48,6 +49,7 @@ import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
+import app.tandemforactual.ui.design.theme.TabletopFold
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -102,6 +104,7 @@ class MainActivity : FragmentActivity() {
 
     private val crashReports by lazy { AndroidCrashReports(this) }
     private val windowHinge = MutableStateFlow<WindowHinge?>(null)
+    private val tabletopFold = MutableStateFlow<TabletopFold?>(null)
     private val signInBrowser = AndroidSignInBrowser(this)
     private val lanAccess = AndroidLanAccess(this)
 
@@ -120,6 +123,8 @@ class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info ->
                     windowHinge.value = info.separatingVerticalHinge()
+                    val metrics = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(this@MainActivity)
+                    tabletopFold.value = info.tabletopFold(metrics.bounds.height().toFloat())
                 }
             }
         }
@@ -183,6 +188,7 @@ class MainActivity : FragmentActivity() {
                     crashReports = crashReports,
                     onShareText = { text -> shareText(text) },
                     windowHinge = windowHinge,
+                    tabletopFold = tabletopFold,
                     screenshotScript = screenshotScript(),
                     postLocalAlert = { BudgetSystemNotifications.post(applicationContext, it) },
                     openSignInPage = signInBrowser::open,

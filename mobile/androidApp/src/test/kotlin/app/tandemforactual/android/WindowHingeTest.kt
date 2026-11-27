@@ -5,6 +5,7 @@ import androidx.window.layout.FoldingFeature
 import androidx.window.testing.layout.FoldingFeature as fakeFold
 import androidx.window.testing.layout.TestWindowLayoutInfo
 import app.tandemforactual.ui.app.WindowHinge
+import app.tandemforactual.ui.design.theme.TabletopFold
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -48,5 +49,21 @@ class WindowHingeTest {
     @Test
     fun aWindowWithoutFoldsHasNoHinge() {
         assertNull(TestWindowLayoutInfo(emptyList()).separatingVerticalHinge())
+    }
+
+    @Test
+    fun aHalfOpenedTabletopFoldReportsWhereTheWindowBends() {
+        val fold = fakeFold(window, state = FoldingFeature.State.HALF_OPENED, orientation = FoldingFeature.Orientation.HORIZONTAL)
+
+        assertEquals(TabletopFold(920f, 920f, 1840f), TestWindowLayoutInfo(listOf(fold)).tabletopFold(1840f))
+    }
+
+    @Test
+    fun aBookOrFlatFoldIsNotATabletop() {
+        val book = fakeFold(window, state = FoldingFeature.State.HALF_OPENED, orientation = FoldingFeature.Orientation.VERTICAL)
+        val flat = fakeFold(window, state = FoldingFeature.State.FLAT, orientation = FoldingFeature.Orientation.HORIZONTAL)
+
+        assertNull(TestWindowLayoutInfo(listOf(book)).tabletopFold(1840f))
+        assertNull(TestWindowLayoutInfo(listOf(flat)).tabletopFold(1840f))
     }
 }

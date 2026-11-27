@@ -156,11 +156,12 @@ private fun shellLayout(chrome: ShellChromeState): ShellLayout {
             !ctx.transactionSheetActive &&
             ctx.shell.backGestureProgress == 0f
     val workspacePanes = state.workspace.panesFor(workspaceLayout.paneCount, route, workspaceTabs)
+    val behindFloatingEditor = ctx.transactionSheetActive && chrome.window.floatsEditors
     val showRail =
         chrome.useRail &&
             tabShellRoute != null &&
-            route.showsBottomNavigation() &&
-            !ctx.transactionSheetActive
+            (if (behindFloatingEditor) ctx.backgroundRouteEntry.route else route).showsBottomNavigation() &&
+            (!ctx.transactionSheetActive || behindFloatingEditor)
     return ShellLayout(tabShellRoute, shellHeaderRoute, workspaceLayout, workspaceActive, workspacePanes, showRail, imeVisible)
 }
 
