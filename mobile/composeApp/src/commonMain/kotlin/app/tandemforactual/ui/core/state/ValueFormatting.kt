@@ -69,7 +69,7 @@ private fun calendarDaysInMonth(
         else -> 31
     }
 
-private fun calendarDayNumber(date: CalendarDate): Long {
+internal fun calendarDayNumber(date: CalendarDate): Long {
     val adjustedYear = date.year - if (date.month <= 2) 1 else 0
     val era = adjustedYear / 400
     val yearOfEra = adjustedYear - era * 400

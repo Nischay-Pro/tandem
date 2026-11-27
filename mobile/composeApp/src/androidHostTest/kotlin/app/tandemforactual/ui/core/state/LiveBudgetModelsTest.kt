@@ -527,6 +527,37 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun theRegisterShowsMissedDueAndComingScheduledTransactions() {
+        fun schedule(
+            id: String,
+            next: String,
+            date: String,
+            account: String = "checking",
+        ) = LiveScheduleSummary(id, id, next, date, account, null, null, -1_000, null, "is", true)
+        val schedules =
+            listOf(
+                schedule("rent", "2026-11-18", """{"frequency":"monthly","start":"2026-08-18"}"""),
+                schedule("gym", "2026-11-21", """{"frequency":"weekly","start":"2026-11-07"}"""),
+                schedule("paid", "2026-11-22", "\"2026-11-22\""),
+                schedule("far", "2026-12-20", "\"2026-12-20\""),
+                schedule("other", "2026-11-21", "\"2026-11-21\"", account = "savings"),
+            )
+        val transactions = listOf(record(type = "transaction", id = "t1", json = """{"id":"t1","schedule":"paid","date":"2026-11-20"}"""))
+
+        val shown = scheduledOccurrences(schedules, transactions, "checking", "2026-11-21")
+
+        assertEquals(
+            listOf(
+                Triple("rent", "2026-11-18", OccurrenceStatus.MISSED),
+                Triple("gym", "2026-11-21", OccurrenceStatus.DUE),
+                Triple("gym", "2026-11-28", OccurrenceStatus.UPCOMING),
+            ),
+            shown.map { Triple(it.schedule.id, it.date, it.status) },
+        )
+        assertTrue(scheduledOccurrences(schedules, transactions, "checking", "soon").isEmpty())
+    }
+
+    @Test
     fun showsAScheduleCreatedOnThisDeviceUntilActualHasIt() {
         val queued =
             listOf(
