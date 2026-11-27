@@ -39,14 +39,20 @@ import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.icons.LogoPainter
 import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowBadgeMark
+import app.tandemforactual.ui.design.rows.RowContextMenu
+import app.tandemforactual.ui.design.rows.RowMenuAction
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import com.composables.icons.lucide.ArrowUpDown
+import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import org.jetbrains.compose.resources.DrawableResource
@@ -77,57 +83,72 @@ internal fun AccountSummaryCard(
     val stackBalance = LocalDensity.current.fontScale >= 1.5f
     val balanceColor = accountBalanceColor(account)
     SurfaceCard(modifier = modifier, highlighted = highlighted) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        role = Role.Button,
-                        onClickLabel = if (isReordering) "Finish reordering" else "Open ${account.name}",
-                        onClick = onClick,
-                    ).then(
-                        if (onLongClick != null) {
-                            Modifier.reorderAccessibilityAction(account.name, onLongClick)
-                        } else {
-                            Modifier
-                        },
-                    ).defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
-                    .padding(
-                        horizontal = TandemLayout.listRowHorizontalInset,
-                        vertical = TandemLayout.listRowVerticalInset,
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
-        ) {
-            val artwork = rememberMerchantArtwork(merchantArtwork)
-            AccountSummaryIcon(account, bankIcon ?: artwork, bankBadge)
-            AccountSummaryText(
-                account = account,
-                showBalance = stackBalance && !isReordering,
-                balanceColor = balanceColor,
-                privacyModeEnabled = privacyModeEnabled,
-                fractionDigits = fractionDigits,
-                modifier = Modifier.weight(1f),
-            )
-            if (isReordering) {
-                AccountReorderControls(
+        RowContextMenu(if (isReordering) emptyList() else accountRowMenuActions(onClick, onEdit, onLongClick)) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .pointerHighlight(tandemPalette.text, reduceMotion = tandemReduceMotion)
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClickLabel = if (isReordering) "Finish reordering" else "Open ${account.name}",
+                            onClick = onClick,
+                        ).then(
+                            if (onLongClick != null) {
+                                Modifier.reorderAccessibilityAction(account.name, onLongClick)
+                            } else {
+                                Modifier
+                            },
+                        ).defaultMinSize(minHeight = TandemLayout.listRowMinHeight)
+                        .padding(
+                            horizontal = TandemLayout.listRowHorizontalInset,
+                            vertical = TandemLayout.listRowVerticalInset,
+                        ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TandemLayout.listRowGap),
+            ) {
+                val artwork = rememberMerchantArtwork(merchantArtwork)
+                AccountSummaryIcon(account, bankIcon ?: artwork, bankBadge)
+                AccountSummaryText(
                     account = account,
-                    reorderEnabled = reorderEnabled,
-                    canMoveUp = canMoveUp,
-                    canMoveDown = canMoveDown,
-                    onEdit = onEdit,
-                    onMoveUp = onMoveUp,
-                    onMoveDown = onMoveDown,
-                    onDragStarted = onDragStarted,
-                    onDragBy = onDragBy,
-                    onDragStopped = onDragStopped,
+                    showBalance = stackBalance && !isReordering,
+                    balanceColor = balanceColor,
+                    privacyModeEnabled = privacyModeEnabled,
+                    fractionDigits = fractionDigits,
+                    modifier = Modifier.weight(1f),
                 )
-            } else if (!stackBalance) {
-                AccountBalanceText(account, balanceColor, privacyModeEnabled, fractionDigits)
+                if (isReordering) {
+                    AccountReorderControls(
+                        account = account,
+                        reorderEnabled = reorderEnabled,
+                        canMoveUp = canMoveUp,
+                        canMoveDown = canMoveDown,
+                        onEdit = onEdit,
+                        onMoveUp = onMoveUp,
+                        onMoveDown = onMoveDown,
+                        onDragStarted = onDragStarted,
+                        onDragBy = onDragBy,
+                        onDragStopped = onDragStopped,
+                    )
+                } else if (!stackBalance) {
+                    AccountBalanceText(account, balanceColor, privacyModeEnabled, fractionDigits)
+                }
             }
         }
     }
 }
+
+/** Open, account options and reorder: what a tap, the edit button and long-press do, for a right-click. */
+internal fun accountRowMenuActions(
+    onOpen: () -> Unit,
+    onEdit: (() -> Unit)?,
+    onReorder: (() -> Unit)?,
+): List<RowMenuAction> =
+    listOfNotNull(
+        RowMenuAction("Open", Lucide.ExternalLink, onClick = onOpen),
+        onEdit?.let { RowMenuAction("Account options", Lucide.Pencil, onClick = it) },
+        onReorder?.let { RowMenuAction("Reorder accounts", Lucide.ArrowUpDown, onClick = it) },
+    )
 
 @Composable
 private fun accountBalanceColor(account: AccountListItemUi): Color {

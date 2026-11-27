@@ -64,7 +64,7 @@ internal fun <T> FilterPills(
         scroll.animateScrollTo((x - with(density) { TandemSpacing.large.roundToPx() }).coerceAtLeast(0))
     }
     Row(
-        modifier.horizontalScroll(scroll).padding(contentPadding),
+        modifier.wheelScrollsHorizontally(scroll, tandemReduceMotion).horizontalScroll(scroll).padding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -134,6 +134,7 @@ private fun FilterPill(
             (if (compact) Modifier.fillMaxWidth() else Modifier)
                 .clip(RoundedCornerShape(TandemShapes.control))
                 .background(background)
+                .pointerHighlight(palette.text, RoundedCornerShape(TandemShapes.control), tandemReduceMotion)
                 .indication(interactions, LocalIndication.current)
                 .heightIn(min = 40.dp)
                 .padding(horizontal = if (compact) TandemSpacing.extraSmall else TandemSpacing.large, vertical = 10.dp)

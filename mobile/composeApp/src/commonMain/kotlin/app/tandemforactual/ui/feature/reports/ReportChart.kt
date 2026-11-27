@@ -38,10 +38,12 @@ import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.formatReportCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.state.ReportKind
+import app.tandemforactual.ui.design.inputs.wheelScrollsHorizontally
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TrendingUp
@@ -211,7 +213,7 @@ internal fun TimeSeriesReportChart(
             LaunchedEffect(scrollState) {
                 snapshotFlow { scrollState.value }.drop(1).collect { selectionCallback(null) }
             }
-            Column(Modifier.horizontalScroll(scrollState)) {
+            Column(Modifier.wheelScrollsHorizontally(scrollState, tandemReduceMotion).horizontalScroll(scrollState)) {
                 ReportCanvas(
                     kind,
                     data,

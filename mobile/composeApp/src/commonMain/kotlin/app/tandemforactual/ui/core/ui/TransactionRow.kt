@@ -29,7 +29,9 @@ import app.tandemforactual.ui.design.money.PrivacyAmountText
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
+import app.tandemforactual.ui.design.rows.RowContextMenu
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.rows.RowMenuAction
 import app.tandemforactual.ui.design.rows.SwipeToDeleteBox
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -37,9 +39,12 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Square
+import com.composables.icons.lucide.SquareCheck
+import com.composables.icons.lucide.Trash2
 
 @Composable
 internal fun TransactionRow(
@@ -84,7 +89,9 @@ internal fun TransactionRow(
                 onClick,
             )
         }
-        if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
+        RowContextMenu(transactionRowMenuActions(selectionMode, onClick, onLongClick, onSwipeDelete)) {
+            if (onSwipeDelete != null) SwipeToDeleteBox(onSwipeDelete) { row() } else row()
+        }
         if (showDivider) {
             Box(
                 Modifier
@@ -95,6 +102,21 @@ internal fun TransactionRow(
             )
         }
     }
+}
+
+/** Open, select and delete: what a tap, long-press and swipe do, for a right-click. Rows with only a tap get no menu. */
+internal fun transactionRowMenuActions(
+    selectionMode: Boolean,
+    onOpen: () -> Unit,
+    onSelect: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+): List<RowMenuAction> {
+    if (onSelect == null && onDelete == null) return emptyList()
+    return listOfNotNull(
+        RowMenuAction("Open", Lucide.ExternalLink, onClick = onOpen),
+        onSelect?.takeUnless { selectionMode }?.let { RowMenuAction("Select", Lucide.SquareCheck, onClick = it) },
+        onDelete?.let { RowMenuAction("Delete", Lucide.Trash2, destructive = true, onClick = it) },
+    )
 }
 
 /** The highlighted list row for one transaction, without its date header and divider. */

@@ -25,11 +25,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.sheets.RegisterFormSubmit
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
 
 @Composable
 internal fun TandemActionButton(
@@ -70,6 +72,7 @@ internal fun TandemActionButton(
                 .clip(shape)
                 .background(containerColor)
                 .border(1.dp, outlineColor, shape)
+                .pointerHighlight(palette.text, shape, tandemReduceMotion, enabled && !loading)
                 .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = TandemSpacing.small),
         horizontalArrangement = Arrangement.Center,

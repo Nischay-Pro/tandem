@@ -28,10 +28,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -80,6 +83,7 @@ internal fun TandemIconButton(
             modifier
                 .sizeIn(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
                 .semantics(mergeDescendants = true) { this.contentDescription = contentDescription }
+                .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -101,6 +105,7 @@ internal fun TandemIconButton(
                         Modifier
                     },
                 ).hoverable(interactionSource)
+                .pointerHighlight(palette.text, shape, tandemReduceMotion, enabled && resolvedHoveredContainerColor == null)
                 .then(resolvedBorderColor?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
                 .indication(interactionSource, LocalIndication.current),
             contentAlignment = Alignment.Center,
