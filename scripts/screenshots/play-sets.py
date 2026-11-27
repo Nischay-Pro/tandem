@@ -31,6 +31,16 @@ def exact(width: int, height: int, ratio: tuple[int, int]) -> tuple[int, int]:
     return width, width * rh // rw
 
 
+def crop_command(png: Path, out: Path, width: int, height: int) -> list[str]:
+    if shutil.which("magick"):
+        return ["magick", str(png), "-gravity", "center", "-crop", f"{width}x{height}+0+0", "+repage", str(out)]
+    if shutil.which("convert"):
+        return ["convert", str(png), "-gravity", "center", "-crop", f"{width}x{height}+0+0", "+repage", str(out)]
+    if shutil.which("ffmpeg"):
+        return ["ffmpeg", "-loglevel", "error", "-y", "-i", str(png), "-vf", f"crop={width}:{height}", str(out)]
+    sys.exit("Cropping needs ImageMagick or ffmpeg on the PATH.")
+
+
 def main(captures: Path, play: Path) -> None:
     lines = ["| Screenshot | Captured | In the listing set |", "| --- | --- | --- |"]
     for png in sorted(captures.glob("*.png")):
@@ -46,8 +56,7 @@ def main(captures: Path, play: Path) -> None:
             if target == (width, height):
                 shutil.copyfile(png, out)
             else:
-                geometry = f"{target[0]}x{target[1]}+0+0"
-                subprocess.run(["convert", str(png), "-gravity", "center", "-crop", geometry, "+repage", str(out)], check=True)
+                subprocess.run(crop_command(png, out, *target), check=True)
         note = f"{target[0]}x{target[1]}" + (" (cropped)" if target != (width, height) else "")
         lines.append(f"| {png.name} | {width}x{height} | {', '.join(folders)} at {note} |")
     print("\n".join(lines))
