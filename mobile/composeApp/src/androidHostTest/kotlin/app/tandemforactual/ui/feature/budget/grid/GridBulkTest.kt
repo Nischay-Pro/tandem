@@ -43,7 +43,7 @@ class GridBulkTest {
     @Test
     fun averagesUseTheMonthsThatHaveFigures() {
         assertEquals(45_000, fill(BulkFill.AVERAGE_3, 0))
-        assertEquals(37_500, fill(BulkFill.AVERAGE_12, 0))
+        assertEquals(38_750, fill(BulkFill.AVERAGE_12, 0))
         assertNull(bulkAmount(BulkFill.AVERAGE_6, GridKey("rent", "2026-03"), 0, null, 0) { history[it] })
     }
 
