@@ -62,7 +62,7 @@ class WatchSurfacesTest {
     fun theLeftToSpendTileShowsTheAmountAndAnAddButton() {
         val texts = texts(leftToSpendLayout(context, device, summary()))
 
-        assertTrue(texts.toString(), "$1,234.56" in texts)
+        assertTrue(texts.toString(), "$1234" in texts)
         assertTrue(texts.toString(), WatchText.LEFT_TO_SPEND in texts)
         assertTrue(texts.toString(), "+ Add" in texts)
     }
@@ -92,9 +92,9 @@ class WatchSurfacesTest {
     fun theTileAndComplicationLeadWithTheSameFigureAsTheGlance() {
         val split = summary().copy(perDayMinor = 9_362, daysLeft = 9)
         val tile = texts(leftToSpendLayout(context, device, split))
-        assertTrue(tile.toString(), "A day" in tile && "$93.62" in tile)
+        assertTrue(tile.toString(), "A day" in tile && "$93" in tile)
         val monthTile = texts(leftToSpendLayout(context, device, split.copy(perDayFirst = false)))
-        assertTrue(monthTile.toString(), WatchText.LEFT_TO_SPEND in monthTile && "$1,234.56" in monthTile)
+        assertTrue(monthTile.toString(), WatchText.LEFT_TO_SPEND in monthTile && "$1234" in monthTile)
 
         val complication = WatchComplications.leftToSpend(split, null, ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
         assertEquals("$93", text(complication))

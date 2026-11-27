@@ -21,7 +21,6 @@ import androidx.wear.protolayout.types.layoutString
 import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
-import app.tandemforactual.watch.money
 import app.tandemforactual.wear.MainActivity
 import app.tandemforactual.wear.data.WatchText
 
@@ -49,7 +48,7 @@ fun leftToSpendLayout(
                     text(message.orEmpty().layoutString, maxLines = 3, typography = Typography.BODY_MEDIUM)
                 } else {
                     rings(summary, summary.categories.take(RINGS)) {
-                        text(summary.money(headline.minor).layoutString, typography = Typography.DISPLAY_SMALL)
+                        text(WatchText.shortAmount(summary, headline.minor).layoutString, typography = Typography.TITLE_LARGE)
                     }
                 }
             },
