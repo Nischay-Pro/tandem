@@ -200,17 +200,19 @@ private val sampleSchedules =
     )
 
 @Composable
-private fun sampleScreenContext(
+internal fun sampleScreenContext(
     route: AppRoute,
     state: AppState,
     session: TandemMobileSession,
+    navigation: AppNavigation =
+        AppNavigation(open = {}, reset = {}, replaceTop = {}, newTransaction = {}, selectTab = {}, back = {}, backToList = {}),
 ): ScreenContext =
     ScreenContext(
         route = route,
         isForegroundRoute = true,
         state = state,
         deviceName = "Pixel Tablet",
-        navigation = AppNavigation(open = {}, reset = {}, replaceTop = {}, newTransaction = {}, selectTab = {}, back = {}, backToList = {}),
+        navigation = navigation,
         mobileSession = session,
         reportsDataCache = ReportsDataCache(),
         onSignIn = {},

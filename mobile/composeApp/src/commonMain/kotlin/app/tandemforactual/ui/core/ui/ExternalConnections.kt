@@ -26,9 +26,11 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.connections_bank_logos
 import app.tandemforactual.ui.generated.resources.connections_bank_logos_detail
+import app.tandemforactual.ui.generated.resources.connections_bank_logos_short
 import app.tandemforactual.ui.generated.resources.connections_detail
 import app.tandemforactual.ui.generated.resources.connections_exchange_rates
 import app.tandemforactual.ui.generated.resources.connections_exchange_rates_detail
+import app.tandemforactual.ui.generated.resources.connections_exchange_rates_short
 import app.tandemforactual.ui.generated.resources.connections_rate_server
 import app.tandemforactual.ui.generated.resources.connections_rate_server_invalid
 import app.tandemforactual.ui.generated.resources.connections_rate_server_save
@@ -41,6 +43,7 @@ import org.jetbrains.compose.resources.stringResource
 internal class ExternalConnection(
     val title: StringResource,
     val detail: StringResource,
+    val shortTitle: StringResource,
     val isOn: (AppState) -> Boolean,
     val turn: (AppState, Boolean) -> Unit,
     val advanced: (@Composable (AppState) -> Unit)? = null,
@@ -51,12 +54,14 @@ internal val externalConnections =
         ExternalConnection(
             Res.string.connections_bank_logos,
             Res.string.connections_bank_logos_detail,
+            Res.string.connections_bank_logos_short,
             isOn = { it.bankIconsEnabled },
             turn = { state, on -> state.bankIconsEnabled = on },
         ),
         ExternalConnection(
             Res.string.connections_exchange_rates,
             Res.string.connections_exchange_rates_detail,
+            Res.string.connections_exchange_rates_short,
             isOn = { it.exchangeRateFetching.enabled },
             turn = { state, on -> state.exchangeRateFetching = state.exchangeRateFetching.copy(enabled = on) },
             advanced = { ExchangeRateServerField(it) },
@@ -82,6 +87,11 @@ internal fun ExternalConnectionsSection(
         }
     }
 }
+
+/** One short line naming which connections are on, or "Off" when none are. */
+@Composable
+internal fun externalConnectionsStatus(state: AppState): String =
+    settingsSwitchStatus(externalConnections.map { it.shortTitle to it.isOn(state) })
 
 /** A self-hosted Frankfurter server to fetch rates from instead of the public one; blank uses the public one. */
 @Composable
