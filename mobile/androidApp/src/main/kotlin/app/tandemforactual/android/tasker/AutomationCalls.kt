@@ -73,12 +73,14 @@ internal object AutomationCalls {
         runCatching {
             val preferences = preferences(context)
             val now = System.currentTimeMillis()
-            if (kind == AutomationEventKind.SYNC_FAILED) {
-                if (!syncEventsAllowed(preferences)) return null
-                AutomationEventStore(TandemProcess.database(context)).find(id, now)
-            } else {
-                withBudget(context, automationTarget(preferences, AutomationKind.READ)) { AutomationEventStore(it).find(id, now) }
-            }?.takeIf { it.kind == kind }
+            val event =
+                if (kind == AutomationEventKind.SYNC_FAILED) {
+                    if (!syncEventsAllowed(preferences)) return null
+                    AutomationEventStore(TandemProcess.database(context)).find(id, now)
+                } else {
+                    withBudget(context, automationTarget(preferences, AutomationKind.READ)) { AutomationEventStore(it).find(id, now) }
+                }
+            event?.takeIf { it.kind == kind }
         }.getOrNull()
 
     /** The "Category over budget" variables while [category], or any category, is over budget; null otherwise. */
