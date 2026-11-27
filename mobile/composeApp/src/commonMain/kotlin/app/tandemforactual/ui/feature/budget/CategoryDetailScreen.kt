@@ -46,6 +46,7 @@ import app.tandemforactual.ui.feature.budget.components.AssignedAmountSheet
 import app.tandemforactual.ui.feature.budget.components.CategoryDetailSheetState
 import app.tandemforactual.ui.feature.budget.components.CategoryInsightsSection
 import app.tandemforactual.ui.feature.budget.components.CategoryNoteSection
+import app.tandemforactual.ui.feature.budget.components.CategoryTemplatesSection
 import app.tandemforactual.ui.feature.budget.components.CategoryThisMonthSection
 import app.tandemforactual.ui.feature.budget.components.DeleteCategoryConfirmation
 import app.tandemforactual.ui.feature.budget.components.DeleteCategorySheet
@@ -212,6 +213,7 @@ private fun CategoryDetailContent(
         scope,
         model.currentIncomeType,
     )
+    if (isLiveBudget) CategoryTemplatesSection(state, mobileSession, category, scope)
     if (isLiveBudget) CategoryNoteSection(state, mobileSession, category)
     if (isLiveBudget) SurfaceCard { WhereUsedRow { sheets.showUsageSheet = true } }
     if (isLiveBudget) {

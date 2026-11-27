@@ -1,8 +1,10 @@
 package app.tandemforactual.ui.core.session.budget
 
+import app.tandemforactual.api.client.budgetGoalTemplateStatus
 import app.tandemforactual.api.client.checkBudgetGoalTemplates
 import app.tandemforactual.api.client.previewBudgetGoalTemplates
 import app.tandemforactual.data.actual.GoalTemplateOutcome
+import app.tandemforactual.data.actual.GoalTemplateStatus
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
@@ -73,4 +75,19 @@ internal suspend fun BudgetEdits.checkGoalTemplates(
         throw error
     } catch (_: Exception) {
         emptyList()
+    }
+
+/** A category's templates and how it stands against them, from the device's copy; null when it can't be read. */
+internal suspend fun BudgetEdits.goalTemplateStatus(
+    budgetId: String,
+    month: String,
+    categoryId: String,
+    encryptionPassword: String?,
+): GoalTemplateStatus? =
+    try {
+        host.apiClient.budgetGoalTemplateStatus(budgetId, month, categoryId, encryptionPassword)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
     }

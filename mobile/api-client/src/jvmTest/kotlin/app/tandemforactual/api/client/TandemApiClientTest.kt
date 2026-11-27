@@ -329,6 +329,7 @@ class TandemApiClientTest {
             assertEquals(emptyList(), client.checkBudgetGoalTemplates("group", null))
             assertEquals(1, client.previewBudgetGoalTemplates("group", "2027-03", false, listOf(dining), null).applied)
             assertEquals(1, client.applyBudgetGoalTemplates("group", "2027-03", false, null, null).applied)
+            assertEquals(2_500L, client.budgetGoalTemplateStatus("group", "2027-03", dining, null).goal)
             client.holdBudgetForNextMonth("group", "2026-11", 1_000, null)
             client.resetBudgetHold("group", "2026-11", null)
             client.setBudgetCategoryAmount("group", groceries, "2026-11", 900_000, null)
