@@ -22,6 +22,7 @@ xcodebuild \
 app="$derived/Build/Products/Release-iphoneos/TandemForActual.app"
 test -d "$app"
 test -d "$app/PlugIns/TandemShare.appex"
+test -d "$app/PlugIns/TandemWidgets.appex"
 mkdir -p "$staging/Payload"
 cp -R "$app" "$staging/Payload/"
 (cd "$staging" && zip -qry "$output" Payload)

@@ -11,8 +11,8 @@ import android.widget.RemoteViews
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.CategoryWidgetSummary
 import app.tandemforactual.data.store.WidgetCategory
+import app.tandemforactual.data.store.categoryBalanceText
 import app.tandemforactual.ui.core.format.formatBudgetCurrency
-import kotlin.math.absoluteValue
 
 /** How many categories fit at each widget size, by the smallest size in dp each needs; one row shows as a single large amount. */
 internal enum class CategoryWidgetSize(
@@ -32,15 +32,6 @@ internal enum class CategoryWidgetSize(
             heightDp: Float,
         ): CategoryWidgetSize = entries.lastOrNull { widthDp >= it.minWidthDp && heightDp >= it.minHeightDp } ?: COMPACT
     }
-}
-
-/** Text for a category's balance: overspending says "over" so it never relies on colour alone. */
-internal fun categoryBalanceText(
-    balanceMinor: Long,
-    settings: BudgetDisplaySettings?,
-): String {
-    val amount = formatBudgetCurrency(balanceMinor.absoluteValue, settings)
-    return if (balanceMinor < 0) "$amount over" else amount
 }
 
 internal fun categoryWidgetViews(
@@ -115,7 +106,7 @@ private fun categoryRow(
 ): RemoteViews {
     val row = RemoteViews(context.packageName, R.layout.widget_category_row)
     val overspent = category.balanceMinor < 0
-    val amount = categoryBalanceText(category.balanceMinor, settings)
+    val amount = categoryBalanceText(category.balanceMinor) { formatBudgetCurrency(it, settings) }
     row.setTextViewText(R.id.widget_row_name, category.name)
     row.setTextViewText(R.id.widget_row_amount, amount)
     row.setTextViewText(R.id.widget_row_amount_negative, amount)
