@@ -3,6 +3,7 @@ package app.tandemforactual.wear
 import androidx.wear.protolayout.DeviceParametersBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
 import androidx.wear.protolayout.LayoutElementBuilders.LayoutElement
+import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
@@ -96,7 +97,7 @@ class WatchSurfacesTest {
 
         val complication = WatchComplications.leftToSpend(split, null, ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
         assertEquals("$93", text(complication))
-        assertEquals("A day", complication.title?.getTextAt(context.resources, Instant.now()).toString())
+        assertEquals("A day", shown(complication.title))
     }
 
     @Test
@@ -147,6 +148,8 @@ class WatchSurfacesTest {
         assertEquals("Locked", text(locked))
         assertTrue(WatchComplications.toBudget(null, null) is NoDataComplicationData)
     }
+
+    private fun shown(text: ComplicationText?) = text?.getTextAt(context.resources, Instant.now()).toString()
 
     private fun text(data: ShortTextComplicationData) = data.text.getTextAt(context.resources, Instant.now()).toString()
 
