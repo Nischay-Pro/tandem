@@ -67,6 +67,7 @@ class CategoryWidgetSummaryTest {
                 assertTrue(hidden.amountsHidden, key)
                 assertEquals(emptyList(), hidden.categories)
                 assertNull(hidden.displaySettings)
+                assertEquals(key == "selectedBudgetEncrypted", hidden.locked, key)
             }
         }
 

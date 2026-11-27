@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.AuthenticatedDevice
+import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.pendingDeviceChangeNotice
@@ -55,6 +56,7 @@ internal fun ServerDeviceScreen(
     onForgetDeviceLocally: () -> Unit,
 ) {
     val encryptedBudgetVault = LocalEncryptedBudgetVault.current
+    val backgroundKeyStore = LocalBackgroundBudgetKeyStore.current
     val device = mobileSession.authenticatedDevice
     val scope = rememberCoroutineScope()
     var confirmation by rememberSaveable { mutableStateOf("") }
@@ -84,6 +86,7 @@ internal fun ServerDeviceScreen(
             scope.launch {
                 if (mobileSession.signOutAndClearLocalData()) {
                     encryptedBudgetVault?.deleteAll()
+                    runCatching { backgroundKeyStore?.clear() }
                     state.clearBudgetSession()
                     navigation.reset(AppRoute.WELCOME)
                 }

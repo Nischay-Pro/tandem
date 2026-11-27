@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.core.platform
 
+import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -65,6 +66,20 @@ internal interface IosKeychainClient {
 
     fun delete(): Int
 }
+
+/**
+ * The one encrypted budget whose password the person let widgets, Siri, Shortcuts and background sync use while it's
+ * locked. Like every Tandem Keychain item it opens only after the first unlock since restart, and only on this device.
+ */
+internal fun iosBackgroundBudgetKeyStore(): DeviceCredentialStore =
+    IosDeviceCredentialStore(SecurityIosKeychainClient("background-budget-key"))
+
+/** The password kept for reading [budgetId] while it's locked, or null when the person hasn't allowed that. */
+internal fun iosReadablePassword(budgetId: String): String? =
+    BackgroundBudgetKey
+        .decode(runCatching { iosBackgroundBudgetKeyStore().read() }.getOrNull())
+        ?.takeIf { it.first == budgetId }
+        ?.second
 
 internal class IosDeviceCredentialStore(
     private val keychain: IosKeychainClient = SecurityIosKeychainClient(),

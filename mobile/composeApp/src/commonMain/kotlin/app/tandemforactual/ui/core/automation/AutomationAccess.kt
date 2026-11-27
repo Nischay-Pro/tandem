@@ -80,11 +80,18 @@ fun automationTarget(
     return AutomationTarget(budgetId, preferences["selectedBudgetEncrypted"] == "true")
 }
 
-/** The budget whose account and category names may be offered: only once either opt-in is on, and never while encrypted. */
-fun automationNamesTarget(preferences: Map<String, String>): AutomationTarget? {
+/**
+ * The budget whose account and category names may be offered: only once either opt-in is on, and for an encrypted
+ * budget only when [encryptedReadable], because the person let automation read it while it's locked.
+ */
+fun automationNamesTarget(
+    preferences: Map<String, String>,
+    encryptedReadable: Boolean = false,
+): AutomationTarget? {
     if (!AutomationAccess.writesAllowed(preferences) && !AutomationAccess.readsAllowed(preferences)) return null
     val budgetId = preferences["selectedBudgetId"]?.takeIf(String::isNotBlank) ?: return null
-    return AutomationTarget(budgetId, encrypted = false).takeUnless { preferences["selectedBudgetEncrypted"] == "true" }
+    val encrypted = preferences["selectedBudgetEncrypted"] == "true"
+    return AutomationTarget(budgetId, encrypted).takeUnless { encrypted && !encryptedReadable }
 }
 
 /** Reads stay closed whenever the home-screen widget would hide amounts too. */

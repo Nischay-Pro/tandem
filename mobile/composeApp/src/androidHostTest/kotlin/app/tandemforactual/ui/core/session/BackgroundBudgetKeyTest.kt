@@ -1,8 +1,11 @@
 package app.tandemforactual.ui.core.session
 
+import app.tandemforactual.ui.app.shell.keptPasswordChanged
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class BackgroundBudgetKeyTest {
     private class MemoryStore(
@@ -40,5 +43,18 @@ class BackgroundBudgetKeyTest {
                 },
             ),
         )
+    }
+
+    @Test
+    fun aPasswordChangedInActualForgetsTheKeptOne() {
+        val store = MemoryStore(BackgroundBudgetKey.encode("b1", "old"))
+        assertFalse(keptPasswordChanged(null, "b1", "new"))
+        assertFalse(keptPasswordChanged(store, "b1", ""))
+        assertFalse(keptPasswordChanged(store, "b1", "old"))
+        assertFalse(keptPasswordChanged(store, "b2", "new"))
+        assertEquals("b1", BackgroundBudgetKey.budgetIn(store))
+        assertTrue(keptPasswordChanged(store, "b1", "new"))
+        assertNull(store.value)
+        assertFalse(keptPasswordChanged(store, "b1", "new"))
     }
 }

@@ -28,10 +28,13 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetSyncCoordinator
 import app.tandemforactual.data.store.BudgetSyncRemoteException
 import app.tandemforactual.data.store.BudgetSyncSummary
+import app.tandemforactual.data.store.LocalAlert
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.NotificationPolicy
+import app.tandemforactual.data.store.forBudget
 import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.overspendingAlert
+import app.tandemforactual.data.store.overspendingForBudget
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
@@ -148,7 +151,7 @@ class BackgroundBudgetSyncWorker(
                 if (banksSynced) {
                     summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
                 }
-                postAlerts(database, repository, budgetId, preferences, summary)
+                postAlerts(database, repository, budgetId, preferences, summary, encrypted = password != null)
                 announceToTasker(database, budgetDatabase, budgetId, preferences)
             } finally {
                 if (budgetDatabase !== database) budgetDatabase.close()
@@ -233,8 +236,10 @@ class BackgroundBudgetSyncWorker(
         budgetId: String,
         preferences: Map<String, String>,
         summary: BudgetSyncSummary,
+        encrypted: Boolean,
     ) {
         val policy = NotificationPolicy.read(preferences)
+        val post = { alert: LocalAlert -> BudgetSystemNotifications.post(applicationContext, policy.forBudget(alert, encrypted)) }
         val minute = LocalTime.now().let { it.hour * 60 + it.minute }
         if (policy.allows(AlertKind.NEEDS_REVIEW, minute)) {
             BudgetSystemNotifications.conflicts(applicationContext, summary.writesConflicted)
@@ -243,27 +248,19 @@ class BackgroundBudgetSyncWorker(
             BudgetSystemNotifications.rejected(applicationContext, summary.writesRejected)
         }
         if (policy.allows(AlertKind.OVERSPENDING, minute)) {
-            BudgetSystemNotifications.overspending(
-                applicationContext,
-                overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString()),
-            )
+            val message = overspendingAlert(repository, AppPreferencesStore(database), budgetId, YearMonth.now().toString())
+            BudgetSystemNotifications.overspending(applicationContext, policy.overspendingForBudget(message, encrypted))
         }
         val store = AppPreferencesStore(database)
         val today = LocalDate.now().toString()
         val format = currencyFormatter(repository, budgetId)
         if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
-            upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let {
-                BudgetSystemNotifications.post(applicationContext, it)
-            }
+            upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(post)
         }
         if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
-            largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let {
-                BudgetSystemNotifications.post(applicationContext, it)
-            }
+            largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(post)
         }
-        uncategorizedAlert(repository, store, budgetId, today, policy, minute, format)?.let {
-            BudgetSystemNotifications.post(applicationContext, it)
-        }
+        uncategorizedAlert(repository, store, budgetId, today, policy, minute, format)?.let(post)
     }
 
     private suspend fun apiFailureResult(

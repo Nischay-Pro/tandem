@@ -60,6 +60,33 @@ class NotificationPolicyTest {
         assertEquals(2500L, NotificationPolicy.read(mapOf(NotificationPolicy.LARGE_TRANSACTION_MINOR to "2500")).largeTransactionMinor)
     }
 
+    @Test
+    fun encryptedBudgetsGetGenericTextUnlessDetailsAreAllowed() {
+        val private = NotificationPolicy.read(emptyMap())
+        val detailed = NotificationPolicy.read(mapOf(NotificationPolicy.ENCRYPTED_DETAILS to "true"))
+        assertFalse(private.encryptedDetails)
+        assertTrue(detailed.encryptedDetails)
+        val expected =
+            mapOf(
+                AlertKind.OVERSPENDING to "A category is over budget this month.",
+                AlertKind.UPCOMING_BILLS to "A bill is due soon.",
+                AlertKind.LARGE_TRANSACTION to "New transaction to review.",
+                AlertKind.UNCATEGORIZED to "New transaction to review.",
+                AlertKind.BANK_SYNC_FAILURE to "A bank connection needs attention.",
+                AlertKind.NEEDS_REVIEW to "Open Tandem to see what changed.",
+            )
+        expected.forEach { (kind, text) ->
+            val alert = LocalAlert(kind, "Title", "€12.40 at Corner Café came in.")
+            assertEquals(LocalAlert(kind, "Title", text), private.forBudget(alert, encrypted = true))
+            assertEquals(alert, private.forBudget(alert, encrypted = false))
+            assertEquals(alert, detailed.forBudget(alert, encrypted = true))
+        }
+        assertEquals("A category is over budget this month.", private.overspendingForBudget("Groceries is over budget.", encrypted = true))
+        assertEquals("Groceries is over budget.", private.overspendingForBudget("Groceries is over budget.", encrypted = false))
+        assertEquals("Groceries is over budget.", detailed.overspendingForBudget("Groceries is over budget.", encrypted = true))
+        assertNull(private.overspendingForBudget(null, encrypted = true))
+    }
+
     private val allAlertsOn = AlertKind.entries.associate { it.preference to "true" }
 
     private fun withRepository(block: suspend (LocalBudgetRepository, AppPreferencesStore) -> Unit) =

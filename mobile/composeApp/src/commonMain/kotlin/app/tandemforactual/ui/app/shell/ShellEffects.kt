@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.withFrameNanos
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.bankSyncFailureAlert
+import app.tandemforactual.data.store.forBudget
 import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.ui.app.QuickAction
 import app.tandemforactual.ui.app.QuickActionEvents
@@ -60,7 +61,10 @@ internal fun SessionQueueEffects(
         val store = appPreferencesStore ?: return@LaunchedEffect
         val post = env.postLocalAlert ?: return@LaunchedEffect
         val failing = links.filter { it.failure != null }.map { it.name }
-        bankSyncFailureAlert(store, state.selectedBudgetId, failing, state.notificationPolicy, platformMinuteOfDay())?.let(post)
+        val policy = state.notificationPolicy
+        bankSyncFailureAlert(store, state.selectedBudgetId, failing, policy, platformMinuteOfDay())?.let {
+            post(policy.forBudget(it, state.selectedBudgetEncrypted))
+        }
     }
     LaunchedEffect(mobileSession.transactionRecords) {
         val repository = mobileSession.repository ?: return@LaunchedEffect
@@ -70,7 +74,7 @@ internal fun SessionQueueEffects(
         val policy = state.notificationPolicy
         uncategorizedAlert(repository, store, state.selectedBudgetId, platformTodayIsoDate(), policy, platformMinuteOfDay()) {
             state.formatCurrency(it)
-        }?.let(post)
+        }?.let { post(policy.forBudget(it, state.selectedBudgetEncrypted)) }
     }
 }
 

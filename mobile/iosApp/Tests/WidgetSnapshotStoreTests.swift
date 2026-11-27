@@ -49,6 +49,11 @@ final class WidgetSnapshotStoreTests: XCTestCase {
         let hidden = try XCTUnwrap(WidgetSnapshotStore.load(from: fileURL))
         XCTAssertEqual(hidden.status(on: date(2026, 11, 2), calendar: calendar), .hidden)
         XCTAssertNil(hidden.categories)
+        XCTAssertTrue(WidgetSnapshotStore.save(#"{"version":1,"month":"2026-11","state":"locked","budgetName":"Home"}"#, to: fileURL))
+        let locked = try XCTUnwrap(WidgetSnapshotStore.load(from: fileURL))
+        XCTAssertEqual(locked.status(on: date(2026, 11, 2), calendar: calendar), .locked)
+        XCTAssertNil(locked.readyToAssign)
+        XCTAssertNil(locked.categories)
         XCTAssertTrue(WidgetSnapshotStore.save(#"{"version":1,"month":"2026-11","state":"none"}"#, to: fileURL))
         XCTAssertEqual(WidgetSnapshotStore.load(from: fileURL)?.status(on: date(2026, 11, 2), calendar: calendar), .noBudget)
     }

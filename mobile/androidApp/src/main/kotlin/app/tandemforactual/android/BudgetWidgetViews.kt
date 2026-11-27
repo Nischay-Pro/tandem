@@ -62,7 +62,11 @@ private fun budgetViews(
     views.setViewVisibility(R.id.widget_amounts, if (locked) View.GONE else View.VISIBLE)
     views.setTextViewText(
         R.id.widget_locked,
-        if (summary == null) "Open Tandem to choose a budget." else "Open Tandem to see your budget.",
+        when {
+            summary == null -> "Open Tandem to choose a budget."
+            summary.locked -> LOCKED_WIDGET_TEXT
+            else -> "Open Tandem to see your budget."
+        },
     )
     if (!locked) {
         val ready = summary.readyToAssignMinor
@@ -104,3 +108,6 @@ private fun formatAmount(
     minor: Long?,
     settings: BudgetDisplaySettings?,
 ): String = minor?.let { formatBudgetCurrency(it, settings) } ?: "—"
+
+/** An encrypted budget's widgets show nothing from it, only that it's locked. */
+internal const val LOCKED_WIDGET_TEXT = "Locked. Open Tandem to unlock it."

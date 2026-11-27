@@ -26,6 +26,7 @@ suspend fun widgetSnapshotJson(
             "state",
             when {
                 budget == null -> "none"
+                budget.locked -> "locked"
                 budget.amountsHidden -> "hidden"
                 else -> "ready"
             },

@@ -146,6 +146,7 @@ class BudgetWidgetSummaryTest {
                     assertEquals(true, hidden.amountsHidden, key)
                     assertNull(hidden.readyToAssignMinor)
                     assertNull(hidden.displaySettings)
+                    assertEquals(key == "selectedBudgetEncrypted", hidden.locked, key)
                 }
             } finally {
                 database.close()

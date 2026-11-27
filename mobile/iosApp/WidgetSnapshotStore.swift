@@ -15,6 +15,7 @@ struct WidgetSnapshot: Codable, Equatable {
     enum Status: Equatable {
         case noBudget
         case hidden
+        case locked
         case outdated
         case ready
     }
@@ -36,6 +37,8 @@ struct WidgetSnapshot: Codable, Equatable {
             return month == WidgetSnapshotStore.monthId(for: date, calendar: calendar) ? .ready : .outdated
         case "hidden":
             return .hidden
+        case "locked":
+            return .locked
         default:
             return .noBudget
         }

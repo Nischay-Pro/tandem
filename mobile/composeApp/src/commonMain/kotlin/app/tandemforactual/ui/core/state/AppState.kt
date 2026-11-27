@@ -198,6 +198,7 @@ internal class AppState {
     var quietHours by mutableStateOf("")
     var largeTransactionMinor by mutableStateOf(NotificationPolicy.DEFAULT_LARGE_TRANSACTION_MINOR)
     var billLeadDays by mutableStateOf(NotificationPolicy.DEFAULT_BILL_LEAD_DAYS)
+    var encryptedAlertDetails by mutableStateOf(false)
     var settingsStorageError by mutableStateOf<String?>(null)
     var settingsStorageRetry by mutableStateOf(0)
     var settingsStorageReady by mutableStateOf(false)
@@ -325,6 +326,7 @@ internal class AppState {
                 NotificationPolicy.QUIET_HOURS to quietHours,
                 NotificationPolicy.LARGE_TRANSACTION_MINOR to largeTransactionMinor.toString(),
                 NotificationPolicy.BILL_LEAD_DAYS to billLeadDays.toString(),
+                NotificationPolicy.ENCRYPTED_DETAILS to encryptedAlertDetails.toString(),
             )
 
     fun restoreAutomaticBackupStatus(saved: Map<String, String>) {
@@ -407,6 +409,7 @@ internal class AppState {
         largeTransactionMinor =
             saved[NotificationPolicy.LARGE_TRANSACTION_MINOR]?.toLongOrNull()?.takeIf { it > 0 } ?: largeTransactionMinor
         billLeadDays = saved[NotificationPolicy.BILL_LEAD_DAYS]?.toIntOrNull()?.coerceIn(0, 14) ?: billLeadDays
+        encryptedAlertDetails = saved[NotificationPolicy.ENCRYPTED_DETAILS]?.toBooleanStrictOrNull() ?: encryptedAlertDetails
     }
 
     /** The phone notification choices as background sync reads them. */

@@ -22,6 +22,7 @@ data class CategoryWidgetSummary(
     val categories: List<WidgetCategory>,
     val amountsHidden: Boolean,
     val displaySettings: BudgetDisplaySettings?,
+    val locked: Boolean = false,
 )
 
 data class WidgetAccount(
@@ -56,7 +57,9 @@ suspend fun categoryWidgetSummary(
     categoryIds: List<String>,
 ): CategoryWidgetSummary? {
     val budget = widgetBudget(preferences) ?: return null
-    if (budget.amountsHidden) return CategoryWidgetSummary(budget.name, emptyList(), amountsHidden = true, displaySettings = null)
+    if (budget.amountsHidden) {
+        return CategoryWidgetSummary(budget.name, emptyList(), amountsHidden = true, displaySettings = null, locked = budget.locked)
+    }
     val byId = monthCategories(repository, budget.id, todayIso).associateBy(WidgetCategory::id)
     return CategoryWidgetSummary(
         budget.name,

@@ -65,6 +65,7 @@ private fun categoryViews(
     val message =
         when {
             summary == null -> "Open Tandem to choose a budget."
+            summary.locked -> LOCKED_WIDGET_TEXT
             summary.amountsHidden -> "Open Tandem to see your budget."
             needsSetup -> "Tap to choose categories."
             else -> null
