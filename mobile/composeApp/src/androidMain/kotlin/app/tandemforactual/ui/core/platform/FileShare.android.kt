@@ -8,13 +8,13 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 @Composable
-internal actual fun rememberFileSharer(): (name: String, mimeType: String, contents: String) -> Unit {
+internal actual fun rememberFileSharer(): (name: String, mimeType: String, contents: ByteArray) -> Unit {
     val context = LocalContext.current
     return remember(context) {
         { name, mimeType, contents ->
             val folder = File(context.cacheDir, "exports").apply { mkdirs() }
             folder.listFiles()?.forEach(File::delete)
-            val file = File(folder, name).apply { writeText(contents) }
+            val file = File(folder, name).apply { writeBytes(contents) }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.receipts", file)
             val send =
                 Intent(Intent.ACTION_SEND)

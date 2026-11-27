@@ -28,12 +28,15 @@ import platform.darwin.NSObject
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) -> Unit): () -> Unit {
+internal actual fun rememberStatementFilePicker(
+    binary: Boolean,
+    onPicked: (PickedStatementFile) -> Unit,
+): () -> Unit {
     val scope = rememberCoroutineScope()
     val onPickedState = rememberUpdatedState(onPicked)
     val delegate =
         remember {
-            StatementDocumentPickerDelegate(scope) { file -> onPickedState.value(file) }
+            StatementDocumentPickerDelegate(scope, binary) { file -> onPickedState.value(file) }
         }
     return remember(delegate) {
         {
@@ -50,6 +53,7 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
 
 private class StatementDocumentPickerDelegate(
     private val scope: CoroutineScope,
+    private val binary: Boolean,
     private val onPicked: (PickedStatementFile) -> Unit,
 ) : NSObject(),
     UIDocumentPickerDelegateProtocol {
@@ -61,7 +65,7 @@ private class StatementDocumentPickerDelegate(
         val path = url.path ?: return
         val filename = url.lastPathComponent ?: "statement.csv"
         scope.launch {
-            val file = withContext(Dispatchers.Default) { readStatementFile(path, filename) }
+            val file = withContext(Dispatchers.Default) { readStatementFile(path, filename, binary) }
             withContext(Dispatchers.Main) { onPicked(file) }
         }
     }
@@ -73,20 +77,26 @@ private class StatementDocumentPickerDelegate(
 private fun readStatementFile(
     path: String,
     filename: String,
+    binary: Boolean,
 ): PickedStatementFile {
+    val limit = if (binary) MAX_BINARY_FILE_BYTES else MAX_STATEMENT_IMPORT_BYTES
     return try {
         val attributes = NSFileManager.defaultManager.attributesOfItemAtPath(path, null)
         val fileSize = (attributes?.get(NSFileSize) as? NSNumber)?.longLongValue
-        if (fileSize != null && fileSize > MAX_STATEMENT_IMPORT_BYTES) {
+        if (fileSize != null && fileSize > limit) {
             return PickedStatementFile(filename, null, "Choose a statement smaller than 10 MB.")
         }
         val data =
             NSFileManager.defaultManager.contentsAtPath(path)
                 ?: return PickedStatementFile(filename, null, "Couldn’t read this file. Choose another statement.")
-        if (data.length.toLong() > MAX_STATEMENT_IMPORT_BYTES) {
+        if (data.length.toLong() > limit) {
             return PickedStatementFile(filename, null, "Choose a statement smaller than 10 MB.")
         }
-        PickedStatementFile(filename, decodeStatementBytes(data.copyBytes()))
+        if (binary) {
+            PickedStatementFile(filename, null, bytes = data.copyBytes())
+        } else {
+            PickedStatementFile(filename, decodeStatementBytes(data.copyBytes()))
+        }
     } catch (error: CancellationException) {
         throw error
     } catch (_: Exception) {

@@ -4,23 +4,30 @@ package app.tandemforactual.ui.core.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.useContents
+import kotlinx.cinterop.usePinned
 import platform.CoreGraphics.CGRectMake
-import platform.Foundation.NSString
+import platform.Foundation.NSData
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
-import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
 import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.popoverPresentationController
 
 @Composable
-internal actual fun rememberFileSharer(): (name: String, mimeType: String, contents: String) -> Unit =
+internal actual fun rememberFileSharer(): (name: String, mimeType: String, contents: ByteArray) -> Unit =
     remember {
         { name, _, contents ->
             val path = NSTemporaryDirectory() + name
-            NSString.create(string = contents).writeToFile(path, atomically = true, encoding = NSUTF8StringEncoding, error = null)
+            val data =
+                if (contents.isEmpty()) {
+                    NSData()
+                } else {
+                    contents.usePinned { NSData.create(bytes = it.addressOf(0), length = contents.size.toULong()) }
+                }
+            data.writeToFile(path, atomically = true)
             presentShareSheet(listOf(NSURL.fileURLWithPath(path)))
         }
     }
