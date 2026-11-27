@@ -59,7 +59,9 @@ class StoredBudgetBackupTest {
             assertNull(client.storedCopyEncrypted("group"))
             assertEquals(
                 "no_device_copy",
-                assertFailsWith<TandemApiException> { client.budgetBackup("group", null, "Direct", null, null, download = false) }.errorCode,
+                assertFailsWith<TandemApiException> {
+                    client.budgetBackup("group", null, "Direct", null, null, download = false)
+                }.errorCode,
             )
             assertEquals(0, server.downloads.get())
             assertFalse(files.directory.resolve("group.sqlite").exists())
