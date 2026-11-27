@@ -71,7 +71,13 @@ class StatementFixtureTest {
 
         assertEquals(listOf("TX-88120", "TX-88121", "TX-88130", "TX-88140"), parsed.transactions.map { it.bankId })
         assertTrue(parsed.transactions.all { it.importedId.startsWith("tandem-import-") })
-        assertEquals(4, parsed.transactions.map { it.importedId }.distinct().size)
+        assertEquals(
+            4,
+            parsed.transactions
+                .map { it.importedId }
+                .distinct()
+                .size,
+        )
     }
 
     @Test
@@ -132,7 +138,13 @@ class StatementFixtureTest {
         assertEquals("202611010001", parsed.transactions.last().bankId)
         assertEquals(parsed.transactions[4].bankId, parsed.transactions[5].bankId)
         assertTrue(parsed.transactions.none { it.importedId == it.bankId })
-        assertEquals(6, parsed.transactions.map { it.importedId }.distinct().size)
+        assertEquals(
+            6,
+            parsed.transactions
+                .map { it.importedId }
+                .distinct()
+                .size,
+        )
     }
 
     @Test

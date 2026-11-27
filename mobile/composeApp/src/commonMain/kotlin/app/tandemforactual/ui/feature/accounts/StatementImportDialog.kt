@@ -226,7 +226,11 @@ private fun StatementImportResult(
         if (preview.serverChecked) {
             ListRow(
                 "New in Actual",
-                trailing = result.newRows(preview).transactions.size.toString(),
+                trailing =
+                    result
+                        .newRows(preview)
+                        .transactions.size
+                        .toString(),
                 leading = RowLeading.None,
             )
             ListRow(
