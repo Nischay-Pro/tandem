@@ -62,6 +62,8 @@ jobs:
           curl -fs "$ACTUAL_URL/account/needs-bootstrap"
 
       - name: Seed the demo budget
+        env:
+          DEMO_VARIANTS: envelope
         run: node scripts/screenshots/seed-demo.mjs
 
       - name: Capture screenshots
@@ -215,6 +217,8 @@ jobs:
           for _ in $(seq 1 120); do curl -fs http://localhost:5006/account/needs-bootstrap >/dev/null && break; sleep 1; done
 
       - name: Seed the demo budget
+        env:
+          DEMO_VARIANTS: envelope
         run: node scripts/screenshots/seed-demo.mjs
 
       - name: Capture screenshots
