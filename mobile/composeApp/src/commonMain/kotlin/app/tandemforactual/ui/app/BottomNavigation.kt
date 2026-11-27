@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -141,6 +142,7 @@ private fun RowScope.BottomNavigationTab(
                 .weight(1f)
                 .defaultMinSize(minHeight = 52.dp)
                 .clip(tabShape)
+                .pointerHighlight(tandemPalette.text, tabShape, tandemReduceMotion, visible)
                 .selectable(
                     selected = active,
                     enabled = visible,

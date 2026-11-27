@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.amountAnnotatedString
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.design.theme.TandemLayout
@@ -45,6 +46,7 @@ import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleDot
 import com.composables.icons.lucide.Lucide
@@ -75,13 +77,15 @@ internal fun ListRow(
                 .defaultMinSize(minHeight = rowMinHeight)
                 .then(
                     if (onClick != null || onLongClick != null) {
-                        Modifier.combinedClickable(
-                            role = Role.Button,
-                            onClickLabel = title,
-                            onLongClickLabel = "Select $title",
-                            onClick = onClick ?: {},
-                            onLongClick = onLongClick,
-                        )
+                        Modifier
+                            .pointerHighlight(palette.text, reduceMotion = tandemReduceMotion)
+                            .combinedClickable(
+                                role = Role.Button,
+                                onClickLabel = title,
+                                onLongClickLabel = "Select $title",
+                                onClick = onClick ?: {},
+                                onLongClick = onLongClick,
+                            )
                     } else {
                         Modifier
                     },

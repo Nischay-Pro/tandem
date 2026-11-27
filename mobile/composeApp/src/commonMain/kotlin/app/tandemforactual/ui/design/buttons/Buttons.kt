@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -221,6 +222,7 @@ internal fun SelectableTile(
                 .background(background)
                 .then(border?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
                 .semantics { this.contentDescription = contentDescription }
+                .pointerHighlight(tandemPalette.text, shape, tandemReduceMotion)
                 .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
         contentAlignment = Alignment.Center,
         content = content,
@@ -279,36 +281,47 @@ private fun TandemButton(
                     } else {
                         Modifier.background(palette.surface).border(1.dp, borderColor, shape)
                     },
-                ).clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
+                ).pointerHighlight(palette.text, shape, tandemReduceMotion, enabled && !loading)
+                .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = label, onClick = onClick)
                 .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.medium),
         contentAlignment = Alignment.Center,
     ) {
-        if (primary) {
-            Row(
-                modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
-                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AnimatedReveal(visible = loading, animateHeight = false) {
-                    TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
-                }
-                AnimatedStatusText(
-                    label,
-                    textColor,
-                    fontSize = TandemTypography.action,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                )
+        TandemButtonLabel(primary, loading, label, textColor)
+    }
+}
+
+@Composable
+private fun TandemButtonLabel(
+    primary: Boolean,
+    loading: Boolean,
+    label: String,
+    textColor: Color,
+) {
+    if (primary) {
+        Row(
+            modifier = Modifier.animateContentSize(tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS)),
+            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedReveal(visible = loading, animateHeight = false) {
+                TandemLoadingIndicator(Modifier.size(17.dp), textColor, 2.dp)
             }
-        } else {
-            Text(
+            AnimatedStatusText(
                 label,
-                color = textColor,
+                textColor,
                 fontSize = TandemTypography.action,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
             )
         }
+    } else {
+        Text(
+            label,
+            color = textColor,
+            fontSize = TandemTypography.action,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+        )
     }
 }
 

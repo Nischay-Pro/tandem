@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.WorkspaceLayout
 import app.tandemforactual.ui.design.buttons.TandemIconButton
+import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -120,6 +121,7 @@ private fun RailItems(
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 52.dp)
                     .clip(RoundedCornerShape(TandemShapes.medium))
+                    .pointerHighlight(tandemPalette.text, RoundedCornerShape(TandemShapes.medium), tandemReduceMotion)
                     .selectable(
                         selected = active,
                         role = Role.Tab,
