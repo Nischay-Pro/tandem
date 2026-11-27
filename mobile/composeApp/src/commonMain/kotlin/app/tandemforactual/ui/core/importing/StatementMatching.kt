@@ -301,7 +301,12 @@ private fun ledgerWords(transaction: StatementLedgerTransaction): Set<String> =
 private fun sharedWordCount(
     first: Set<String>,
     second: Set<String>,
-): Int = first.count { word -> second.any { it == word || (minOf(it.length, word.length) >= 4 && (it.startsWith(word) || word.startsWith(it))) } }
+): Int = first.count { word -> second.any { it == word || sharesStem(it, word) } }
+
+private fun sharesStem(
+    first: String,
+    second: String,
+): Boolean = minOf(first.length, second.length) >= 4 && (first.startsWith(second) || second.startsWith(first))
 
 internal fun isoDayNumber(date: String): Int? {
     val (year, month, day) = parseIsoDate(date) ?: return null

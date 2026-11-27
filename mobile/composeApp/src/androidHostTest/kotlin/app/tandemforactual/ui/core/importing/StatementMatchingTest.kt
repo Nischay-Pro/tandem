@@ -146,7 +146,8 @@ class StatementMatchingTest {
         val parsed = fixture("sgml-checking.ofx").transactions
         val ledger =
             parsed.take(5).mapIndexed { index, draft ->
-                ledger("t$index", draft.date, draft.amountMinor, draft.payeeName, importedId = if (index == 0) draft.bankId else draft.importedId)
+                val importedId = if (index == 0) draft.bankId else draft.importedId
+                ledger("t$index", draft.date, draft.amountMinor, draft.payeeName, importedId = importedId)
             }
         val review = reviewStatement(parsed, ledger)
 
@@ -161,7 +162,8 @@ class StatementMatchingTest {
     fun anAmountAlreadyTakenByAnImportedRowIsExplained() {
         val first = row("2026-11-04", -700, "Cinema")
         val second = row("2026-11-05", -700, "Snacks")
-        val review = reviewStatement(listOf(first, second), listOf(ledger("t", "2026-11-04", -700, "Cinema", importedId = first.importedId)))
+        val ledger = listOf(ledger("t", "2026-11-04", -700, "Cinema", importedId = first.importedId))
+        val review = reviewStatement(listOf(first, second), ledger)
 
         assertEquals(StatementRowStatus.IMPORTED, review.rows[0].status)
         assertTrue(review.rows[1].reason is StatementNoMatchReason.AlreadyImported)
@@ -169,7 +171,8 @@ class StatementMatchingTest {
 
     @Test
     fun applySendsOnlyPairsAndNewRowsAndATransactionPairsOnce() {
-        val rows = listOf(row("2026-11-03", -1_200, "UBER TRIP", bankId = "fit-1"), row("2026-11-03", -1_200, "UBER TRIP", bankId = "fit-2"))
+        val rows =
+            listOf(row("2026-11-03", -1_200, "UBER TRIP", bankId = "fit-1"), row("2026-11-03", -1_200, "UBER TRIP", bankId = "fit-2"))
         val review = reviewStatement(rows, listOf(ledger("u1", "2026-11-03", -1_200, "Uber"), ledger("u2", "2026-11-03", -1_200, "Uber")))
         var actions = review.defaultActions()
         assertTrue(review.applyItems(actions).isEmpty())

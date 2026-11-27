@@ -169,7 +169,15 @@ class StatementImportPresentationTest {
         payee: String,
         bankId: String? = null,
         rowNumber: Int = 0,
-    ) = StatementImportDraft(date, amount, payee, null, StatementImportIds().next(date, amount, payee + bankId.orEmpty()), bankId, rowNumber)
+    ) = StatementImportDraft(
+        date,
+        amount,
+        payee,
+        null,
+        StatementImportIds().next(date, amount, payee + bankId.orEmpty()),
+        bankId,
+        rowNumber,
+    )
 
     private fun ledger(
         id: String,

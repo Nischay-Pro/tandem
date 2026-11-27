@@ -30,7 +30,12 @@ internal fun Map<Int, StatementRowAction>.choose(
     index: Int,
     action: StatementRowAction,
 ): Map<Int, StatementRowAction> {
-    val freed = if (action is StatementRowAction.Match) filter { (other, current) -> other != index && current == action }.keys else emptySet()
+    val freed =
+        if (action is StatementRowAction.Match) {
+            filter { (other, current) -> other != index && current == action }.keys
+        } else {
+            emptySet()
+        }
     return this + (index to action) + freed.associateWith { StatementRowAction.Later }
 }
 
@@ -64,7 +69,8 @@ internal fun StatementReview.applyItems(actions: Map<Int, StatementRowAction>): 
     rows.mapNotNull { review ->
         val row = review.row
         when (val action = actions[review.index] ?: review.defaultAction()) {
-            is StatementRowAction.Match -> StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId, action.transactionId)
+            is StatementRowAction.Match ->
+                StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId, action.transactionId)
             StatementRowAction.Create -> StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId)
             StatementRowAction.Duplicate, StatementRowAction.Later -> null
         }

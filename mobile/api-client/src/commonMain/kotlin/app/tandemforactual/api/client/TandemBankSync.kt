@@ -131,7 +131,15 @@ suspend fun TandemApiClient.importBudgetAccountTransactions(
             edits.importTransactions(
                 accountId,
                 transactions.map {
-                    ImportRow(it.date, it.amountMinor, it.payeeName, it.notes, it.importedId, cleared = true.takeIf { reviewed }, matchId = it.matchId)
+                    ImportRow(
+                        it.date,
+                        it.amountMinor,
+                        it.payeeName,
+                        it.notes,
+                        it.importedId,
+                        cleared = true.takeIf { reviewed },
+                        matchId = it.matchId,
+                    )
                 },
                 reviewed,
             )

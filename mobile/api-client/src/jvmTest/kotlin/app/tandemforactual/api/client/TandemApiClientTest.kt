@@ -490,7 +490,10 @@ class TandemApiClientTest {
                     StatementImportItem("2026-11-21", -1_234, "corner shop", null, "stmt-r1", shop.id),
                     StatementImportItem("2026-11-21", -99, "kiosk", null, "stmt-r2"),
                 )
-            assertEquals(StatementImportSummary(1, 0, 0), client.importBudgetAccountTransactions("group", checking, reviewed, null, reviewed = true))
+            assertEquals(
+                StatementImportSummary(1, 0, 0),
+                client.importBudgetAccountTransactions("group", checking, reviewed, null, reviewed = true),
+            )
             assertTrue(client.budgetAccountLedger("group", checking, "2026-11-21", "2026-11-21", null).any { it.importedId == "stmt-r2" })
             assertEquals(3, StatementImportPreview(setOf("a")).newRowCount(4))
             assertTrue(client.budgetDataHealth("group", null).isNotEmpty())
