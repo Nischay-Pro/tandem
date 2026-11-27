@@ -18,7 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.core.state.RulesReferenceFilter
 import app.tandemforactual.ui.core.state.booleanValue
+import app.tandemforactual.ui.core.state.matches
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
@@ -27,15 +29,18 @@ import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.ListRowAction
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.PageLazyColumn
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.X
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -51,6 +56,8 @@ internal fun BudgetRulesScreen(
     canAddRules: Boolean,
     onOpenRule: (String) -> Unit,
     selectedRuleId: String? = null,
+    referenceFilter: RulesReferenceFilter? = null,
+    onClearReferenceFilter: () -> Unit = {},
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val namesByField =
@@ -62,7 +69,7 @@ internal fun BudgetRulesScreen(
                 "payee" to payeeRecords.mapNotNull { it.recordName()?.let { name -> it.recordId to name } }.toMap(),
             )
         }
-    val activeRules = remember(rules) { rules.filterNot { it.recordBody()?.booleanValue("tombstone") == true } }
+    val activeRules = remember(rules, referenceFilter) { activeRules(rules, referenceFilter) }
     val summaries =
         remember(activeRules, namesByField) {
             activeRules.map { rule -> ruleSummary(rule, namesByField) }
@@ -75,6 +82,9 @@ internal fun BudgetRulesScreen(
     PageLazyColumn {
         item(key = "budget-rules-search") {
             ActivitySearchInput(searchQuery, onValueChange = { searchQuery = it }, placeholder = "Find a rule")
+        }
+        referenceFilter?.let { filter ->
+            item(key = "budget-rules-reference") { RulesReferenceRow(filter, onClearReferenceFilter) }
         }
         item(key = "budget-rules-summary") {
             RulesCountRow(searchQuery.isBlank(), visibleRules.size, summaries.size, canAddRules) { onOpenRule("") }
@@ -111,6 +121,34 @@ internal fun BudgetRulesScreen(
                     }
                 }
         }
+    }
+}
+
+private fun activeRules(
+    rules: List<BudgetRecordEntity>,
+    referenceFilter: RulesReferenceFilter?,
+): List<BudgetRecordEntity> =
+    rules.filter { rule ->
+        rule.recordBody()?.booleanValue("tombstone") != true && referenceFilter?.matches(rule) != false
+    }
+
+/** The filter the rules list was opened with from an item's where-used sheet, and the button that clears it. */
+@Composable
+private fun RulesReferenceRow(
+    filter: RulesReferenceFilter,
+    onClear: () -> Unit,
+) {
+    SurfaceCard {
+        ListRow(
+            filter.label,
+            "Only rules that name it",
+            leading = RowLeading.Icon(Lucide.Link),
+            options =
+                ListRowOptions(
+                    showChevron = false,
+                    trailingAction = ListRowAction(Lucide.X, "Show all rules", onClick = onClear),
+                ),
+        )
     }
 }
 

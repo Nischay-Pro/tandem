@@ -14,6 +14,7 @@ import androidx.room3.PrimaryKey
             orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
         ),
         Index(value = ["budgetId", "recordType", "categoryId", "recordDate"]),
+        Index(value = ["budgetId", "recordType", "payeeId"]),
         Index(
             value = ["budgetId", "recordType", "recordDate", "recordId"],
             orders = [Index.Order.ASC, Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],

@@ -5,6 +5,10 @@ import androidx.compose.runtime.Composable
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageSummary
+import app.tandemforactual.ui.core.usage.isChecking
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -19,9 +23,12 @@ internal fun DeletePayeeDialog(
     mobileSession: TandemMobileSession,
     scope: CoroutineScope,
 ) {
+    val usage = rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.PAYEE, selectedPayee.first)
     DestructiveConfirmationDialog(
         title = "Delete ${selectedPayee.second}?",
-        message = mobileSession.budgetActionMessage ?: "Remove this payee from the budget?",
+        message =
+            mobileSession.budgetActionMessage
+                ?: "Its transactions lose this payee, and rules that name it may stop working.",
         messageKind = mobileSession.feedback.budgetActionMessageKind.takeIf { mobileSession.budgetActionMessage != null },
         messageActionLabel = mobileSession.feedback.budgetActionMessageActionLabel,
         onMessageAction =
@@ -34,7 +41,8 @@ internal fun DeletePayeeDialog(
             },
         confirmLabel = if (mobileSession.isPerformingBudgetAction) "Deleting…" else "Delete",
         dismissLabel = "Keep payee",
-        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction,
+        enabled = !state.readOnlyMode && !mobileSession.isPerformingBudgetAction && !usage.isChecking,
+        content = { UsageSummary(usage, UsageSubject.PAYEE) },
         onDismissRequest = {
             if (!mobileSession.isPerformingBudgetAction) payee.mode = "menu"
         },
