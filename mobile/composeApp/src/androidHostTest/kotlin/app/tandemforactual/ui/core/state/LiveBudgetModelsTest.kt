@@ -239,7 +239,11 @@ class LiveBudgetModelsTest {
                 ),
             )
 
-        val salary = summary.groups.first { it.isIncome }.categories.single()
+        val salary =
+            summary.groups
+                .first { it.isIncome }
+                .categories
+                .single()
         assertEquals(6_000L, salary.assignedMinor)
         assertEquals(4_500L, salary.activityMinor)
         assertEquals(1_500L, salary.balanceMinor)
