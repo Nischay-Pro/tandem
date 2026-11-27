@@ -2,6 +2,7 @@ package app.tandemforactual.ui.core.state
 
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.BudgetReorderQueueState
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
@@ -49,8 +50,8 @@ class LiveBudgetModelsTest {
 
         assertEquals(
             listOf(
-                LiveAccountSummary("checking", "Checking", 12_500, "checking", false),
-                LiveAccountSummary("loan", "Auto loan", -80_000, "loan", true),
+                LiveAccountSummary("checking", "Checking", 12_500, AccountKind.BANK, false),
+                LiveAccountSummary("loan", "Auto loan", -80_000, AccountKind.LOAN, true),
             ),
             accounts,
         )
@@ -97,10 +98,10 @@ class LiveBudgetModelsTest {
 
         assertEquals("Everyday", accounts.first().accountGroupName)
         assertEquals("daily", accounts.first().accountGroupId)
-        assertEquals("Other", liveAccountGroupLabel(accounts[0]))
-        assertEquals("Credit", liveAccountGroupLabel(accounts[1]))
-        assertEquals("Mortgage", liveAccountGroupLabel(accounts[2]))
-        assertEquals("Investment", liveAccountGroupLabel(accounts[3]))
+        assertEquals("Bank accounts", liveAccountGroupLabel(accounts[0]))
+        assertEquals("Credit cards", liveAccountGroupLabel(accounts[1]))
+        assertEquals("Mortgages", liveAccountGroupLabel(accounts[2]))
+        assertEquals("Investments", liveAccountGroupLabel(accounts[3]))
         assertEquals("Closed", liveAccountGroupLabel(accounts[4]))
         assertEquals(true, accounts[4].closed)
     }
@@ -137,12 +138,33 @@ class LiveBudgetModelsTest {
                 ),
             )
 
-        assertEquals("Checking", liveAccountGroupLabel(accounts[0]))
+        assertEquals("Bank accounts", liveAccountGroupLabel(accounts[0]))
         assertEquals(liveAccountGroupLabel(accounts[0]), liveAccountGroupLabel(accounts[1]))
         assertEquals("Savings", liveAccountGroupLabel(accounts[2]))
         assertEquals(liveAccountGroupLabel(accounts[2]), liveAccountGroupLabel(accounts[3]))
         assertFalse(accounts[2].offBudget)
         assertTrue(accounts[3].offBudget)
+    }
+
+    @Test
+    fun aChosenKindWinsOverGuessesAndUnknownAccountsStayUnconfirmed() {
+        val accounts =
+            liveAccountSummaries(
+                listOf(
+                    record(type = "account", id = "card", name = "Credit card", json = """{"id":"card"}"""),
+                    record(type = "account", id = "joint", name = "Joint", json = """{"id":"joint"}"""),
+                    record(type = "account", id = "linked", name = "Joint", json = """{"id":"linked","official_name":"Platinum Visa"}"""),
+                    record(type = "account", id = "cash", name = "Credit card", json = """{"id":"cash"}"""),
+                ),
+                accountKinds = mapOf("cash" to AccountKind.CASH),
+            )
+
+        assertEquals(
+            listOf(AccountKind.CREDIT_CARD, AccountKind.OTHER, AccountKind.CREDIT_CARD, AccountKind.CASH),
+            accounts.map { it.kind },
+        )
+        assertEquals(listOf(false, false, false, true), accounts.map { it.kindChosen })
+        assertEquals(listOf("Credit cards", "Other", "Credit cards", "Cash"), accounts.map(::liveAccountGroupLabel))
     }
 
     @Test

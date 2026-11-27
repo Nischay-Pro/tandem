@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.feature.banking.isBestMatch
@@ -11,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BankLinkMatchTest {
-    private fun account(name: String) = LiveAccountSummary(name, name, null, null, offBudget = false)
+    private fun account(name: String) = LiveAccountSummary(name, name, null, AccountKind.OTHER, offBudget = false)
 
     private fun bank(
         name: String,

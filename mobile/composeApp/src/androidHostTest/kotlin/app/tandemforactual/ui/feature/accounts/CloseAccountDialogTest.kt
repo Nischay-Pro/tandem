@@ -15,6 +15,7 @@ import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.RemoteBudgetRecord
@@ -70,8 +71,8 @@ class CloseAccountDialogTest {
             }
             val session = TandemMobileSession(TandemApiClient(), database, { 100L })
             val state = AppState().apply { selectedBudgetId = BUDGET_ID }
-            val card = LiveAccountSummary("card", "Card", 0L, null, false)
-            val checking = LiveAccountSummary("checking", "Checking", 10_000L, null, false)
+            val card = LiveAccountSummary("card", "Card", 0L, AccountKind.OTHER, false)
+            val checking = LiveAccountSummary("checking", "Checking", 10_000L, AccountKind.OTHER, false)
             var closed = false
             composeTestRule.setContent {
                 TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {

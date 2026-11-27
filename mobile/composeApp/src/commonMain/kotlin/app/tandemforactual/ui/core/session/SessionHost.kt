@@ -11,6 +11,7 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.ui.core.session.budget.BudgetEditQueue
 import app.tandemforactual.ui.core.session.conflicts.ConflictController
 import app.tandemforactual.ui.core.session.feedback.BudgetActionRunner
+import app.tandemforactual.ui.core.session.planning.PlanningController
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -37,6 +38,7 @@ internal interface SessionHost {
 
     val feedback: BudgetActionRunner
     val budgetQueue: BudgetEditQueue
+    val planning: PlanningController
     val conflicts: ConflictController
     val syncCoordinator: BudgetSyncCoordinator?
     val currentDateIso: () -> String

@@ -1,47 +1,39 @@
 package app.tandemforactual.ui
 
-import app.tandemforactual.data.planning.PlanningBackupSeal
+import app.tandemforactual.data.planning.OpenedBackup
 import app.tandemforactual.ui.core.state.BackupLog
 import app.tandemforactual.ui.core.state.decodeBackupLogs
 import app.tandemforactual.ui.core.state.encodeBackupLogs
-import app.tandemforactual.ui.feature.export.BackupContents
-import app.tandemforactual.ui.feature.export.readBackupFile
-import app.tandemforactual.ui.feature.export.readPlanningBackup
+import app.tandemforactual.ui.feature.export.describeBackup
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonObject
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class PlanningBackupTest {
-    @Test
-    fun readsOnlyTandemPlanningBackups() {
-        val backup =
-            """{"format":"tandem-planning-backup","version":1,"records":[""" +
-                """{"id":"g1","type":"planning.savings_goal","body":{"name":"Trip"}},""" +
-                """{"id":"x","type":"budget.transaction","body":{}}]}"""
-        val records = readPlanningBackup(backup)!!.records
-        assertEquals(listOf("g1"), records.map { it.first })
-        assertEquals("planning.savings_goal", records.single().second)
-        assertNull(readPlanningBackup("""{"format":"other"}"""))
-        assertNull(readPlanningBackup("not json"))
-    }
+    private fun contents(
+        database: ByteArray?,
+        records: List<Triple<String, String, JsonObject>>?,
+        budgetId: String? = "b1",
+    ) = OpenedBackup.Contents(database, null, records, budgetId, "Cabin", "2026-11-20", null)
 
     @Test
-    fun sealedBackupsNeedTheirPassphrase() {
-        val plain = """{"format":"tandem-planning-backup","version":1,"records":[{"id":"g1","type":"planning.savings_goal","body":{}}]}"""
-        val sealed = PlanningBackupSeal.seal(plain, "passphrase1")
-        assertEquals(BackupContents.NeedsPassphrase, readBackupFile(sealed, null))
-        assertEquals(BackupContents.WrongPassphrase, readBackupFile(sealed, "nope"))
-        assertEquals("g1", assertIs<BackupContents.Records>(readBackupFile(sealed, "passphrase1")).records.single().first)
-        assertIs<BackupContents.Records>(readBackupFile(plain, null))
-        assertEquals(BackupContents.NotABackup, readBackupFile("{}", null))
-        assertEquals(BackupContents.NotABackup, readBackupFile(PlanningBackupSeal.seal("{}", "passphrase1"), "passphrase1"))
+    fun saysWhatABackupHolds() {
+        val goal = Triple("g1", "planning.savings_goal", JsonObject(emptyMap()))
+        assertTrue(describeBackup(contents(byteArrayOf(1), listOf(goal)), "b1").contains("your Actual budget and Tandem extras (1 item)"))
+        assertTrue(describeBackup(contents(null, listOf(goal, goal)), "b1").contains("holds Tandem extras (2 items)"))
+        assertTrue(describeBackup(contents(byteArrayOf(1), null), "b1").contains("holds your Actual budget,"))
+        assertTrue(describeBackup(contents(null, listOf(goal), "b2"), "b1").endsWith("from “Cabin”."))
     }
 
     @Test
     fun backupLogRoundTrips() {
-        val logs = mapOf("b1" to BackupLog("2026-11-20", null), "b2" to BackupLog(null, "2026-11-21"))
+        val logs = mapOf("b1" to BackupLog("2026-11-20"), "b2" to BackupLog(null))
         assertEquals(logs, decodeBackupLogs(encodeBackupLogs(logs)))
+        assertEquals(mapOf("b1" to BackupLog("2026-11-19")), decodeBackupLogs("""{"b1":{"backedUpOn":"2026-11-19"}}"""))
         assertEquals(emptyMap(), decodeBackupLogs("broken"))
     }
 }

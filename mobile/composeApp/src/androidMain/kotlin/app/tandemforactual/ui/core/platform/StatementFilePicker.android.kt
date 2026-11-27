@@ -18,7 +18,10 @@ import kotlinx.coroutines.withContext
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) -> Unit): () -> Unit {
+internal actual fun rememberStatementFilePicker(
+    binary: Boolean,
+    onPicked: (PickedStatementFile) -> Unit,
+): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val onPickedState = rememberUpdatedState(onPicked)
@@ -27,7 +30,7 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
             if (uri != null) {
                 val resolver = context.contentResolver
                 scope.launch {
-                    val file = withContext(Dispatchers.IO) { readStatementFile(resolver, uri) }
+                    val file = withContext(Dispatchers.IO) { readStatementFile(resolver, uri, binary) }
                     withContext(Dispatchers.Main) { onPickedState.value(file) }
                 }
             }
@@ -51,13 +54,15 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
 internal fun readStatementFile(
     resolver: android.content.ContentResolver,
     uri: android.net.Uri,
+    binary: Boolean = false,
 ): PickedStatementFile {
     val name = resolver.displayName(uri) ?: "statement.csv"
     return try {
+        val limit = if (binary) MAX_BINARY_FILE_BYTES else MAX_STATEMENT_IMPORT_BYTES
         val bytes =
-            resolver.openInputStream(uri)?.use(InputStream::readBoundedStatementBytes)
+            resolver.openInputStream(uri)?.use { it.readBoundedStatementBytes(limit) }
                 ?: return PickedStatementFile(name, null, "Couldn’t read this file. Choose another statement.")
-        PickedStatementFile(name, decodeStatementBytes(bytes))
+        if (binary) PickedStatementFile(name, null, bytes = bytes) else PickedStatementFile(name, decodeStatementBytes(bytes))
     } catch (_: StatementFileTooLargeException) {
         PickedStatementFile(name, null, "Choose a statement smaller than 10 MB.")
     } catch (error: CancellationException) {
@@ -67,13 +72,13 @@ internal fun readStatementFile(
     }
 }
 
-private fun InputStream.readBoundedStatementBytes(): ByteArray {
+private fun InputStream.readBoundedStatementBytes(limit: Int): ByteArray {
     val output = ByteArrayOutputStream()
     val buffer = ByteArray(8_192)
     while (true) {
         val count = read(buffer)
         if (count < 0) return output.toByteArray()
-        if (output.size() + count > MAX_STATEMENT_IMPORT_BYTES) throw StatementFileTooLargeException()
+        if (output.size() + count > limit) throw StatementFileTooLargeException()
         output.write(buffer, 0, count)
     }
 }

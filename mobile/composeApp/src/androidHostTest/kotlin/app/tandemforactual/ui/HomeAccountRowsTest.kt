@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.state.HomeModule
@@ -10,8 +11,8 @@ import kotlin.test.assertEquals
 
 class HomeAccountRowsTest {
     private val accounts =
-        (1..6).map { LiveAccountSummary("a$it", "Account $it", it * 100L, "checking", offBudget = false) } +
-            LiveAccountSummary("loan", "Loan", -5_000, "loan", offBudget = true)
+        (1..6).map { LiveAccountSummary("a$it", "Account $it", it * 100L, AccountKind.BANK, offBudget = false) } +
+            LiveAccountSummary("loan", "Loan", -5_000, AccountKind.LOAN, offBudget = true)
     private val sameCurrency = BudgetCurrencyConverter(emptyMap(), "USD", emptyList())
 
     @Test

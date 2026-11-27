@@ -1,5 +1,6 @@
 package app.tandemforactual.ui.core.state
 
+import app.tandemforactual.data.planning.AccountKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -9,7 +10,7 @@ class NewTransactionAccountTest {
         id: String,
         offBudget: Boolean = false,
         closed: Boolean = false,
-    ) = LiveAccountSummary(id, id, 0, null, offBudget, closed)
+    ) = LiveAccountSummary(id, id, 0, AccountKind.OTHER, offBudget, closed)
 
     private val accounts =
         listOf(

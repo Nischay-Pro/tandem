@@ -2,6 +2,7 @@ package app.tandemforactual.ui.core.session.budget
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
 import app.tandemforactual.data.store.enqueueWrites
@@ -37,6 +38,7 @@ internal suspend fun BudgetEdits.createBudgetAccount(
     offbudget: Boolean,
     accountGroupId: String?,
     encryptionPassword: String?,
+    kind: AccountKind? = null,
 ): Boolean {
     val cleanName = name.trim()
     if (cleanName.isBlank()) {
@@ -48,20 +50,24 @@ internal suspend fun BudgetEdits.createBudgetAccount(
         return false
     }
     val localAccountId = "local-account-${Uuid.random()}"
-    return queue.enqueueOfflineBudgetMutation(
-        budgetId = budgetId,
-        kind = BudgetReorderKind.CREATE_ACCOUNT,
-        itemId = localAccountId,
-        scopeId = "accounts",
-        payload =
-            buildJsonObject {
-                put("name", cleanName)
-                put("offbudget", offbudget)
-                put("accountGroupId", accountGroupId?.let(::JsonPrimitive) ?: JsonNull)
-            },
-        encryptionPassword = encryptionPassword,
-        name = cleanName,
-    )
+    kind?.let { host.planning.saveAccountKind(budgetId, localAccountId, it) }
+    val queued =
+        queue.enqueueOfflineBudgetMutation(
+            budgetId = budgetId,
+            kind = BudgetReorderKind.CREATE_ACCOUNT,
+            itemId = localAccountId,
+            scopeId = "accounts",
+            payload =
+                buildJsonObject {
+                    put("name", cleanName)
+                    put("offbudget", offbudget)
+                    put("accountGroupId", accountGroupId?.let(::JsonPrimitive) ?: JsonNull)
+                },
+            encryptionPassword = encryptionPassword,
+            name = cleanName,
+        )
+    if (!queued && kind != null) host.planning.planningStore(budgetId)?.deleteAccountKind(localAccountId)
+    return queued
 }
 
 internal suspend fun BudgetEdits.closeBudgetAccount(

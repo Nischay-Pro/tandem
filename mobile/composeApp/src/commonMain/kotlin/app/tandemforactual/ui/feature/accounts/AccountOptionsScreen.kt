@@ -9,13 +9,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.format.formatAccountMoney
+import app.tandemforactual.ui.core.navigation.openAccountActivity
+import app.tandemforactual.ui.core.navigation.openRulesUsing
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageTarget
+import app.tandemforactual.ui.core.usage.WhereUsedRow
+import app.tandemforactual.ui.core.usage.WhereUsedSheet
+import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun AccountOptionsScreen(
@@ -36,38 +45,36 @@ internal fun AccountOptionsScreen(
         return
     }
     val liveAccount = liveAccounts.firstOrNull { it.id == state.selectedAccountId }
-    val accountName = liveAccount?.name
-    val accountBalance =
-        liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, mobileSession.planning.accountCurrencies[liveAccount.id]) }
-            ?: "Unavailable"
-    val accountScope = if (liveAccount?.offBudget == true) "Off budget" else "On budget"
     var confirmClose by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     var renameDialog by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     var renameValue by rememberSaveable(state.selectedAccountId) { mutableStateOf(liveAccount?.name.orEmpty()) }
     var transferAccountId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
+    var showUsage by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     PageColumn {
-        if (accountName == null) {
+        if (liveAccount == null) {
             EmptyStateCard("Account unavailable", "This account isn’t saved on this device.")
         } else {
-            AccountOptionsHeader(accountName, liveAccount, state, mobileSession) {
+            AccountOptionsHeader(liveAccount.name, liveAccount, state, mobileSession) {
                 renameValue = liveAccount.name
                 mobileSession.feedback.clearBudgetActionMessage()
                 renameDialog = true
             }
+            val currency = mobileSession.planning.accountCurrencies[liveAccount.id]
             AccountOptionsDetails(
-                accountName,
-                accountBalance,
-                accountScope,
-                liveAccount?.let { mobileSession.planning.accountCurrencies[it.id] } ?: state.budgetCurrencyCode,
+                liveAccount,
+                liveAccount.balanceMinor?.let { state.formatAccountMoney(it, currency) } ?: "Unavailable",
+                currency ?: state.budgetCurrencyCode,
+                onKindChange = { kind ->
+                    scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, kind) }
+                },
             ) { navigation.open(AppRoute.EXCHANGE_RATES) }
-            if (liveAccount != null) {
-                AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {
-                    transferAccountId = ""
-                    transferCategoryId = ""
-                    mobileSession.feedback.clearBudgetActionMessage()
-                    confirmClose = true
-                }
+            SurfaceCard { WhereUsedRow { showUsage = true } }
+            AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {
+                transferAccountId = ""
+                transferCategoryId = ""
+                mobileSession.feedback.clearBudgetActionMessage()
+                confirmClose = true
             }
         }
     }
@@ -80,6 +87,7 @@ internal fun AccountOptionsScreen(
         state = state,
         mobileSession = mobileSession,
     )
+    if (liveAccount != null) AccountUsageSheet(showUsage, liveAccount, state, mobileSession, navigation) { showUsage = false }
     if (confirmClose && liveAccount != null) {
         CloseAccountDialog(
             liveAccount = liveAccount,
@@ -95,4 +103,36 @@ internal fun AccountOptionsScreen(
             scope = scope,
         )
     }
+}
+
+@Composable
+private fun AccountUsageSheet(
+    visible: Boolean,
+    account: LiveAccountSummary,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onDismiss: () -> Unit,
+) {
+    val currency = mobileSession.planning.accountCurrencies[account.id]
+    WhereUsedSheet(
+        visible = visible,
+        mobileSession = mobileSession,
+        target =
+            UsageTarget(state.selectedBudgetId, UsageSubject.ACCOUNT, account.id, account.name) {
+                state.formatAccountMoney(it, currency)
+            },
+        links =
+            UsageLinks(
+                transactions = {
+                    onDismiss()
+                    openAccountActivity(state, navigation, account.id, account.name)
+                },
+                rules = {
+                    onDismiss()
+                    openRulesUsing(state, navigation, listOf(account.id), account.name)
+                },
+            ),
+        onDismiss = onDismiss,
+    )
 }

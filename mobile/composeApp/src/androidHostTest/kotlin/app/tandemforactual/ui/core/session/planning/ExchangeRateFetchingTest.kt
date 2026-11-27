@@ -11,6 +11,7 @@ import app.tandemforactual.api.client.ExchangeRateException
 import app.tandemforactual.api.client.ExchangeRateSource
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -239,7 +240,7 @@ class ExchangeRateFetchingTest {
             planning.saveAccountCurrency(BUDGET, "travel", foreign)
             with(planning) { scope.observe(BUDGET) }
             repeat(100) { if (planning.accountCurrencies.isEmpty()) Thread.sleep(20) }
-            val accounts = listOf(LiveAccountSummary("travel", "Travel card", 10_000, "checking", offBudget = false))
+            val accounts = listOf(LiveAccountSummary("travel", "Travel card", 10_000, AccountKind.BANK, offBudget = false))
             composeTestRule.setContent {
                 TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
                     ExchangeRatesScreen(state, session, accounts, NAVIGATION)

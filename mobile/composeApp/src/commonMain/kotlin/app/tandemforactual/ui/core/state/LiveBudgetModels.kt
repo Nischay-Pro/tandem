@@ -2,6 +2,8 @@ package app.tandemforactual.ui.core.state
 
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
+import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.resolveAccountKind
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
 import kotlinx.serialization.json.Json
@@ -90,16 +92,20 @@ internal fun liveAccountSummaries(
     accountGroupRecords: List<BudgetRecordEntity> = emptyList(),
     nameOverrides: Map<String, String> = emptyMap(),
     closedOverrides: Map<String, Boolean> = emptyMap(),
+    accountKinds: Map<String, AccountKind> = emptyMap(),
 ): List<LiveAccountSummary> {
     val groupNames = accountGroupRecords.associate { it.recordId to (it.recordName() ?: it.recordId) }
     return accountRecords.mapNotNull { record ->
         val body = record.recordBody() ?: return@mapNotNull null
         val accountGroupId = body.stringValue("account_group_id") ?: body.stringValue("accountGroupId")
+        val name = nameOverrides[record.recordId] ?: record.recordName() ?: return@mapNotNull null
+        val kind = resolveAccountKind(accountKinds[record.recordId], name, body.stringValue("official_name"), body.stringValue("type"))
         LiveAccountSummary(
             id = record.recordId,
-            name = nameOverrides[record.recordId] ?: record.recordName() ?: return@mapNotNull null,
+            name = name,
             balanceMinor = body.longValue("balance_current"),
-            type = body.stringValue("type"),
+            kind = kind.kind,
+            kindChosen = kind.chosen,
             offBudget = body.booleanValue("offbudget") ?: body.booleanValue("offBudget") ?: false,
             closed = closedOverrides[record.recordId] ?: body.booleanValue("closed") ?: false,
             accountGroupId = accountGroupId,
@@ -109,23 +115,7 @@ internal fun liveAccountSummaries(
     }
 }
 
-internal fun liveAccountGroupLabel(account: LiveAccountSummary): String {
-    if (account.closed) return "Closed"
-    val typeLabel =
-        when (account.type?.lowercase()) {
-            "checking", "chequing" -> "Checking"
-            "savings", "saving" -> "Savings"
-            "credit", "credit-card", "credit card" -> "Credit"
-            "loan" -> "Loan"
-            "mortgage" -> "Mortgage"
-            "debt" -> "Debt"
-            "investment" -> "Investment"
-            "cash" -> "Cash"
-            "other" -> "Other"
-            else -> "Other"
-        }
-    return typeLabel
-}
+internal fun liveAccountGroupLabel(account: LiveAccountSummary): String = if (account.closed) "Closed" else account.kind.groupLabel
 
 internal fun liveBudgetMonthSummary(
     monthRecord: BudgetRecordEntity?,

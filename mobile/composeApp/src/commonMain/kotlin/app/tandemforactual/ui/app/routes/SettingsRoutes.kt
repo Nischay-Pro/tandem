@@ -7,6 +7,8 @@ import app.tandemforactual.ui.app.RouteListDetailPanes
 import app.tandemforactual.ui.app.ScreenContext
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.feature.settings.AppearanceScreen
+import app.tandemforactual.ui.feature.settings.AutomationScreen
+import app.tandemforactual.ui.feature.settings.ConnectedServicesScreen
 import app.tandemforactual.ui.feature.settings.LocalServerAddressScreen
 import app.tandemforactual.ui.feature.settings.NotificationsScreen
 import app.tandemforactual.ui.feature.settings.SecurityScreen
@@ -23,6 +25,8 @@ private val settingsPaneRoutes =
         AppRoute.NOTIFICATIONS,
         AppRoute.SECURITY_PRIVACY,
         AppRoute.LOCAL_DATA,
+        AppRoute.AUTOMATION,
+        AppRoute.CONNECTED_SERVICES,
         AppRoute.EXPORT,
         AppRoute.ABOUT,
     )
@@ -57,6 +61,14 @@ internal val settingsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                 with(ctx) {
                     ServerDeviceScreen(state, deviceName, mobileSession, navigation, onForgetDevice, onForgetDeviceLocally)
                 }
+            },
+        AppRoute.AUTOMATION to
+            @Composable { ctx ->
+                AutomationScreen(ctx.state)
+            },
+        AppRoute.CONNECTED_SERVICES to
+            @Composable { ctx ->
+                ConnectedServicesScreen(ctx.state, ctx.navigation)
             },
         AppRoute.SECURITY_PRIVACY to
             @Composable { ctx ->

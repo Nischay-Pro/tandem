@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.PlanningMath
 import app.tandemforactual.data.planning.SavingsGoal
@@ -44,7 +45,7 @@ class PlanningCardsRenderTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val card = LiveAccountSummary("card", "Credit card", -43_599, null, false)
+    private val card = LiveAccountSummary("card", "Credit card", -43_599, AccountKind.OTHER, false)
     private val month =
         LiveBudgetMonthSummary(
             0,

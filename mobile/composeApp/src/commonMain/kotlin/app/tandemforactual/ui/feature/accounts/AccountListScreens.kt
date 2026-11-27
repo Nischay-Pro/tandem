@@ -4,6 +4,7 @@ package app.tandemforactual.ui.feature.accounts
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.format.formatDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.keepTogether
 import app.tandemforactual.ui.core.state.AccountSort
@@ -13,12 +14,11 @@ import app.tandemforactual.ui.core.state.liveAccountGroupLabel
 internal data class AccountListItemUi(
     val id: String,
     val name: String,
-    val typeLabel: String,
+    val kind: AccountKind,
     val status: String,
     val balance: String,
     val offBudget: Boolean,
     val closed: Boolean = false,
-    val accountType: String? = null,
     val balanceMinor: Long? = null,
 )
 
@@ -48,20 +48,6 @@ internal fun accountListSubtitle(
             }.joinToString(" · ")
     }
 
-internal fun accountListTypeLabel(accountType: String?): String =
-    when (accountType?.trim()?.lowercase()) {
-        "checking", "chequing" -> "Checking"
-        "savings", "saving" -> "Savings"
-        "credit", "credit-card", "credit card" -> "Credit"
-        "loan" -> "Loan"
-        "mortgage" -> "Mortgage"
-        "debt" -> "Debt"
-        "investment" -> "Investment"
-        "cash" -> "Cash"
-        "other" -> "Other"
-        else -> "Other"
-    }
-
 internal fun accountBalanceAccessibilityDescription(
     balanceMinor: Long?,
     formattedBalance: String,
@@ -72,26 +58,11 @@ internal fun accountBalanceAccessibilityDescription(
         else -> "Balance, $formattedBalance"
     }
 
+/** Groups follow the order of [AccountKind], with closed accounts last. */
 internal fun accountGroupOrder(groupName: String): Int {
     val name = groupName.trim().lowercase()
-    val type = name.substringAfter("·", name).trim()
-    val typeOrder =
-        when (type) {
-            "cash" -> 0
-            "checking" -> 1
-            "savings" -> 2
-            "credit" -> 3
-            "loan" -> 4
-            "mortgage" -> 5
-            "debt" -> 6
-            "investment" -> 7
-            "other" -> 8
-            else -> 9
-        }
-    return when {
-        name == "closed" -> Int.MAX_VALUE
-        else -> typeOrder
-    }
+    if (name == "closed") return Int.MAX_VALUE
+    return AccountKind.entries.indexOfFirst { it.groupLabel.lowercase() == name }.takeIf { it >= 0 } ?: AccountKind.entries.size
 }
 
 internal fun sortAccountsForList(accounts: List<LiveAccountSummary>): List<LiveAccountSummary> =

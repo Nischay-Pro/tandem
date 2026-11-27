@@ -26,7 +26,7 @@ import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.feature.onboarding.FirstSyncScreen
-import app.tandemforactual.ui.feature.settings.SettingsScreen
+import app.tandemforactual.ui.feature.settings.ConnectedServicesScreen
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,16 +87,15 @@ class ExternalConnectionsTest {
     }
 
     @Test
-    fun settingsListsTheSameConnections() {
+    fun connectedServicesPageListsTheSameConnections() {
         val state = AppState()
-        val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SettingsScreen(state, navigation, mobileSession)
+                ConnectedServicesScreen(state, navigation)
             }
         }
 
-        composeTestRule.onNodeWithText("Connections to other services").performScrollTo()
+        composeTestRule.onNodeWithText("From each bank’s own website").assertExists()
         composeTestRule
             .onNodeWithText("Show bank logos")
             .performScrollTo()
@@ -105,6 +104,11 @@ class ExternalConnectionsTest {
         assertTrue(state.bankIconsEnabled)
         composeTestRule.onNodeWithText("Show bank logos").performClick()
         assertFalse(state.bankIconsEnabled)
+
+        composeTestRule.onNodeWithText("Only currency codes and dates are sent").assertDoesNotExist()
+        composeTestRule.onNodeWithText("What’s shared").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("The bank sees that your device asked, nothing about your budget").assertExists()
+        composeTestRule.onNodeWithText("Only currency codes and dates are sent").assertExists()
     }
 
     @Test
@@ -131,12 +135,11 @@ class ExternalConnectionsTest {
     }
 
     @Test
-    fun settingsTakesACustomRateServerOnlyWhenItsAddressIsUsable() {
+    fun connectedServicesPageTakesACustomRateServerOnlyWhenItsAddressIsUsable() {
         val state = AppState()
-        val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SettingsScreen(state, navigation, mobileSession)
+                ConnectedServicesScreen(state, navigation)
             }
         }
 
