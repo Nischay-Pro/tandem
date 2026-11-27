@@ -68,7 +68,7 @@ internal fun LinkBankAccountDialog(
                             "Best match".takeIf { isBestMatch(candidates, candidate) },
                             if (account.offBudget) "Off budget" else "On budget",
                         ).joinToString(" · "),
-                        leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
+                        leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.kind)),
                         onClick = { onPick(account) },
                     )
                 }

@@ -1,19 +1,22 @@
 package app.tandemforactual.ui.design.icons
 
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.liveAccountSummaries
+import app.tandemforactual.ui.core.ui.accountKindIcon
 import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.feature.accounts.accountBalanceAccessibilityDescription
 import app.tandemforactual.ui.feature.accounts.accountGroupOrder
 import app.tandemforactual.ui.feature.accounts.accountListSubtitle
-import app.tandemforactual.ui.feature.accounts.accountListTypeLabel
 import app.tandemforactual.ui.feature.accounts.sortAccountsForList
+import com.composables.icons.lucide.Banknote
 import com.composables.icons.lucide.CarFront
 import com.composables.icons.lucide.Carrot
 import com.composables.icons.lucide.ChartNoAxesCombined
 import com.composables.icons.lucide.CreditCard
 import com.composables.icons.lucide.HandCoins
+import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PiggyBank
@@ -107,10 +110,21 @@ class MerchantIconMatchingTest {
         assertEquals(Lucide.PiggyBank, accountTypeIcon("Household Savings"))
         assertEquals(Lucide.Landmark, accountTypeIcon("Household Checking"))
         assertEquals(Lucide.CreditCard, accountTypeIcon("Rewards Card"))
-        assertEquals(Lucide.CreditCard, accountTypeIcon("Primary", "Credit"))
-        assertEquals(Lucide.HandCoins, accountTypeIcon("Primary", "Loans"))
-        assertEquals(Lucide.ChartNoAxesCombined, accountTypeIcon("Primary", "Tracking"))
-        assertEquals(Lucide.WalletCards, accountTypeIcon("Primary", "Cash"))
+        assertEquals(Lucide.CreditCard, accountTypeIcon("Savings", AccountKind.CREDIT_CARD))
+        assertEquals(Lucide.WalletCards, accountTypeIcon("Primary"))
+        assertEquals(
+            listOf(
+                Lucide.Landmark,
+                Lucide.PiggyBank,
+                Lucide.CreditCard,
+                Lucide.Banknote,
+                Lucide.ChartNoAxesCombined,
+                Lucide.HandCoins,
+                Lucide.House,
+                Lucide.WalletCards,
+            ),
+            AccountKind.entries.map(::accountKindIcon),
+        )
 
         val issuerMatcher =
             MerchantAliasMatcher<String>().apply {
@@ -137,40 +151,38 @@ class MerchantIconMatchingTest {
         val closedOrder = accountGroupOrder("Closed")
 
         assertTrue(closedOrder > accountGroupOrder("Other"))
-        assertTrue(closedOrder > accountGroupOrder("Investment"))
+        assertTrue(closedOrder > accountGroupOrder("Investments"))
         assertTrue(closedOrder > accountGroupOrder("Unrecognized account group"))
+        assertEquals(AccountKind.entries.indices.toList(), AccountKind.entries.map { accountGroupOrder(it.groupLabel) })
     }
 
     @Test
     fun accountSubtitleOnlyAddsTheOffBudgetTagWhenItAddsInformation() {
         assertEquals(
             "Off budget · Not synced yet",
-            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), null),
+            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, AccountKind.INVESTMENT, true), null),
         )
         assertTrue(
-            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, "investment", true), 0)
+            accountListSubtitle(LiveAccountSummary("off", "Tracking", 100, AccountKind.INVESTMENT, true), 0)
                 .startsWith("Off budget · Last synced "),
         )
         assertTrue(
-            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), 0)
+            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, AccountKind.BANK, false), 0)
                 .orEmpty()
                 .startsWith("Last synced "),
         )
         assertEquals(
             "Not synced yet",
-            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, "checking", false), null),
+            accountListSubtitle(LiveAccountSummary("on", "Checking", 100, AccountKind.BANK, false), null),
         )
         assertEquals(
             "Closed",
-            accountListSubtitle(LiveAccountSummary("closed", "Closed", 0, "savings", false, closed = true), 0),
+            accountListSubtitle(LiveAccountSummary("closed", "Closed", 0, AccountKind.SAVINGS, false, closed = true), 0),
         )
     }
 
     @Test
     fun accountCardsExposeTypeAndSignedBalanceAccessibly() {
-        assertEquals("Checking", accountListTypeLabel("checking"))
-        assertEquals("Credit", accountListTypeLabel("credit-card"))
-        assertEquals("Other", accountListTypeLabel(null))
         assertEquals("Negative balance, -\$315.45", accountBalanceAccessibilityDescription(-31545, "-\$315.45"))
         assertEquals("Balance unavailable", accountBalanceAccessibilityDescription(null, "Unavailable"))
     }
@@ -180,9 +192,9 @@ class MerchantIconMatchingTest {
         val ordered =
             sortAccountsForList(
                 listOf(
-                    LiveAccountSummary("closed", "Closed Account", 0, "checking", false, closed = true, sortOrder = 0.0),
-                    LiveAccountSummary("later", "Later Checking", 0, "checking", false, sortOrder = 20.0),
-                    LiveAccountSummary("earlier", "Earlier Checking", 0, "checking", false, sortOrder = 10.0),
+                    LiveAccountSummary("closed", "Closed Account", 0, AccountKind.BANK, false, closed = true, sortOrder = 0.0),
+                    LiveAccountSummary("later", "Later Checking", 0, AccountKind.BANK, false, sortOrder = 20.0),
+                    LiveAccountSummary("earlier", "Earlier Checking", 0, AccountKind.BANK, false, sortOrder = 10.0),
                 ),
             )
 

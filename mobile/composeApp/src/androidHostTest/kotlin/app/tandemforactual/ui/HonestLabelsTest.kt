@@ -1,5 +1,6 @@
 package app.tandemforactual.ui
 
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.session.ConflictResolutionFeedback
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.feature.accounts.accountBalanceLabel
@@ -16,11 +17,11 @@ import org.robolectric.RobolectricTestRunner
 class HonestLabelsTest {
     @Test
     fun debtAccountsShowWhatIsOwed() {
-        assertEquals("Balance owed", accountBalanceLabel("credit", -12_000))
-        assertEquals("Balance owed", accountBalanceLabel("Mortgage", null))
-        assertEquals("Balance", accountBalanceLabel("loan", 500))
-        assertEquals("Balance", accountBalanceLabel("checking", -100))
-        assertEquals("Available balance", accountBalanceLabel("checking", 2_500))
+        assertEquals("Balance owed", accountBalanceLabel(AccountKind.CREDIT_CARD, -12_000))
+        assertEquals("Balance owed", accountBalanceLabel(AccountKind.MORTGAGE, null))
+        assertEquals("Balance", accountBalanceLabel(AccountKind.LOAN, 500))
+        assertEquals("Balance", accountBalanceLabel(AccountKind.BANK, -100))
+        assertEquals("Available balance", accountBalanceLabel(AccountKind.BANK, 2_500))
         assertEquals("Available balance", accountBalanceLabel(null, null))
     }
 

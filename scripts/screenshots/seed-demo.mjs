@@ -1,4 +1,5 @@
 // Creates the "Demo household" budget used for app screenshots on a fresh Actual server.
+// Actual stores no account kind; Tandem suggests one from each name, so names here say what each account is.
 import * as api from "../../services/api/node_modules/@actual-app/api/dist/index.js";
 import console from "node:console";
 import fs from "node:fs";
@@ -43,7 +44,11 @@ await api.runImport("Demo household", async () => {
     { name: "Credit card", offbudget: false },
     -42000,
   );
-  for (const account of [checking, savings, card]) {
+  const brokerage = await api.createAccount(
+    { name: "Brokerage", offbudget: true },
+    2840000,
+  );
+  for (const account of [checking, savings, card, brokerage]) {
     for (const t of await api.getTransactions(
       account,
       "2000-01-01",

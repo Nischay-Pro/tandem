@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.reopenBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
@@ -52,21 +53,23 @@ internal fun AccountOptionsHeader(
     }
 }
 
-/** Read-only name, balance, budget status and currency of the account. */
+/** The account's name, type, balance, budget status and currency; type and currency can be changed here. */
 @Composable
 internal fun AccountOptionsDetails(
-    accountName: String,
+    account: LiveAccountSummary,
     accountBalance: String,
-    accountScope: String,
     currency: String,
+    onKindChange: (AccountKind) -> Unit,
     onOpenExchangeRates: () -> Unit,
 ) {
-    SectionCard("Account", "Read-only details") {
-        ListRow("Name", "Account name", accountName)
+    SectionCard("Account") {
+        ListRow("Name", "Account name", account.name)
+        DividerLine()
+        AccountKindPicker(account.kind, suggested = !account.kindChosen, onKindChange)
         DividerLine()
         ListRow("Balance", "Current balance", accountBalance)
         DividerLine()
-        ListRow("Budget status", "Account scope", accountScope)
+        ListRow("Budget status", "Account scope", if (account.offBudget) "Off budget" else "On budget")
         DividerLine()
         ListRow(
             "Currency",

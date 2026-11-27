@@ -97,6 +97,7 @@ private suspend fun BudgetEditQueue.remapCreatedIds(
     if (createdAccountIdAfterAction != null) {
         host.repository?.remapPendingAccountReferences(request.budgetId, request.itemId, createdAccountIdAfterAction)
         edits.remapQueuedAccountReferences(request.operationId, request.itemId, createdAccountIdAfterAction)
+        host.planning.moveAccountKind(request.budgetId, request.itemId, createdAccountIdAfterAction)
     }
 }
 

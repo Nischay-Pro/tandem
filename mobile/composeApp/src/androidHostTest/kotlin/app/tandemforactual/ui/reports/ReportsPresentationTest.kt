@@ -4,6 +4,7 @@ import app.tandemforactual.data.database.AccountDayAggregate
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.CategoryMonthAggregate
 import app.tandemforactual.data.database.MonthlyIncomeSpendingAggregate
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.ui.core.format.BudgetCurrencyConverter
 import app.tandemforactual.ui.core.state.LiveAccountSummary
@@ -254,9 +255,9 @@ class ReportsPresentationTest {
     fun netWorthWalksBackFromCurrentBalancesByAccountAndOmitsFutureMonths() {
         val accounts =
             listOf(
-                LiveAccountSummary("savings", "Savings", 10_000, "savings", offBudget = true),
-                LiveAccountSummary("checking", "Checking", 5_000, "checking", offBudget = false),
-                LiveAccountSummary("credit", "Credit card", -3_000, "credit", offBudget = false),
+                LiveAccountSummary("savings", "Savings", 10_000, AccountKind.SAVINGS, offBudget = true),
+                LiveAccountSummary("checking", "Checking", 5_000, AccountKind.BANK, offBudget = false),
+                LiveAccountSummary("credit", "Credit card", -3_000, AccountKind.CREDIT_CARD, offBudget = false),
             )
         val points =
             netWorthPoints(
@@ -286,9 +287,9 @@ class ReportsPresentationTest {
     fun netWorthConvertsForeignAccountsAndLeavesOutOnesWithoutARate() {
         val accounts =
             listOf(
-                LiveAccountSummary("checking", "Checking", 10_000, "checking", offBudget = false),
-                LiveAccountSummary("euro", "Euro savings", 20_000, "savings", offBudget = false),
-                LiveAccountSummary("yen", "Yen card", -50_000, "credit", offBudget = false),
+                LiveAccountSummary("checking", "Checking", 10_000, AccountKind.BANK, offBudget = false),
+                LiveAccountSummary("euro", "Euro savings", 20_000, AccountKind.SAVINGS, offBudget = false),
+                LiveAccountSummary("yen", "Yen card", -50_000, AccountKind.CREDIT_CARD, offBudget = false),
             )
         val converter =
             BudgetCurrencyConverter(
@@ -313,7 +314,7 @@ class ReportsPresentationTest {
 
     @Test
     fun netWorthConvertsEachMonthWithTheRateFromThatMonthsEnd() {
-        val accounts = listOf(LiveAccountSummary("euro", "Euro savings", 10_000, "savings", offBudget = false))
+        val accounts = listOf(LiveAccountSummary("euro", "Euro savings", 10_000, AccountKind.SAVINGS, offBudget = false))
         val converter =
             BudgetCurrencyConverter(
                 mapOf("euro" to "EUR"),
@@ -343,7 +344,7 @@ class ReportsPresentationTest {
         val points =
             netWorthPoints(
                 emptyList(),
-                listOf(LiveAccountSummary("credit", "Credit card", -25_000, "credit", offBudget = false)),
+                listOf(LiveAccountSummary("credit", "Credit card", -25_000, AccountKind.CREDIT_CARD, offBudget = false)),
                 listOf("2025-01"),
                 "2025-01-31",
                 sameCurrency,
@@ -377,7 +378,7 @@ class ReportsPresentationTest {
         assertTrue(
             netWorthPoints(
                 emptyList(),
-                listOf(LiveAccountSummary("checking", "Checking", null, "checking", offBudget = false)),
+                listOf(LiveAccountSummary("checking", "Checking", null, AccountKind.BANK, offBudget = false)),
                 listOf("2025-01"),
                 "2025-01-31",
                 sameCurrency,

@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -138,9 +139,9 @@ private fun sampleState(): AppState =
 
 private val sampleAccounts =
     listOf(
-        LiveAccountSummary("checking", LONG_ACCOUNT, BIG, "checking", offBudget = false, accountGroupName = "Banking and everyday"),
-        LiveAccountSummary("card", "Rewards credit card with travel insurance", -BIG, "credit", offBudget = false),
-        LiveAccountSummary("savings", "Long-term savings for the house deposit", BIG, "savings", offBudget = true),
+        LiveAccountSummary("checking", LONG_ACCOUNT, BIG, AccountKind.BANK, offBudget = false, accountGroupName = "Banking and everyday"),
+        LiveAccountSummary("card", "Rewards credit card with travel insurance", -BIG, AccountKind.CREDIT_CARD, offBudget = false),
+        LiveAccountSummary("savings", "Long-term savings for the house deposit", BIG, AccountKind.SAVINGS, offBudget = true),
     )
 
 private val sampleMonth =
