@@ -87,8 +87,18 @@ private struct ComposeRootView: UIViewControllerRepresentable {
             },
             onOpenNotificationSettings: {
                 IosBudgetNotifications.shared.openSettings()
+            },
+            windowControlsInset: { view in
+                KotlinDouble(value: Self.windowControlsInset(in: view))
             }
         )
+    }
+
+    private static func windowControlsInset(in view: UIView) -> Double {
+        if #available(iOS 26.0, *) {
+            return Double(view.directionalEdgeInsets(for: .safeArea(cornerAdaptation: .horizontal)).leading)
+        }
+        return 0
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}

@@ -20,10 +20,8 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSize
 import platform.Foundation.NSNumber
 import platform.Foundation.NSURL
-import platform.UIKit.UIApplication
 import platform.UIKit.UIDocumentPickerDelegateProtocol
 import platform.UIKit.UIDocumentPickerViewController
-import platform.UIKit.UIViewController
 import platform.UniformTypeIdentifiers.UTTypeData
 import platform.UniformTypeIdentifiers.UTTypePlainText
 import platform.darwin.NSObject
@@ -45,12 +43,7 @@ internal actual fun rememberStatementFilePicker(onPicked: (PickedStatementFile) 
                     asCopy = true,
                 )
             picker.delegate = delegate
-            val root = UIApplication.sharedApplication.keyWindow?.rootViewController
-            var presenter: UIViewController? = root
-            while (presenter?.presentedViewController != null) {
-                presenter = presenter.presentedViewController
-            }
-            presenter?.presentViewController(picker, animated = true, completion = null)
+            topViewController()?.presentViewController(picker, animated = true, completion = null)
         }
     }
 }

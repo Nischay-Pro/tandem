@@ -16,12 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.DialogProperties
+import app.tandemforactual.ui.core.platform.isScreenCaptured
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
-import platform.UIKit.UIScreen
 import platform.UIKit.UIScreenCapturedDidChangeNotification
 
 @Suppress("UNUSED_PARAMETER")
@@ -40,14 +40,14 @@ internal actual fun SecureSheetContent(
         content()
         return
     }
-    var captured by remember { mutableStateOf(UIScreen.mainScreen.captured) }
+    var captured by remember { mutableStateOf(isScreenCaptured()) }
     DisposableEffect(Unit) {
         val observer =
             NSNotificationCenter.defaultCenter.addObserverForName(
                 name = UIScreenCapturedDidChangeNotification,
                 `object` = null,
                 queue = NSOperationQueue.mainQueue,
-            ) { _ -> captured = UIScreen.mainScreen.captured }
+            ) { _ -> captured = isScreenCaptured() }
         onDispose { NSNotificationCenter.defaultCenter.removeObserver(observer) }
     }
     Box(contentAlignment = Alignment.Center) {

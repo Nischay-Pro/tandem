@@ -13,8 +13,6 @@ import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
 import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
-import platform.UIKit.UIApplication
-import platform.UIKit.UIViewController
 import platform.UIKit.popoverPresentationController
 
 @Composable
@@ -32,9 +30,8 @@ internal actual fun rememberFileSharer(): (name: String, mimeType: String, conte
  * throws, so it points at the middle of that screen.
  */
 internal fun presentShareSheet(items: List<Any>) {
-    var presenter: UIViewController? = UIApplication.sharedApplication.keyWindow?.rootViewController
-    while (presenter?.presentedViewController != null) presenter = presenter.presentedViewController
-    val view = presenter?.view ?: return
+    val presenter = topViewController() ?: return
+    val view = presenter.view
     val sheet = UIActivityViewController(activityItems = items, applicationActivities = null)
     sheet.popoverPresentationController?.let { popover ->
         popover.sourceView = view

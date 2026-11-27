@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.dp
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.UIKit.UIAccessibilityIsReduceMotionEnabled
@@ -53,6 +54,8 @@ internal actual fun Modifier.tandemEdgeBackGesture(
     pointerInput(enabled) {
         if (!enabled) return@pointerInput
         val edgeWidth = 28.dp.toPx()
+        val commitDistance = minOf(size.width * 0.3f, EDGE_BACK_COMMIT_DISTANCE.toPx())
+        val flingVelocity = EDGE_BACK_FLING_VELOCITY.toPx()
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
@@ -60,7 +63,9 @@ internal actual fun Modifier.tandemEdgeBackGesture(
 
             var tracking = true
             var active = false
-            var completedProgress = 0f
+            var dragged = 0f
+            val velocity = VelocityTracker()
+            velocity.addPosition(down.uptimeMillis, down.position)
             while (tracking) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -73,15 +78,15 @@ internal actual fun Modifier.tandemEdgeBackGesture(
                     }
                     active = true
                 }
+                velocity.addPosition(change.uptimeMillis, change.position)
                 if (active) {
-                    val progress = (horizontal / size.width).coerceIn(0f, 1f)
-                    completedProgress = progress
-                    onBackProgress(progress, 1f)
+                    dragged = horizontal
+                    onBackProgress((horizontal / size.width).coerceIn(0f, 1f), 1f)
                     change.consume()
                 }
                 if (!change.pressed) tracking = false
             }
-            if (active && completedProgress >= 0.3f) {
+            if (active && dragged > 0f && (dragged >= commitDistance || velocity.calculateVelocity().x >= flingVelocity)) {
                 onBackProgress(1f, 1f)
                 onBack()
             } else {
@@ -89,3 +94,6 @@ internal actual fun Modifier.tandemEdgeBackGesture(
             }
         }
     }
+
+private val EDGE_BACK_COMMIT_DISTANCE = 120.dp
+private val EDGE_BACK_FLING_VELOCITY = 600.dp
