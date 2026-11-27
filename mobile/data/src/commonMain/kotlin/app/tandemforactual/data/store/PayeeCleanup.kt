@@ -65,7 +65,12 @@ fun cleanPayeeName(
                 " "
             }
     }
-    var words = text.replace(SEPARATORS, " ").replace(EDGES, "").split(' ').filter(String::isNotBlank)
+    var words =
+        text
+            .replace(SEPARATORS, " ")
+            .replace(EDGES, "")
+            .split(' ')
+            .filter(String::isNotBlank)
     while (words.size > 1 && words.first().lowercase() in boilerplate) {
         stripped += words.first()
         words = words.drop(1)
