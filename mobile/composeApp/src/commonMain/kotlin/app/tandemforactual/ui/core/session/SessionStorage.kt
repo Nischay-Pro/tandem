@@ -60,14 +60,15 @@ internal fun TandemMobileSession.forgetEncryptionPasswords() {
     scheduleActionEncryptionPasswords.clear()
 }
 
+/** Why [budgetId] can't be removed from this device yet, or null when it can. */
+internal suspend fun TandemMobileSession.removeBudgetBlocker(budgetId: String): String? =
+    if (unsentChangeCount(budgetId) > 0) "Sync or resolve this budget’s changes before removing it from this device." else null
+
 internal suspend fun TandemMobileSession.removeBudgetFromDevice(
     budgetId: String,
     vault: EncryptedBudgetVault?,
 ): String? {
-    val unsynced =
-        budgetQueue.pendingBudgetMutationCount(budgetId) > 0 ||
-            repository?.readPendingWrites(budgetId).orEmpty().any { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
-    if (unsynced) return "Sync or resolve this budget’s changes before removing it from this device."
+    removeBudgetBlocker(budgetId)?.let { return it }
     if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
     mainStorage?.repository?.removeBudget(budgetId)
     apiClient.removeBudget(budgetId)
@@ -83,23 +84,48 @@ internal suspend fun TandemMobileSession.unsentChangeCount(budgetId: String): In
         repository?.readPendingWrites(budgetId).orEmpty().count { it.status in UNSYNCED_TRANSACTION_WRITE_STATUSES }
 
 /**
- * Recovers from a reset in Actual: the device's copy is kept as a backup, the budget is downloaded fresh, and edits it
- * could not send are queued again to replay against the new copy. Returns how many unsent edits there were.
+ * Why [budgetId] can't be downloaded again without losing edits Actual doesn't have yet, or null when it can. An
+ * encrypted budget's edits live in its vault, so it must be unlocked to carry them over to the new copy.
+ */
+internal suspend fun TandemMobileSession.downloadAgainBlocker(
+    budgetId: String,
+    password: String?,
+): String? =
+    when {
+        encryptedStorageMissing(budgetId) -> "Unlock this budget first so Tandem can keep the changes Actual doesn’t have yet."
+        boundEncryptedBudgetId == budgetId &&
+            replayPassword(budgetId, password) == null &&
+            repository?.unsentWrites(budgetId).orEmpty().isNotEmpty() ->
+            "Lock and unlock this budget again first so Tandem can keep the changes Actual doesn’t have yet."
+        else -> null
+    }
+
+private fun TandemMobileSession.replayPassword(
+    budgetId: String,
+    password: String?,
+): String? = scheduleActionEncryptionPasswords[budgetId]?.takeIf { it.isNotBlank() } ?: password?.takeIf { it.isNotBlank() }
+
+/**
+ * Recovers from a reset in Actual: the device's copy is set aside, the budget is downloaded fresh, and edits it could not
+ * send are queued again to replay against the new copy. Returns how many unsent edits there were, or null when
+ * [downloadAgainBlocker] says it would lose them and nothing was changed.
  */
 internal suspend fun TandemMobileSession.downloadBudgetAgain(
     budgetId: String,
     vault: EncryptedBudgetVault?,
-): Int {
+    password: String? = null,
+): Int? {
+    if (downloadAgainBlocker(budgetId, password) != null) return null
     val unsent = unsentChangeCount(budgetId)
     val replay = repository?.unsentWrites(budgetId).orEmpty()
     val encrypted = boundEncryptedBudgetId == budgetId
-    val password = scheduleActionEncryptionPasswords[budgetId]
+    val vaultPassword = replayPassword(budgetId, password)
     if (encrypted) unbindEncryptedBudgetDatabase()
     apiClient.retireBudget(budgetId)
     mainStorage?.repository?.removeBudget(budgetId)
     vault?.delete(budgetId)
     if (encrypted) {
-        if (!storeReplayInNewVault(budgetId, vault, password, replay)) writesToReplay[budgetId] = replay
+        if (!storeReplayInNewVault(budgetId, vault, vaultPassword, replay)) writesToReplay[budgetId] = replay
     } else {
         mainStorage?.repository?.importBudgetWrites(replay)
     }

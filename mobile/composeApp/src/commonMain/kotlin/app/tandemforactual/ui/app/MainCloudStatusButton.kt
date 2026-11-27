@@ -26,6 +26,7 @@ import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.CloudUpload
 import com.composables.icons.lucide.Lucide
 
 @Composable
@@ -42,6 +43,7 @@ internal fun MainCloudStatusButton(
                     MainCloudStatus.OFF -> palette.muted
                     MainCloudStatus.SYNCED -> palette.positive
                     MainCloudStatus.SYNCING -> palette.syncing
+                    MainCloudStatus.WAITING -> palette.muted
                     MainCloudStatus.ERROR -> palette.negative
                 },
             animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
@@ -71,6 +73,7 @@ internal fun MainCloudStatusButton(
             when (syncStatus) {
                 MainCloudStatus.OFF -> Lucide.CloudOff
                 MainCloudStatus.ERROR -> Lucide.CloudAlert
+                MainCloudStatus.WAITING -> Lucide.CloudUpload
                 else -> Lucide.Cloud
             },
         contentDescription = mainCloudStatusAccessibilityDescription(syncStatus, pendingWriteStatuses),

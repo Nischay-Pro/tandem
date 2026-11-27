@@ -3,6 +3,8 @@ package app.tandemforactual.ui.core.session
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.data.planning.UnsyncedPlanningRecord
+import app.tandemforactual.data.planning.unsyncedPlanningRecords
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.clearAllLocalData
 import app.tandemforactual.data.store.hasUnresolvedWrites
@@ -120,7 +122,12 @@ internal suspend fun TandemMobileSession.signOutAndClearLocalData(): Boolean {
     }
 }
 
-private suspend fun TandemMobileSession.signOutBlocker(): String? {
+/** Planning records that exist only on this device, so erasing it deletes them for good. */
+internal suspend fun TandemMobileSession.unsyncedPlanningRecords(): List<UnsyncedPlanningRecord> =
+    listOfNotNull(mainStorage, budgetStorage).flatMap { it.database.planningRecordDao().unsyncedPlanningRecords() }
+
+/** Why signing out and erasing can't start yet, or null when it can. */
+internal suspend fun TandemMobileSession.signOutBlocker(): String? {
     if (isSyncing || isSavingTransaction || isPerformingBudgetAction || isLoadingBudgets) {
         return "Wait for the current sync or change to finish before signing out."
     }

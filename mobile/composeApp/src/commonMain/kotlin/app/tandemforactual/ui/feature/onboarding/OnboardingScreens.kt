@@ -291,35 +291,24 @@ internal fun FirstSyncCompletionAction(
     state: AppState,
     navigation: AppNavigation,
     syncComplete: Boolean,
-    notificationPermissionEnabled: Boolean?,
     actionLabel: String = stringResource(Res.string.setup_done),
     onComplete: () -> Unit,
 ) {
     SetupPrimaryButton(actionLabel, modifier = Modifier.fillMaxWidth(), enabled = syncComplete) {
         state.pendingBudgetSelectionOrigin = null
         onComplete()
-        continueSetup(state, navigation, notificationPermissionEnabled)
+        continueSetup(state, navigation)
     }
 }
 
-internal fun nextSetupRoute(
-    state: AppState,
-    notificationPermissionEnabled: Boolean?,
-): AppRoute = if (state.experience == null) AppRoute.PERSONALIZE else AppRoute.SETUP_COMPLETE
+internal fun nextSetupRoute(state: AppState): AppRoute = if (state.experience == null) AppRoute.PERSONALIZE else AppRoute.SETUP_COMPLETE
 
 internal fun continueSetup(
     state: AppState,
     navigation: AppNavigation,
-    notificationPermissionEnabled: Boolean?,
 ) {
-    if (notificationPermissionEnabled == true) state.hasCompletedNotificationOnboarding = true
-    navigation.open(nextSetupRoute(state, notificationPermissionEnabled))
+    navigation.open(nextSetupRoute(state))
 }
-
-internal fun shouldShowNotificationOnboarding(
-    alreadyCompleted: Boolean,
-    permissionEnabled: Boolean?,
-): Boolean = !alreadyCompleted && permissionEnabled != true
 
 internal fun budgetPasswordRequired(
     isEncrypted: Boolean,

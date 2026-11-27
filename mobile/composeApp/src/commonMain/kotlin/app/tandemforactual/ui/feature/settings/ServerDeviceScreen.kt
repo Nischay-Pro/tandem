@@ -6,6 +6,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -14,9 +15,13 @@ import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.pendingDeviceChangeNotice
 import app.tandemforactual.ui.core.session.signOutAndClearLocalData
+import app.tandemforactual.ui.core.session.signOutBlocker
+import app.tandemforactual.ui.core.session.unsyncedPlanningRecords
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.design.feedback.InlineMessage
+import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -61,15 +66,20 @@ internal fun ServerDeviceScreen(
             InfoBubble(mobileSession.signOutError.orEmpty())
         }
         mobileSession.deviceRevocationError?.let { message ->
-            AttentionBanner("Couldn’t unlink this device", message, "Try again", onForgetDevice)
+            AttentionBanner("Couldn’t sign out", message, "Try again", onForgetDevice)
         }
         AnimatedPreviewNote(mobileSession.credentialStorageError)
-        UnlinkSection(mobileSession, device, navigation) { confirmation = it }
+        SignOutSection(mobileSession, device, navigation) { confirmation = it }
     }
     ServerDeviceConfirmation(
         confirmation,
         mobileSession,
+        openBudgetId = state.selectedBudgetId,
         onDismiss = { confirmation = "" },
+        onBackUpFirst = {
+            confirmation = ""
+            navigation.open(AppRoute.EXPORT)
+        },
         onSignOut = {
             scope.launch {
                 if (mobileSession.signOutAndClearLocalData()) {
@@ -172,15 +182,15 @@ private fun ThisDeviceSection(
     }
 }
 
-/** Sign in again, unlink, or unlink and erase this device's data. */
+/** Sign in again, sign out, or sign out and erase this device's data. */
 @Composable
-private fun UnlinkSection(
+private fun SignOutSection(
     mobileSession: TandemMobileSession,
     device: AuthenticatedDevice?,
     navigation: AppNavigation,
     onConfirm: (String) -> Unit,
 ) {
-    SectionCard("Unlink", "Your budgets in Actual are never changed.") {
+    SectionCard("Sign out", "Your budgets in Actual are never changed.") {
         when {
             device == null ->
                 ListRow(
@@ -191,7 +201,7 @@ private fun UnlinkSection(
                 )
             mobileSession.deviceRevocationError != null ->
                 ListRow(
-                    "Unlink on this device only",
+                    "Sign out on this device only",
                     "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
                     leading = RowLeading.Icon(Lucide.LogOut),
                     options = ListRowOptions(muted = mobileSession.isRevokingDevice),
@@ -199,8 +209,8 @@ private fun UnlinkSection(
                 )
             else ->
                 ListRow(
-                    if (mobileSession.isRevokingDevice) "Unlinking…" else "Unlink this device",
-                    "Signs out. Budgets and unsynced edits stay on this device for when you link again.",
+                    if (mobileSession.isRevokingDevice) "Signing out…" else "Sign out",
+                    "Unlinks this device. Budgets and unsynced edits stay here for when you sign in again.",
                     leading = RowLeading.Icon(Lucide.LogOut),
                     options = ListRowOptions(muted = mobileSession.isRevokingDevice),
                     onClick = { if (!mobileSession.isRevokingDevice) onConfirm("server") },
@@ -208,7 +218,7 @@ private fun UnlinkSection(
         }
         DividerLine()
         ListRow(
-            if (mobileSession.isSigningOut) "Erasing…" else "Unlink and erase data",
+            if (mobileSession.isSigningOut) "Erasing…" else "Sign out and erase data",
             "Signs out and deletes every saved budget from this device. Edits must be synced first.",
             leading = RowLeading.Icon(Lucide.Trash2),
             options = ListRowOptions(muted = mobileSession.isSigningOut, trailingColor = tandemPalette.negative),
@@ -217,38 +227,26 @@ private fun UnlinkSection(
     }
 }
 
-/** The confirmation dialog for whichever unlink option was chosen. */
+/** The confirmation dialog for whichever sign-out option was chosen. */
 @Composable
 private fun ServerDeviceConfirmation(
     confirmation: String,
     mobileSession: TandemMobileSession,
+    openBudgetId: String,
     onDismiss: () -> Unit,
+    onBackUpFirst: () -> Unit,
     onSignOut: () -> Unit,
     onForgetDevice: () -> Unit,
     onForgetDeviceLocally: () -> Unit,
 ) {
     when (confirmation) {
-        "signout" ->
-            DestructiveConfirmationDialog(
-                title = "Unlink and erase data?",
-                message =
-                    "This signs out and deletes every saved budget from this device. Your budgets in Actual stay unchanged. Edits waiting to sync must be synced or resolved first.",
-                confirmLabel = "Unlink and erase",
-                dismissLabel = "Cancel",
-                enabled = !mobileSession.isSigningOut,
-                dismissEnabled = !mobileSession.isSigningOut,
-                onDismissRequest = { if (!mobileSession.isSigningOut) onDismiss() },
-                onConfirm = {
-                    onDismiss()
-                    onSignOut()
-                },
-            )
+        "signout" -> EraseDataConfirmation(mobileSession, openBudgetId, onDismiss, onBackUpFirst, onSignOut)
         "server" ->
             DestructiveConfirmationDialog(
-                title = "Unlink this device?",
+                title = "Sign out?",
                 message =
                     "Tandem will stop trusting this device and you’ll need to sign in again to link it. Your saved budgets stay on this device. ${pendingDeviceChangeNotice()}",
-                confirmLabel = "Unlink",
+                confirmLabel = "Sign out",
                 dismissLabel = "Cancel",
                 enabled = !mobileSession.isRevokingDevice,
                 dismissEnabled = !mobileSession.isRevokingDevice,
@@ -260,10 +258,10 @@ private fun ServerDeviceConfirmation(
             )
         "local" ->
             DestructiveConfirmationDialog(
-                title = "Unlink on this device only?",
+                title = "Sign out on this device only?",
                 message =
                     "This clears the sign-in saved on this device. The server keeps it linked until you unlink it from another signed-in device. ${pendingDeviceChangeNotice()}",
-                confirmLabel = "Unlink here",
+                confirmLabel = "Sign out here",
                 dismissLabel = "Cancel",
                 onDismissRequest = onDismiss,
                 onConfirm = {
@@ -273,3 +271,48 @@ private fun ServerDeviceConfirmation(
             )
     }
 }
+
+/** Checks what erasing would lose before asking: edits that must sync first, and planning records found nowhere else. */
+@Composable
+private fun EraseDataConfirmation(
+    mobileSession: TandemMobileSession,
+    openBudgetId: String,
+    onDismiss: () -> Unit,
+    onBackUpFirst: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    val check by produceState<EraseCheck?>(null) {
+        value = EraseCheck(mobileSession.signOutBlocker(), eraseLossSummary(mobileSession.unsyncedPlanningRecords(), openBudgetId))
+    }
+    val ready = check ?: return
+    val blocked = ready.blocker != null
+    DestructiveConfirmationDialog(
+        title = "Sign out and erase data?",
+        message = "This signs out and deletes every saved budget from this device. Your budgets in Actual stay unchanged.",
+        confirmLabel = "Erase",
+        dismissLabel = "Cancel",
+        enabled = !blocked && !mobileSession.isSigningOut,
+        dismissEnabled = !mobileSession.isSigningOut,
+        content = {
+            ready.blocker?.let { InlineMessage(it, InlineMessageKind.WARNING) }
+            ready.loss?.let {
+                InlineMessage(
+                    it,
+                    InlineMessageKind.WARNING,
+                    actionLabel = "Back up first".takeIf { openBudgetId.isNotBlank() },
+                    onAction = onBackUpFirst.takeIf { openBudgetId.isNotBlank() },
+                )
+            }
+        },
+        onDismissRequest = { if (!mobileSession.isSigningOut) onDismiss() },
+        onConfirm = {
+            onDismiss()
+            onSignOut()
+        },
+    )
+}
+
+private data class EraseCheck(
+    val blocker: String?,
+    val loss: String?,
+)

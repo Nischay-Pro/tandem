@@ -8,19 +8,18 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 
-/** Each kind of phone notification Tandem can post, with the preference that turns it on or off. */
+/** Each kind of phone notification Tandem can post, with the preference that turns it on. Every kind starts off. */
 enum class AlertKind(
     val preference: String,
-    val onByDefault: Boolean,
 ) {
-    SYNC_FAILURE("syncReminders", true),
-    NEEDS_REVIEW("conflictReviewAlerts", true),
-    REJECTED_EDIT("rejectedEditAlerts", true),
-    OVERSPENDING("overspendingAlerts", true),
-    BANK_SYNC_FAILURE("bankSyncAlerts", true),
-    UPCOMING_BILLS("upcomingBillAlerts", false),
-    LARGE_TRANSACTION("largeTransactionAlerts", false),
-    UNCATEGORIZED("uncategorizedAlerts", true),
+    SYNC_FAILURE("syncReminders"),
+    NEEDS_REVIEW("conflictReviewAlerts"),
+    REJECTED_EDIT("rejectedEditAlerts"),
+    OVERSPENDING("overspendingAlerts"),
+    BANK_SYNC_FAILURE("bankSyncAlerts"),
+    UPCOMING_BILLS("upcomingBillAlerts"),
+    LARGE_TRANSACTION("largeTransactionAlerts"),
+    UNCATEGORIZED("uncategorizedAlerts"),
 }
 
 /** A daily window, in minutes after midnight, when notifications stay silent. It may wrap past midnight. */
@@ -77,7 +76,7 @@ data class NotificationPolicy(
             NotificationPolicy(
                 enabled =
                     AlertKind.entries
-                        .filterTo(mutableSetOf()) { preferences[it.preference]?.toBooleanStrictOrNull() ?: it.onByDefault },
+                        .filterTo(mutableSetOf()) { preferences[it.preference] == "true" },
                 quietHours = QuietHours.parse(preferences[QUIET_HOURS]),
                 largeTransactionMinor =
                     preferences[LARGE_TRANSACTION_MINOR]?.toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_LARGE_TRANSACTION_MINOR,

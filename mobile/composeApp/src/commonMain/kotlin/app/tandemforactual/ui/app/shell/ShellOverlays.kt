@@ -76,7 +76,7 @@ internal fun ShellOverlays(
                 shell.savedTabBackStacks = ""
                 ctx.backStack.clear()
                 ctx.backStack.add(ctx.navigator.newRouteEntry(AppRoute.BUDGET_CHOOSER))
-                ctx.backStack.add(ctx.navigator.newRouteEntry(nextSetupRoute(state, ctx.env.notificationPermissionEnabled)))
+                ctx.backStack.add(ctx.navigator.newRouteEntry(nextSetupRoute(state)))
             }
         },
     )

@@ -7,6 +7,7 @@ import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,6 +19,7 @@ import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.removeBudgetBlocker
 import app.tandemforactual.ui.core.session.removeBudgetFromDevice
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -172,6 +174,10 @@ private fun RemoveBudgetFromDeviceDialog(
     val authenticator = LocalDeviceAuthenticator.current
     val budgetName = state.selectedBudget.ifBlank { "this budget" }
     val keyStore = LocalBackgroundBudgetKeyStore.current
+    val blockers by produceState<List<String>?>(null, state.selectedBudgetId) {
+        value = listOfNotNull(mobileSession.removeBudgetBlocker(state.selectedBudgetId))
+    }
+    val blocker = blockers?.firstOrNull()
     DestructiveConfirmationDialog(
         title = "Remove $budgetName from this device?",
         message =
@@ -179,7 +185,8 @@ private fun RemoveBudgetFromDeviceDialog(
                 "You can download it again from your server. Your budget in Actual isn’t changed.",
         confirmLabel = "Remove",
         dismissLabel = "Cancel",
-        enabled = !removing,
+        enabled = !removing && blockers?.isEmpty() == true,
+        content = blocker?.let { message -> { InlineMessage(message, InlineMessageKind.WARNING) } },
         dismissEnabled = !removing,
         onDismissRequest = { if (!removing) onDismiss() },
         onConfirm = {
