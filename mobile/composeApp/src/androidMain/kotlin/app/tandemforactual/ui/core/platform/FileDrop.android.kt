@@ -63,7 +63,11 @@ internal actual fun rememberFileDropTarget(
                 override fun onDrop(event: DragAndDropEvent): Boolean {
                     hovering = false
                     val drag = event.toAndroidDragEvent()
-                    val uri = drag.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri ?: return false
+                    val uri =
+                        drag.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.uri ?: return false
                     permissions.hold(context.findActivity()?.requestDragAndDropPermissions(drag))
                     val resolver = context.contentResolver
                     scope.launch {

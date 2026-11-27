@@ -25,7 +25,12 @@ internal fun droppedFileKind(
     mimeType: String?,
     name: String?,
 ): DroppedFileKind? {
-    val mime = mimeType?.lowercase()?.substringBefore(';')?.trim().orEmpty()
+    val mime =
+        mimeType
+            ?.lowercase()
+            ?.substringBefore(';')
+            ?.trim()
+            .orEmpty()
     val extension = name?.substringAfterLast('.', "")?.lowercase().orEmpty()
     return when {
         mime.startsWith("image/") -> DroppedFileKind.IMAGE
