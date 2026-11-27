@@ -135,7 +135,7 @@ class ActualScheduleEdits(
     internal fun requireEditTargets(
         accountId: String?,
         payeeId: String?,
-        categoryId: String? = null,
+        categoryId: String?,
     ) {
         if (accountId != null) {
             val account = db.first("SELECT closed FROM accounts WHERE id = ? AND tombstone = 0", accountId)
