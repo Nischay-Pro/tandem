@@ -68,7 +68,7 @@ class ExternalConnectionsTest {
         val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncScreen(state, mobileSession, navigation, onRetrySync = {}, notificationPermissionEnabled = false)
+                FirstSyncScreen(state, mobileSession, navigation, onRetrySync = {})
             }
         }
 
@@ -113,7 +113,7 @@ class ExternalConnectionsTest {
         val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncScreen(state, mobileSession, navigation, onRetrySync = {}, notificationPermissionEnabled = false)
+                FirstSyncScreen(state, mobileSession, navigation, onRetrySync = {})
             }
         }
 

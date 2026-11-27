@@ -21,7 +21,7 @@
     <string name="settings_sync_preferences">Sync preferences</string>
     <string name="settings_sync_preferences_detail">When and over which network to sync</string>
     <string name="settings_server_device">Server and device</string>
-    <string name="settings_server_device_detail">Server address, local address, and this device</string>
+    <string name="settings_server_device_detail">Server address, this device, and sign out</string>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_notifications_detail">Sync problems and changes to review</string>
     <string name="settings_section_privacy">Privacy</string>
@@ -97,6 +97,7 @@
     <string name="setup_unlock_your_budget">Unlock your budget.</string>
     <string name="setup_budget_encryption_password">Budget encryption password</string>
     <string name="setup_this_is_not_your_actual">This is not your Actual sign-in password. Tandem keeps it only while the app is unlocked.</string>
+    <string name="setup_password_saved_with_biometrics">This is not your Actual sign-in password. Tandem saves it on this device, protected by your biometrics.</string>
     <string name="setup_unlock_budget">Unlock budget</string>
     <string name="setup_making_it_yours">Making it yours.</string>
     <string name="setup_downloading_a_local_copy_so">Downloading a local copy so your budget is ready when you’re offline.</string>
@@ -112,14 +113,6 @@
     <string name="setup_cancel">Cancel</string>
     <string name="setup_keep_tandem_open_for_the">Keep Tandem open for the first download.</string>
     <string name="setup_done">Done</string>
-    <string name="setup_stay_in_the_loop">Stay in the loop.</string>
-    <string name="setup_get_helpful_alerts_when_your">Get helpful alerts when your budget needs attention. You can change this later.</string>
-    <string name="setup_sync_issues">Sync issues</string>
-    <string name="setup_know_when_your_actual_server">Know when your Actual server needs attention.</string>
-    <string name="setup_needs_review">Needs review</string>
-    <string name="setup_these_changes_need_your_decision">These changes need your decision.</string>
-    <string name="setup_allow_notifications">Allow notifications</string>
-    <string name="setup_not_now">Not now</string>
     <string name="setup_keep_it_up_to_date">Keep it up to date.</string>
     <string name="setup_choose_how_tandem_syncs_with">Choose how Tandem syncs with Actual. You can change this later in Settings.</string>
     <string name="setup_sync_in_the_background">Sync in the background</string>

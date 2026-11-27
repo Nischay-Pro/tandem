@@ -32,5 +32,8 @@ class HeaderSyncCaptionTest {
         assertEquals("2 changes waiting to sync", caption(MainCloudStatus.OFF, listOf("queued", "sending")))
         assertEquals("1 change needs review", caption(MainCloudStatus.ERROR, listOf("conflict", "queued")))
         assertEquals("2 changes need review", caption(writes = listOf("uncertain", "rejected")))
+        assertEquals("Waiting to sync · 2 changes", caption(MainCloudStatus.WAITING, listOf("queued", "sending")))
+        assertEquals("Waiting to sync · 1 change", caption(MainCloudStatus.WAITING, listOf("queued")))
+        assertEquals("Waiting to sync", caption(MainCloudStatus.WAITING))
     }
 }

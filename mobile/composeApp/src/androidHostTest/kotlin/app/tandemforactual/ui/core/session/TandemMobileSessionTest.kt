@@ -372,10 +372,12 @@ class TandemMobileSessionTest {
                 val session = TandemMobileSession(TandemApiClient(), database, { 1_000L })
                 session.loadLocalRecords("budget-1")
 
+                assertNotNull(session.removeBudgetBlocker("budget-1"))
                 assertNotNull(session.removeBudgetFromDevice("budget-1", null))
                 assertTrue(repository.hasCachedSnapshot("budget-1"))
 
                 repository.budgetWrites("budget-1").forEach { repository.discardWrite(it.operationId) }
+                assertNull(session.removeBudgetBlocker("budget-1"))
                 assertNull(session.removeBudgetFromDevice("budget-1", null))
                 assertFalse(repository.hasCachedSnapshot("budget-1"))
             } finally {
@@ -459,6 +461,85 @@ class TandemMobileSessionTest {
                 oldVault.close()
             }
         }
+
+    @Test
+    fun downloadingAnEncryptedBudgetAgainNeverLeavesItsEditsOnlyInMemory() =
+        runBlocking {
+            val main = newDatabase()
+            val oldVault = newDatabase()
+            val newVault = newDatabase()
+            try {
+                seedCachedBudget(LocalBudgetRepository(oldVault) { 1_000L }, AppPreferencesStore(oldVault), withPendingWrite = true)
+                val vault = RecordingVault(newVault)
+                val session = TandemMobileSession(TandemApiClient(), main, { 2_000L })
+                session.bindEncryptedBudgetDatabase("budget-1", oldVault)
+                session.scheduleActionEncryptionPasswords.clear()
+
+                assertNotNull(session.downloadAgainBlocker("budget-1", password = ""))
+                assertNull(session.downloadBudgetAgain("budget-1", vault, password = ""))
+                assertEquals(0, vault.deleted)
+                assertEquals("budget-1", session.boundEncryptedBudgetId)
+
+                assertNull(session.downloadAgainBlocker("budget-1", password = "secret"))
+                assertEquals(1, session.downloadBudgetAgain("budget-1", vault, password = "secret"))
+                assertEquals(1, vault.deleted)
+                assertEquals(setOf("edit-1"), vault.committed)
+                assertTrue(session.writesToReplay.isEmpty())
+            } finally {
+                main.close()
+                oldVault.close()
+            }
+        }
+
+    @Test
+    fun aLockedEncryptedBudgetMustBeUnlockedBeforeDownloadingAgain() =
+        runBlocking {
+            val main = newDatabase()
+            try {
+                val vault = RecordingVault(main)
+                val session = TandemMobileSession(TandemApiClient(), main, { 2_000L })
+                session.encryptedStorageRequired = setOf("budget-1")
+
+                assertNotNull(session.downloadAgainBlocker("budget-1", password = "secret"))
+                assertNull(session.downloadBudgetAgain("budget-1", vault, password = "secret"))
+                assertEquals(0, vault.deleted)
+            } finally {
+                main.close()
+            }
+        }
+
+    private class RecordingVault(
+        private val fresh: TandemDatabase,
+    ) : EncryptedBudgetVault {
+        var committed: Set<String>? = null
+        var deleted = 0
+
+        override fun hasStore(budgetId: String) = true
+
+        override suspend fun open(
+            budgetId: String,
+            password: String,
+        ): TandemDatabase? = null
+
+        override suspend fun create(
+            budgetId: String,
+            password: String,
+        ) = object : PendingEncryptedBudget {
+            override val database = fresh
+
+            override suspend fun commit() {
+                committed = LocalBudgetRepository(fresh) { 2_000L }.budgetWrites(budgetId).map { it.operationId }.toSet()
+            }
+
+            override suspend fun discard() = Unit
+        }
+
+        override fun delete(budgetId: String) {
+            deleted += 1
+        }
+
+        override fun deleteAll() = Unit
+    }
 
     @Test
     fun deletedTransactionsCanBeUndoneUntilTheyAreSent() =

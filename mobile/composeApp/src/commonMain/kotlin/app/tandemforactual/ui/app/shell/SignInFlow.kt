@@ -102,11 +102,11 @@ internal class SignInActions(
             val alreadyUnlocked =
                 mobileSession.boundEncryptedBudgetId == selected.budgetId && state.encryptedPassword.isNotBlank()
             if (!alreadyUnlocked) state.encryptedPassword = ""
-            val setupIncomplete = !state.hasCompletedNotificationOnboarding || !state.hasCompletedSyncOnboarding
+            val setupIncomplete = !state.hasCompletedSyncOnboarding
             state.pendingSetupAfterUnlock = !alreadyUnlocked && setupIncomplete
             state.pendingBudgetSelectionOrigin = null
             if (alreadyUnlocked && setupIncomplete) {
-                navigation.open(nextSetupRoute(state, env.notificationPermissionEnabled))
+                navigation.open(nextSetupRoute(state))
             } else {
                 navigation.reset(AppRoute.HOME)
             }

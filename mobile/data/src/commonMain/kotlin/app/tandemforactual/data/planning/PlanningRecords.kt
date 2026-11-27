@@ -56,9 +56,21 @@ interface PlanningRecordDao {
     @Query("SELECT * FROM planning_records WHERE budgetId = :budgetId")
     suspend fun all(budgetId: String): List<PlanningRecordEntity>
 
+    @Query("SELECT budgetId, recordType FROM planning_records WHERE deleted = 0 AND pendingUpload = 1")
+    suspend fun unsyncedRecords(): List<UnsyncedPlanningRecord>
+
     @Upsert
     suspend fun upsert(record: PlanningRecordEntity)
 
     @Query("DELETE FROM planning_records WHERE budgetId = :budgetId")
     suspend fun deleteBudget(budgetId: String)
 }
+
+data class UnsyncedPlanningRecord(
+    val budgetId: String,
+    val recordType: String,
+)
+
+/** Live planning records that never reached extension sync, across every budget in this database. */
+suspend fun PlanningRecordDao.unsyncedPlanningRecords(): List<UnsyncedPlanningRecord> =
+    unsyncedRecords().filter { PlanningStore.isBackedUp(it.recordType) }

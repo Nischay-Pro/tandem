@@ -97,7 +97,7 @@ class OnboardingWordingTest {
 
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                FirstSyncCompletionAction(state, navigation, syncComplete.value, notificationPermissionEnabled = false, onComplete = {})
+                FirstSyncCompletionAction(state, navigation, syncComplete.value, onComplete = {})
             }
         }
 
@@ -106,7 +106,7 @@ class OnboardingWordingTest {
         composeTestRule.onNodeWithText("Done").assertIsEnabled().performClick()
         assertEquals(AppRoute.PERSONALIZE, route.value)
         state.updateExperience { it.copy(personalizationDeferred = true) }
-        assertEquals(AppRoute.SETUP_COMPLETE, nextSetupRoute(state, notificationPermissionEnabled = false))
+        assertEquals(AppRoute.SETUP_COMPLETE, nextSetupRoute(state))
     }
 
     @Test
@@ -121,6 +121,7 @@ class OnboardingWordingTest {
 
         composeTestRule.onNodeWithText("Want Tandem tailored to you?").assertExists()
         composeTestRule.onNodeWithContentDescription("Step 1 of 5").assertExists()
+        composeTestRule.onNodeWithText("Continue").assertIsNotEnabled()
         composeTestRule.onNodeWithText("Just connect to Actual").performClick()
         composeTestRule.onNodeWithText("Continue").performClick()
         assertEquals(AppRoute.HOME, tab)
@@ -137,6 +138,7 @@ class OnboardingWordingTest {
             }
         }
 
+        composeTestRule.onNodeWithText("Personalize Tandem").performClick()
         composeTestRule.onNodeWithText("Continue").performClick()
         listOf("Stay organized", "Get control of my spending", "Pay down debt", "Save for something", "Analyze my finances")
             .forEach { composeTestRule.onNodeWithText(it).performScrollTo().performClick() }
@@ -165,6 +167,7 @@ class OnboardingWordingTest {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) { PersonalizeScreen(state, noOpNavigation()) }
         }
+        composeTestRule.onNodeWithText("Personalize Tandem").performClick()
         composeTestRule.onNodeWithText("Continue").performClick()
         composeTestRule.onNodeWithText("Pay down debt").performScrollTo().performClick()
         composeTestRule.onNodeWithText("Continue").performClick()

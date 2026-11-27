@@ -26,6 +26,37 @@ import kotlinx.serialization.json.jsonObject
 
 class PlanningStoreTest {
     @Test
+    fun countsOnlyLivePlanningRecordsThatNeverSynced(): Unit =
+        runBlocking {
+            val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))
+            try {
+                val dao = db.planningRecordDao()
+                val cipher = PlanningCipher(PlanningCipher.newKey())
+                val first = PlanningStore(dao, "budget-1", cipher) { 1L }
+                val second = PlanningStore(dao, "budget-2", cipher) { 1L }
+                first.put("goal-1", SavingsGoal.TYPE, JsonObject(emptyMap()))
+                first.put("goal-2", SavingsGoal.TYPE, JsonObject(emptyMap()))
+                second.put("goal-3", SavingsGoal.TYPE, JsonObject(emptyMap()))
+                second.put("bill-1", SharedBill.TYPE, JsonObject(emptyMap()))
+                first.put("gone", SharedBill.TYPE, JsonObject(emptyMap()))
+                first.delete("gone", SharedBill.TYPE)
+                first.put("other", "internal.state", JsonObject(emptyMap()))
+                dao.upsert(checkNotNull(dao.find("budget-1", "goal-2")).copy(pendingUpload = false))
+
+                assertEquals(
+                    setOf(
+                        UnsyncedPlanningRecord("budget-1", SavingsGoal.TYPE),
+                        UnsyncedPlanningRecord("budget-2", SavingsGoal.TYPE),
+                        UnsyncedPlanningRecord("budget-2", SharedBill.TYPE),
+                    ),
+                    dao.unsyncedPlanningRecords().toSet(),
+                )
+            } finally {
+                db.close()
+            }
+        }
+
+    @Test
     fun anAgeFromAnOlderVersionIsDatedByWhenThisDeviceSavedIt(): Unit =
         runBlocking {
             val db = openTandemDatabase(Room.inMemoryDatabaseBuilder<TandemDatabase>().setQueryCoroutineContext(Dispatchers.IO))

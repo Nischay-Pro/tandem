@@ -25,7 +25,6 @@ internal fun ScreenshotScriptEffect(
     val mobileSession = ctx.mobileSession
     LaunchedEffect(screenshotScript, state.settingsStorageReady) {
         if (!state.settingsStorageReady) return@LaunchedEffect
-        state.hasCompletedNotificationOnboarding = true
         state.hasCompletedSyncOnboarding = true
         state.hasDismissedBudgetHint = true
         if (!mobileSession.isAuthenticated) {

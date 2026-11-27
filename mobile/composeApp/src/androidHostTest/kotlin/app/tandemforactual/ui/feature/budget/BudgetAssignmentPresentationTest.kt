@@ -46,6 +46,7 @@ class BudgetAssignmentPresentationTest {
         assertEquals("Sync off", mainCloudStatusLabel(MainCloudStatus.OFF))
         assertEquals("Synced", mainCloudStatusLabel(MainCloudStatus.SYNCED))
         assertEquals("Syncing", mainCloudStatusLabel(MainCloudStatus.SYNCING))
+        assertEquals("Waiting to sync", mainCloudStatusLabel(MainCloudStatus.WAITING))
         assertEquals("Sync needs attention", mainCloudStatusLabel(MainCloudStatus.ERROR))
     }
 }

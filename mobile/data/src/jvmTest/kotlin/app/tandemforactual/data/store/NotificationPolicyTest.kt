@@ -32,7 +32,7 @@ class NotificationPolicyTest {
     @Test
     fun readsPreferencesWithDefaults() {
         val defaults = NotificationPolicy.read(emptyMap())
-        assertEquals(AlertKind.entries.filter { it.onByDefault }.toSet(), defaults.enabled)
+        assertEquals(emptySet(), defaults.enabled)
         assertNull(defaults.quietHours)
         assertEquals(NotificationPolicy.DEFAULT_LARGE_TRANSACTION_MINOR, defaults.largeTransactionMinor)
         assertEquals(NotificationPolicy.DEFAULT_BILL_LEAD_DAYS, defaults.billLeadDays)
@@ -59,6 +59,8 @@ class NotificationPolicyTest {
         assertFalse(custom.allows(AlertKind.SYNC_FAILURE, 12 * 60))
         assertEquals(2500L, NotificationPolicy.read(mapOf(NotificationPolicy.LARGE_TRANSACTION_MINOR to "2500")).largeTransactionMinor)
     }
+
+    private val allAlertsOn = AlertKind.entries.associate { it.preference to "true" }
 
     private fun withRepository(block: suspend (LocalBudgetRepository, AppPreferencesStore) -> Unit) =
         runBlocking {
@@ -116,7 +118,7 @@ class NotificationPolicyTest {
                     record("schedule", "nodate", """{"name":"No date"}"""),
                 ),
             )
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             val format = { minor: Long -> "$$minor" }
             val first = upcomingBillsAlert(repository, preferences, "budget", "2026-11-21", policy, format)
             assertEquals("Rent and 1 more are due in the next 3 days.", first?.message)
@@ -152,7 +154,7 @@ class NotificationPolicyTest {
                     record("transaction", "income", """{"date":"2026-11-20","amount":90000}"""),
                 ),
             )
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             val format = { minor: Long -> "$$minor" }
             assertNull(largeTransactionAlert(repository, preferences, "budget", "2026-11-21", policy, format))
             assertEquals("big", preferences.read()["internal:announced-large:budget"])
@@ -180,7 +182,7 @@ class NotificationPolicyTest {
     @Test
     fun announcesNewUncategorizedTransactionsOnceAfterAFirstLook() =
         withRepository { repository, preferences ->
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             val format = { minor: Long -> "$$minor" }
 
             suspend fun alert(hide: Boolean = false) =
@@ -223,7 +225,7 @@ class NotificationPolicyTest {
     fun largeSpendingWithoutPayee() =
         withRepository { repository, preferences ->
             repository.load(listOf(record("transaction", "big", """{"date":"2026-11-20","amount":-80000}""")))
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             preferences.putValue("internal:announced-large:budget", "")
             assertEquals(
                 "$80000 came in.",
@@ -257,7 +259,7 @@ class NotificationPolicyTest {
                     ),
                 ),
             )
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             preferences.putValue("internal:announced-large:budget", "")
             assertEquals(
                 "$60000 at Costco came in.",
@@ -269,7 +271,7 @@ class NotificationPolicyTest {
     @Test
     fun announcesBankFailuresUntilTheyRecover() =
         withRepository { _, preferences ->
-            val policy = NotificationPolicy.read(emptyMap())
+            val policy = NotificationPolicy.read(allAlertsOn)
             assertEquals(
                 "Checking couldn’t sync with its bank. Open Bank connections to fix it.",
                 bankSyncFailureAlert(preferences, "budget", listOf("Checking"), policy, NOON)?.message,
@@ -286,7 +288,7 @@ class NotificationPolicyTest {
     @Test
     fun holdsNewUncategorizedTransactionsUntilQuietHoursEnd() =
         withRepository { repository, preferences ->
-            val night = NotificationPolicy.read(mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
+            val night = NotificationPolicy.read(allAlertsOn + mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
             val key = "internal:announced-uncategorized:budget"
 
             suspend fun alert(
@@ -316,7 +318,7 @@ class NotificationPolicyTest {
     @Test
     fun holdsNewBankFailuresUntilQuietHoursEnd() =
         withRepository { _, preferences ->
-            val night = NotificationPolicy.read(mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
+            val night = NotificationPolicy.read(allAlertsOn + mapOf(NotificationPolicy.QUIET_HOURS to "1320-420"))
             val key = "internal:announced-bank-failures:budget"
             assertNull(bankSyncFailureAlert(preferences, "budget", listOf("Checking"), night, 23 * 60))
             assertEquals("", preferences.read()[key])

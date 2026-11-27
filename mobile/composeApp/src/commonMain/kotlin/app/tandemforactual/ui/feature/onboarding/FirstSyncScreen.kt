@@ -52,7 +52,6 @@ import app.tandemforactual.ui.generated.resources.setup_first_sync_complete
 import app.tandemforactual.ui.generated.resources.setup_first_sync_needs_attention
 import app.tandemforactual.ui.generated.resources.setup_keep_tandem_open_for_the
 import app.tandemforactual.ui.generated.resources.setup_making_it_yours
-import app.tandemforactual.ui.generated.resources.setup_open_budget
 import app.tandemforactual.ui.generated.resources.setup_open_saved_copy
 import app.tandemforactual.ui.generated.resources.setup_preparing_your_offline_copy
 import app.tandemforactual.ui.generated.resources.setup_saving_your_budget_for_offline
@@ -71,7 +70,6 @@ internal fun FirstSyncScreen(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
-    notificationPermissionEnabled: Boolean?,
 ) {
     OnboardingLayout(
         content = {
@@ -81,7 +79,7 @@ internal fun FirstSyncScreen(
             FirstSyncStatusText(state, mobileSession, navigation)
             ExternalConnectionsSection(state)
         },
-        actions = { FirstSyncActions(state, mobileSession, navigation, onRetrySync, notificationPermissionEnabled) },
+        actions = { FirstSyncActions(state, mobileSession, navigation, onRetrySync) },
     )
 }
 
@@ -178,7 +176,6 @@ private fun FirstSyncActions(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRetrySync: () -> Unit,
-    notificationPermissionEnabled: Boolean?,
 ) {
     val palette = tandemPalette
     when {
@@ -187,17 +184,7 @@ private fun FirstSyncActions(
                 state = state,
                 navigation = navigation,
                 syncComplete = true,
-                notificationPermissionEnabled = notificationPermissionEnabled,
-                actionLabel =
-                    if (shouldShowNotificationOnboarding(
-                            state.hasCompletedNotificationOnboarding,
-                            notificationPermissionEnabled,
-                        )
-                    ) {
-                        stringResource(Res.string.setup_continue)
-                    } else {
-                        stringResource(Res.string.setup_open_budget)
-                    },
+                actionLabel = stringResource(Res.string.setup_continue),
                 onComplete = {
                     selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                 },
