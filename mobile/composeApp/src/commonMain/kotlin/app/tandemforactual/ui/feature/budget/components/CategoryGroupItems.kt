@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.usage.WhereUsedRow
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.Badge
@@ -105,6 +106,9 @@ internal fun LazyListScope.categoryGroupHeaderItems(
     }
     if (context.isLiveBudget) {
         item(key = "category-group-note:${group.id}") { CategoryGroupNoteSection(state, mobileSession, group) }
+        item(key = "category-group-usage:${group.id}") {
+            SurfaceCard { WhereUsedRow { context.screen.showUsageSheet = true } }
+        }
     }
 }
 
