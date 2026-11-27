@@ -136,6 +136,7 @@ internal fun CompactActionButton(
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

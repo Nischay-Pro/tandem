@@ -324,6 +324,7 @@ private fun CustomReportTrend(
                 fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         AreaChart(
@@ -423,6 +424,7 @@ private fun TableRow(
             fontWeight = weight,
             textAlign = TextAlign.End,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

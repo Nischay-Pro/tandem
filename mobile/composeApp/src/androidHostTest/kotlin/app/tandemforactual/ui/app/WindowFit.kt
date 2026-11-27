@@ -11,6 +11,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.design.buttons.MIN_TOUCH_TARGET
+import kotlin.math.abs
 
 private const val EDGE_DP = 0.5f
 
@@ -40,9 +41,9 @@ internal fun SemanticsNodeInteractionsProvider.windowFitProblems(where: String):
         problems += node.textProblems(where)
     }
     val tappable = onAllNodes(anyNode).fetchSemanticsNodes().filter { it.size.width > 0 && !it.hidden() && it.isTappable() }
-    val days = tappable.groupBy { it.rowKey() }.values.filter { it.size >= WEEK_LENGTH }.flatten().map { it.cellKey() }.toSet()
+    val days = tappable.groupBy { it.rowKey() }.values.filter { it.size >= WEEK_LENGTH }.flatten()
     tappable.forEach { node ->
-        if (node.cellKey() in days) return@forEach
+        if (days.any { it.sameCellAs(node) }) return@forEach
         val density = node.density()
         val width = node.size.width / density
         val height = node.size.height / density
@@ -102,9 +103,10 @@ private fun SemanticsNode.insideHorizontalScroll(): Boolean =
     generateSequence(parent) { it.parent }.any { SemanticsProperties.HorizontalScrollAxisRange in it.config }
 
 /** Calendar days share a row seven to a week, so in a narrow window they're narrower than a touch target by design. */
-private fun SemanticsNode.rowKey(): Triple<Int, Int, Int> = Triple(rootNode().id, positionInRoot.y.toInt(), size.height)
+private fun SemanticsNode.rowKey(): Pair<Int, Int> = rootNode().id to positionInRoot.y.toInt()
 
-private fun SemanticsNode.cellKey(): Triple<Int, Int, Int> = Triple(rootNode().id, size.width, size.height)
+private fun SemanticsNode.sameCellAs(other: SemanticsNode): Boolean =
+    rootNode().id == other.rootNode().id && abs(size.height - other.size.height) <= 2 && abs(size.width - other.size.width) <= 2
 
 private fun SemanticsNode.rootNode(): SemanticsNode = generateSequence(this) { it.parent }.last()
 

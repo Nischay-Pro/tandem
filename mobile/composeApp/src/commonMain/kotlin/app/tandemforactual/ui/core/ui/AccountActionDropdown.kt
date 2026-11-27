@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -45,7 +46,13 @@ internal fun AccountActionDropdown(
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                     Text(title, color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                    Text(selectedLabel, color = tandemPalette.text, fontSize = TandemTypography.body, maxLines = 1)
+                    Text(
+                        selectedLabel,
+                        color = tandemPalette.text,
+                        fontSize = TandemTypography.body,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 Icon(Lucide.ChevronDown, contentDescription = null, modifier = Modifier.size(20.dp), tint = tandemPalette.muted)
             }

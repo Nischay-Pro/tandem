@@ -127,6 +127,7 @@ internal fun BudgetSwitchSplash(
                         letterSpacing = 3.sp,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     return@Column
                 }

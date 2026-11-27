@@ -35,7 +35,7 @@ internal fun AnimatedStatusText(
     lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     fontWeight: FontWeight = FontWeight.Normal,
     maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
     animateSizeChanges: Boolean = false,
     fractionDigits: Int = 0,
 ) {

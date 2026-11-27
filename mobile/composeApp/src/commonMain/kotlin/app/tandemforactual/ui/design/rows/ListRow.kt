@@ -256,6 +256,7 @@ private fun ListRowText(
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         } else {
             Text(
@@ -264,6 +265,7 @@ private fun ListRowText(
                 fontSize = TandemTypography.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (subtitleContent != null) {
@@ -275,6 +277,7 @@ private fun ListRowText(
                     palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = options.subtitleMaxLines,
+                    overflow = TextOverflow.Ellipsis,
                     fractionDigits = 2,
                 )
             } else {
@@ -283,6 +286,7 @@ private fun ListRowText(
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = options.subtitleMaxLines,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -311,6 +315,7 @@ private fun ListRowStackedTrailing(
                 fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 fractionDigits = 2,
             )
         } else {
@@ -320,6 +325,7 @@ private fun ListRowStackedTrailing(
                 fontSize = TandemTypography.compactBody,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -345,6 +351,7 @@ private fun ListRowTrailing(
                     fontSize = TandemTypography.compactBody,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     fractionDigits = 2,
                 )
             } else {

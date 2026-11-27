@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.data.planning.SpendingInsights
 import app.tandemforactual.data.planning.TrendBaseline
 import app.tandemforactual.data.planning.TrendDirection
@@ -176,6 +177,7 @@ private fun CategoryTrendsSection(
                             fontSize = TandemTypography.body,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         TrendBadge(trend.direction, trend.changeBasisPoints)
                     }

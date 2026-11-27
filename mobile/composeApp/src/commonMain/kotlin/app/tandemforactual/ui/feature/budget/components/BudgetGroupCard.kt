@@ -135,6 +135,7 @@ private fun RowScope.BudgetGroupHeading(
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         when {
             isReordering || isTrackingBudget -> {
@@ -143,6 +144,7 @@ private fun RowScope.BudgetGroupHeading(
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             else -> {
@@ -159,6 +161,7 @@ private fun RowScope.BudgetGroupHeading(
                         color = palette.muted,
                         fontSize = TandemTypography.caption,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -227,6 +230,7 @@ private fun BudgetGroupBalance(
             color = tandemPalette.muted,
             fontSize = TandemTypography.micro,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
     TandemIconButton(

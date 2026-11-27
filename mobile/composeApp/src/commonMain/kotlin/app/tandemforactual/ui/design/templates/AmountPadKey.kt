@@ -2,8 +2,11 @@
 
 package app.tandemforactual.ui.design.templates
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -53,15 +58,17 @@ internal fun AmountPadKey(
             AmountPadKeyStyle.OPERATOR -> CircleShape
             else -> RoundedCornerShape(TandemShapes.capsule)
         }
+    val interactions = remember { MutableInteractionSource() }
     Box(
         modifier =
             modifier
                 .fillMaxSize()
+                .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
+                .clickable(interactions, null, role = Role.Button, onClickLabel = accessibilityLabel, onClick = onClick)
                 .padding(TandemSpacing.xxSmall)
                 .clip(shape)
                 .background(background)
-                .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
-                .clickable(role = Role.Button, onClickLabel = accessibilityLabel, onClick = onClick),
+                .indication(interactions, LocalIndication.current),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -70,6 +77,7 @@ internal fun AmountPadKey(
             fontSize = if (style == AmountPadKeyStyle.NUMBER) TandemTypography.keypadNumber else TandemTypography.keypadOperator,
             fontWeight = if (style == AmountPadKeyStyle.DONE) FontWeight.SemiBold else FontWeight.Medium,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

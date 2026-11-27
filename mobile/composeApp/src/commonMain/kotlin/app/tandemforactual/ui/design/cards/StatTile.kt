@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -34,7 +35,21 @@ internal fun StatTile(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
     ) {
         Text(label, color = palette.muted, fontSize = TandemTypography.label)
-        Text(value, color = palette.text, fontSize = TandemTypography.cardTitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(detail, Modifier.fillMaxWidth(), color = palette.muted, fontSize = TandemTypography.caption, maxLines = 2)
+        Text(
+            value,
+            color = palette.text,
+            fontSize = TandemTypography.cardTitle,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            detail,
+            Modifier.fillMaxWidth(),
+            color = palette.muted,
+            fontSize = TandemTypography.caption,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

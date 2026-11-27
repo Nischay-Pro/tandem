@@ -125,9 +125,16 @@ private fun RowScope.BudgetMonthHeaderCell(
             .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
     ) {
-        Text(label, color = titleColor, fontSize = TandemTypography.body, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            label,
+            color = titleColor,
+            fontSize = TandemTypography.body,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall), verticalAlignment = Alignment.CenterVertically) {
-            Text("To budget", color = palette.muted, fontSize = TandemTypography.caption, maxLines = 1)
+            Text("To budget", color = palette.muted, fontSize = TandemTypography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (toBudgetMinor != null) {
                 PrivacyAmountText(
                     state.formatCurrency(toBudgetMinor),

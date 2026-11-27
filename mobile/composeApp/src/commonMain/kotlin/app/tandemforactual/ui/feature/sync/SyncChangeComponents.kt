@@ -68,9 +68,22 @@ internal fun AmountTransitionLine(change: BudgetAmountChange) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(change.before, color = tandemPalette.muted, fontSize = TandemTypography.caption, maxLines = 1)
+        Text(
+            change.before,
+            color = tandemPalette.muted,
+            fontSize = TandemTypography.caption,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Text("→", color = tandemPalette.accent, fontSize = TandemTypography.caption, fontWeight = FontWeight.Bold)
-        Text(change.after, color = tandemPalette.text, fontSize = TandemTypography.caption, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            change.after,
+            color = tandemPalette.text,
+            fontSize = TandemTypography.caption,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

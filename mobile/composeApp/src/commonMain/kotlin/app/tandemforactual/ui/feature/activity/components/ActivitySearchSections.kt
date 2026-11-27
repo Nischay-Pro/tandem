@@ -113,6 +113,7 @@ private fun ActivitySavedSearchesRow(
                             color = tandemPalette.muted,
                             fontSize = TandemTypography.caption,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     TandemIconButton(
