@@ -21,6 +21,13 @@ suspend fun LocalBudgetRepository.payeeUsage(
     )
 }
 
+/** Every payee's transaction count in one query, for screens that weigh many payees at once. */
+suspend fun LocalBudgetRepository.payeeTransactionCounts(budgetId: String): Map<String, Long> =
+    database
+        .budgetUsageDao()
+        .countTransactionsByPayee(budgetId)
+        .associate { it.payeeId to it.transactions }
+
 suspend fun LocalBudgetRepository.categoryUsage(
     budgetId: String,
     categoryId: String,

@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.core.format.formatInteger
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
@@ -26,6 +27,7 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Sparkles
 import kotlinx.coroutines.flow.first
 
 /** Live, non-transfer payees as id-name pairs sorted by name. */
@@ -64,6 +66,7 @@ internal fun rememberPayeeCategoryOptions(categoryRecords: List<BudgetRecordEnti
 internal fun PayeeListSummary(
     summary: String,
     addEnabled: Boolean,
+    onCleanUp: (() -> Unit)?,
     onAddPayee: () -> Unit,
 ) {
     Row(
@@ -76,6 +79,15 @@ internal fun PayeeListSummary(
             color = tandemPalette.muted,
             fontSize = TandemTypography.caption,
         )
+        if (onCleanUp != null) {
+            TandemIconButton(
+                Lucide.Sparkles,
+                "Clean up payees",
+                tint = tandemPalette.accent,
+                containerColor = tandemPalette.accentSurface,
+                onClick = onCleanUp,
+            )
+        }
         TandemIconButton(
             Lucide.Plus,
             "Add payee",
@@ -111,3 +123,10 @@ internal fun LazyListScope.noMatchingPayeesItem() {
         }
     }
 }
+
+/** "120 payees", or "4 of 120 payees" while a search narrows the list. */
+internal fun payeeCountSummary(
+    shown: Int,
+    total: Int,
+    searching: Boolean,
+): String = if (searching) "${formatInteger(shown)} of ${formatInteger(total)} payees" else "${formatInteger(total)} payees"
