@@ -219,15 +219,32 @@ class TandemApiClient(
         }
     }
 
-    /** Opens the device's copy of a budget, downloading it from Actual the first time. */
+    /** Opens the device's copy of a budget, downloading it from Actual the first time unless [download] is false. */
     internal suspend fun budget(
         budgetId: String,
         password: String? = null,
-    ): ActualDirectBudget = withContext(Dispatchers.IO) { openBudget(budgetId, password) }
+        download: Boolean = true,
+    ): ActualDirectBudget = withContext(Dispatchers.IO) { openBudget(budgetId, password, download) }
+
+    /** Whether Actual encrypts the device's copy of this budget, or null when the device has no copy. */
+    suspend fun storedCopyEncrypted(budgetId: String): Boolean? =
+        withContext(Dispatchers.IO) {
+            budgetMutex.withLock {
+                val files = budgetFiles ?: return@withLock null
+                if (files.sealedKeyInfo(budgetId) != null) return@withLock true
+                val db = files.open(budgetId) ?: return@withLock null
+                try {
+                    ActualDirectBudget.storedFileId(db)?.let { ActualDirectBudget.storedKeyInfo(db) != null }
+                } finally {
+                    db.close()
+                }
+            }
+        }
 
     private suspend fun openBudget(
         budgetId: String,
         password: String?,
+        download: Boolean,
     ): ActualDirectBudget =
         budgetMutex.withLock {
             password?.let { budgetPasswords[budgetId] = it }
@@ -236,6 +253,7 @@ class TandemApiClient(
             val files = budgetFiles ?: throw TandemApiException("not_supported")
             val budget =
                 reopenStored(client, files, budgetId) ?: run {
+                    if (!download) throw TandemApiException("no_device_copy")
                     val file = call { client.budgetFile(budgetId) }
                     call {
                         ActualDirectBudget.download(
