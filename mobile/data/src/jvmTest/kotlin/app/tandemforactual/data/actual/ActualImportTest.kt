@@ -290,7 +290,7 @@ class ActualImportTest {
         assertEquals(3, after.size)
         assertEquals("bank-sync-uber", after.first { it.id == synced.id }.importedId)
         assertEquals(true, after.first { it.id == synced.id }.cleared)
-        assertEquals("UBER TRIP", after.first { it.id == synced.id }.importedPayee)
+        assertEquals("Uber Trip", after.first { it.id == synced.id }.importedPayee)
         assertEquals(false, after.first { it.id == synced.id }.reconciled)
         assertEquals(1, after.count { it.importedId == "tandem-import-a-2" })
     }
