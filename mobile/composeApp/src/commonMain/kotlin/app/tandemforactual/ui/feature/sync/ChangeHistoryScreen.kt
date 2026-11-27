@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.BudgetChangeHistory
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.UndoResult
+import app.tandemforactual.ui.core.automation.automatedTransactionSources
 import app.tandemforactual.ui.core.format.platformFormatTimeAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.platformIsoDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
@@ -84,10 +85,12 @@ internal fun ChangeHistoryScreen(
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<Pair<String, InlineMessageKind>?>(null) }
     var confirmingUndo by remember { mutableStateOf<ChangeSet?>(null) }
+    var sources by remember(state.selectedBudgetId) { mutableStateOf(emptyMap<String, String>()) }
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
         history = mobileSession.insights.loadChangeHistory(state.selectedBudgetId, password)
+        sources = mobileSession.automationSources(state.selectedBudgetId)
         loading = false
     }
     val names =
@@ -124,7 +127,7 @@ internal fun ChangeHistoryScreen(
                 ChangeRow(
                     set = set,
                     describe = describe,
-                    deviceLabel = changeDeviceLabel(set.node, history?.deviceNode, mobileSession.planning.deviceNames),
+                    deviceLabel = changeLabel(set, history?.deviceNode, mobileSession.planning.deviceNames, sources),
                     expanded = expanded == set.id,
                     undoing = mobileSession.isPerformingBudgetAction,
                     onToggle = { expanded = if (expanded == set.id) null else set.id },
@@ -167,6 +170,23 @@ private fun changeDeviceLabel(
     thisDevice: String?,
     deviceNames: Map<String, String>,
 ): String = if (node == thisDevice) "This device" else deviceNames[node] ?: "Another device"
+
+private suspend fun TandemMobileSession.automationSources(budgetId: String): Map<String, String> =
+    storage?.database?.let { automatedTransactionSources(it, budgetId) }.orEmpty()
+
+/** Which device made [set], and the automation app, such as Tasker, when one added a transaction in it. */
+private fun changeLabel(
+    set: ChangeSet,
+    thisDevice: String?,
+    deviceNames: Map<String, String>,
+    sources: Map<String, String>,
+): String {
+    val source =
+        set.rows.firstNotNullOfOrNull { row ->
+            row.current["financial_id"]?.let(sources::get)?.takeIf { row.dataset == "transactions" }
+        }
+    return listOfNotNull(changeDeviceLabel(set.node, thisDevice, deviceNames), source).joinToString(" · ")
+}
 
 private fun visibleChangeSets(
     history: BudgetChangeHistory?,

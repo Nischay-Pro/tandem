@@ -128,6 +128,7 @@ class ActualTransactionOperations(
                 "amount" to input["amount"],
                 "payee" to input["payee"],
             )
+        if (input["payee"] == null) input["payee_name"]?.let { transaction["payee_name"] = it }
         val offBudget = truthy(db.first("SELECT offbudget FROM accounts WHERE id = ?", input["account"])?.get("offbudget"))
         if (input["category"] != null && !offBudget) transaction["category"] = input["category"]
         transaction["notes"] = input["notes"]
@@ -365,7 +366,9 @@ class ActualTransactionOperations(
         existing: JsonObject,
         input: Map<String, Any?>,
     ): List<String> =
-        listOf("account", "amount", "date", "payee", "category", "notes", "cleared").filter { !same(it, existing.value(it), input[it]) }
+        listOf("account", "amount", "date", "payee", "category", "notes", "cleared")
+            .filter { it != "payee" || input["payee_name"] == null }
+            .filter { !same(it, existing.value(it), input[it]) }
 
     /**
      * A split's lines, each with an amount and a category and optional notes, or null when the transaction isn't split.
@@ -465,7 +468,7 @@ class ActualTransactionOperations(
 
     private fun parseCreate(patch: JsonObject): Map<String, Any?> {
         val allowed = listOf("account", "amount", "date", "payee", "category", "notes", "cleared")
-        val unsupported = patch.keys - allowed.toSet() - "subtransactions"
+        val unsupported = patch.keys - allowed.toSet() - "subtransactions" - "payee_name"
         if (unsupported.isNotEmpty()) {
             throw InvalidTransactionRequestException(
                 "transaction create input contains unsupported fields: ${unsupported.joinToString()}",

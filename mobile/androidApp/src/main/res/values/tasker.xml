@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tasker_add_transaction">Add transaction</string>
+  <string name="tasker_read_budget">Read budget</string>
+  <string name="tasker_amount">Amount</string>
+  <string name="tasker_payee">Payee</string>
+  <string name="tasker_category">Category</string>
+  <string name="tasker_account">Account</string>
+  <string name="tasker_date">Date</string>
+  <string name="tasker_notes">Notes</string>
+  <string name="tasker_cleared">Cleared</string>
+  <string name="tasker_external_id">Repeat check ID</string>
+  <string name="tasker_month">Month</string>
+  <string name="tasker_output_transaction_id">Transaction ID</string>
+  <string name="tasker_output_transaction_id_detail">Tandem’s ID for the added transaction, or for the first one when the repeat check ID was used before.</string>
+  <string name="tasker_output_left">Left to spend</string>
+  <string name="tasker_output_left_detail">What’s left to spend this month, in the category when one is set, such as 120.50.</string>
+  <string name="tasker_output_budgeted">Budgeted</string>
+  <string name="tasker_output_budgeted_detail">What’s budgeted for the month, in the category when one is set.</string>
+  <string name="tasker_output_spent">Spent</string>
+  <string name="tasker_output_spent_detail">What’s been spent in the month, as a positive number, in the category when one is set.</string>
+  <string name="tasker_output_balance">Account balance</string>
+  <string name="tasker_output_balance_detail">The account’s balance when an account is set.</string>
+  <string name="tasker_output_to_budget">Ready to assign</string>
+  <string name="tasker_output_to_budget_detail">What’s ready to assign in the month.</string>
+  <string name="explanation_for_special_use_action">Runs Tandem’s Tasker actions: adding a transaction and reading budget numbers.</string>
+  <string name="running_tasker_plugin">Running a Tasker action</string>
+</resources>

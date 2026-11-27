@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.QuietHours
+import app.tandemforactual.ui.core.automation.AutomationAccess
 import app.tandemforactual.ui.core.format.currentMonthId
 import app.tandemforactual.ui.core.format.currentMonthLabel
 import app.tandemforactual.ui.core.format.formatAmount
@@ -126,6 +127,10 @@ internal class AppState {
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
+
+    /** Whether automation apps such as Tasker may add transactions, and separately read budget numbers. */
+    var automationWritesEnabled by mutableStateOf(false)
+    var automationReadsEnabled by mutableStateOf(false)
     var collapsedBudgetSections by mutableStateOf("")
     var pinnedCategoryIds by mutableStateOf("")
     var menuPins by mutableStateOf(MENU_PINS_UNSET)
@@ -260,6 +265,8 @@ internal class AppState {
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
+            AutomationAccess.WRITES to automationWritesEnabled.toString(),
+            AutomationAccess.READS to automationReadsEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
             "pinnedCategoryIds" to pinnedCategoryIds,
             "menuPins" to menuPins,
@@ -325,6 +332,8 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
+        automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
         exchangeRateFetching = ExchangeRateFetching.from(saved)
         collapsedBudgetSections = saved["collapsedBudgetSections"] ?: collapsedBudgetSections
         pinnedCategoryIds = saved["pinnedCategoryIds"] ?: pinnedCategoryIds
