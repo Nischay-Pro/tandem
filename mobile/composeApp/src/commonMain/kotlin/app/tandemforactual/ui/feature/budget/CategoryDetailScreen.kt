@@ -23,6 +23,7 @@ import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.categoryIconChoice
+import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.isTrackingBudget
@@ -53,6 +54,7 @@ import app.tandemforactual.ui.feature.budget.components.DeleteCategorySheet
 import app.tandemforactual.ui.feature.budget.components.EditCategorySheet
 import app.tandemforactual.ui.feature.budget.components.MoveMoneySheet
 import app.tandemforactual.ui.feature.budget.components.categoryPlanTitle
+import app.tandemforactual.ui.feature.budget.components.moveMoneyPreset
 import app.tandemforactual.ui.feature.budget.components.rememberCategoryDetailSheetState
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -93,6 +95,17 @@ internal fun CategoryDetailScreen(
             state.categoryEditRequested = false
             openCategoryEditor()
         }
+    }
+    LaunchedEffect(state.categoryMoveMoneyRequest, category?.id) {
+        val request = state.categoryMoveMoneyRequest ?: return@LaunchedEffect
+        if (category == null || isTrackingBudget) return@LaunchedEffect
+        state.categoryMoveMoneyRequest = null
+        val preset = moveMoneyPreset(request, category, model.moveMoneyCategories.map { it.second })
+        sheets.moveMoneyFromId = preset.fromId
+        sheets.moveMoneyToId = preset.toId
+        sheets.moveMoneyAmountDraft = preset.amountMinor?.let { state.formatAmount(it) }.orEmpty()
+        mobileSession.feedback.clearBudgetActionMessage()
+        sheets.showMoveMoneyDialog = true
     }
     PageColumn {
         if (category == null) {

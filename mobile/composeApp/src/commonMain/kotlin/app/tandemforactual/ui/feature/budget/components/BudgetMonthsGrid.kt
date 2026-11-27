@@ -23,6 +23,8 @@ import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.keyboard.ShortcutAction
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
+import app.tandemforactual.ui.core.state.MoveMoneyRequest
+import app.tandemforactual.ui.core.state.isTrackingBudget
 import app.tandemforactual.ui.design.rows.RowMenuAction
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.budget.BudgetMonthsView
@@ -38,6 +40,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RotateCcw
+import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.WalletCards
 
 internal const val BUDGET_MONTHS_HEADER_KEY = "budget-months-header"
 private val TODAY_TRACK = 2.dp
@@ -80,9 +84,27 @@ internal fun budgetGridMenu(
                 RowMenuAction("Copy last month", Lucide.Copy) { run(ShortcutAction.GRID_COPY_PREVIOUS) },
                 RowMenuAction("Budget what was spent", Lucide.Receipt) { run(ShortcutAction.GRID_SET_SPENT) },
                 RowMenuAction("Set to zero", Lucide.RotateCcw) { run(ShortcutAction.GRID_CLEAR) },
-            )
+            ) + moveMoneyActions(cells, key, onOpen)
         }
     return edits + RowMenuAction("Open category", Lucide.ExternalLink, onClick = onOpen)
+}
+
+private fun moveMoneyActions(
+    cells: GridCellContext,
+    key: GridKey,
+    onOpen: () -> Unit,
+): List<RowMenuAction> {
+    if (cells.state.isTrackingBudget) return emptyList()
+
+    fun request(coverMinor: Long) {
+        cells.state.categoryMoveMoneyRequest = MoveMoneyRequest(coverMinor)
+        onOpen()
+    }
+    val overspent = (cells.data.amounts(key)?.balance ?: 0L).takeIf { it < 0L }
+    return listOfNotNull(
+        overspent?.let { RowMenuAction("Cover overspending", Lucide.ShieldCheck) { request(-it) } },
+        RowMenuAction("Move money", Lucide.WalletCards) { request(0L) },
+    )
 }
 
 /**

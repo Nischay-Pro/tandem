@@ -78,6 +78,7 @@ internal class AppState {
     var pendingScheduleToOpenId by mutableStateOf<String?>(null)
     var pendingScheduleSeed by mutableStateOf<ScheduleSeed?>(null)
     var categoryEditRequested by mutableStateOf(false)
+    var categoryMoveMoneyRequest by mutableStateOf<MoveMoneyRequest?>(null)
     var selectedTransactionRecordId by mutableStateOf("")
     var selectedCustomReportId by mutableStateOf("")
     var selectedCustomReportName by mutableStateOf("")
@@ -224,6 +225,7 @@ internal class AppState {
         pendingScheduleToOpenId = null
         pendingScheduleSeed = null
         categoryEditRequested = false
+        categoryMoveMoneyRequest = null
         selectedTransactionRecordId = ""
         selectedTransactionAccountId = ""
         selectedTransactionPayeeId = ""
