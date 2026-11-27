@@ -28,8 +28,12 @@ internal fun readStatementCsvStructure(content: String): StatementCsvStructure {
             .eachCount()
             .maxBy { it.value }
             .key
-    val dataStart = transactionRows.first { kotlin.math.abs(rows[it].size - width) <= 1 }
-    val headerIndex = (dataStart - 1).takeIf { it >= 0 && rows[it].count(String::isNotBlank) >= 2 }
+    val firstTransaction = transactionRows.first { kotlin.math.abs(rows[it].size - width) <= 1 }
+    val headerIndex =
+        (firstTransaction - 1 downTo 0).firstOrNull { index ->
+            rows[index].none(::looksLikeStatementDate) && rows[index].count(String::isNotBlank) >= 2
+        }
+    val dataStart = headerIndex?.plus(1) ?: (0..firstTransaction).first { index -> rows[index].any(::looksLikeStatementDate) }
     val footerStart =
         (transactionRows.last() + 1 until rows.size).firstOrNull { index ->
             (index until rows.size).all { rows[it].any(footerLabel::containsMatchIn) }
@@ -51,7 +55,7 @@ internal fun looksLikeStatementDate(cell: String): Boolean =
 internal fun looksLikeStatementAmount(cell: String): Boolean =
     cell.any(Char::isDigit) &&
         !looksLikeStatementDate(cell) &&
-        listOf(null, "dot-comma").any { format -> runCatching { parseMoney(cell, 2, format) }.isSuccess }
+        listOf(null, "comma-dot", "dot-comma").any { format -> runCatching { parseMoney(cell, 2, format) }.isSuccess }
 
 private val CSV_DELIMITERS = listOf(',', ';', '\t', '|')
 
