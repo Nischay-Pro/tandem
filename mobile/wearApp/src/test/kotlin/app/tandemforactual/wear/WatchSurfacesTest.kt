@@ -1,0 +1,125 @@
+package app.tandemforactual.wear
+
+import androidx.wear.protolayout.DeviceParametersBuilders
+import androidx.wear.protolayout.LayoutElementBuilders
+import androidx.wear.protolayout.LayoutElementBuilders.LayoutElement
+import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import app.tandemforactual.watch.HIDDEN_AMOUNT
+import app.tandemforactual.watch.WatchBill
+import app.tandemforactual.watch.WatchCategory
+import app.tandemforactual.watch.WatchState
+import app.tandemforactual.watch.WatchSummary
+import app.tandemforactual.wear.complications.WatchComplications
+import app.tandemforactual.wear.data.WatchText
+import app.tandemforactual.wear.tiles.leftToSpendLayout
+import app.tandemforactual.wear.tiles.nextBillLayout
+import java.time.Instant
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+
+@RunWith(RobolectricTestRunner::class)
+class WatchSurfacesTest {
+    private val context = RuntimeEnvironment.getApplication()
+    private val device =
+        DeviceParametersBuilders.DeviceParameters
+            .Builder()
+            .setScreenWidthDp(192)
+            .setScreenHeightDp(192)
+            .setScreenDensity(2f)
+            .setScreenShape(DeviceParametersBuilders.SCREEN_SHAPE_ROUND)
+            .setDevicePlatform(DeviceParametersBuilders.DEVICE_PLATFORM_WEAR_OS)
+            .build()
+
+    private fun summary(state: WatchState = WatchState.VISIBLE) =
+        WatchSummary(
+            version = WatchSummary.VERSION,
+            state = state,
+            budgetName = "Home",
+            sentAtEpochMs = 0,
+            toBudgetMinor = 7_500,
+            leftToSpendMinor = 123_456,
+            categories =
+                listOf(
+                    WatchCategory("food", "Groceries", budgetedMinor = 40_000, spentMinor = 30_000, leftMinor = 10_000),
+                    WatchCategory("fun", "Fun", budgetedMinor = 5_000, spentMinor = 7_000, leftMinor = -2_000),
+                ),
+            bills = listOf(WatchBill("Internet", "2026-12-01", -6_000)),
+        )
+
+    @Test
+    fun theLeftToSpendTileShowsTheAmountAndAnAddButton() {
+        val texts = texts(leftToSpendLayout(context, device, summary()))
+
+        assertTrue(texts.toString(), "$1,234.56" in texts)
+        assertTrue(texts.toString(), WatchText.LEFT_TO_SPEND in texts)
+        assertTrue(texts.toString(), "+ Add" in texts)
+    }
+
+    @Test
+    fun theTileOffersAddOnlyOnceThePhoneAllowsIt() {
+        assertFalse("+ Add" in texts(leftToSpendLayout(context, device, null)))
+        assertFalse("+ Add" in texts(leftToSpendLayout(context, device, summary().copy(quickAdd = false))))
+    }
+
+    @Test
+    fun tilesNeverShowHiddenOrLockedAmounts() {
+        val hidden = texts(leftToSpendLayout(context, device, summary(WatchState.AMOUNTS_HIDDEN)))
+        val locked = texts(leftToSpendLayout(context, device, summary(WatchState.LOCKED)))
+        val bill = texts(nextBillLayout(context, device, summary(WatchState.AMOUNTS_HIDDEN)))
+
+        assertTrue(hidden.toString(), HIDDEN_AMOUNT in hidden)
+        assertFalse(hidden.toString(), hidden.any { "1,234" in it })
+        assertTrue(locked.toString(), WatchText.LOCKED in locked)
+        assertFalse(locked.toString(), locked.any { "1,234" in it })
+        assertTrue(bill.toString(), "Internet" in bill && HIDDEN_AMOUNT in bill)
+        assertTrue(texts(leftToSpendLayout(context, device, null)).contains(WatchText.NO_BUDGET))
+    }
+
+    @Test
+    fun theNextBillTileNamesTheBill() {
+        val texts = texts(nextBillLayout(context, device, summary()))
+
+        assertTrue(texts.toString(), "Internet" in texts && "$60.00" in texts)
+    }
+
+    @Test
+    fun complicationsFollowTheChosenCategory() {
+        val whole = WatchComplications.leftToSpend(summary(), null, ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
+        val overspent = WatchComplications.leftToSpend(summary(), "fun", ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
+        val ranged = WatchComplications.leftToSpend(summary(), null, ComplicationType.RANGED_VALUE, null) as RangedValueComplicationData
+
+        assertEquals("$1234", text(whole))
+        assertEquals("−$20", text(overspent))
+        assertEquals(10_000f, ranged.value)
+        assertEquals(40_000f, ranged.max)
+    }
+
+    @Test
+    fun complicationsHideAmountsTheWayTheAppDoes() {
+        val hidden = WatchComplications.toBudget(summary(WatchState.AMOUNTS_HIDDEN), null) as ShortTextComplicationData
+        val locked = WatchComplications.toBudget(summary(WatchState.LOCKED), null) as ShortTextComplicationData
+
+        assertEquals(HIDDEN_AMOUNT, text(hidden))
+        assertEquals("Locked", text(locked))
+        assertTrue(WatchComplications.toBudget(null, null) is NoDataComplicationData)
+    }
+
+    private fun text(data: ShortTextComplicationData) = data.text.getTextAt(context.resources, Instant.now()).toString()
+
+    private fun texts(element: LayoutElement): List<String> =
+        when (element) {
+            is LayoutElementBuilders.Text -> listOfNotNull(element.text?.value)
+            is LayoutElementBuilders.Box -> element.contents.flatMap(::texts)
+            is LayoutElementBuilders.Column -> element.contents.flatMap(::texts)
+            is LayoutElementBuilders.Row -> element.contents.flatMap(::texts)
+            else -> emptyList()
+        }
+}

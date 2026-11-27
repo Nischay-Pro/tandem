@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOTS = (
     ROOT / "mobile" / "composeApp" / "src" / "commonMain",
     ROOT / "mobile" / "androidApp" / "src" / "main",
+    ROOT / "mobile" / "wearApp" / "src" / "main",
     ROOT / "mobile" / "iosApp",
 )
 TEXT_SUFFIXES = {

@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
+import app.tandemforactual.android.watch.PhoneWatch
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.KeyboardCommands
@@ -45,6 +46,7 @@ import app.tandemforactual.ui.app.TandemApp
 import app.tandemforactual.ui.app.WindowHinge
 import app.tandemforactual.ui.app.receiveSharedFile
 import app.tandemforactual.ui.app.separatingVerticalHinge
+import app.tandemforactual.ui.core.platform.LocalWatchLink
 import app.tandemforactual.ui.core.session.BackupSecrets
 import app.tandemforactual.ui.core.session.LocalBackupSecrets
 import app.tandemforactual.ui.core.session.LocalBankIcons
@@ -52,6 +54,7 @@ import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.session.NetworkKind
 import app.tandemforactual.ui.core.session.SyncNetwork
 import app.tandemforactual.ui.core.session.bankIcons
+import app.tandemforactual.ui.core.watch.WatchPairing
 import app.tandemforactual.ui.design.theme.TabletopFold
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -136,6 +139,7 @@ class MainActivity : FragmentActivity() {
         notificationPermissionEnabled = hasNotificationPermission()
         BudgetSystemNotifications.initialize(applicationContext)
         AutomaticBackupScheduler.ensureScheduled(applicationContext)
+        PhoneWatch.start(applicationContext)
         val database = TandemProcess.database(applicationContext)
         showApp(database)
     }
@@ -161,6 +165,7 @@ class MainActivity : FragmentActivity() {
                 LocalBackupSecrets provides backupSecrets,
                 LocalBankIcons provides bankIcons,
                 LocalLanAccess provides lanAccess,
+                LocalWatchLink provides WatchPairing,
             ) {
                 TandemApp(
                     onAutomaticBackupNetworkChanged = { AutomaticBackupScheduler.update(applicationContext, it) },
@@ -311,6 +316,7 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         appInForeground.value = true
         AppVisibility.visible = true
+        PhoneWatch.checkPairing(this)
         if (!networkCallbackRegistered) {
             syncSignalState.onNetworkStarted(connectivityManager.activeNetwork)
             connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -322,6 +328,7 @@ class MainActivity : FragmentActivity() {
         appInForeground.value = false
         AppVisibility.visible = false
         TandemWidgets.refresh(this)
+        PhoneWatch.refresh(this)
         if (networkCallbackRegistered) {
             connectivityManager.unregisterNetworkCallback(networkCallback)
             networkCallbackRegistered = false

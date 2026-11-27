@@ -6,11 +6,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import app.tandemforactual.data.store.AppPreferencesStore
+import app.tandemforactual.data.store.WatchSettings
+import app.tandemforactual.ui.core.automation.AutomationAccess
 import app.tandemforactual.ui.core.format.currentMonthId
 import app.tandemforactual.ui.core.format.currentMonthLabel
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.encodeCachedBudgetCatalog
+import app.tandemforactual.ui.core.watch.WatchPairing
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -97,6 +100,18 @@ private suspend fun CoroutineScope.persistAppSettings(
     saveAppSettingsChanges(store, state, if (localChanges.isEmpty()) state.persistentSettings() else emptyMap())
 }
 
+/** Settings that change what a paired watch may show, so a change sends it a fresh summary or clears it. */
+private val WATCH_KEYS =
+    listOf(
+        "selectedBudgetId",
+        "selectedBudget",
+        "selectedBudgetEncrypted",
+        "privacyModeEnabled",
+        "readOnlyMode",
+        "pinnedCategoryIds",
+        AutomationAccess.READS,
+    ) + WatchSettings().toPreferences().keys
+
 private suspend fun saveAppSettingsChanges(
     store: AppPreferencesStore,
     state: AppState,
@@ -111,6 +126,7 @@ private suspend fun saveAppSettingsChanges(
             lastAttemptedRetry = retryCount
             try {
                 store.save(updatedPreferences)
+                if (WATCH_KEYS.any { updatedPreferences[it] != lastSavedPreferences[it] }) WatchPairing.refresh()
                 lastSavedPreferences = updatedPreferences
                 state.settingsStorageError = null
             } catch (error: CancellationException) {

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOTS = (
     ROOT / "mobile" / "composeApp" / "src",
     ROOT / "mobile" / "androidApp" / "src",
+    ROOT / "mobile" / "wearApp" / "src",
     ROOT / "mobile" / "iosApp",
 )
 STRING_LITERAL = re.compile(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"')

@@ -1,0 +1,7 @@
+<resources>
+  <string name="app_name">Tandem</string>
+  <string name="tile_left_to_spend">Left to spend</string>
+  <string name="tile_next_bill">Next bill</string>
+  <string name="complication_left_to_spend">Left to spend</string>
+  <string name="complication_to_budget">To budget</string>
+</resources>

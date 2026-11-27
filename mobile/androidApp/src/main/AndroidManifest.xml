@@ -57,6 +57,18 @@
         <data android:mimeType="application/x-qif" />
       </intent-filter>
     </activity>
+    <service
+      android:name=".watch.PhoneWatchService"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/tandem/" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+        <data android:scheme="wear" android:host="*" android:path="/tandem_watch" />
+      </intent-filter>
+    </service>
     <provider
       android:name="androidx.core.content.FileProvider"
       android:authorities="${applicationId}.receipts"

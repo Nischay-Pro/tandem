@@ -278,9 +278,18 @@ jobs:
           setup_node: "true"
           setup_android: "true"
 
-      - name: Run Android app unit tests
+      - name: Run Android and Wear OS app unit tests
         working-directory: mobile
-        run: ./gradlew :androidApp:testDebugUnitTest :androidApp:ktlintCheck :baselineprofile:ktlintCheck
+        run: >-
+          ./gradlew
+          :androidApp:testDebugUnitTest
+          :androidApp:ktlintCheck
+          :baselineprofile:ktlintCheck
+          :watch-protocol:jvmTest
+          :watch-protocol:ktlintCheck
+          :wearable-play:ktlintCheck
+          :wearApp:testDebugUnitTest
+          :wearApp:ktlintCheck
 
   android_app_release_lint:
     name: Android app · release lint
@@ -301,11 +310,12 @@ jobs:
           setup_node: "true"
           setup_android: "true"
 
-      - name: Run Android release lint
+      - name: Run Android and Wear OS release lint
         working-directory: mobile
         run: |
           ./gradlew \
-            :androidApp:lintRelease
+            :androidApp:lintRelease \
+            :wearApp:lintRelease
 
   android_app_release:
     name: Android app · release assembly
@@ -327,11 +337,12 @@ jobs:
           setup_node: "true"
           setup_android: "true"
 
-      - name: Assemble Android release
+      - name: Assemble Android and Wear OS releases
         working-directory: mobile
         run: |
           ./gradlew \
-            :androidApp:assembleRelease
+            :androidApp:assembleRelease \
+            :wearApp:assembleRelease
 
   ios:
     name: iOS · Kotlin and Xcode simulator tests
