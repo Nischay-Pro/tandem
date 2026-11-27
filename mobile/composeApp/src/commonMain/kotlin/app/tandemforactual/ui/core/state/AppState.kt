@@ -134,7 +134,6 @@ internal class AppState {
     var hasDismissedBudgetHint by mutableStateOf(false)
     var biometricLockEnabled by mutableStateOf(false)
     var rememberBudgetPasswordWithBiometrics by mutableStateOf(false)
-    var hasCompletedNotificationOnboarding by mutableStateOf(false)
     var reduceMotionOverride by mutableStateOf<Boolean?>(null)
     var systemReduceMotionEnabled by mutableStateOf(false)
     val reduceMotion: Boolean get() = reduceMotionOverride ?: systemReduceMotionEnabled
@@ -176,12 +175,12 @@ internal class AppState {
     var unlockFailureCount by mutableStateOf(0)
     var localServerUrl by mutableStateOf("")
     var unlockRetryAtEpochMillis by mutableStateOf(0L)
-    var syncReminders by mutableStateOf(true)
-    var conflictReviewAlerts by mutableStateOf(true)
-    var rejectedEditAlerts by mutableStateOf(true)
-    var overspendingAlerts by mutableStateOf(true)
-    var uncategorizedAlerts by mutableStateOf(true)
-    var bankSyncAlerts by mutableStateOf(true)
+    var syncReminders by mutableStateOf(false)
+    var conflictReviewAlerts by mutableStateOf(false)
+    var rejectedEditAlerts by mutableStateOf(false)
+    var overspendingAlerts by mutableStateOf(false)
+    var uncategorizedAlerts by mutableStateOf(false)
+    var bankSyncAlerts by mutableStateOf(false)
     var upcomingBillAlerts by mutableStateOf(false)
     var largeTransactionAlerts by mutableStateOf(false)
     var quietHours by mutableStateOf("")
@@ -268,7 +267,6 @@ internal class AppState {
             "readOnlyMode" to readOnlyMode.toString(),
             "hasDismissedBudgetHint" to hasDismissedBudgetHint.toString(),
             "biometricLockEnabled" to biometricLockEnabled.toString(),
-            "hasCompletedNotificationOnboarding" to hasCompletedNotificationOnboarding.toString(),
             "selectedBudget" to selectedBudget,
             "selectedBudgetId" to selectedBudgetId,
             "selectedBudgetEncrypted" to selectedBudgetEncrypted.toString(),
@@ -335,8 +333,6 @@ internal class AppState {
         readOnlyMode = saved["readOnlyMode"]?.toBooleanStrictOrNull() ?: readOnlyMode
         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"]?.toBooleanStrictOrNull() ?: hasDismissedBudgetHint
         biometricLockEnabled = saved["biometricLockEnabled"]?.toBooleanStrictOrNull() ?: biometricLockEnabled
-        hasCompletedNotificationOnboarding =
-            saved["hasCompletedNotificationOnboarding"]?.toBooleanStrictOrNull() ?: hasCompletedNotificationOnboarding
         selectedBudget = saved["selectedBudget"] ?: selectedBudget
         selectedBudgetId = saved["selectedBudgetId"] ?: selectedBudgetId
         selectedBudgetEncrypted = saved["selectedBudgetEncrypted"]?.toBooleanStrictOrNull() ?: selectedBudgetEncrypted
@@ -463,7 +459,6 @@ internal class AppState {
                         "readOnlyMode" to state.readOnlyMode,
                         "hasDismissedBudgetHint" to state.hasDismissedBudgetHint,
                         "biometricLockEnabled" to state.biometricLockEnabled,
-                        "hasCompletedNotificationOnboarding" to state.hasCompletedNotificationOnboarding,
                         "reduceMotionOverride" to state.reduceMotionOverride,
                         "syncOnOpen" to state.syncOnOpen,
                         "appLanguage" to state.appLanguage,
@@ -547,8 +542,6 @@ internal class AppState {
                         readOnlyMode = saved["readOnlyMode"] as? Boolean ?: readOnlyMode
                         hasDismissedBudgetHint = saved["hasDismissedBudgetHint"] as? Boolean ?: hasDismissedBudgetHint
                         biometricLockEnabled = saved["biometricLockEnabled"] as? Boolean ?: biometricLockEnabled
-                        hasCompletedNotificationOnboarding =
-                            saved["hasCompletedNotificationOnboarding"] as? Boolean ?: hasCompletedNotificationOnboarding
                         selectedBudgetId = saved["selectedBudgetId"] as? String ?: selectedBudgetId
                         reduceMotionOverride =
                             (saved["reduceMotionOverride"] as? Boolean) ?: (saved["reduceMotion"] as? Boolean)

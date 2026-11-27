@@ -22,6 +22,7 @@ internal fun mainCloudStatusLabel(status: MainCloudStatus): String =
         MainCloudStatus.OFF -> "Sync off"
         MainCloudStatus.SYNCED -> "Synced"
         MainCloudStatus.SYNCING -> "Syncing"
+        MainCloudStatus.WAITING -> "Waiting to sync"
         MainCloudStatus.ERROR -> "Sync needs attention"
     }
 
@@ -38,6 +39,7 @@ internal fun mainCloudStatusAccessibilityDescription(
             MainCloudStatus.OFF -> "Sync is off"
             MainCloudStatus.SYNCED -> "Everything synced"
             MainCloudStatus.SYNCING -> "Syncing changes"
+            MainCloudStatus.WAITING -> "Changes waiting to sync"
             MainCloudStatus.ERROR -> "Sync needs attention"
         }
     }
@@ -65,6 +67,7 @@ internal enum class MainCloudStatus {
     OFF,
     SYNCED,
     SYNCING,
+    WAITING,
     ERROR,
 }
 
@@ -87,7 +90,7 @@ internal fun resolveMainCloudStatus(
     if (hasSyncError || persistedSyncStatus in setOf("FAILED", "NEEDS_FULL_SYNC")) {
         return MainCloudStatus.ERROR
     }
-    if (pendingWriteStatuses.any { it in setOf("queued", "sending") } || hasPendingBudgetChanges) return MainCloudStatus.SYNCING
+    if (pendingWriteStatuses.any { it in setOf("queued", "sending") } || hasPendingBudgetChanges) return MainCloudStatus.WAITING
     return if (hasSuccessfulSync) MainCloudStatus.SYNCED else MainCloudStatus.ERROR
 }
 
@@ -130,6 +133,8 @@ internal fun headerSyncCaption(
         needsReview > 0 -> "${changes(needsReview)} ${if (needsReview == 1) "needs" else "need"} review"
         status == MainCloudStatus.SYNCING -> "Syncing…"
         status == MainCloudStatus.ERROR -> "Couldn’t sync"
+        status == MainCloudStatus.WAITING && waiting > 0 -> "Waiting to sync · ${changes(waiting)}"
+        status == MainCloudStatus.WAITING -> "Waiting to sync"
         waiting > 0 -> "${changes(waiting)} waiting to sync"
         status == MainCloudStatus.OFF -> "Saved on this device"
         lastSyncedAtEpochMs == null -> null

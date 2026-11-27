@@ -41,6 +41,7 @@ import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.AnimatedStatusText
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
 import app.tandemforactual.ui.design.inputs.pointerHighlight
+import app.tandemforactual.ui.design.sheets.RegisterFormSubmit
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -245,6 +246,7 @@ private fun TandemButton(
 ) {
     val palette = tandemPalette
     val primary = style == TandemButtonStyle.PRIMARY
+    if (primary) RegisterFormSubmit(enabled && !loading, onClick)
     val shape = RoundedCornerShape(TandemShapes.medium)
     val backgroundColor by
         animateColorAsState(

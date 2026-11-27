@@ -56,6 +56,10 @@ class MainCloudStatusButtonTest {
             "Syncing changes",
             mainCloudStatusAccessibilityDescription(MainCloudStatus.SYNCING, emptyList()),
         )
+        assertEquals(
+            "Changes waiting to sync",
+            mainCloudStatusAccessibilityDescription(MainCloudStatus.WAITING, listOf("queued")),
+        )
     }
 
     @Test

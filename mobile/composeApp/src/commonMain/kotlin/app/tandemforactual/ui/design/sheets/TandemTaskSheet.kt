@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import app.tandemforactual.ui.design.theme.escapeClosesSheetsInCompose
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.design.theme.tandemSheetEnter
@@ -60,24 +61,39 @@ internal fun TandemTaskSheet(
             properties =
                 edgeToEdgeDialogProperties(dismissOnBackPress, secure),
         ) {
-            Box(
-                Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
-                contentAlignment = Alignment.BottomCenter,
+            FormShortcutHost(
+                onEscape = onDismissRequest.takeIf { dismissOnBackPress && escapeClosesSheetsInCompose },
+                Modifier.fillMaxSize(),
             ) {
-                AnimatedVisibility(
-                    modifier = Modifier.fillMaxWidth(),
-                    visibleState = visibleState,
-                    enter = tandemSheetEnter(tandemReduceMotion),
-                    exit = tandemSheetExit(tandemReduceMotion),
-                ) {
-                    if (fullScreen) {
-                        Box(Modifier.fillMaxSize().background(tandemPalette.background).safeDrawingPadding()) {
-                            SecureSheetContent(secure, content)
-                        }
-                    } else {
-                        SecureSheetContent(secure, content)
-                    }
+                TaskSheetFrame(visibleState, fullScreen, secure, content)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskSheetFrame(
+    visibleState: MutableTransitionState<Boolean>,
+    fullScreen: Boolean,
+    secure: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.safeDrawingPadding()),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            modifier = Modifier.fillMaxWidth(),
+            visibleState = visibleState,
+            enter = tandemSheetEnter(tandemReduceMotion),
+            exit = tandemSheetExit(tandemReduceMotion),
+        ) {
+            if (fullScreen) {
+                Box(Modifier.fillMaxSize().background(tandemPalette.background).safeDrawingPadding()) {
+                    SecureSheetContent(secure, content)
                 }
+            } else {
+                SecureSheetContent(secure, content)
             }
         }
     }

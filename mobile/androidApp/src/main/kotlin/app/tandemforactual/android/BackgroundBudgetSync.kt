@@ -248,8 +248,6 @@ internal enum class BackgroundSyncFailureAction {
     FINISH,
 }
 
-internal fun backgroundAlertEnabled(preference: String?): Boolean = preference != "false"
-
 private fun syncFailureAlertAllowed(preferences: Map<String, String>?): Boolean =
     NotificationPolicy.read(preferences.orEmpty()).allows(AlertKind.SYNC_FAILURE, LocalTime.now().let { it.hour * 60 + it.minute })
 

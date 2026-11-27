@@ -20,6 +20,7 @@ import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.session.BudgetSyncOverview
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budgetSyncOverview
+import app.tandemforactual.ui.core.session.downloadAgainBlocker
 import app.tandemforactual.ui.core.session.downloadBudgetAgain
 import app.tandemforactual.ui.core.session.retryFailedWork
 import app.tandemforactual.ui.core.session.unsentChangeCount
@@ -31,6 +32,8 @@ import app.tandemforactual.ui.core.state.LiveScheduleSummary
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
+import app.tandemforactual.ui.design.feedback.InlineMessage
+import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.sheets.DestructiveConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.templates.PageLazyColumn
@@ -108,11 +111,13 @@ internal fun SyncCenterScreen(
         syncCenterDetailItems(budgetOverview, mobileSession, navigation, state)
     }
     if (confirmingDownload) {
-        DownloadAgainDialog(mobileSession, state.selectedBudgetId, onDismiss = { confirmingDownload = false }) {
+        val password = state.encryptedPassword
+        DownloadAgainDialog(mobileSession, state.selectedBudgetId, password, onDismiss = { confirmingDownload = false }) {
             confirmingDownload = false
             scope.launch {
-                mobileSession.downloadBudgetAgain(state.selectedBudgetId, vault)
-                navigation.reset(AppRoute.SWITCH_BUDGET)
+                if (mobileSession.downloadBudgetAgain(state.selectedBudgetId, vault, password) != null) {
+                    navigation.reset(AppRoute.SWITCH_BUDGET)
+                }
             }
         }
     }
@@ -216,23 +221,34 @@ private suspend fun retryFailedSyncWork(
 private fun DownloadAgainDialog(
     mobileSession: TandemMobileSession,
     budgetId: String,
+    password: String,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val unsent by produceState<Int?>(null, budgetId) { value = mobileSession.unsentChangeCount(budgetId) }
-    val count = unsent ?: return
+    val check by produceState<Pair<Int, String?>?>(null, budgetId, password) {
+        value = mobileSession.unsentChangeCount(budgetId) to mobileSession.downloadAgainBlocker(budgetId, password)
+    }
+    val (count, blocker) = check ?: return
     DestructiveConfirmationDialog(
         title = "Download this budget again?",
-        message =
-            "Tandem will delete this device’s copy and download a fresh one from Actual." +
-                when (count) {
-                    0 -> " Everything here is already in Actual."
-                    1 -> " The 1 change Actual doesn’t have yet will be sent again after the download."
-                    else -> " The $count changes Actual doesn’t have yet will be sent again after the download."
-                },
+        message = downloadAgainMessage(count, blocked = blocker != null),
         confirmLabel = "Download again",
         dismissLabel = "Keep this copy",
+        enabled = blocker == null,
+        content = blocker?.let { message -> { InlineMessage(message, InlineMessageKind.WARNING) } },
         onDismissRequest = onDismiss,
         onConfirm = onConfirm,
     )
 }
+
+internal fun downloadAgainMessage(
+    count: Int,
+    blocked: Boolean,
+): String =
+    "Tandem sets this device’s copy aside and downloads a fresh one from Actual." +
+        when {
+            blocked -> ""
+            count == 0 -> " Everything here is already in Actual."
+            count == 1 -> " The 1 change Actual doesn’t have yet will be sent again after the download."
+            else -> " The $count changes Actual doesn’t have yet will be sent again after the download."
+        }

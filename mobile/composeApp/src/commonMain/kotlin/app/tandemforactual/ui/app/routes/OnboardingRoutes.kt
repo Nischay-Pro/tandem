@@ -70,7 +70,6 @@ internal val onboardingScreens: Map<AppRoute, @Composable (ScreenContext) -> Uni
                         mobileSession = mobileSession,
                         navigation = navigation,
                         onRetrySync = onRetrySync,
-                        notificationPermissionEnabled = notificationPermissionEnabled,
                     )
                 }
             },

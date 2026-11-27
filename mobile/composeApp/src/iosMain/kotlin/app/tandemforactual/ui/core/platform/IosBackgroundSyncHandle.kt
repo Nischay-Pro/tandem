@@ -84,10 +84,11 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
         if (preferences["backgroundSyncEnabled"] != "true") {
             return IosBackgroundSyncAlerts(taskSucceeded = true)
         }
-        syncRemindersEnabled = NotificationPolicy.read(preferences).allows(AlertKind.SYNC_FAILURE, platformMinuteOfDay())
-        conflictAlertsEnabled = preferences["conflictReviewAlerts"] != "false"
-        rejectedAlertsEnabled = preferences["rejectedEditAlerts"] != "false"
-        overspendingAlertsEnabled = preferences["overspendingAlerts"] != "false"
+        val policy = NotificationPolicy.read(preferences)
+        syncRemindersEnabled = policy.allows(AlertKind.SYNC_FAILURE, platformMinuteOfDay())
+        conflictAlertsEnabled = AlertKind.NEEDS_REVIEW in policy.enabled
+        rejectedAlertsEnabled = AlertKind.REJECTED_EDIT in policy.enabled
+        overspendingAlertsEnabled = AlertKind.OVERSPENDING in policy.enabled
         val budgetId =
             preferences["selectedBudgetId"]?.takeIf(String::isNotBlank)
                 ?: return IosBackgroundSyncAlerts(taskSucceeded = true)

@@ -7,17 +7,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.view.View
-import android.widget.RemoteViews
+import android.os.Bundle
 import app.tandemforactual.data.database.openTandemDatabase
 import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.data.store.AppPreferencesStore
-import app.tandemforactual.data.store.BudgetDisplaySettings
-import app.tandemforactual.data.store.BudgetWidgetSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.budgetWidgetSummary
-import app.tandemforactual.ui.core.format.formatBudgetCurrency
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** Home-screen widget with what's ready to assign this month and a button to add a transaction. */
-class BudgetWidget : AppWidgetProvider() {
+/** Home-screen and lock-screen widget with what's ready to assign this month and a button to add a transaction. */
+open class BudgetWidget : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -42,6 +37,15 @@ class BudgetWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        onUpdate(context, appWidgetManager, intArrayOf(appWidgetId))
+    }
+
     override fun onReceive(
         context: Context,
         intent: Intent,
@@ -49,7 +53,7 @@ class BudgetWidget : AppWidgetProvider() {
         if (!refreshesOnAction(intent.action)) return super.onReceive(context, intent)
         val appContext = context.applicationContext
         val manager = AppWidgetManager.getInstance(appContext)
-        val ids = manager.getAppWidgetIds(ComponentName(appContext, BudgetWidget::class.java))
+        val ids = allWidgetIds(appContext, manager)
         if (ids.isEmpty()) return
         val pending = goAsync()
         scope.launch {
@@ -62,7 +66,10 @@ class BudgetWidget : AppWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) {
-        context.getSystemService(AlarmManager::class.java)?.cancel(monthChangeIntent(context))
+        val appContext = context.applicationContext
+        if (allWidgetIds(appContext, AppWidgetManager.getInstance(appContext)).isEmpty()) {
+            appContext.getSystemService(AlarmManager::class.java)?.cancel(monthChangeIntent(appContext))
+        }
     }
 
     companion object {
@@ -83,9 +90,17 @@ class BudgetWidget : AppWidgetProvider() {
         fun refresh(context: Context) {
             val appContext = context.applicationContext
             val manager = AppWidgetManager.getInstance(appContext)
-            val ids = manager.getAppWidgetIds(ComponentName(appContext, BudgetWidget::class.java))
+            val ids = allWidgetIds(appContext, manager)
             if (ids.isNotEmpty()) scope.launch { render(appContext, manager, ids) }
         }
+
+        private fun allWidgetIds(
+            context: Context,
+            manager: AppWidgetManager,
+        ): IntArray =
+            listOf(BudgetWidget::class.java, BudgetCoverWidget::class.java)
+                .flatMap { manager.getAppWidgetIds(ComponentName(context, it)).asList() }
+                .toIntArray()
 
         private suspend fun render(
             context: Context,
@@ -105,7 +120,7 @@ class BudgetWidget : AppWidgetProvider() {
                         database.close()
                     }
                 }.getOrNull()
-            manager.updateAppWidget(ids, views(context, summary))
+            ids.forEach { manager.updateAppWidget(it, budgetWidgetViews(context, manager, it, summary)) }
             scheduleMonthChange(context)
         }
 
@@ -122,56 +137,8 @@ class BudgetWidget : AppWidgetProvider() {
                 Intent(context, BudgetWidget::class.java).setAction(ACTION_MONTH_CHANGED),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-
-        private fun views(
-            context: Context,
-            summary: BudgetWidgetSummary?,
-        ): RemoteViews {
-            val views = RemoteViews(context.packageName, R.layout.widget_budget)
-            views.setOnClickPendingIntent(R.id.widget_root, launch(context, null, 0))
-            views.setOnClickPendingIntent(R.id.widget_add, launch(context, ACTION_ADD_TRANSACTION, 1))
-            views.setTextViewText(R.id.widget_budget_name, summary?.budgetName ?: "Tandem")
-            val locked = summary == null || summary.amountsHidden
-            views.setViewVisibility(R.id.widget_locked, if (locked) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.widget_amounts, if (locked) View.GONE else View.VISIBLE)
-            views.setTextViewText(
-                R.id.widget_locked,
-                if (summary == null) "Open Tandem to choose a budget." else "Open Tandem to see your budget.",
-            )
-            if (!locked) {
-                val ready = summary.readyToAssignMinor
-                views.setTextViewText(R.id.widget_ready, formatAmount(ready, summary.displaySettings))
-                val readyColor = if (ready != null && ready < 0) R.color.widget_negative else R.color.widget_text
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    views.setColorStateList(R.id.widget_ready, "setTextColor", readyColor)
-                } else {
-                    views.setTextColor(R.id.widget_ready, context.getColor(readyColor))
-                }
-                views.setTextViewText(R.id.widget_spent, formatAmount(summary.spentMinor, summary.displaySettings))
-            }
-            return views
-        }
-
-        private fun launch(
-            context: Context,
-            action: String?,
-            requestCode: Int,
-        ): PendingIntent {
-            val intent =
-                Intent(context, MainActivity::class.java)
-                    .setAction(action ?: Intent.ACTION_MAIN)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            return PendingIntent.getActivity(
-                context,
-                requestCode,
-                intent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-        }
-
-        private fun formatAmount(
-            minor: Long?,
-            settings: BudgetDisplaySettings?,
-        ): String = minor?.let { formatBudgetCurrency(it, settings) } ?: "—"
     }
 }
+
+/** The same widget sized for a flip phone's cover screen. */
+class BudgetCoverWidget : BudgetWidget()

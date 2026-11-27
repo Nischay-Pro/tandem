@@ -22,6 +22,7 @@ import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.setup_budget_encryption_password
 import app.tandemforactual.ui.generated.resources.setup_budget_is_encrypted
 import app.tandemforactual.ui.generated.resources.setup_password
+import app.tandemforactual.ui.generated.resources.setup_password_saved_with_biometrics
 import app.tandemforactual.ui.generated.resources.setup_this_is_not_your_actual
 import app.tandemforactual.ui.generated.resources.setup_unlock_budget
 import app.tandemforactual.ui.generated.resources.setup_unlock_your_budget
@@ -53,8 +54,17 @@ internal fun BudgetUnlockScreen(
                 { state.encryptedPassword = it },
                 TextFieldOptions(placeholder = stringResource(Res.string.setup_password), isSecret = true),
             )
-            InfoBubble(stringResource(Res.string.setup_this_is_not_your_actual))
-            if (LocalDeviceAuthenticator.current?.canStoreSecrets() == true) {
+            val canRemember = LocalDeviceAuthenticator.current?.canStoreSecrets() == true
+            InfoBubble(
+                stringResource(
+                    if (canRemember && state.rememberBudgetPasswordWithBiometrics) {
+                        Res.string.setup_password_saved_with_biometrics
+                    } else {
+                        Res.string.setup_this_is_not_your_actual
+                    },
+                ),
+            )
+            if (canRemember) {
                 BiometricPasswordCheckbox(state.rememberBudgetPasswordWithBiometrics) {
                     state.rememberBudgetPasswordWithBiometrics = it
                 }

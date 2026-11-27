@@ -154,6 +154,7 @@ internal fun StepScaffold(
     subtitle: String,
     primaryLabel: String,
     onPrimary: () -> Unit,
+    primaryEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = tandemPalette
@@ -187,7 +188,7 @@ internal fun StepScaffold(
             SetupHeadline(title, subtitle)
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.small), content = content)
         },
-        actions = { SetupPrimaryButton(primaryLabel, modifier = Modifier.fillMaxWidth(), onClick = onPrimary) },
+        actions = { SetupPrimaryButton(primaryLabel, modifier = Modifier.fillMaxWidth(), enabled = primaryEnabled, onClick = onPrimary) },
     )
 }
 
@@ -198,7 +199,7 @@ private fun DecideStep(
     onConnect: () -> Unit,
     onPersonalize: () -> Unit,
 ) {
-    var personalize by rememberSaveable { mutableStateOf(true) }
+    var personalize by rememberSaveable { mutableStateOf<Boolean?>(null) }
     StepScaffold(
         PersonalizeStep.DECIDE,
         onBack,
@@ -206,25 +207,28 @@ private fun DecideStep(
         stringResource(Res.string.personalize_detail),
         stringResource(Res.string.personalize_continue),
         onPrimary = {
-            if (personalize) {
-                onPersonalize()
-            } else {
-                state.updateExperience { it.copy(personalizationDeferred = true) }
-                onConnect()
+            when (personalize) {
+                true -> onPersonalize()
+                false -> {
+                    state.updateExperience { it.copy(personalizationDeferred = true) }
+                    onConnect()
+                }
+                null -> Unit
             }
         },
+        primaryEnabled = personalize != null,
     ) {
         ChoiceCard(
             stringResource(Res.string.decide_personalize),
             stringResource(Res.string.decide_personalize_detail),
-            personalize,
+            personalize == true,
             multiSelect = false,
             icon = Lucide.Sparkles,
         ) { personalize = true }
         ChoiceCard(
             stringResource(Res.string.personalize_just_connect),
             stringResource(Res.string.decide_connect_detail),
-            !personalize,
+            personalize == false,
             multiSelect = false,
             icon = Lucide.PlugZap,
         ) { personalize = false }

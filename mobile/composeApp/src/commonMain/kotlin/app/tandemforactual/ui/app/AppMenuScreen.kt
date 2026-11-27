@@ -60,6 +60,7 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudAlert
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudSync
+import com.composables.icons.lucide.CloudUpload
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelsTopLeft
 import com.composables.icons.lucide.X
@@ -244,6 +245,7 @@ private fun SyncStrip(
             when (status) {
                 MainCloudStatus.ERROR -> Lucide.CloudAlert
                 MainCloudStatus.SYNCING -> Lucide.CloudSync
+                MainCloudStatus.WAITING -> Lucide.CloudUpload
                 else -> Lucide.CloudCheck
             },
             null,

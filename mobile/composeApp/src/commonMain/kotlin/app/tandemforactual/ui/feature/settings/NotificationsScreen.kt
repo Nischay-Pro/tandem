@@ -56,18 +56,24 @@ internal fun NotificationsScreen(
             if (on && notificationPermissionEnabled == false) onRequestNotificationPermission?.invoke()
         }
         SectionCard("Sync and safety") {
-            ToggleRow("Sync reminders", "When background sync fails", state.syncReminders) { state.syncReminders = it }
+            ToggleRow("Sync reminders", "When background sync fails", state.syncReminders) {
+                state.syncReminders = it
+                askOnEnable(it)
+            }
             DividerLine()
             ToggleRow("Needs review alerts", "When a change needs review", state.conflictReviewAlerts) {
                 state.conflictReviewAlerts = it
+                askOnEnable(it)
             }
             DividerLine()
             ToggleRow("Rejected edit alerts", "When Actual rejects an edit", state.rejectedEditAlerts) {
                 state.rejectedEditAlerts = it
+                askOnEnable(it)
             }
             DividerLine()
             ToggleRow("Bank sync failures", "When a linked account can’t sync with its bank", state.bankSyncAlerts) {
                 state.bankSyncAlerts = it
+                askOnEnable(it)
             }
         }
         MoneyAlertsSection(state, askOnEnable)
@@ -142,10 +148,12 @@ private fun MoneyAlertsSection(
         DividerLine()
         ToggleRow("Overspending alerts", "When a category goes over budget this month", state.overspendingAlerts) {
             state.overspendingAlerts = it
+            askOnEnable(it)
         }
         DividerLine()
         ToggleRow("New transactions to categorize", "When new transactions come in without a category", state.uncategorizedAlerts) {
             state.uncategorizedAlerts = it
+            askOnEnable(it)
         }
         DividerLine()
         ToggleRow(
