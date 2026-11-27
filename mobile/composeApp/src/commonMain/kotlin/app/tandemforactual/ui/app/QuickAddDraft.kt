@@ -20,7 +20,9 @@ internal data class QuickAddDraft(
         private val AMOUNT = Regex("""(\d{1,12})(?:\.(\d{1,6}))?""")
 
         fun fromLink(link: String): QuickAddDraft? {
-            val draft = QuickAddDraft(quickAddParameter(link, "amount"), quickAddParameter(link, "payee")?.take(100))
+            val amount = quickAddParameter(link, "amount")
+            val payee = quickAddParameter(link, "payee")?.take(100)
+            val draft = QuickAddDraft(amount, payee)
             return draft.takeIf { it.amount != null || it.payee != null }
         }
     }
@@ -46,7 +48,8 @@ internal fun percentDecode(value: String): String? {
     var index = 0
     while (index < value.length) {
         if (value[index] == '%') {
-            val byte = value.substring(index + 1, minOf(index + 3, value.length)).takeIf { it.length == 2 && it.all(Char::isLetterOrDigit) }?.toIntOrNull(16)
+            val hex = value.substring(index + 1, minOf(index + 3, value.length))
+            val byte = if (hex.length == 2 && hex.all(Char::isLetterOrDigit)) hex.toIntOrNull(16) else null
             bytes += (byte ?: return null).toByte()
             index += 3
         } else {
