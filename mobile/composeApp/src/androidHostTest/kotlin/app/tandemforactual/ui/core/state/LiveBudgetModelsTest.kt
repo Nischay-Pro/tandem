@@ -288,6 +288,27 @@ class LiveBudgetModelsTest {
     }
 
     @Test
+    fun queuedHoldsAddToWhatIsAlreadyHeld() {
+        val month =
+            record(
+                type = "budget-month",
+                id = "2026-11",
+                json = """{"month":"2026-11","toBudget":6000,"forNextMonth":500,"totalBudgeted":0,"categoryGroups":[]}""",
+            )
+        val holds =
+            listOf(700L, 300L).map {
+                queuedBudgetMutation(
+                    BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
+                    itemId = "2026-11",
+                    payload = """{"month":"2026-11","amountMinor":$it}""",
+                )
+            }
+        val projected = requireNotNull(liveBudgetMonthSummary(month, emptyList(), emptyList(), pendingBudgetMutations = holds))
+        assertEquals(1_500L, projected.heldForNextMonthMinor)
+        assertEquals(5_000L, projected.toBudgetMinor)
+    }
+
+    @Test
     fun hidesQueuedCategoryCreateWhenItHasAlsoBeenQueuedForDeletion() {
         val month =
             record(

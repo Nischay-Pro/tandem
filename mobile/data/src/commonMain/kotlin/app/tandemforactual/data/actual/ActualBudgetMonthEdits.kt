@@ -5,14 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
-internal fun ActualBudgetEdits.createdMonths(): List<String> {
-    val current = ActualMonths.fromIsoDate(today())
-    val earliest =
-        db.first("SELECT date FROM transactions WHERE isChild=0 AND date IS NOT NULL ORDER BY date ASC LIMIT 1")?.get("date")?.let {
-            ActualMonths.fromDateInt((it as Number).toLong())
-        } ?: current
-    return ActualMonths.rangeInclusive(ActualMonths.add(minOf(earliest, current), -3), ActualMonths.add(current, 12))
-}
+internal fun ActualBudgetEdits.createdMonths(): List<String> = actualCreatedMonths(db, ActualMonths.fromIsoDate(today()), tracking())
 
 private fun ActualBudgetEdits.requireMonth(month: String) {
     if (!Regex("^\\d{4}-(0[1-9]|1[0-2])$").matches(month)) fail("Choose a valid budget month")
@@ -91,9 +84,9 @@ fun ActualBudgetEdits.setBudgetCarryover(
     enabled: Boolean,
 ) = writer.batch {
     if (monthCategories(month).none { it.value("id") == categoryId }) fail("Choose a category in this budget month")
-    val category = categories().firstOrNull { it["id"] == categoryId }
-    if (category == null || truthy(category["is_income"])) fail("budget-set-carryover: category is an income category")
+    val category = categories().firstOrNull { it["id"] == categoryId } ?: fail("Choose a category in this budget month")
     val table = budgetTable()
+    if (enabled && truthy(category["is_income"]) && table == "zero_budgets") setBuffer(month, 0L)
     for (each in createdMonths().filter { it >= month }) {
         val dbMonth = ActualMonths.dbMonth(each).toString()
         val existing = db.first("SELECT id FROM $table WHERE month = ? AND category = ?", dbMonth, categoryId)
@@ -117,12 +110,18 @@ fun ActualBudgetEdits.copyBudgetMonth(month: String) =
     writer.batch {
         requireMonth(month)
         if (month == "0001-01") fail("Choose a valid budget month")
-        val previous = ActualMonths.add(month, -1)
-        val source = monthCategories(previous).associate { it.value("id") as String to (it.value("budgeted") as Long? ?: 0L) }
-        val targetIds = monthCategories(month).map { it.value("id") as String }.toSet()
-        categories().filter { !truthy(it["hidden"]) && it["id"] in targetIds }.forEach {
-            setBudget(month, it["id"] as String, source[it["id"]] ?: 0L)
-        }
+        val tracking = tracking()
+        db
+            .query(
+                "SELECT b.category, b.amount, c.is_income, c.hidden, g.hidden AS group_hidden FROM ${budgetTable()} b " +
+                    "LEFT JOIN categories c ON b.category = c.id LEFT JOIN category_groups g ON c.cat_group = g.id " +
+                    "WHERE c.tombstone = 0 AND b.month = ?",
+                ActualMonths.dbMonth(ActualMonths.add(month, -1)),
+            ).forEach {
+                if (truthy(it["is_income"]) && !tracking) return@forEach
+                if (truthy(it["hidden"]) || truthy(it["group_hidden"])) return@forEach
+                setBudget(month, it["category"] as String, (it["amount"] as Number?)?.toLong() ?: 0L)
+            }
     }
 
 fun ActualBudgetEdits.applyBudgetTemplate(
@@ -162,10 +161,9 @@ fun ActualBudgetEdits.holdBudgetForNextMonth(
     if (tracking()) fail("Hold for next month is only available in an envelope budget")
     val data = monthData(month)
     val ready = data.value("toBudget") as Long? ?: 0L
-    val held = data.value("forNextMonth") as Long? ?: 0L
-    if (amount > ready + held) fail("The hold cannot exceed the amount ready to assign")
-    if (amount == held) return@batch
-    setBuffer(month, amount)
+    if (ready <= 0) fail("There is no money ready to assign to hold")
+    val held = (db.first("SELECT buffered FROM zero_budget_months WHERE id = ?", month)?.get("buffered") as Number?)?.toLong() ?: 0L
+    setBuffer(month, held + minOf(maxOf(amount, -held), ready))
 }
 
 fun ActualBudgetEdits.resetBudgetHold(month: String) =
@@ -191,4 +189,5 @@ fun ActualBudgetEdits.moveMoney(
     if ((source.value("balance") as Long? ?: 0L) < amount) fail("The source category does not have enough available money")
     setBudget(month, fromCategoryId, (source.value("budgeted") as Long? ?: 0L) - amount)
     setBudget(month, toCategoryId, (destination.value("budgeted") as Long? ?: 0L) + amount)
+    addMovementNote(month, amount, fromCategoryId, toCategoryId)
 }

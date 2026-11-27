@@ -41,6 +41,40 @@ internal data class BudgetGroup(
 }
 
 /**
+ * Actual's `getBudgetRange`: three months before the first transaction through twelve after the current month,
+ * extended to three months past the latest non-zero amount but never more than sixty months ahead.
+ */
+internal fun actualCreatedMonths(
+    db: ActualDatabase,
+    currentMonth: String,
+    tracking: Boolean,
+): List<String> {
+    val earliest =
+        db.first("SELECT date FROM transactions WHERE isChild=0 AND date IS NOT NULL ORDER BY date ASC LIMIT 1")?.get("date")?.let {
+            ActualMonths.fromDateInt((it as Number).toLong())
+        } ?: currentMonth
+    val table = if (tracking) "reflect_budgets" else "zero_budgets"
+    val latest =
+        db
+            .first(
+                "SELECT MAX(b.month) AS month FROM $table b JOIN categories c ON c.id = b.category WHERE c.tombstone = 0 AND b.amount != 0",
+            )?.get("month")
+            ?.let { (it as? Number)?.toLong() ?: it.toString().toLongOrNull() }
+            ?.takeIf { it > 0 }
+            ?.let { ActualMonths.of((it / 100).toInt(), (it % 100).toInt()) }
+    var end = ActualMonths.add(currentMonth, MIN_MONTHS_AHEAD)
+    if (latest != null) {
+        val planned = ActualMonths.add(latest, MONTHS_AFTER_LATEST_ALLOCATION)
+        if (planned > end) end = minOf(planned, ActualMonths.add(currentMonth, MAX_MONTHS_AHEAD))
+    }
+    return ActualMonths.rangeInclusive(ActualMonths.add(minOf(earliest, currentMonth), -3), end)
+}
+
+private const val MIN_MONTHS_AHEAD = 12
+private const val MONTHS_AFTER_LATEST_ALLOCATION = 3
+private const val MAX_MONTHS_AHEAD = 60
+
+/**
  * Reproduces the cells of Actual's budget spreadsheet (`envelope.ts` and `tracking.ts`) for every month Actual creates,
  * and returns them in the shape of the API's `getBudgetMonth`.
  */
@@ -59,15 +93,7 @@ internal class ActualBudgetMonths(
     private val buffered = HashMap<String, Any?>()
     private val sums = HashMap<String, Long>()
 
-    /** The months Actual creates: three before the first transaction through twelve after the current month. */
-    fun createdMonths(currentMonth: String): List<String> {
-        val earliest =
-            db.first("SELECT date FROM transactions WHERE isChild=0 AND date IS NOT NULL ORDER BY date ASC LIMIT 1")?.get("date")?.let {
-                ActualMonths.fromDateInt((it as Number).toLong())
-            } ?: currentMonth
-        val start = ActualMonths.add(minOf(earliest, currentMonth), -3)
-        return ActualMonths.rangeInclusive(start, ActualMonths.add(currentMonth, 12))
-    }
+    fun createdMonths(currentMonth: String): List<String> = actualCreatedMonths(db, currentMonth, tracking)
 
     fun compute(
         months: List<String>,

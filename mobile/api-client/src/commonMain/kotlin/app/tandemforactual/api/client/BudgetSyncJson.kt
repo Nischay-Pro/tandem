@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import app.tandemforactual.data.actual.ActualSnapshot
+import app.tandemforactual.data.actual.jsMathRound
 import app.tandemforactual.data.store.BudgetRecordDisplayMetadata
 import app.tandemforactual.data.store.BudgetSyncProtocolException
 import app.tandemforactual.data.store.LocalRecordProjection
@@ -106,7 +107,7 @@ object BudgetSyncJson {
         val range = this["amount"] as? JsonObject ?: return firstLong("amount", "amountMinor")
         val low = range.firstLong("num1") ?: return null
         val high = range.firstLong("num2") ?: return null
-        return kotlin.math.round((low + high) / 2.0).toLong()
+        return jsMathRound((low + high) / 2.0).toLong()
     }
 
     private fun JsonObject.firstString(vararg names: String): String? = names.firstNotNullOfOrNull { name -> optionalString(name) }
