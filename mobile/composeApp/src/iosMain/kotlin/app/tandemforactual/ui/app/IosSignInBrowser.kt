@@ -1,9 +1,10 @@
 package app.tandemforactual.ui.app
 
+import app.tandemforactual.ui.core.platform.activeWindow
+import app.tandemforactual.ui.core.platform.activeWindowScene
 import platform.AuthenticationServices.ASWebAuthenticationPresentationContextProvidingProtocol
 import platform.AuthenticationServices.ASWebAuthenticationSession
 import platform.Foundation.NSURL
-import platform.UIKit.UIApplication
 import platform.UIKit.UIWindow
 import platform.darwin.NSObject
 
@@ -13,7 +14,7 @@ private class SignInAnchor :
     NSObject(),
     ASWebAuthenticationPresentationContextProvidingProtocol {
     override fun presentationAnchorForWebAuthenticationSession(session: ASWebAuthenticationSession): UIWindow =
-        UIApplication.sharedApplication.keyWindow ?: UIWindow()
+        activeWindow() ?: activeWindowScene()?.let { UIWindow(windowScene = it) } ?: UIWindow()
 }
 
 private val signInAnchor = SignInAnchor()

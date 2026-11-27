@@ -1,6 +1,8 @@
 package app.tandemforactual.ui.core.platform
 
+import kotlin.math.abs
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.useContents
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
@@ -16,7 +18,10 @@ import platform.UIKit.systemBackgroundColor
 /** Face ID and passcode sheets make the app inactive too; covering for them would only flash the cover behind the prompt. */
 internal var iosAuthenticationPrompts = 0
 
-/** Covers the app before iOS snapshots it for the app switcher, so balances never show there. */
+/**
+ * Covers the app before iOS snapshots it for the app switcher, so balances never show there. A window that shares the
+ * screen with other apps stays visible while it's inactive, so it's only covered once it goes to the background.
+ */
 @OptIn(ExperimentalForeignApi::class)
 internal class IosPrivacyCover(
     private val host: UIViewController,
@@ -26,7 +31,7 @@ internal class IosPrivacyCover(
     private val observers =
         listOf(
             center.addObserverForName(UIApplicationWillResignActiveNotification, null, NSOperationQueue.mainQueue) { _ ->
-                if (iosAuthenticationPrompts == 0) show()
+                if (iosAuthenticationPrompts == 0 && fillsScreen()) show()
             },
             center.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, NSOperationQueue.mainQueue) { _ -> show() },
             center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, NSOperationQueue.mainQueue) { _ -> hide() },
@@ -40,6 +45,14 @@ internal class IosPrivacyCover(
         view.autoresizingMask = UIViewAutoresizingFlexibleWidth or UIViewAutoresizingFlexibleHeight
         root.addSubview(view)
         cover = view
+    }
+
+    private fun fillsScreen(): Boolean {
+        val window = host.viewIfLoaded?.window ?: return true
+        val screen = window.windowScene?.screen ?: return true
+        val (windowWidth, windowHeight) = window.bounds.useContents { size.width to size.height }
+        val (screenWidth, screenHeight) = screen.bounds.useContents { size.width to size.height }
+        return abs(windowWidth - screenWidth) < 1.0 && abs(windowHeight - screenHeight) < 1.0
     }
 
     private fun hide() {

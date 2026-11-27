@@ -3,13 +3,16 @@
 package app.tandemforactual.ui.app.shell
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.app.AppHeader
+import app.tandemforactual.ui.app.windowControlsPadding
 import app.tandemforactual.ui.core.security.hidesContentInAppSwitcher
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
@@ -144,36 +147,39 @@ internal fun ShellHeader(
             null
         }
     val conflictTitle = conflictPayeeTitle(conflictOperation, ctx.shell.liveTransactions, mobileSession)
-    AppHeader(
-        route = headerRoute,
-        state = state,
-        showBack = !headerRoute.isTab(),
-        onBack = ctx.navigator::handleCurrentRouteBack,
-        onSync = { navigation.open(AppRoute.SYNC_CENTER) },
-        syncStatus = chrome.mainCloudStatus,
-        pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
-        onBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
-        onOpenRoute = navigation.open,
-        actualConnected = mobileSession.isServerReachable,
-        liveAccounts = ctx.shell.liveAccounts,
-        liveBudgetMonth = ctx.shell.liveBudgetMonth,
-        activitySelectionTotalMinor = ctx.budgetScoped.activitySelectionTotalMinor,
-        conflictTitle = conflictTitle,
-        compactHeight = chrome.window.compactHeight,
-        onAddTransaction =
-            if (chrome.window.compactHeight &&
-                !ctx.transactionSheetActive &&
-                headerRoute == AppRoute.BUDGET &&
-                shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), ctx.budgetScoped.budgetGroupReorderActive)
-            ) {
-                { navigation.newTransaction(null) }
-            } else {
-                null
-            },
-        addTransactionEnabled = !state.readOnlyMode,
-        syncCaption = chrome.syncCaption(),
-        onRefreshBudgets = ctx.signInActions::refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
-        refreshingBudgets = mobileSession.isLoadingBudgets,
-        onOpenMenu = if (!chrome.useRail && state.selectedBudgetId.isNotBlank()) ({ state.menuOpen = true }) else null,
-    )
+    Box(Modifier.windowControlsPadding()) {
+        AppHeader(
+            route = headerRoute,
+            state = state,
+            showBack = !headerRoute.isTab(),
+            onBack = ctx.navigator::handleCurrentRouteBack,
+            onSync = { navigation.open(AppRoute.SYNC_CENTER) },
+            syncStatus = chrome.mainCloudStatus,
+            pendingWriteStatuses = mobileSession.pendingWrites.map { it.status },
+            onBudget = { navigation.open(AppRoute.SWITCH_BUDGET) },
+            onOpenRoute = navigation.open,
+            actualConnected = mobileSession.isServerReachable,
+            liveAccounts = ctx.shell.liveAccounts,
+            liveBudgetMonth = ctx.shell.liveBudgetMonth,
+            activitySelectionTotalMinor = ctx.budgetScoped.activitySelectionTotalMinor,
+            conflictTitle = conflictTitle,
+            compactHeight = chrome.window.compactHeight,
+            onAddTransaction =
+                if (chrome.window.compactHeight &&
+                    !ctx.transactionSheetActive &&
+                    headerRoute == AppRoute.BUDGET &&
+                    shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), ctx.budgetScoped.budgetGroupReorderActive)
+                ) {
+                    { navigation.newTransaction(null) }
+                } else {
+                    null
+                },
+            addTransactionEnabled = !state.readOnlyMode,
+            syncCaption = chrome.syncCaption(),
+            onRefreshBudgets =
+                ctx.signInActions::refreshBudgets.takeIf { mobileSession.isAuthenticated && mobileSession.isServerReachable },
+            refreshingBudgets = mobileSession.isLoadingBudgets,
+            onOpenMenu = if (!chrome.useRail && state.selectedBudgetId.isNotBlank()) ({ state.menuOpen = true }) else null,
+        )
+    }
 }

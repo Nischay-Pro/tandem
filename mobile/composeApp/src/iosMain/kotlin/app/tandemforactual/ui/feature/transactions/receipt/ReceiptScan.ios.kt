@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import app.tandemforactual.ui.core.platform.topViewController
 import kotlinx.cinterop.useContents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +14,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGSizeMake
-import platform.UIKit.UIApplication
+import platform.PhotosUI.PHPickerConfiguration
+import platform.PhotosUI.PHPickerFilter
+import platform.PhotosUI.PHPickerResult
+import platform.PhotosUI.PHPickerViewController
+import platform.PhotosUI.PHPickerViewControllerDelegateProtocol
 import platform.UIKit.UIGraphicsBeginImageContextWithOptions
 import platform.UIKit.UIGraphicsEndImageContext
 import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
@@ -23,7 +28,7 @@ import platform.UIKit.UIImagePickerControllerDelegateProtocol
 import platform.UIKit.UIImagePickerControllerOriginalImage
 import platform.UIKit.UIImagePickerControllerSourceType
 import platform.UIKit.UINavigationControllerDelegateProtocol
-import platform.UIKit.UIViewController
+import platform.UIKit.UIModalPresentationFullScreen
 import platform.Vision.VNImageRequestHandler
 import platform.Vision.VNRecognizeTextRequest
 import platform.Vision.VNRecognizedText
@@ -41,11 +46,10 @@ internal actual fun rememberReceiptScanner(
     val result = rememberUpdatedState(onResult)
     val delegate = remember { ReceiptPickerDelegate(scope, { started.value(null) }) { result.value(it) } }
     return remember(delegate) {
-        val camera = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
         ReceiptScanner(
-            canTakePhoto = UIImagePickerController.isSourceTypeAvailable(camera),
-            takePhoto = { delegate.present(camera) },
-            choosePhoto = { delegate.present(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypePhotoLibrary) },
+            canTakePhoto = UIImagePickerController.isSourceTypeAvailable(CAMERA),
+            takePhoto = delegate::takePhoto,
+            choosePhoto = delegate::choosePhoto,
         )
     }
 }
@@ -56,14 +60,23 @@ private class ReceiptPickerDelegate(
     private val onResult: (ReceiptScanResult) -> Unit,
 ) : NSObject(),
     UIImagePickerControllerDelegateProtocol,
-    UINavigationControllerDelegateProtocol {
-    fun present(source: UIImagePickerControllerSourceType) {
-        val picker = UIImagePickerController()
-        picker.sourceType = source
-        picker.delegate = this
-        var presenter: UIViewController? = UIApplication.sharedApplication.keyWindow?.rootViewController
-        while (presenter?.presentedViewController != null) presenter = presenter.presentedViewController
-        presenter?.presentViewController(picker, animated = true, completion = null)
+    UINavigationControllerDelegateProtocol,
+    PHPickerViewControllerDelegateProtocol {
+    fun takePhoto() {
+        val camera = UIImagePickerController()
+        camera.sourceType = CAMERA
+        camera.modalPresentationStyle = UIModalPresentationFullScreen
+        camera.delegate = this
+        topViewController()?.presentViewController(camera, animated = true, completion = null)
+    }
+
+    fun choosePhoto() {
+        val configuration = PHPickerConfiguration()
+        configuration.filter = PHPickerFilter.imagesFilter
+        configuration.selectionLimit = 1
+        val library = PHPickerViewController(configuration)
+        library.delegate = this
+        topViewController()?.presentViewController(library, animated = true, completion = null)
     }
 
     override fun imagePickerController(
@@ -71,18 +84,44 @@ private class ReceiptPickerDelegate(
         didFinishPickingMediaWithInfo: Map<Any?, *>,
     ) {
         picker.dismissViewControllerAnimated(true, completion = null)
-        val image = didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage ?: return
+        (didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage)?.let(::read)
+    }
+
+    override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+    }
+
+    override fun picker(
+        picker: PHPickerViewController,
+        didFinishPicking: List<*>,
+    ) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+        val provider = (didFinishPicking.firstOrNull() as? PHPickerResult)?.itemProvider ?: return
+        if (!provider.hasItemConformingToTypeIdentifier(IMAGE_TYPE)) return
+        provider.loadDataRepresentationForTypeIdentifier(IMAGE_TYPE) { data, _ ->
+            val image = data?.let { UIImage.imageWithData(it) }
+            scope.launch {
+                if (image != null) {
+                    read(image)
+                } else {
+                    onResult(ReceiptScanResult(null, "Couldn’t open this photo. Try another one."))
+                }
+            }
+        }
+    }
+
+    private fun read(image: UIImage) {
         onStarted()
         scope.launch {
             val lines = withContext(Dispatchers.Default) { recognize(image) }
             onResult(lines?.let { ReceiptScanResult(it) } ?: ReceiptScanResult(null, "Couldn’t read this receipt. Try a sharper photo."))
         }
     }
-
-    override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
-        picker.dismissViewControllerAnimated(true, completion = null)
-    }
 }
+
+private const val IMAGE_TYPE = "public.image"
+
+private val CAMERA = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
 
 private fun recognize(image: UIImage): List<String>? {
     val (width, height) = image.size.useContents { width to height }
