@@ -18,12 +18,14 @@ import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.InterfaceMode
+import app.tandemforactual.ui.core.state.LocalPaneDetailRoute
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.ui.ExternalConnectionsSection
 import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.DashboardCard
@@ -117,6 +119,10 @@ internal fun SettingsScreen(
     )
 }
 
+/** Marks the row whose page is open in the pane beside the list. */
+@Composable
+private fun paneRowOptions(route: AppRoute) = ListRowOptions(selected = LocalPaneDetailRoute.current == route)
+
 /** Home layout, interface mode, appearance and language. */
 @Composable
 private fun PersonalizationSection(
@@ -150,6 +156,7 @@ private fun PersonalizationSection(
             stringResource(Res.string.settings_appearance),
             stringResource(Res.string.settings_appearance_detail),
             leading = RowLeading.Icon(Lucide.Palette),
+            options = paneRowOptions(AppRoute.APPEARANCE),
             onClick = { navigation.open(AppRoute.APPEARANCE) },
         )
         LocalAppLanguage.current?.let { language ->
@@ -175,6 +182,7 @@ private fun BudgetSettingsSection(navigation: AppNavigation) {
             stringResource(Res.string.settings_budget_preferences),
             stringResource(Res.string.settings_budget_preferences_detail),
             leading = RowLeading.Icon(Lucide.WalletCards),
+            options = paneRowOptions(AppRoute.BUDGET_PREFERENCES),
             onClick = { navigation.open(AppRoute.BUDGET_PREFERENCES) },
         )
         DividerLine()
@@ -202,6 +210,7 @@ private fun ConnectionSection(navigation: AppNavigation) {
             stringResource(Res.string.settings_sync_preferences),
             stringResource(Res.string.settings_sync_preferences_detail),
             leading = RowLeading.Icon(Lucide.CloudSync),
+            options = paneRowOptions(AppRoute.SYNC_PREFERENCES),
             onClick = { navigation.open(AppRoute.SYNC_PREFERENCES) },
         )
         DividerLine()
@@ -209,6 +218,7 @@ private fun ConnectionSection(navigation: AppNavigation) {
             stringResource(Res.string.settings_server_device),
             stringResource(Res.string.settings_server_device_detail),
             leading = RowLeading.Icon(Lucide.Smartphone),
+            options = paneRowOptions(AppRoute.SERVER_DEVICE),
             onClick = { navigation.open(AppRoute.SERVER_DEVICE) },
         )
         DividerLine()
@@ -216,6 +226,7 @@ private fun ConnectionSection(navigation: AppNavigation) {
             stringResource(Res.string.settings_notifications),
             stringResource(Res.string.settings_notifications_detail),
             leading = RowLeading.Icon(Lucide.Bell),
+            options = paneRowOptions(AppRoute.NOTIFICATIONS),
             onClick = { navigation.open(AppRoute.NOTIFICATIONS) },
         )
     }
@@ -259,6 +270,7 @@ private fun PrivacySection(
             stringResource(Res.string.settings_security),
             stringResource(Res.string.settings_security_detail),
             leading = RowLeading.Icon(Lucide.ShieldCheck),
+            options = paneRowOptions(AppRoute.SECURITY_PRIVACY),
             onClick = { navigation.open(AppRoute.SECURITY_PRIVACY) },
         )
         DividerLine()
@@ -266,6 +278,7 @@ private fun PrivacySection(
             stringResource(Res.string.settings_local_data),
             stringResource(Res.string.settings_local_data_detail),
             leading = RowLeading.Icon(Lucide.Database),
+            options = paneRowOptions(AppRoute.LOCAL_DATA),
             onClick = { navigation.open(AppRoute.LOCAL_DATA) },
         )
     }
@@ -279,6 +292,7 @@ private fun YourDataSection(navigation: AppNavigation) {
             stringResource(Res.string.settings_export_backup),
             stringResource(Res.string.settings_export_backup_detail),
             leading = RowLeading.Icon(Lucide.FileDown),
+            options = paneRowOptions(AppRoute.EXPORT),
             onClick = { navigation.open(AppRoute.EXPORT) },
         )
     }
@@ -305,6 +319,7 @@ private fun SupportSection(
             stringResource(Res.string.settings_about),
             stringResource(Res.string.settings_about_detail),
             leading = RowLeading.Icon(Lucide.Info),
+            options = paneRowOptions(AppRoute.ABOUT),
             onClick = { navigation.open(AppRoute.ABOUT) },
         )
     }

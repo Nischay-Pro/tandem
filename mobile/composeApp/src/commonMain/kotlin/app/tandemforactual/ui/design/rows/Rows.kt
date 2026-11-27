@@ -61,6 +61,7 @@ internal data class ListRowOptions(
     val showChevron: Boolean = true,
     val subtitleMaxLines: Int = 3,
     val badge: RowBadge? = null,
+    val selected: Boolean = false,
 )
 
 /** A small status mark on the corner of the row's icon. */

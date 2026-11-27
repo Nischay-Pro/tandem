@@ -50,6 +50,7 @@ internal fun BudgetRulesScreen(
     payeeRecords: List<BudgetRecordEntity>,
     canAddRules: Boolean,
     onOpenRule: (String) -> Unit,
+    selectedRuleId: String? = null,
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val namesByField =
@@ -98,7 +99,7 @@ internal fun BudgetRulesScreen(
             else ->
                 items(visibleRules.size, key = { index -> visibleRules[index].id }) { index ->
                     val rule = visibleRules[index]
-                    SurfaceCard {
+                    SurfaceCard(highlighted = rule.id == selectedRuleId) {
                         ListRow(
                             rule.conditions,
                             rule.actions,

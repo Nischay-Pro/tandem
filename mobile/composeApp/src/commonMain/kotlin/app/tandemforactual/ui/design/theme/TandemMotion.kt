@@ -102,6 +102,15 @@ internal fun tandemDialogExit(reduceMotion: Boolean): ExitTransition =
             fadeOut(tween(TandemMotion.REVEAL_MILLIS, easing = TandemMotion.exitEasing))
     }
 
+/** A side pane grows in from the trailing edge, pushing the page beside it over instead of covering it. */
+internal fun tandemPaneEnter(reduceMotion: Boolean): EnterTransition =
+    expandHorizontally(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS), Alignment.Start) +
+        tandemFadeEnter(reduceMotion, TandemMotion.REVEAL_MILLIS)
+
+internal fun tandemPaneExit(reduceMotion: Boolean): ExitTransition =
+    shrinkHorizontally(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS), Alignment.Start) +
+        tandemFadeExit(reduceMotion, TandemMotion.CROSSFADE_MILLIS)
+
 internal fun tandemBottomBarEnter(reduceMotion: Boolean): EnterTransition =
     slideInVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) { it } +
         tandemFadeEnter(reduceMotion, TandemMotion.CROSSFADE_MILLIS)

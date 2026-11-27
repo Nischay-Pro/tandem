@@ -98,6 +98,7 @@ internal object TandemLayout {
     val minDetailPaneWidth = 340.dp
     val editorDialogWidth = 560.dp
     val editorDialogMaxHeight = 880.dp
+    val minMainPaneWidth = 400.dp
     val listRowMinHeight = 64.dp
     val compactListRowMinHeight = 56.dp
     val listRowHorizontalInset = TandemSpacing.large

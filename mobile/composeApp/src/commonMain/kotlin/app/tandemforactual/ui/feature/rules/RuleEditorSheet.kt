@@ -59,6 +59,35 @@ import com.composables.icons.lucide.Plus
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
+private fun closeRuleEditor(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    if (!mobileSession.isPerformingBudgetAction) {
+        state.ruleEditorRuleId = null
+        mobileSession.feedback.clearBudgetActionMessage()
+    }
+}
+
+private fun ruleEditorTitle(ruleId: String) = if (ruleId.isBlank()) "New rule" else "Edit rule"
+
+/** The rule editor in the pane beside the rules list, for the rule [AppState.ruleEditorRuleId] names. */
+@Composable
+internal fun RuleEditorPane(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
+    val ruleId = state.ruleEditorRuleId ?: return
+    Column(Modifier.fillMaxSize()) {
+        TandemModalHeader(
+            title = ruleEditorTitle(ruleId),
+            onClose = { closeRuleEditor(state, mobileSession) },
+            modifier = Modifier.padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
+        )
+        RuleEditorContent(state, mobileSession, ruleId, onDone = { state.ruleEditorRuleId = null })
+    }
+}
+
 @Composable
 internal fun RuleEditorSheet(
     state: AppState,
@@ -67,12 +96,7 @@ internal fun RuleEditorSheet(
     val target = state.ruleEditorRuleId
     var shownRuleId by remember { mutableStateOf("") }
     if (target != null) shownRuleId = target
-    val close = {
-        if (!mobileSession.isPerformingBudgetAction) {
-            state.ruleEditorRuleId = null
-            mobileSession.feedback.clearBudgetActionMessage()
-        }
-    }
+    val close = { closeRuleEditor(state, mobileSession) }
     TandemTaskSheet(
         visible = target != null,
         onDismissRequest = close,
@@ -81,7 +105,7 @@ internal fun RuleEditorSheet(
     ) {
         Column(Modifier.fillMaxSize().background(tandemPalette.background)) {
             TandemModalHeader(
-                title = if (shownRuleId.isBlank()) "New rule" else "Edit rule",
+                title = ruleEditorTitle(shownRuleId),
                 onClose = close,
                 modifier = Modifier.padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.medium),
             )

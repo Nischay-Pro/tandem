@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +78,7 @@ internal fun ListRow(
             modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = rowMinHeight)
+                .then(if (options.selected) Modifier.background(palette.accentSurface).semantics { selected = true } else Modifier)
                 .then(
                     if (onClick != null || onLongClick != null) {
                         Modifier

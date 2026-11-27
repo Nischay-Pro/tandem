@@ -91,6 +91,57 @@ internal class ScreenContext(
     val uriHandler: UriHandler,
 )
 
+/** The same context for [route] shown in a pane beside its list, navigating through [navigation]. */
+internal fun ScreenContext.inPane(
+    route: AppRoute,
+    navigation: AppNavigation,
+): ScreenContext =
+    ScreenContext(
+        route = route,
+        isForegroundRoute = isForegroundRoute,
+        state = state,
+        deviceName = deviceName,
+        navigation = navigation,
+        mobileSession = mobileSession,
+        reportsDataCache = reportsDataCache,
+        onSignIn = onSignIn,
+        onStartOpenIdSignIn = onStartOpenIdSignIn,
+        onRefreshBudgets = onRefreshBudgets,
+        onPrepareBudgetUnlock = onPrepareBudgetUnlock,
+        onOpenSelectedBudget = onOpenSelectedBudget,
+        onRetrySync = onRetrySync,
+        backgroundSyncSupported = backgroundSyncSupported,
+        merchantIconMatcher = merchantIconMatcher,
+        merchantIconMatcherLoadError = merchantIconMatcherLoadError,
+        merchantIconCatalog = merchantIconCatalog,
+        merchantIconCatalogLoadError = merchantIconCatalogLoadError,
+        liveTransactions = liveTransactions,
+        liveActivityTransactions = liveActivityTransactions,
+        liveUncategorized = liveUncategorized,
+        onActivitySelectionTotalChanged = onActivitySelectionTotalChanged,
+        activitySortCache = activitySortCache,
+        liveAccounts = liveAccounts,
+        liveSchedules = liveSchedules,
+        liveBudgetMonth = liveBudgetMonth,
+        onSyncNow = onSyncNow,
+        onBudgetGroupReorderModeChange = onBudgetGroupReorderModeChange,
+        onSaveTransaction = onSaveTransaction,
+        onDeleteTransaction = onDeleteTransaction,
+        onCreateTransaction = onCreateTransaction,
+        onResolveConflict = onResolveConflict,
+        onDiscardWrite = onDiscardWrite,
+        onRetryUncertainWrite = onRetryUncertainWrite,
+        onCheckUncertainWriteStatus = onCheckUncertainWriteStatus,
+        onForgetDevice = onForgetDevice,
+        onForgetDeviceLocally = onForgetDeviceLocally,
+        onRequestNotificationPermission = onRequestNotificationPermission,
+        onOpenNotificationSettings = onOpenNotificationSettings,
+        notificationPermissionEnabled = notificationPermissionEnabled,
+        onToggleNotificationPermission = onToggleNotificationPermission,
+        scope = scope,
+        uriHandler = uriHandler,
+    )
+
 /** Every route's screen, gathered from the per-feature route files in `app/routes`. */
 internal val screenRoutes: List<Map<AppRoute, @Composable (ScreenContext) -> Unit>> =
     listOf(

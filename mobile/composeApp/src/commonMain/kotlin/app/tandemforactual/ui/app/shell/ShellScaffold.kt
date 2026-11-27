@@ -41,6 +41,7 @@ import app.tandemforactual.ui.app.showsBottomNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.Workspace
 import app.tandemforactual.ui.core.state.WorkspaceLayout
+import app.tandemforactual.ui.core.state.isSetupRoute
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.shouldRenderRouteHeader
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
@@ -151,16 +152,17 @@ private fun shellLayout(chrome: ShellChromeState): ShellLayout {
     val workspaceTabs = navigationRoutes(state.interfaceMode)
     val workspaceActive =
         workspaceLayout != WorkspaceLayout.SINGLE &&
-            ctx.backStack.all { it.route.isTab() } &&
-            route in workspaceTabs &&
+            tabShellRoute != null &&
+            tabShellRoute in workspaceTabs &&
+            ctx.backStack.all { it.route.opensInWorkspacePane() } &&
             !ctx.transactionSheetActive &&
-            ctx.shell.backGestureProgress == 0f
-    val workspacePanes = state.workspace.panesFor(workspaceLayout.paneCount, route, workspaceTabs)
+            (ctx.shell.backGestureProgress == 0f || !route.isTab())
+    val workspacePanes = state.workspace.panesFor(workspaceLayout.paneCount, tabShellRoute ?: route, workspaceTabs)
     val behindFloatingEditor = ctx.transactionSheetActive && chrome.window.floatsEditors
     val showRail =
         chrome.useRail &&
             tabShellRoute != null &&
-            (if (behindFloatingEditor) ctx.backgroundRouteEntry.route else route).showsBottomNavigation() &&
+            ((if (behindFloatingEditor) ctx.backgroundRouteEntry.route else route).showsBottomNavigation() || workspaceActive) &&
             (!ctx.transactionSheetActive || behindFloatingEditor)
     return ShellLayout(tabShellRoute, shellHeaderRoute, workspaceLayout, workspaceActive, workspacePanes, showRail, imeVisible)
 }
@@ -194,11 +196,12 @@ private fun ShellRailContent(
     val ctx = chrome.ctx
     val state = ctx.state
     val workspacePanes = layout.workspacePanes
+    val focusedPane = layout.tabShellRoute?.let(workspacePanes::indexOf) ?: -1
     SideNavigationRail(
         selected = selected,
         selectTab = { tab ->
-            if (layout.workspaceActive && tab !in workspacePanes) {
-                state.workspace = state.workspace.place(tab, workspacePanes.indexOf(ctx.route), workspacePanes)
+            if (layout.workspaceActive && tab !in workspacePanes && focusedPane >= 0) {
+                state.workspace = state.workspace.place(tab, focusedPane, workspacePanes)
                 ctx.navigator.selectTabRoot(tab)
             } else if (layout.workspaceActive) {
                 ctx.navigator.selectTabRoot(tab)
@@ -252,3 +255,7 @@ internal fun ShellBottomBar(
         }
     }
 }
+
+/** Screens opened from a workspace pane stay in that pane; sign-in, budget switching and setup flows take the window. */
+internal fun AppRoute.opensInWorkspacePane(): Boolean =
+    !isSetupRoute() && this != AppRoute.STARTUP && this != AppRoute.SWITCH_BUDGET && this != AppRoute.HOME_LAYOUT
