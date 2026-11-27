@@ -335,7 +335,7 @@ class MainActivity : FragmentActivity() {
         deviceId: Int,
     ) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
-        keyboardShortcutGroup(KeyboardCommands.current)?.let { data?.add(it) }
+        data?.addAll(keyboardShortcutGroups(KeyboardCommands.current))
     }
 }
 
