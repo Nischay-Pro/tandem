@@ -19,7 +19,15 @@ data class SharedBillMember(
     val ruleCreated: Boolean = false,
     /** How many months each payment usually covers; months in between aren't missed until the cycle ends. */
     val everyMonths: Int = 1,
+    /** The first month this person owed a share (yyyy-MM), when they joined after the bill started. */
+    val startMonth: String? = null,
+    /** Shares owed before [shareMinor] applied, so a change doesn't rewrite months already settled. */
+    val earlierShares: List<EarlierShare> = emptyList(),
 ) {
+    /** The share owed for [monthId]: the one in effect then, or [shareMinor] from the latest change on. */
+    fun shareFor(monthId: String): Long =
+        earlierShares.sortedBy { it.throughMonth }.firstOrNull { monthId <= it.throughMonth }?.shareMinor ?: shareMinor
+
     fun toJson(): JsonObject =
         jsonOf(
             "name" to JsonPrimitive(name),
@@ -28,6 +36,20 @@ data class SharedBillMember(
             "matchText" to JsonPrimitive(matchText),
             "ruleCreated" to JsonPrimitive(ruleCreated),
             "everyMonths" to JsonPrimitive(everyMonths),
+            "startMonth" to startMonth.json(),
+            "earlierShares" to
+                (
+                    earlierShares.takeIf { it.isNotEmpty() }?.let { list ->
+                        JsonArray(
+                            list.map {
+                                jsonOf(
+                                    "through" to JsonPrimitive(it.throughMonth),
+                                    "shareMinor" to JsonPrimitive(it.shareMinor),
+                                )
+                            },
+                        )
+                    } ?: kotlinx.serialization.json.JsonNull
+                ),
         )
 
     companion object {
@@ -39,9 +61,22 @@ data class SharedBillMember(
                 matchText = body.text("matchText").orEmpty(),
                 ruleCreated = body.text("ruleCreated") == "true",
                 everyMonths = body.int("everyMonths")?.coerceIn(1, 12) ?: 1,
+                startMonth = body.text("startMonth"),
+                earlierShares =
+                    (body["earlierShares"] as? JsonArray).orEmpty().mapNotNull { element ->
+                        val share = element as? JsonObject ?: return@mapNotNull null
+                        val through = share.text("through") ?: return@mapNotNull null
+                        EarlierShare(through, share.long("shareMinor") ?: return@mapNotNull null)
+                    },
             )
     }
 }
+
+/** A share owed up to and including [throughMonth] (yyyy-MM), before it changed. */
+data class EarlierShare(
+    val throughMonth: String,
+    val shareMinor: Long,
+)
 
 /**
  * A bill you pay in full and others pay you back for each month, like a family phone plan. Payments are found by Actual
@@ -107,6 +142,8 @@ data class MemberMonth(
     val member: SharedBillMember,
     val paidMinor: Long,
     val state: ShareState,
+    /** The share owed that month, which may differ from the member's current one. */
+    val shareMinor: Long = member.shareMinor,
 )
 
 /** A money-in transaction that might be someone's share. */
@@ -133,25 +170,38 @@ object SharedBills {
         payments: List<TaggedPayment>,
         monthId: String,
         today: String,
-    ): List<MemberMonth> {
-        val tracked = bill.startMonth == null || monthId >= bill.startMonth
-        return bill.members.map { member ->
+    ): List<MemberMonth> =
+        bill.members.map { member ->
+            val start = member.startMonth ?: bill.startMonth
+            val share = member.shareFor(monthId)
             val paid = credits(bill, member, payments)[monthId] ?: 0
             val state =
                 when {
-                    paid >= member.shareMinor -> ShareState.PAID
+                    paid >= share -> ShareState.PAID
                     paid > 0 -> ShareState.PARTLY_PAID
-                    !tracked -> ShareState.NOT_TRACKED
-                    !isDue(bill, member, monthId, today) -> ShareState.NOT_YET_DUE
+                    start != null && monthId < start -> ShareState.NOT_TRACKED
+                    !isDue(bill, member, anchor(bill, member, payments) ?: monthId, monthId, today) -> ShareState.NOT_YET_DUE
                     else -> ShareState.MISSING
                 }
-            MemberMonth(member, paid, state)
+            MemberMonth(member, paid, state, share)
         }
-    }
 
     /**
-     * What [member] has paid, credited to months in order from their first one, so a payment covering two months fills
-     * both and a late payment fills the month it was owed for.
+     * The first month [member] owed a share: when they joined, else when the bill started, else, for bills saved before
+     * Tandem kept a start month, the month of their earliest payment.
+     */
+    fun anchor(
+        bill: SharedBill,
+        member: SharedBillMember,
+        payments: List<TaggedPayment>,
+    ): String? =
+        member.startMonth ?: bill.startMonth
+            ?: payments.filter { it.amountMinor > 0 && it.hasTag(bill.tag) && it.hasTag(member.tag) }.minOfOrNull { it.date.take(7) }
+
+    /**
+     * What [member] has paid, credited to months in order from the first month they owed, each up to the share owed that
+     * month, so a payment covering two months fills both, a late payment fills the month it was owed for, and an early one
+     * counts from their first month.
      */
     fun credits(
         bill: SharedBill,
@@ -159,17 +209,45 @@ object SharedBills {
         payments: List<TaggedPayment>,
     ): Map<String, Long> {
         val mine = payments.filter { it.amountMinor > 0 && it.hasTag(bill.tag) && it.hasTag(member.tag) }
+        var month = anchor(bill, member, payments) ?: return emptyMap()
         if (mine.isEmpty() || member.shareMinor <= 0) return emptyMap()
-        var month = listOfNotNull(bill.startMonth, mine.minOf { it.date.take(7) }).min()
         var left = mine.sumOf { it.amountMinor }
         val credits = linkedMapOf<String, Long>()
-        while (left > 0 && credits.size < MAX_CREDITED_MONTHS) {
-            val credit = minOf(left, member.shareMinor)
-            credits[month] = credit
+        var months = 0
+        while (left > 0 && months++ < MAX_CREDITED_MONTHS) {
+            val credit = minOf(left, member.shareFor(month))
+            if (credit > 0) credits[month] = credit
             left -= credit
             month = SpendingInsights.shiftMonth(month, 1)
         }
         return credits
+    }
+
+    /**
+     * [edited] as saved over [existing]: a new bill starts this month, a person added later starts this month, and a share
+     * that changes keeps the old amount for months before this one.
+     */
+    fun withEdits(
+        existing: SharedBill?,
+        edited: SharedBill,
+        currentMonth: String,
+    ): SharedBill {
+        if (existing == null) return edited.copy(startMonth = edited.startMonth ?: currentMonth)
+        val lastMonth = SpendingInsights.shiftMonth(currentMonth, -1)
+        val members =
+            edited.members.map { member ->
+                val before = existing.members.firstOrNull { it.tag == member.tag } ?: return@map member.copy(startMonth = currentMonth)
+                val start = before.startMonth ?: existing.startMonth
+                val kept = before.earlierShares.filter { it.throughMonth < lastMonth }
+                val earlier =
+                    if (member.shareMinor == before.shareMinor || (start != null && start >= currentMonth)) {
+                        before.earlierShares
+                    } else {
+                        kept + EarlierShare(lastMonth, before.shareFor(lastMonth))
+                    }
+                member.copy(startMonth = before.startMonth, earlierShares = earlier)
+            }
+        return edited.copy(members = members, startMonth = existing.startMonth)
     }
 
     /** The last month [member] has paid for in full, when that's this month or later. */
@@ -180,7 +258,7 @@ object SharedBills {
         today: String,
     ): String? =
         credits(bill, member, payments)
-            .filter { (_, credit) -> credit >= member.shareMinor }
+            .filter { (month, credit) -> credit >= member.shareFor(month) }
             .keys
             .maxOrNull()
             ?.takeIf { it >= today.take(7) }
@@ -188,11 +266,11 @@ object SharedBills {
     private fun isDue(
         bill: SharedBill,
         member: SharedBillMember,
+        anchor: String,
         monthId: String,
         today: String,
     ): Boolean {
         val every = member.everyMonths.coerceAtLeast(1)
-        val anchor = bill.startMonth ?: monthId
         val cycle = monthsBetween(anchor, monthId).floorDiv(every)
         val lastMonth = SpendingInsights.shiftMonth(anchor, cycle * every + every - 1)
         val thisMonth = today.take(7)
