@@ -47,14 +47,17 @@ orient() {
   fi
 }
 
-# Scrolls the open screen by most of its height; the short side is used so it works in either orientation.
+# Scrolls the open screen down three times its short side; the short side is used so it works in either orientation.
 scroll_down() {
   local size short
   size="$(adb shell wm size | awk -F': ' '/Physical size/ {print $2}' | tr -d '\r')"
   short="${size%x*}"
   [ "${size#*x}" -lt "$short" ] && short="${size#*x}"
-  adb shell input swipe $((short / 2)) $((short * 8 / 10)) $((short / 2)) $((short / 10)) 400
-  sleep 3
+  for _ in 1 2 3; do
+    adb shell input swipe $((short / 2)) $((short * 8 / 10)) $((short / 2)) $((short / 10)) 600
+    sleep 1
+  done
+  sleep 2
 }
 
 wait=75
