@@ -81,6 +81,7 @@ internal fun LazyListScope.budgetMonthsTableItems(
     stickyHeader(key = BUDGET_MONTHS_HEADER_KEY) {
         BudgetMonthsHeader(context.state, months)
         BudgetGridFollowFocus(months.grid, groups)
+        BudgetGridBulkSheet(context.state, context.mobileSession, months, data)
     }
     groups.forEach { group ->
         item(key = "budget-months-group:${group.id}") { BudgetMonthsGroupCard(context, months, group, cells) }
