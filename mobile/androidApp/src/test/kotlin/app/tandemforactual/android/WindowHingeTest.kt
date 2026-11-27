@@ -2,6 +2,7 @@ package app.tandemforactual.android
 
 import android.graphics.Rect
 import androidx.window.layout.FoldingFeature
+import androidx.window.testing.layout.FoldingFeature as fakeFold
 import androidx.window.testing.layout.TestWindowLayoutInfo
 import app.tandemforactual.ui.app.WindowHinge
 import org.junit.Assert.assertEquals
@@ -9,7 +10,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import androidx.window.testing.layout.FoldingFeature as fakeFold
 
 @RunWith(RobolectricTestRunner::class)
 class WindowHingeTest {
