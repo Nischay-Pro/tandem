@@ -38,14 +38,14 @@ internal fun WatchScreen(
     val settings = state.watchSettings
     PageColumn {
         BodyText(stringResource(Res.string.watch_intro))
-        OptInCard(
-            stringResource(Res.string.watch_quick_add),
-            settings.quickAdd,
-            { change(settings.copy(quickAdd = it)) },
-            stringResource(Res.string.watch_quick_add),
-            stringResource(Res.string.watch_quick_add_detail),
-        )
         SurfaceCard {
+            ToggleRow(
+                stringResource(Res.string.watch_quick_add),
+                subtitle = stringResource(Res.string.watch_quick_add_detail),
+                checked = settings.quickAdd,
+                onChange = { change(settings.copy(quickAdd = it)) },
+            )
+            DividerLine()
             ToggleRow(
                 stringResource(Res.string.watch_after_unlock),
                 subtitle = stringResource(Res.string.watch_after_unlock_detail),
