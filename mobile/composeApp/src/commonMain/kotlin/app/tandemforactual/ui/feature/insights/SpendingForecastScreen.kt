@@ -40,6 +40,7 @@ import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.rows.SkeletonRows
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -82,35 +83,40 @@ internal fun SpendingForecastScreen(
         remember(transactions, income, limits, today) {
             transactions?.let { SpendingInsights.forecast(SpendingInsights.entries(it, income), thisMonth, today, limits) }
         }
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        if (forecast == null || month == null) {
-            SkeletonRows()
-            return@PageColumn
-        }
-        ForecastHeadline(state, forecast)
-        val atRisk = forecast.categories.filter { it.status != ForecastStatus.ON_TRACK }.sortedBy { it.runOutDate ?: "" }
-        if (atRisk.isEmpty() && forecast.categories.isNotEmpty()) {
-            InlineMessage("Every budgeted category is on pace to stay within its budget.", InlineMessageKind.SUCCESS)
-        }
-        if (atRisk.isNotEmpty()) ForecastHeadsUp(state, atRisk, names, forecast.daysInMonth)
-        val shown = forecast.categories.sortedByDescending { it.projectedMinor }
-        if (shown.isEmpty()) {
-            EmptyStateCard("Nothing to forecast yet", "Spending recorded this month will be projected here.")
-        } else {
-            SectionCard("By category", "Spent so far and where it’s heading") {
-                shown.forEachIndexed { index, category ->
-                    if (index > 0) DividerLine()
-                    ForecastRow(state, names.category(category.categoryId), category)
+    if (forecast == null || month == null) {
+        PageColumn(verticalSpacing = TandemSpacing.large) { SkeletonRows() }
+        return
+    }
+    val atRisk = forecast.categories.filter { it.status != ForecastStatus.ON_TRACK }.sortedBy { it.runOutDate ?: "" }
+    val shown = forecast.categories.sortedByDescending { it.projectedMinor }
+    PageColumns(
+        primary = {
+            ForecastHeadline(state, forecast)
+            if (atRisk.isEmpty() && forecast.categories.isNotEmpty()) {
+                InlineMessage("Every budgeted category is on pace to stay within its budget.", InlineMessageKind.SUCCESS)
+            }
+            if (atRisk.isNotEmpty()) ForecastHeadsUp(state, atRisk, names, forecast.daysInMonth)
+        },
+        secondary = {
+            if (shown.isEmpty()) {
+                EmptyStateCard("Nothing to forecast yet", "Spending recorded this month will be projected here.")
+            } else {
+                SectionCard("By category", "Spent so far and where it’s heading") {
+                    shown.forEachIndexed { index, category ->
+                        if (index > 0) DividerLine()
+                        ForecastRow(state, names.category(category.categoryId), category)
+                    }
                 }
             }
-        }
-        Text(
-            "Estimates follow how your spending usually lands after this point in the month, from up to 6 months of history, " +
-                "adjusted for your pace so far. Without history, spending so far is stretched over the month. They’re a guide, not a promise.",
-            color = palette.muted,
-            fontSize = TandemTypography.label,
-        )
-    }
+            Text(
+                "Estimates follow how your spending usually lands after this point in the month, from up to 6 months of history, " +
+                    "adjusted for your pace so far. Without history, spending so far is stretched over the month. " +
+                    "They’re a guide, not a promise.",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+            )
+        },
+    )
 }
 
 /** The projected total, what's been spent, the days left and the budget bar. */

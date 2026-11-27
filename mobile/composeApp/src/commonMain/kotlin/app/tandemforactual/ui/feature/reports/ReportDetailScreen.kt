@@ -3,6 +3,7 @@
 package app.tandemforactual.ui.feature.reports
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +50,7 @@ import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.templates.PageDashboardLazyColumn
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -93,43 +97,50 @@ internal fun ReportDetailScreen(
     val netWorthWindow = createReportHistoryWindow(netWorthMonthIds, today) ?: window
     val selectedWindow = if (kind == ReportKind.NET_WORTH) netWorthWindow else window
     val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen),
-        contentPadding = PaddingValues(vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-    ) {
+    val chart = @Composable { ReportDetailChart(kind, data, selectedWindow, onOpenCategoryActivity) }
+    val table =
+        @Composable {
+            ReportDataTable(kind, data, selectedWindow, state.budgetDisplaySettings, "All accounts", onOpenCategoryActivity)
+        }
+    PageDashboardLazyColumn(verticalSpacing = TandemSpacing.medium) { columns ->
         if (kind != ReportKind.NET_WORTH) {
             item(key = "report-detail-period") {
                 ReportsPeriodItem(state, mobileSession.budgetMonthIds, periodMode, rangePreset)
             }
         }
-        if (reportHasNoData(kind, data)) {
-            item(key = "report-detail-empty") {
-                SurfaceCard {
-                    EmptyState(
-                        "No report data yet",
-                        "Add transactions and sync your budget to build this report.",
-                        Modifier.padding(TandemSpacing.large),
-                        "Add transaction",
-                        onEmptyAction,
-                    )
-                }
-            }
-        } else {
-            item(key = "report-detail-chart") {
-                ReportDetailChart(kind, data, selectedWindow, onOpenCategoryActivity)
-            }
-            item(key = "report-detail-table") {
-                ReportDataTable(
-                    kind,
-                    data,
-                    selectedWindow,
-                    state.budgetDisplaySettings,
-                    "All accounts",
-                    onOpenCategoryActivity = onOpenCategoryActivity,
-                )
+        when {
+            reportHasNoData(kind, data) -> item(key = "report-detail-empty") { ReportDetailEmpty(onEmptyAction) }
+            columns > 1 -> item(key = "report-detail-columns") { ReportDetailColumns(chart, table) }
+            else -> {
+                item(key = "report-detail-chart") { chart() }
+                item(key = "report-detail-table") { table() }
             }
         }
+    }
+}
+
+/** The chart beside its table on wide windows, the chart getting the larger share. */
+@Composable
+private fun ReportDetailColumns(
+    chart: @Composable () -> Unit,
+    table: @Composable () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium), verticalAlignment = Alignment.Top) {
+        Box(Modifier.weight(3f).semantics { isTraversalGroup = true }) { chart() }
+        Box(Modifier.weight(2f).semantics { isTraversalGroup = true }) { table() }
+    }
+}
+
+@Composable
+private fun ReportDetailEmpty(onEmptyAction: () -> Unit) {
+    SurfaceCard {
+        EmptyState(
+            "No report data yet",
+            "Add transactions and sync your budget to build this report.",
+            Modifier.padding(TandemSpacing.large),
+            "Add transaction",
+            onEmptyAction,
+        )
     }
 }
 

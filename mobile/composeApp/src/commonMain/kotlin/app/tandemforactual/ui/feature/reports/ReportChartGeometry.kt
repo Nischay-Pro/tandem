@@ -1,9 +1,17 @@
 package app.tandemforactual.ui.feature.reports
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 internal val ReportChartInset = 8.dp
+internal val ReportMonthSlotWidth = 64.dp
+internal const val REPORT_MIN_VISIBLE_MONTHS = 6
+internal const val REPORT_MAX_VISIBLE_MONTHS = 24
+
+/** Months that fit the chart at once: six on phones, more history as the chart widens. */
+internal fun reportVisibleMonths(viewportWidth: Dp): Int =
+    (viewportWidth / ReportMonthSlotWidth).toInt().coerceIn(REPORT_MIN_VISIBLE_MONTHS, REPORT_MAX_VISIBLE_MONTHS)
 
 internal fun reportSlotCenterX(
     index: Int,

@@ -112,6 +112,8 @@ internal object TandemLayout {
     val compactListRowIconSize = 24.dp
     val listRowLogoSize = 32.dp
     val compactListRowLogoSize = 28.dp
+    val dashboardContentWidth = 1_360.dp
+    val dashboardMinColumnWidth = 320.dp
 }
 
 internal data class TandemPalette(

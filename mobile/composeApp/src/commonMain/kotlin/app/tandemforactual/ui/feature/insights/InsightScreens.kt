@@ -46,7 +46,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -85,57 +85,69 @@ internal fun CashFlowScreen(
         }
     val projection = remember(start, events, horizon) { CashFlow.project(start, today, horizon, events.map { it.date to it.amountMinor }) }
     val palette = tandemPalette
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-            val point = scrub
-            Text(
-                if (point != null) formatLiveDate(ActualDates.addDays(today, point)) else "In $horizon days",
-                color = palette.muted,
-                fontSize = TandemTypography.body,
-            )
-            Text(
-                state.formatCurrency(projection.daily[point ?: projection.daily.lastIndex]),
-                color = palette.text,
-                fontSize = TandemTypography.heroTitle,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = tandemAlloFamily(),
-            )
-            Text(
-                "Today ${state.formatCurrency(start)} across ${accounts.size} on-budget accounts",
-                color = palette.muted,
-                fontSize = TandemTypography.compactBody,
-            )
-        }
-        AreaChart(projection.daily, "Projected balance for the next $horizon days", selected = scrub, onScrub = { scrub = it })
-        FilterPills(listOf(30 to "30 days", 60 to "60 days", 90 to "90 days"), horizon, { horizon = it })
-        if (projection.lowestMinor < 0) {
-            InlineMessage(
-                "Your balance dips to ${state.formatCurrency(projection.lowestMinor)} on ${formatLiveDate(projection.lowestDate)}.",
-                InlineMessageKind.WARNING,
-            )
-        }
-        if (events.isEmpty()) {
-            EmptyStateCard("No scheduled transactions", "Add schedules for bills and paychecks to see where your balance is heading.")
-        } else {
-            SectionCard("Coming up", "${events.size} scheduled in the next $horizon days") {
-                events.take(MAX_FLOW_ROWS).forEachIndexed { index, event ->
-                    if (index > 0) DividerLine()
-                    ListRow(
-                        event.name,
-                        formatLiveDate(event.date),
-                        state.formatCurrency(event.amountMinor),
-                        leading = RowLeading.Payee(event.name, Lucide.CalendarClock),
-                        options = ListRowOptions(showChevron = false),
-                    )
-                }
+    PageColumns(
+        primary = {
+            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                val point = scrub
+                Text(
+                    if (point != null) formatLiveDate(ActualDates.addDays(today, point)) else "In $horizon days",
+                    color = palette.muted,
+                    fontSize = TandemTypography.body,
+                )
+                Text(
+                    state.formatCurrency(projection.daily[point ?: projection.daily.lastIndex]),
+                    color = palette.text,
+                    fontSize = TandemTypography.heroTitle,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = tandemAlloFamily(),
+                )
+                Text(
+                    "Today ${state.formatCurrency(start)} across ${accounts.size} on-budget accounts",
+                    color = palette.muted,
+                    fontSize = TandemTypography.compactBody,
+                )
+            }
+            AreaChart(projection.daily, "Projected balance for the next $horizon days", selected = scrub, onScrub = { scrub = it })
+            FilterPills(listOf(30 to "30 days", 60 to "60 days", 90 to "90 days"), horizon, { horizon = it })
+            if (projection.lowestMinor < 0) {
+                InlineMessage(
+                    "Your balance dips to ${state.formatCurrency(projection.lowestMinor)} on ${formatLiveDate(projection.lowestDate)}.",
+                    InlineMessageKind.WARNING,
+                )
+            }
+        },
+        secondary = { CashFlowEvents(state, events, horizon) },
+    )
+}
+
+/** The scheduled transactions inside the horizon, and how the projection treats them. */
+@Composable
+private fun CashFlowEvents(
+    state: AppState,
+    events: List<FlowEvent>,
+    horizon: Int,
+) {
+    if (events.isEmpty()) {
+        EmptyStateCard("No scheduled transactions", "Add schedules for bills and paychecks to see where your balance is heading.")
+    } else {
+        SectionCard("Coming up", "${events.size} scheduled in the next $horizon days") {
+            events.take(MAX_FLOW_ROWS).forEachIndexed { index, event ->
+                if (index > 0) DividerLine()
+                ListRow(
+                    event.name,
+                    formatLiveDate(event.date),
+                    state.formatCurrency(event.amountMinor),
+                    leading = RowLeading.Payee(event.name, Lucide.CalendarClock),
+                    options = ListRowOptions(showChevron = false),
+                )
             }
         }
-        Text(
-            "Schedules with a range use the middle of it. Only on-budget accounts are included.",
-            color = palette.muted,
-            fontSize = TandemTypography.label,
-        )
     }
+    Text(
+        "Schedules with a range use the middle of it. Only on-budget accounts are included.",
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.label,
+    )
 }
 
 private const val MAX_FLOW_ROWS = 40
@@ -159,53 +171,57 @@ internal fun MonthlyReviewScreen(
     val spent = -categories.sumOf { it.activityMinor }
     val top = categories.filter { it.activityMinor < 0 }.sortedBy { it.activityMinor }.take(6)
     val overspent = categories.filter { it.balanceMinor < 0 }
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        MonthReviewHeadline(state, income, spent)
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-            StatTile(
-                "Money in",
-                state.formatCurrency(income),
-                "${monthTransactions.count { it.amountMinorUnits > 0 }} deposits",
-                Modifier.weight(1f),
-            )
-            StatTile(
-                "Money out",
-                state.formatCurrency(spent),
-                "${monthTransactions.count { it.amountMinorUnits < 0 }} purchases",
-                Modifier.weight(1f),
-            )
-        }
-        if (top.isNotEmpty()) {
-            WhereItWentSection(state, top)
-        }
-        if (overspent.isNotEmpty()) {
-            InlineMessage(
-                "${overspent.size} ${if (overspent.size == 1) "category is" else "categories are"} overspent: " +
-                    overspent.take(3).joinToString { it.name } + if (overspent.size > 3) " and more." else ".",
-                InlineMessageKind.WARNING,
-            )
-        }
-        val biggest = monthTransactions.filter { it.amountMinorUnits < 0 }.sortedBy { it.amountMinorUnits }.take(5)
-        if (biggest.isNotEmpty()) {
-            SectionCard("Biggest purchases", null) {
-                biggest.forEachIndexed { index, item ->
-                    if (index > 0) DividerLine()
-                    ListRow(
-                        item.payee,
-                        "${item.category} · ${item.dateLabel}",
-                        state.formatCurrency(item.amountMinorUnits),
-                        options = ListRowOptions(showChevron = false),
-                    )
+    val biggest = monthTransactions.filter { it.amountMinorUnits < 0 }.sortedBy { it.amountMinorUnits }.take(5)
+    PageColumns(
+        primary = {
+            MonthReviewHeadline(state, income, spent)
+            Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                StatTile(
+                    "Money in",
+                    state.formatCurrency(income),
+                    "${monthTransactions.count { it.amountMinorUnits > 0 }} deposits",
+                    Modifier.weight(1f),
+                )
+                StatTile(
+                    "Money out",
+                    state.formatCurrency(spent),
+                    "${monthTransactions.count { it.amountMinorUnits < 0 }} purchases",
+                    Modifier.weight(1f),
+                )
+            }
+            if (overspent.isNotEmpty()) {
+                InlineMessage(
+                    "${overspent.size} ${if (overspent.size == 1) "category is" else "categories are"} overspent: " +
+                        overspent.take(3).joinToString { it.name } + if (overspent.size > 3) " and more." else ".",
+                    InlineMessageKind.WARNING,
+                )
+            }
+            if (top.isNotEmpty()) {
+                WhereItWentSection(state, top)
+            }
+        },
+        secondary = {
+            if (biggest.isNotEmpty()) {
+                SectionCard("Biggest purchases", null) {
+                    biggest.forEachIndexed { index, item ->
+                        if (index > 0) DividerLine()
+                        ListRow(
+                            item.payee,
+                            "${item.category} · ${item.dateLabel}",
+                            state.formatCurrency(item.amountMinorUnits),
+                            options = ListRowOptions(showChevron = false),
+                        )
+                    }
                 }
             }
-        }
-        if (monthTransactions.isEmpty()) {
-            EmptyStateCard(
-                "Nothing recorded this month yet",
-                "Transactions for ${state.selectedMonth} will be summarized here.",
-            )
-        }
-    }
+            if (monthTransactions.isEmpty()) {
+                EmptyStateCard(
+                    "Nothing recorded this month yet",
+                    "Transactions for ${state.selectedMonth} will be summarized here.",
+                )
+            }
+        },
+    )
 }
 
 /** The month's name and whether it saved or overspent overall. */

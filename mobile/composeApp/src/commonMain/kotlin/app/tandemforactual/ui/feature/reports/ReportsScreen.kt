@@ -4,14 +4,10 @@ package app.tandemforactual.ui.feature.reports
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -35,7 +31,6 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
-import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.ReportKind
 import app.tandemforactual.ui.core.state.ReportPeriodMode
 import app.tandemforactual.ui.core.state.ReportRangePreset
@@ -44,7 +39,10 @@ import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.templates.DashboardCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageDashboardLazyColumn
+import app.tandemforactual.ui.design.templates.dashboardItems
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -104,32 +102,28 @@ internal fun ReportsScreen(
     val netWorthWindow =
         remember(netWorthMonthIds, today) { createReportHistoryWindow(netWorthMonthIds, today) } ?: window
     val data = rememberReportData(state, mobileSession, accounts, window, netWorthWindow, reportsDataCache)
-    val listState = LocalRouteLazyListState.current ?: rememberLazyListState()
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().padding(horizontal = TandemSpacing.screen),
-        contentPadding = PaddingValues(vertical = TandemSpacing.medium),
-        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-    ) {
-        item(key = "reports-period") {
-            ReportsPeriodItem(state, mobileSession.budgetMonthIds, periodMode, rangePreset)
-        }
-        item(key = "reports-more") {
-            ReportsMoreCard(mobileSession.planning.customReports.size, onOpenInsight)
-        }
-        ReportKind.entries.forEach { kind ->
-            item(key = "report-card-${kind.name}") {
-                ReportCard(
-                    kind,
-                    data,
-                    if (kind == ReportKind.NET_WORTH) netWorthWindow else window,
-                    onSeeAll = { onOpenReport(kind) },
-                    onOpenCategoryActivity = onOpenCategoryActivity,
-                    onEmptyAction = onAddTransaction,
-                    emptyActionLabel = "Add transaction",
-                )
+    val cards =
+        listOf(
+            DashboardCard("reports-period", fullWidth = true) {
+                ReportsPeriodItem(state, mobileSession.budgetMonthIds, periodMode, rangePreset)
+            },
+            DashboardCard("reports-more") { ReportsMoreCard(mobileSession.planning.customReports.size, onOpenInsight) },
+        ) +
+            ReportKind.entries.map { kind ->
+                DashboardCard("report-card-${kind.name}") {
+                    ReportCard(
+                        kind,
+                        data,
+                        if (kind == ReportKind.NET_WORTH) netWorthWindow else window,
+                        onSeeAll = { onOpenReport(kind) },
+                        onOpenCategoryActivity = onOpenCategoryActivity,
+                        onEmptyAction = onAddTransaction,
+                        emptyActionLabel = "Add transaction",
+                    )
+                }
             }
-        }
+    PageDashboardLazyColumn(verticalSpacing = TandemSpacing.medium) { columns ->
+        dashboardItems("reports-dashboard", columns, TandemSpacing.medium, cards)
     }
 }
 

@@ -28,6 +28,7 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.rows.SkeletonRows
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -44,45 +45,52 @@ internal fun SubscriptionsScreen(
     val names = mobileSession.rememberRecordNames()
     val today = platformTodayIsoDate()
     val found = remember(transactions, today) { transactions?.let { RecurringCharges.find(it, today) } }
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        if (found == null) {
-            SkeletonRows()
-            return@PageColumn
+    if (found == null || found.isEmpty()) {
+        PageColumn(verticalSpacing = TandemSpacing.large) {
+            if (found == null) {
+                SkeletonRows()
+            } else {
+                EmptyStateCard(
+                    "No subscriptions found",
+                    "Tandem looks for a payee charged at least three times, weekly, monthly, every quarter or yearly, " +
+                        "for a similar amount.",
+                )
+            }
         }
-        val (active, stopped) = found.partition { !it.stopped }
-        if (found.isEmpty()) {
-            EmptyStateCard(
-                "No subscriptions found",
-                "Tandem looks for a payee charged at least three times, weekly, monthly, every quarter or yearly, for a similar amount.",
-            )
-            return@PageColumn
-        }
-        SubscriptionsHeadline(state, active)
-        val scheduled = schedules.mapNotNullTo(mutableSetOf()) { it.payeeId }
-        if (active.isNotEmpty()) {
-            SectionCard("Active", "Charged on a steady rhythm") {
-                ChargeRows(state, active, names) { charge ->
-                    listOfNotNull(
-                        "Price went up".takeIf { charge.priceRose },
-                        cadenceLabel(charge.cadence),
-                        "next around ${formatLiveDate(charge.nextDate)}",
-                        "scheduled".takeIf { charge.payeeId in scheduled },
-                    ).joinToString(" · ")
+        return
+    }
+    val (active, stopped) = found.partition { !it.stopped }
+    val scheduled = schedules.mapNotNullTo(mutableSetOf()) { it.payeeId }
+    PageColumns(
+        primary = {
+            SubscriptionsHeadline(state, active)
+            if (active.isNotEmpty()) {
+                SectionCard("Active", "Charged on a steady rhythm") {
+                    ChargeRows(state, active, names) { charge ->
+                        listOfNotNull(
+                            "Price went up".takeIf { charge.priceRose },
+                            cadenceLabel(charge.cadence),
+                            "next around ${formatLiveDate(charge.nextDate)}",
+                            "scheduled".takeIf { charge.payeeId in scheduled },
+                        ).joinToString(" · ")
+                    }
                 }
             }
-        }
-        if (stopped.isNotEmpty()) {
-            SectionCard("Stopped", "No charge for well over a cycle; possibly cancelled") {
-                ChargeRows(state, stopped, names) { "Last charged ${formatLiveDate(it.lastDate)}" }
+        },
+        secondary = {
+            if (stopped.isNotEmpty()) {
+                SectionCard("Stopped", "No charge for well over a cycle; possibly cancelled") {
+                    ChargeRows(state, stopped, names) { "Last charged ${formatLiveDate(it.lastDate)}" }
+                }
             }
-        }
-        Text(
-            "Found on this device from your transactions. Amounts are the latest charge; the monthly total spreads weekly, " +
-                "quarterly and yearly charges across months.",
-            color = tandemPalette.muted,
-            fontSize = TandemTypography.label,
-        )
-    }
+            Text(
+                "Found on this device from your transactions. Amounts are the latest charge; the monthly total spreads weekly, " +
+                    "quarterly and yearly charges across months.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+            )
+        },
+    )
 }
 
 @Composable

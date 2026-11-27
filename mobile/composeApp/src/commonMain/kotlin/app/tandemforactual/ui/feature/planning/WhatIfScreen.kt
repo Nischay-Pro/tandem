@@ -39,6 +39,7 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -78,28 +79,33 @@ internal fun WhatIfScreen(
 
     val basePlan = PlanningMath.plan(debts, 0, PayoffStrategy.AVALANCHE)
     val newPlan = PlanningMath.plan(debts, debtExtra, PayoffStrategy.AVALANCHE)
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        IntroCard(
-            "See how earning or spending a little differently moves your debt-free date and savings goals. Nothing here changes your budget.",
-        )
-        WhatIfSummary(state, leftover, income, spending, typicalMonthLabel(typical, state.selectedMonth))
-        WhatIfControls(
-            state = state,
-            steps =
-                WhatIfSteps.steps(income, spending, state.budgetDisplaySettings?.currencyCode),
-            incomeChange = incomeChange,
-            spendingChange = spendingChange,
-            toDebt = toDebt,
-            onIncomeChange = { incomeChange = it },
-            onSpendingChange = { spendingChange = it },
-            onToDebtChange = { toDebt = it },
-        )
-        if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, { monthLabel(today, it) })
-        if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, { monthLabel(today, it) })
-        if (debts.isEmpty() && goals.isEmpty()) {
-            EmptyStateCard("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
-        }
-    }
+    PageColumns(
+        primary = {
+            IntroCard(
+                "See how earning or spending a little differently moves your debt-free date and savings goals. " +
+                    "Nothing here changes your budget.",
+            )
+            WhatIfSummary(state, leftover, income, spending, typicalMonthLabel(typical, state.selectedMonth))
+            WhatIfControls(
+                state = state,
+                steps =
+                    WhatIfSteps.steps(income, spending, state.budgetDisplaySettings?.currencyCode),
+                incomeChange = incomeChange,
+                spendingChange = spendingChange,
+                toDebt = toDebt,
+                onIncomeChange = { incomeChange = it },
+                onSpendingChange = { spendingChange = it },
+                onToDebtChange = { toDebt = it },
+            )
+        },
+        secondary = {
+            if (debts.isNotEmpty()) WhatIfDebtCard(state, debtExtra, basePlan, newPlan, { monthLabel(today, it) })
+            if (goals.isNotEmpty()) WhatIfGoalsCard(state, goals, goalExtra, { it.saved(month, liveAccounts) }, { monthLabel(today, it) })
+            if (debts.isEmpty() && goals.isEmpty()) {
+                EmptyStateCard("Add a debt or a savings goal", "What-if shows how changes move your debt-free date and goal dates.")
+            }
+        },
+    )
 }
 
 internal fun whatIfDebts(

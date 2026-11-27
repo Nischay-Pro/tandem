@@ -26,7 +26,8 @@ import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.DashboardCard
+import app.tandemforactual.ui.design.templates.PageGrid
 import app.tandemforactual.ui.design.templates.PreviewNote
 import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -95,21 +96,25 @@ internal fun SettingsScreen(
     navigation: AppNavigation,
     mobileSession: TandemMobileSession,
 ) {
-    PageColumn {
-        AnimatedReveal(visible = state.settingsStorageError != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-                PreviewNote(state.settingsStorageError.orEmpty())
-                SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
-            }
-        }
-        PersonalizationSection(state, navigation)
-        BudgetSettingsSection(navigation)
-        ConnectionSection(navigation)
-        PrivacySection(state, navigation, mobileSession)
-        ExternalConnectionsSection(state, showAdvanced = true)
-        YourDataSection(navigation)
-        SupportSection(state, navigation)
-    }
+    PageGrid(
+        listOf(
+            DashboardCard("settings-storage-error", fullWidth = true) {
+                AnimatedReveal(visible = state.settingsStorageError != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+                        PreviewNote(state.settingsStorageError.orEmpty())
+                        SecondaryButton("Try again") { state.settingsStorageRetry += 1 }
+                    }
+                }
+            },
+            DashboardCard("settings-personalization") { PersonalizationSection(state, navigation) },
+            DashboardCard("settings-budget") { BudgetSettingsSection(navigation) },
+            DashboardCard("settings-connection") { ConnectionSection(navigation) },
+            DashboardCard("settings-privacy") { PrivacySection(state, navigation, mobileSession) },
+            DashboardCard("settings-external") { ExternalConnectionsSection(state, showAdvanced = true) },
+            DashboardCard("settings-data") { YourDataSection(navigation) },
+            DashboardCard("settings-support") { SupportSection(state, navigation) },
+        ),
+    )
 }
 
 /** Home layout, interface mode, appearance and language. */

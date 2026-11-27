@@ -35,6 +35,7 @@ import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -75,31 +76,33 @@ internal fun ExtraMoneyScreen(
                     )
                 },
         )
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        SectionCard("Extra each month", "Compare what it would do in each place. Nothing here moves money.") {
-            Column(Modifier.padding(TandemSpacing.large)) {
-                TextFieldCard(
-                    "Amount",
-                    draft,
-                    { draft = it },
-                    TextFieldOptions(
-                        placeholder = "0",
-                        currencySymbol = settings?.currencySymbol ?: "$",
-                        currencySymbolAfter = settings?.currencySymbolPosition == "after",
-                        currencySymbolSpace = settings?.currencySpaceBetweenAmountAndSymbol == true,
-                        amountFractionDigits = settings?.currencyFractionDigits ?: 2,
-                    ),
+    PageColumns(
+        primary = {
+            SectionCard("Extra each month", "Compare what it would do in each place. Nothing here moves money.") {
+                Column(Modifier.padding(TandemSpacing.large)) {
+                    TextFieldCard(
+                        "Amount",
+                        draft,
+                        { draft = it },
+                        TextFieldOptions(
+                            placeholder = "0",
+                            currencySymbol = settings?.currencySymbol ?: "$",
+                            currencySymbolAfter = settings?.currencySymbolPosition == "after",
+                            currencySymbolSpace = settings?.currencySpaceBetweenAmountAndSymbol == true,
+                            amountFractionDigits = settings?.currencyFractionDigits ?: 2,
+                        ),
+                    )
+                }
+            }
+            if (comparison.thinBuffer) {
+                InlineMessage(
+                    "Less than a month of spending is set aside. Many people build a small cushion before paying debt early or investing.",
+                    InlineMessageKind.INFO,
                 )
             }
-        }
-        if (comparison.thinBuffer) {
-            InlineMessage(
-                "Less than a month of spending is set aside. Many people build a small cushion before paying debt early or investing.",
-                InlineMessageKind.INFO,
-            )
-        }
-        ExtraMoneyOptions(comparison, { state.formatCurrency(it) }, navigation.open)
-    }
+        },
+        secondary = { ExtraMoneyOptions(comparison, { state.formatCurrency(it) }, navigation.open) },
+    )
 }
 
 /** A starting amount: about 5% of the month's spending, rounded to an amount people would type. */

@@ -53,6 +53,7 @@ import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.theme.TandemMotion
@@ -106,28 +107,32 @@ internal fun GoalTimelineScreen(
     val inputs = ordered.map { GoalInput(it.id, it.targetMinor - (it.saved(month, liveAccounts) ?: 0)) }
     val plan = remember(inputs, monthly, split) { GoalTimeline.plan(inputs, monthly, split) }
     val horizon = plan.goals.maxOfOrNull { it.reachedMonth ?: 0 }?.coerceAtLeast(1) ?: 1
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        GoalTimelineSummary(state, goals.size, plan, monthly, today, inputs)
-        TextFieldCard("Each month", amountText, { amountText = it }, goalAmountOptions(state))
-        FilterPills(listOf(GoalSplit.PRIORITY to "One at a time", GoalSplit.EVEN to "Split evenly"), split, { split = it })
-        GoalTimelineCard(plan, ordered, split, today, horizon)
-        GoalPriorityList(
-            state = state,
-            ordered = ordered,
-            plan = plan,
-            inputs = inputs,
-            split = split,
-            today = today,
-            saved = { it.saved(month, liveAccounts) },
-            onEdit = { editors.editGoal(it) },
-            onMoveUp = { index -> order = ordered.map { it.id }.toMutableList().apply { add(index - 1, removeAt(index)) } },
-        )
-        Text(
-            "Progress comes from each goal’s linked category or account. Nothing here changes your budget.",
-            color = palette.muted,
-            fontSize = TandemTypography.label,
-        )
-    }
+    PageColumns(
+        primary = {
+            GoalTimelineSummary(state, goals.size, plan, monthly, today, inputs)
+            TextFieldCard("Each month", amountText, { amountText = it }, goalAmountOptions(state))
+            FilterPills(listOf(GoalSplit.PRIORITY to "One at a time", GoalSplit.EVEN to "Split evenly"), split, { split = it })
+            GoalTimelineCard(plan, ordered, split, today, horizon)
+        },
+        secondary = {
+            GoalPriorityList(
+                state = state,
+                ordered = ordered,
+                plan = plan,
+                inputs = inputs,
+                split = split,
+                today = today,
+                saved = { it.saved(month, liveAccounts) },
+                onEdit = { editors.editGoal(it) },
+                onMoveUp = { index -> order = ordered.map { it.id }.toMutableList().apply { add(index - 1, removeAt(index)) } },
+            )
+            Text(
+                "Progress comes from each goal’s linked category or account. Nothing here changes your budget.",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+            )
+        },
+    )
 }
 
 /** When every goal is reached for the chosen amount, and how much is left to save. */
