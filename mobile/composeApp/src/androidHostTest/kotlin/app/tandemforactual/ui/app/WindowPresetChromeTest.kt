@@ -102,8 +102,10 @@ class WindowPresetChromeTest {
         repeat(count) { index ->
             val bounds = nodes[index].assertIsDisplayed().getUnclippedBoundsInRoot()
             assertTrue(
-                bounds.left >= root.left - EDGE && bounds.top >= root.top - EDGE &&
-                    bounds.right <= root.right + EDGE && bounds.bottom <= root.bottom + EDGE,
+                bounds.left >= root.left - EDGE &&
+                    bounds.top >= root.top - EDGE &&
+                    bounds.right <= root.right + EDGE &&
+                    bounds.bottom <= root.bottom + EDGE,
                 "$where: $description at $bounds is cut off by the window $root",
             )
             assertTrue(
