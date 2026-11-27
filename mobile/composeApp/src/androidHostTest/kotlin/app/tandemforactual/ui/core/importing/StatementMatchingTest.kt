@@ -23,7 +23,12 @@ class StatementMatchingTest {
 
         val only = review.rows.single()
         assertEquals(StatementRowStatus.MATCHED, only.status)
-        assertEquals("near", only.candidates.single().transaction.id)
+        assertEquals(
+            "near",
+            only.candidates
+                .single()
+                .transaction.id,
+        )
         assertEquals(2, only.candidates.single().days)
         assertEquals(StatementRowAction.Match("near"), only.defaultAction())
     }
@@ -69,8 +74,19 @@ class StatementMatchingTest {
                 listOf(ledger("a", "2026-11-05", -500, "Fee refund"), ledger("b", "2026-11-04", -500, "Bank fee")),
             )
 
-        assertTrue(review.rows.single().candidates.all { it.sharedWords == 0 })
-        assertEquals(listOf("b", "a"), review.rows.single().candidates.map { it.transaction.id })
+        assertTrue(
+            review.rows
+                .single()
+                .candidates
+                .all { it.sharedWords == 0 },
+        )
+        assertEquals(
+            listOf("b", "a"),
+            review.rows
+                .single()
+                .candidates
+                .map { it.transaction.id },
+        )
     }
 
     @Test
@@ -153,7 +169,13 @@ class StatementMatchingTest {
 
         assertTrue(review.repeatedStatement)
         assertEquals(5, review.alreadyImported)
-        assertEquals("t0", review.rows.first().existing?.id)
+        assertEquals(
+            "t0",
+            review.rows
+                .first()
+                .existing
+                ?.id,
+        )
         assertEquals(StatementRowAction.Duplicate, review.rows.first().defaultAction())
         assertTrue(review.applyItems(review.defaultActions()).isEmpty())
     }

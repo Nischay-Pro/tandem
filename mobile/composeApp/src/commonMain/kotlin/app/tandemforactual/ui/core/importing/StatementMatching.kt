@@ -221,6 +221,7 @@ private fun noMatchReason(
         ledger.mapNotNull { transaction ->
             isoDayNumber(transaction.date)?.let { transaction to it - day }
         }
+
     fun closest(test: (StatementLedgerTransaction, Int) -> Boolean) =
         nearby.filter { (transaction, days) -> test(transaction, days) }.minByOrNull { kotlin.math.abs(it.second) }
     closest { t, days -> t.amountMinor == row.amountMinor && t.id in claimed && kotlin.math.abs(days) <= MATCH_WINDOW_DAYS }

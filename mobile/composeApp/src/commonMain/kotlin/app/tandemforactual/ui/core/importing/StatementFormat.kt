@@ -10,7 +10,7 @@ private val ofxMarker = Regex("(?i)OFXHEADER\\s*:|<\\?OFX|<OFX>|<STMTTRN>")
 private val qifHeader = Regex("(?i)^!(?:Type|Account|Option|Clear)\\b")
 
 internal fun detectStatementFormat(contents: String): StatementFormat {
-    val content = contents.removePrefix("﻿").trimStart()
+    val content = contents.removePrefix("").trimStart()
     if (content.startsWith("%PDF")) {
         throw StatementImportParseException("PDF statements can’t be read. Export a CSV, QIF, OFX, or QFX file from your bank.")
     }
@@ -18,7 +18,13 @@ internal fun detectStatementFormat(contents: String): StatementFormat {
         throw StatementImportParseException("Choose a CSV, TSV, QIF, OFX, or QFX statement.")
     }
     if (ofxMarker.containsMatchIn(content.take(OFX_SAMPLE_CHARS))) return StatementFormat.OFX
-    val lines = content.lineSequence().map(String::trim).filter(String::isNotEmpty).take(QIF_SAMPLE_LINES).toList()
+    val lines =
+        content
+            .lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .take(QIF_SAMPLE_LINES)
+            .toList()
     if (lines.firstOrNull()?.let(qifHeader::containsMatchIn) == true) return StatementFormat.QIF
     val looksLikeQif =
         lines.any { it == "^" } &&
