@@ -114,12 +114,12 @@ class BulkTransactionEditsTest {
         )
         val file = target("f", """"amount":-500,"importedPayee":"CAFE 123"""")
         assertEquals("f", planBulkMerge(listOf(manual, file)).first?.keep?.id)
-        assertEquals("m", planBulkMerge(listOf(manual, target("n", """"amount":-500""""))).first?.keep?.id)
+        assertEquals("m", planBulkMerge(listOf(manual, target("n", """"amount":-500"""))).first?.keep?.id)
         assertEquals("k", planBulkMerge(listOf(bank, file)).first?.keep?.id)
 
         assertEquals(BulkMergeIssue.NOT_TWO, planBulkMerge(listOf(manual)).second)
-        assertEquals(BulkMergeIssue.AMOUNTS_DIFFER, planBulkMerge(listOf(manual, target("z", """"amount":-1""""))).second)
-        assertEquals(BulkMergeIssue.SPLIT, planBulkMerge(listOf(manual, target("c", """"amount":-500,"isChild":true""""))).second)
+        assertEquals(BulkMergeIssue.AMOUNTS_DIFFER, planBulkMerge(listOf(manual, target("z", """"amount":-1"""))).second)
+        assertEquals(BulkMergeIssue.SPLIT, planBulkMerge(listOf(manual, target("c", """"amount":-500,"isChild":true"""))).second)
         assertEquals(BulkMergeIssue.SPLIT, planBulkMerge(listOf(manual, target("l", """"amount":-500""", split))).second)
     }
 

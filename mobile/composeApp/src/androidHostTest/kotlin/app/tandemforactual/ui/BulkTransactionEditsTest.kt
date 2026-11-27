@@ -65,7 +65,7 @@ class BulkTransactionEditsTest {
     private fun records() =
         listOf(
             record("t1", """"amount":-1000,"notes":"lunch","cleared":false"""),
-            record("t2", """"amount":-1000,"notes":null,"cleared":false,"importedId":"bank-1""""),
+            record("t2", """"amount":-1000,"notes":null,"cleared":false,"importedId":"bank-1"""),
             record("t3", """"amount":-500,"notes":null,"cleared":true,"reconciled":true"""),
             record(
                 "p1",

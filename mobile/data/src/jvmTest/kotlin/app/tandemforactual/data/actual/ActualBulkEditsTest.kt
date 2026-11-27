@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /** Bulk edits planned on the device and sent through Actual's transaction operations, one write at a time. */
@@ -60,7 +61,7 @@ class ActualBulkEditsTest {
 
         fun target(id: String): BulkTarget {
             val body = checkNotNull(reader.transaction(id))
-            val parent = (body["parentId"] as? JsonPrimitive)?.content?.let(::target)
+            val parent = (body["parentId"] as? JsonPrimitive)?.contentOrNull?.let(::target)
             return BulkTarget(id, body, parent)
         }
 
