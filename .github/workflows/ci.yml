@@ -3,6 +3,7 @@ name: CI
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
+  merge_group:
   push:
     branches:
       - main
@@ -32,7 +33,7 @@ jobs:
       - name: Check whether only Markdown changed
         id: scope
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           BUILD_SHA: ${{ github.sha }}
         run: |
           bash scripts/test-ci-ios-needed.sh
