@@ -3,6 +3,7 @@ package app.tandemforactual.wear
 import androidx.wear.protolayout.DeviceParametersBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
 import androidx.wear.protolayout.LayoutElementBuilders.LayoutElement
+import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
@@ -122,13 +123,15 @@ class WatchSurfacesTest {
         val none = WatchComplications.nextBill(summary().copy(bills = emptyList()), ComplicationType.SHORT_TEXT, null)
 
         assertEquals("$60", text(short))
-        assertEquals("Internet", short.title?.getTextAt(context.resources, Instant.now()).toString())
-        assertTrue(long.text.getTextAt(context.resources, Instant.now()).toString().startsWith("Internet · $60.00 · "))
+        assertEquals("Internet", shown(short.title))
+        assertTrue(shown(long.text).startsWith("Internet · $60.00 · "))
         assertEquals(HIDDEN_AMOUNT, text(hidden as ShortTextComplicationData))
         assertEquals("Locked", text(locked as ShortTextComplicationData))
         assertEquals("None", text(none as ShortTextComplicationData))
         assertTrue(WatchComplications.nextBill(null, ComplicationType.SHORT_TEXT, null) is NoDataComplicationData)
     }
+
+    private fun shown(text: ComplicationText?) = text?.getTextAt(context.resources, Instant.now()).toString()
 
     private fun text(data: ShortTextComplicationData) = data.text.getTextAt(context.resources, Instant.now()).toString()
 
