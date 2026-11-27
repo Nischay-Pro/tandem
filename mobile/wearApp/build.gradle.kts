@@ -75,6 +75,7 @@ dependencies {
   implementation(libs.wearComposeFoundation)
   implementation(libs.wearComposeNavigation)
   implementation(libs.wearInput)
+  implementation(libs.wearRemoteInteractions)
   implementation(libs.wearTiles)
   implementation(libs.wearProtolayout)
   implementation(libs.wearProtolayoutMaterial3)

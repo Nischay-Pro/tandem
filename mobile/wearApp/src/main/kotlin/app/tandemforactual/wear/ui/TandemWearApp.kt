@@ -52,12 +52,15 @@ class QuickAddDraft {
 fun TandemWearApp(
     summaryFlow: StateFlow<WatchSummary?>,
     queueFlow: StateFlow<QuickAddQueue>,
+    phoneFlow: StateFlow<Boolean?>,
     startOnQuickAdd: Boolean,
     onAdd: suspend (amountMinor: Long, categoryId: String?, payee: String?) -> Boolean,
     onRefresh: () -> Unit,
+    onInstallOnPhone: () -> Unit,
 ) {
     val summary by summaryFlow.collectAsState()
     val queue by queueFlow.collectAsState()
+    val phoneHasTandem by phoneFlow.collectAsState()
     val navController = rememberSwipeDismissableNavController()
     val draft = remember { QuickAddDraft() }
     val scope = rememberCoroutineScope()
@@ -68,7 +71,7 @@ fun TandemWearApp(
         navController.navigate(Routes.AMOUNT)
     }
 
-    LaunchedEffect(startOnQuickAdd) { if (startOnQuickAdd) startQuickAdd() }
+    LaunchedEffect(startOnQuickAdd) { if (startOnQuickAdd && summary?.quickAdd == true) startQuickAdd() }
 
     TandemWearTheme {
         AppScaffold {
@@ -77,9 +80,11 @@ fun TandemWearApp(
                     GlancePager(
                         summary = summary,
                         waiting = queue.items.size,
+                        phoneHasTandem = phoneHasTandem,
                         onCategory = { navController.navigate(Routes.category(it)) },
                         onAdd = { startQuickAdd() },
                         onRefresh = onRefresh,
+                        onInstallOnPhone = onInstallOnPhone,
                     )
                 }
                 composable(Routes.CATEGORY) { entry ->

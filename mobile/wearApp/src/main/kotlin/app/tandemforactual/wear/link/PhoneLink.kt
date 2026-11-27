@@ -1,7 +1,9 @@
 package app.tandemforactual.wear.link
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import androidx.wear.remote.interactions.RemoteActivityHelper
 import app.tandemforactual.watch.WatchCodec
 import app.tandemforactual.watch.WatchPaths
 import app.tandemforactual.watch.WatchQuickAdd
@@ -17,6 +19,23 @@ internal class PhoneLink(
     context: Context,
 ) {
     private val appContext = context.applicationContext
+
+    /** Whether the paired phone has Tandem at all, reachable right now or not. */
+    suspend fun phoneHasTandem(): Boolean =
+        Wearable
+            .getCapabilityClient(appContext)
+            .getCapability(WatchPaths.PHONE_CAPABILITY, CapabilityClient.FILTER_ALL)
+            .await()
+            .nodes
+            .isNotEmpty()
+
+    /** Opens Tandem's store listing on the paired phone. */
+    fun openStoreOnPhone() {
+        val listing =
+            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${appContext.packageName}"))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+        RemoteActivityHelper(appContext).startRemoteActivity(listing)
+    }
 
     /** The summary the phone last put in the Data Layer, or null when there is none. */
     suspend fun storedSummary(): ByteArray? {

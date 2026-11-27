@@ -52,7 +52,7 @@ fun leftToSpendLayout(
                     }
                 }
             },
-            bottomSlot = addButton(context).takeUnless { summary?.quickAdd == false },
+            bottomSlot = addButton(context).takeIf { summary?.quickAdd == true },
         )
     }
 

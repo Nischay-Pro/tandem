@@ -64,6 +64,12 @@ class WatchSurfacesTest {
     }
 
     @Test
+    fun theTileOffersAddOnlyOnceThePhoneAllowsIt() {
+        assertFalse("+ Add" in texts(leftToSpendLayout(context, device, null)))
+        assertFalse("+ Add" in texts(leftToSpendLayout(context, device, summary().copy(quickAdd = false))))
+    }
+
+    @Test
     fun tilesNeverShowHiddenOrLockedAmounts() {
         val hidden = texts(leftToSpendLayout(context, device, summary(WatchState.AMOUNTS_HIDDEN)))
         val locked = texts(leftToSpendLayout(context, device, summary(WatchState.LOCKED)))

@@ -20,9 +20,11 @@ class MainActivity : ComponentActivity() {
             TandemWearApp(
                 summaryFlow = store.summary,
                 queueFlow = store.queue,
+                phoneFlow = store.phoneHasTandem,
                 startOnQuickAdd = startOnQuickAdd,
                 onAdd = { amount, categoryId, payee -> QuickAdds.add(this, amount, categoryId, payee) },
                 onRefresh = { refresh() },
+                onInstallOnPhone = { PhoneLink(this).openStoreOnPhone() },
             )
         }
         refresh()
@@ -33,6 +35,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val link = PhoneLink(this@MainActivity)
+                WatchStore.phoneChecked(link.phoneHasTandem())
                 val stored = link.storedSummary()
                 if (WatchStore.saveSummary(stored)) WatchSurfaces.refresh(this@MainActivity)
                 QuickAdds.summaryArrived(this@MainActivity)

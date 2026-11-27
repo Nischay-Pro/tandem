@@ -17,6 +17,7 @@ import kotlin.math.abs
 object WatchText {
     const val LOCKED = "Locked · open Tandem on your phone"
     const val NO_BUDGET = "Open Tandem on your phone to choose a budget"
+    const val NO_PHONE_APP = "Tandem runs on your phone. Install it there to use your budget here."
     const val LEFT_TO_SPEND = "Left to spend"
     const val TO_BUDGET = "To budget"
 

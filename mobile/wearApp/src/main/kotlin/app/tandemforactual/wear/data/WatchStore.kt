@@ -19,9 +19,17 @@ object WatchStore {
     private var preferences: SharedPreferences? = null
     private val summaryState = MutableStateFlow<WatchSummary?>(null)
     private val queueState = MutableStateFlow(QuickAddQueue())
+    private val phoneState = MutableStateFlow<Boolean?>(null)
 
     val summary: StateFlow<WatchSummary?> = summaryState.asStateFlow()
     val queue: StateFlow<QuickAddQueue> = queueState.asStateFlow()
+
+    /** Whether the paired phone has Tandem; null until the watch has asked. */
+    val phoneHasTandem: StateFlow<Boolean?> = phoneState.asStateFlow()
+
+    fun phoneChecked(hasTandem: Boolean) {
+        phoneState.value = hasTandem
+    }
 
     @Synchronized
     fun load(context: Context): WatchStore {

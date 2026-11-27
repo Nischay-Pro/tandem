@@ -51,16 +51,18 @@ import app.tandemforactual.wear.data.WatchText
 fun GlancePager(
     summary: WatchSummary?,
     waiting: Int,
+    phoneHasTandem: Boolean?,
     onCategory: (String) -> Unit,
     onAdd: () -> Unit,
     onRefresh: () -> Unit,
+    onInstallOnPhone: () -> Unit,
 ) {
     val pagerState = rememberPagerState { 2 }
     HorizontalPagerScaffold(pagerState = pagerState) {
         HorizontalPager(state = pagerState) { page ->
             AnimatedPage(page, pagerState) {
                 if (page == 0) {
-                    GlanceScreen(summary, waiting, onCategory, onAdd, onRefresh)
+                    GlanceScreen(summary, waiting, phoneHasTandem, onCategory, onAdd, onRefresh, onInstallOnPhone)
                 } else {
                     BillsScreen(summary)
                 }
@@ -73,13 +75,16 @@ fun GlancePager(
 private fun GlanceScreen(
     summary: WatchSummary?,
     waiting: Int,
+    phoneHasTandem: Boolean?,
     onCategory: (String) -> Unit,
     onAdd: () -> Unit,
     onRefresh: () -> Unit,
+    onInstallOnPhone: () -> Unit,
 ) {
+    val missingOnPhone = summary == null && phoneHasTandem == false
     val listState = rememberTransformingLazyColumnState()
     val spec = rememberTransformationSpec()
-    val canAdd = summary?.quickAdd != false
+    val canAdd = summary?.quickAdd == true
     ScreenScaffold(
         scrollState = listState,
         edgeButton = {
@@ -96,8 +101,17 @@ private fun GlanceScreen(
                     Text(summary?.budgetName ?: "Tandem", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            item { LeftToSpend(summary, Modifier.transformedHeight(this, spec)) }
-            if (summary == null || summary.state == WatchState.LOCKED) {
+            item { LeftToSpend(summary, missingOnPhone, Modifier.transformedHeight(this, spec)) }
+            if (missingOnPhone) {
+                item {
+                    FilledTonalButton(
+                        onClick = onInstallOnPhone,
+                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                        transformation = SurfaceTransformation(spec),
+                        label = { Text("Install on phone") },
+                    )
+                }
+            } else if (summary == null || summary.state == WatchState.LOCKED) {
                 item {
                     FilledTonalButton(
                         onClick = onRefresh,
@@ -135,10 +149,12 @@ private fun GlanceScreen(
 @Composable
 private fun LeftToSpend(
     summary: WatchSummary?,
+    missingOnPhone: Boolean,
     modifier: Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         when {
+            missingOnPhone -> Hint(WatchText.NO_PHONE_APP)
             summary == null -> Hint(WatchText.NO_BUDGET)
             summary.state == WatchState.LOCKED -> Hint(WatchText.LOCKED)
             else -> {

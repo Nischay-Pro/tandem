@@ -40,6 +40,7 @@ wearTiles = "1.6.2"
 wearProtolayout = "1.4.2"
 wearComplications = "1.3.0"
 wearInput = "1.2.0"
+wearRemoteInteractions = "1.1.0"
 playServicesWearable = "20.0.1"
 concurrentFutures = "1.3.0"
 
@@ -120,6 +121,7 @@ wearProtolayoutMaterial3 = { module = "androidx.wear.protolayout:protolayout-mat
 wearProtolayoutExpression = { module = "androidx.wear.protolayout:protolayout-expression", version.ref = "wearProtolayout" }
 wearComplicationsDataSource = { module = "androidx.wear.watchface:watchface-complications-data-source-ktx", version.ref = "wearComplications" }
 wearInput = { module = "androidx.wear:wear-input", version.ref = "wearInput" }
+wearRemoteInteractions = { module = "androidx.wear:wear-remote-interactions", version.ref = "wearRemoteInteractions" }
 playServicesWearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "playServicesWearable" }
 coroutinesPlayServices = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 concurrentFuturesKtx = { module = "androidx.concurrent:concurrent-futures-ktx", version.ref = "concurrentFutures" }
