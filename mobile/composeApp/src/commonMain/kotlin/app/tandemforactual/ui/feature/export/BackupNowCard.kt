@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.core.format.platformIsoDateAtEpochMilliseconds
 import app.tandemforactual.ui.core.session.AutomaticBackups
 import app.tandemforactual.ui.core.session.automaticBackupSummary
+import app.tandemforactual.ui.core.session.staleBackupNote
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.backupLog
 import app.tandemforactual.ui.core.state.formatLiveDate
@@ -34,8 +35,15 @@ internal fun BackupNowCard(
     SurfaceCard {
         ListRow(
             lastBackupDate(state)?.let { "Last backup: ${formatLiveDate(it)}" } ?: "No backup yet",
-            listOfNotNull(if (encryption.on) "Encrypted" else "Not encrypted", automaticBackupProblem(state, encryption))
-                .joinToString(" · "),
+            listOfNotNull(
+                if (encryption.on) "Encrypted" else "Not encrypted",
+                automaticBackupProblem(state, encryption),
+                if (state.automaticBackup.enabled) {
+                    staleBackupNote(state.automaticBackupResult) { formatLiveDate(platformIsoDateAtEpochMilliseconds(it)) }
+                } else {
+                    null
+                },
+            ).joinToString(" · "),
             leading = RowLeading.Icon(Lucide.History),
             options = ListRowOptions(showChevron = false, subtitleMaxLines = 3),
         )
@@ -56,7 +64,7 @@ internal fun BackupNowCard(
 internal fun lastBackupDate(state: AppState): String? =
     listOfNotNull(state.backupLog.sharedOn, state.automaticBackupLastRun?.let(::platformIsoDateAtEpochMilliseconds)).maxOrNull()
 
-/** Why automatic backups aren't running, in a few words, or null while they're fine or off. */
+/** Why automatic backups aren't running or what they're waiting for, in a few words, or null while they're fine or off. */
 internal fun automaticBackupProblem(
     state: AppState,
     encryption: BackupEncryption,
@@ -68,7 +76,7 @@ internal fun automaticBackupProblem(
         AutomaticBackups.needsPassphrase(encryption.budgetEncrypted, encryption.hasPassphrase) ->
             "Automatic backups paused until a passphrase is set"
         settings.folder == null && settings.webDavUrl == null -> "Choose a folder for automatic backups"
-        result?.problem != null -> automaticBackupSummary(settings, null, result)
+        result?.problem != null || result?.waiting?.isNotEmpty() == true -> automaticBackupSummary(settings, null, result)
         else -> null
     }
 }
