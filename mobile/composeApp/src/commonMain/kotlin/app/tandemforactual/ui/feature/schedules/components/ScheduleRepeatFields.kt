@@ -54,16 +54,6 @@ private val PATTERN_TYPES =
 /** Actual's "Last", "1st" … "31st" choices for a monthly pattern. */
 private val PATTERN_VALUES = listOf("-1" to "Last") + (1..31).map { it.toString() to ordinal(it) }
 
-private fun ordinal(n: Int): String =
-    n.toString() +
-        when {
-            n % 100 in 11..13 -> "th"
-            n % 10 == 1 -> "st"
-            n % 10 == 2 -> "nd"
-            n % 10 == 3 -> "rd"
-            else -> "th"
-        }
-
 /** How often the schedule repeats, from when, on which days of the month, around weekends and until when. */
 @Composable
 internal fun ScheduleRepeatFields(draft: ScheduleEditDraft) {

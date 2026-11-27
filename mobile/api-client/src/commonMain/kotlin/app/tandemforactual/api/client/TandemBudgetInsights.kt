@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.DiscoveredSchedule
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.RuleFinding
@@ -43,6 +44,12 @@ suspend fun TandemApiClient.exportBudgetTransactions(
     to: String,
     encryptionPassword: String?,
 ): String = call { budget(budgetId, encryptionPassword).exportCsv(from, to) }
+
+/** Recurring payments with no schedule yet, offered as new schedules. */
+suspend fun TandemApiClient.discoverBudgetSchedules(
+    budgetId: String,
+    encryptionPassword: String?,
+): List<DiscoveredSchedule> = call { budget(budgetId, encryptionPassword).discoverSchedules(today()) }
 
 suspend fun TandemApiClient.previewBudgetRule(
     budgetId: String,
