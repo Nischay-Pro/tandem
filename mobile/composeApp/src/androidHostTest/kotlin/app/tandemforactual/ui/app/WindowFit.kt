@@ -41,7 +41,12 @@ internal fun SemanticsNodeInteractionsProvider.windowFitProblems(where: String):
         problems += node.textProblems(where)
     }
     val tappable = onAllNodes(anyNode).fetchSemanticsNodes().filter { it.size.width > 0 && !it.hidden() && it.isTappable() }
-    val days = tappable.groupBy { it.rowKey() }.values.filter { it.size >= WEEK_LENGTH }.flatten()
+    val days =
+        tappable
+            .groupBy { it.rowKey() }
+            .values
+            .filter { it.size >= WEEK_LENGTH }
+            .flatten()
     tappable.forEach { node ->
         if (days.any { it.sameCellAs(node) }) return@forEach
         val density = node.density()
