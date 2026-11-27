@@ -11,6 +11,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.ui.core.format.formatCurrency
+import app.tandemforactual.ui.core.navigation.openActivityFor
+import app.tandemforactual.ui.core.navigation.openRulesUsing
+import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -24,7 +27,13 @@ import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.togglePinnedCategory
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageTarget
+import app.tandemforactual.ui.core.usage.WhereUsedRow
+import app.tandemforactual.ui.core.usage.WhereUsedSheet
 import app.tandemforactual.ui.design.buttons.SecondaryButton
+import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.feedback.Badge
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -204,6 +213,7 @@ private fun CategoryDetailContent(
         scope,
     )
     if (isLiveBudget) CategoryNoteSection(state, mobileSession, category, scope)
+    if (isLiveBudget) SurfaceCard { WhereUsedRow { sheets.showUsageSheet = true } }
     if (isLiveBudget) {
         SecondaryButton(
             if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
@@ -263,4 +273,32 @@ private fun CategoryDetailSheets(
     if (sheets.confirmCategoryDelete && category != null) {
         DeleteCategoryConfirmation(state, navigation, mobileSession, category, model.deleteDestinations, sheets, scope)
     }
+    if (category != null) CategoryUsageSheet(state, navigation, mobileSession, category, sheets)
+}
+
+@Composable
+private fun CategoryUsageSheet(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    category: LiveCategorySummary,
+    sheets: CategoryDetailSheetState,
+) {
+    WhereUsedSheet(
+        visible = sheets.showUsageSheet,
+        mobileSession = mobileSession,
+        target = UsageTarget(state.selectedBudgetId, UsageSubject.CATEGORY, category.id, category.name),
+        links =
+            UsageLinks(
+                transactions = {
+                    sheets.showUsageSheet = false
+                    openActivityFor(state, navigation, ActivitySearchField.CATEGORY, category.id, "Category: ${category.name}")
+                },
+                rules = {
+                    sheets.showUsageSheet = false
+                    openRulesUsing(state, navigation, listOf(category.id), category.name)
+                },
+            ),
+        onDismiss = { sheets.showUsageSheet = false },
+    )
 }

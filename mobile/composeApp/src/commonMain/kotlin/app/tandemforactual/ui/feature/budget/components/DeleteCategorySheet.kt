@@ -34,6 +34,10 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.setCategoryIconChoice
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageSummary
+import app.tandemforactual.ui.core.usage.isChecking
+import app.tandemforactual.ui.core.usage.rememberRecordUsage
 import app.tandemforactual.ui.design.buttons.SelectableTile
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
@@ -226,6 +230,7 @@ internal fun DeleteCategoryConfirmation(
     sheets: CategoryDetailSheetState,
     scope: CoroutineScope,
 ) {
+    val usage = rememberRecordUsage(mobileSession, state.selectedBudgetId, UsageSubject.CATEGORY, category.id)
     DestructiveConfirmationDialog(
         title = "Delete ${category.name}?",
         message =
@@ -234,7 +239,8 @@ internal fun DeleteCategoryConfirmation(
             } ?: "Unassigned"}.",
         confirmLabel = "Delete",
         dismissLabel = "Keep category",
-        enabled = !state.readOnlyMode,
+        enabled = !state.readOnlyMode && !usage.isChecking,
+        content = { UsageSummary(usage, UsageSubject.CATEGORY) },
         onDismissRequest = { sheets.confirmCategoryDelete = false },
         onConfirm = {
             scope.launch {
