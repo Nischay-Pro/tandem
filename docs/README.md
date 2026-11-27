@@ -33,14 +33,15 @@ Choose a page by what you need to do.
 
 ## Build and contribute
 
-| Page                                                                | For                                                                  |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [Build from source](develop/build-from-source.md)                   | Developers building the API, Android app, or iOS app.                |
-| [Test Tandem](develop/testing.md)                                   | Contributors running API and mobile checks before review.            |
-| [Pull requests](develop/pull-requests.md)                           | Contributors opening a pull request.                                 |
-| [Actual compatibility tests](develop/actual-compatibility-tests.md) | Contributors checking direct sync against the pinned Actual release. |
-| [Toolchain](develop/toolchain.md)                                   | Developers setting up Gradle, Kotlin, and the generated client.      |
-| [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                           |
-| [Extension sync API](develop/api-reference.md)                      | Developers integrating with the optional extension sync service.     |
-| [App and server versioning](develop/versioning.md)                  | Contributors changing the API or features the app depends on.        |
-| [OpenAPI document](api/openapi-v1.json)                             | Tools generating or checking API clients. Keep this path stable.     |
+| Page                                                                | For                                                                    |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [Build from source](develop/build-from-source.md)                   | Developers building the API, Android app, or iOS app.                  |
+| [Test Tandem](develop/testing.md)                                   | Contributors running API and mobile checks before review.              |
+| [Pull requests](develop/pull-requests.md)                           | Contributors opening a pull request.                                   |
+| [Actual compatibility tests](develop/actual-compatibility-tests.md) | Contributors checking direct sync against the pinned Actual release.   |
+| [Toolchain](develop/toolchain.md)                                   | Developers setting up Gradle, Kotlin, and the generated client.        |
+| [UI wording](develop/ui-writing.md)                                 | Developers changing mobile interface text.                             |
+| [Extension sync API](develop/api-reference.md)                      | Developers integrating with the optional extension sync service.       |
+| [App and server versioning](develop/versioning.md)                  | Contributors changing the API or features the app depends on.          |
+| [Store screenshots](develop/store-screenshots.md)                   | Maintainers capturing phone, foldable, and tablet listing screenshots. |
+| [OpenAPI document](api/openapi-v1.json)                             | Tools generating or checking API clients. Keep this path stable.       |
