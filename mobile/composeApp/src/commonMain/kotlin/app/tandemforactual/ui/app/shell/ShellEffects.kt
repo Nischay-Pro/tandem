@@ -115,7 +115,7 @@ internal fun NavigationEffects(ctx: ShellContext) {
         if (!shell.routeTransitionInputBlocked && QuickActionEvents.consumeAddTransaction()) {
             if (QuickActionEvents.consumeReceiptScan()) state.receiptScanRequested = true
             QuickActionEvents.consumeSharedReceiptPhoto()?.let { state.pendingReceiptPhoto = it }
-            ctx.navigator.newTransaction(null)
+            ctx.navigator.newTransaction(QuickActionEvents.consumeRequestedAccount())
             QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
                 fillNewTransaction(
                     state,

@@ -15,23 +15,23 @@ class BudgetWidgetMonthTest {
     fun nextRefreshIsLocalMidnightOnTheFirstOfNextMonth() {
         val now = ZonedDateTime.of(2026, 11, 30, 23, 59, 0, 0, zone)
 
-        assertEquals(ZonedDateTime.of(2026, 12, 1, 0, 0, 0, 0, zone), BudgetWidget.nextMonthStart(now))
+        assertEquals(ZonedDateTime.of(2026, 12, 1, 0, 0, 0, 0, zone), TandemWidgets.nextMonthStart(now))
     }
 
     @Test
     fun theFirstOfTheMonthWaitsForTheFollowingMonth() {
         val now = ZonedDateTime.of(2026, 12, 1, 0, 0, 0, 0, zone)
 
-        assertEquals(ZonedDateTime.of(2027, 1, 1, 0, 0, 0, 0, zone), BudgetWidget.nextMonthStart(now))
+        assertEquals(ZonedDateTime.of(2027, 1, 1, 0, 0, 0, 0, zone), TandemWidgets.nextMonthStart(now))
     }
 
     @Test
     fun monthTimeAndTimezoneChangesRefreshTheWidget() {
         listOf("app.tandemforactual.android.WIDGET_MONTH_CHANGED", Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED).forEach {
-            assertTrue(it, BudgetWidget.refreshesOnAction(it))
+            assertTrue(it, TandemWidgets.refreshesOnAction(it))
         }
-        assertFalse(BudgetWidget.refreshesOnAction(null))
-        assertFalse(BudgetWidget.refreshesOnAction(Intent.ACTION_DATE_CHANGED))
-        assertFalse(BudgetWidget.refreshesOnAction("android.appwidget.action.APPWIDGET_UPDATE"))
+        assertFalse(TandemWidgets.refreshesOnAction(null))
+        assertFalse(TandemWidgets.refreshesOnAction(Intent.ACTION_DATE_CHANGED))
+        assertFalse(TandemWidgets.refreshesOnAction("android.appwidget.action.APPWIDGET_UPDATE"))
     }
 }

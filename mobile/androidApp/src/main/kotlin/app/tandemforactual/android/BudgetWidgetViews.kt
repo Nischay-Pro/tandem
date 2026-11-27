@@ -54,8 +54,8 @@ private fun budgetViews(
     size: BudgetWidgetSize,
 ): RemoteViews {
     val views = RemoteViews(context.packageName, size.layout)
-    views.setOnClickPendingIntent(android.R.id.background, launch(context, null, 0))
-    views.setOnClickPendingIntent(R.id.widget_add, launch(context, ACTION_ADD_TRANSACTION, 1))
+    views.setOnClickPendingIntent(android.R.id.background, openApp(context, null, 0))
+    views.setOnClickPendingIntent(R.id.widget_add, openApp(context, ACTION_ADD_TRANSACTION, 1))
     views.setTextViewText(R.id.widget_budget_name, summary?.budgetName ?: "Tandem")
     val locked = summary == null || summary.amountsHidden
     views.setViewVisibility(R.id.widget_locked, if (locked) View.VISIBLE else View.GONE)
@@ -79,15 +79,18 @@ private fun budgetViews(
     return views
 }
 
-private fun launch(
+/** Opens Tandem, or runs [action] in it; [accountId] starts a new transaction in that account. */
+internal fun openApp(
     context: Context,
     action: String?,
     requestCode: Int,
+    accountId: String? = null,
 ): PendingIntent {
     val intent =
         Intent(context, MainActivity::class.java)
             .setAction(action ?: Intent.ACTION_MAIN)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    accountId?.let { intent.putExtra(EXTRA_WIDGET_ACCOUNT, it) }
     return PendingIntent.getActivity(
         context,
         requestCode,

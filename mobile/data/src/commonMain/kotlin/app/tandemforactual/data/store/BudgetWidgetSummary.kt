@@ -14,7 +14,22 @@ data class BudgetWidgetSummary(
     val displaySettings: BudgetDisplaySettings?,
 )
 
-private val WIDGET_HIDING_PREFERENCES = listOf("biometricLockEnabled", "privacyModeEnabled", "selectedBudgetEncrypted")
+private val WIDGET_CLOSING_PREFERENCES = listOf("biometricLockEnabled", "selectedBudgetEncrypted")
+
+internal class WidgetBudget(
+    val id: String,
+    val name: String,
+    val closed: Boolean,
+    val amountsHidden: Boolean,
+)
+
+/** The open budget as widgets see it: closed while app lock or encryption protects it, and amounts hidden then or in privacy mode. */
+internal fun widgetBudget(preferences: Map<String, String>): WidgetBudget? {
+    val id = preferences["selectedBudgetId"]?.takeIf(String::isNotBlank) ?: return null
+    val name = preferences["selectedBudget"]?.takeIf(String::isNotBlank) ?: "Budget"
+    val closed = WIDGET_CLOSING_PREFERENCES.any { preferences[it] == "true" }
+    return WidgetBudget(id, name, closed, amountsHidden = closed || preferences["privacyModeEnabled"] == "true")
+}
 
 /** Ready to assign and net spending this month from an Actual budget month record; refunds beyond spending count as zero. */
 fun budgetMonthTotals(budgetMonthJson: String): Pair<Long?, Long?> {
@@ -30,12 +45,10 @@ suspend fun budgetWidgetSummary(
     preferences: Map<String, String>,
     todayIso: String,
 ): BudgetWidgetSummary? {
-    val budgetId = preferences["selectedBudgetId"]?.takeIf(String::isNotBlank) ?: return null
-    val name = preferences["selectedBudget"]?.takeIf(String::isNotBlank) ?: "Budget"
-    if (WIDGET_HIDING_PREFERENCES.any { preferences[it] == "true" }) {
-        return BudgetWidgetSummary(name, null, null, amountsHidden = true, displaySettings = null)
-    }
-    val record = repository.findRecord(budgetId, "budget-month", todayIso.take(7))
+    val budget = widgetBudget(preferences) ?: return null
+    if (budget.amountsHidden) return BudgetWidgetSummary(budget.name, null, null, amountsHidden = true, displaySettings = null)
+    val record = repository.findRecord(budget.id, "budget-month", todayIso.take(7))
     val (ready, spent) = (record?.localJson ?: record?.remoteJson)?.let(::budgetMonthTotals) ?: (null to null)
-    return BudgetWidgetSummary(name, ready, spent, amountsHidden = false, displaySettings = repository.readBudgetDisplaySettings(budgetId))
+    val settings = repository.readBudgetDisplaySettings(budget.id)
+    return BudgetWidgetSummary(budget.name, ready, spent, amountsHidden = false, displaySettings = settings)
 }

@@ -1,13 +1,5 @@
 package app.tandemforactual.data.store
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.longOrNull
-
 data class OverspentCategory(
     val id: String,
     val name: String,
@@ -15,21 +7,10 @@ data class OverspentCategory(
 )
 
 /** Expense categories with a negative balance in one Actual budget month; income and hidden categories are left out. */
-fun overspentCategories(budgetMonthJson: String): List<OverspentCategory> {
-    val month = runCatching { Json.parseToJsonElement(budgetMonthJson) as? JsonObject }.getOrNull() ?: return emptyList()
-    val groups = month["categoryGroups"] as? JsonArray ?: return emptyList()
-    return groups
-        .mapNotNull { it as? JsonObject }
-        .filterNot { it.boolean("is_income") || it.boolean("hidden") }
-        .flatMap { group -> (group["categories"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject } }
-        .filterNot { it.boolean("is_income") || it.boolean("hidden") }
-        .mapNotNull { category ->
-            val id = (category["id"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-            val name = (category["name"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-            val balance = (category["balance"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
-            if (balance < 0) OverspentCategory(id, name, balance) else null
-        }
-}
+fun overspentCategories(budgetMonthJson: String): List<OverspentCategory> =
+    budgetMonthCategories(budgetMonthJson)
+        .filter { it.balanceMinor < 0 }
+        .map { OverspentCategory(it.id, it.name, it.balanceMinor) }
 
 /** Which overspent categories are new since the last alert, given the ids already alerted this month. */
 fun newlyOverspent(
@@ -70,5 +51,3 @@ suspend fun overspendingAlert(
     preferences.putValue(key, current.joinToString(",") { it.id })
     return overspendingMessage(newlyOverspent(current, previous))
 }
-
-private fun JsonObject.boolean(name: String): Boolean = (this[name] as? JsonPrimitive)?.booleanOrNull == true

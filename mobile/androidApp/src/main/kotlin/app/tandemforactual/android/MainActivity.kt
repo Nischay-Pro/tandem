@@ -253,7 +253,8 @@ class MainActivity : FragmentActivity() {
         when {
             intent?.action == Intent.ACTION_VIEW ->
                 intent.dataString?.let { link -> if (!QuickActionEvents.openLink(link)) AuthReturnEvents.publish(link) }
-            intent?.action == ACTION_ADD_TRANSACTION -> QuickActionEvents.requestAddTransaction()
+            intent?.action == ACTION_ADD_TRANSACTION ->
+                QuickActionEvents.requestAddTransaction(intent.getStringExtra(EXTRA_WIDGET_ACCOUNT))
             intent?.action == Intent.ACTION_SEND -> receiveShare(intent)
         }
     }
@@ -319,7 +320,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         appInForeground.value = false
         AppVisibility.visible = false
-        BudgetWidget.refresh(this)
+        TandemWidgets.refresh(this)
         if (networkCallbackRegistered) {
             connectivityManager.unregisterNetworkCallback(networkCallback)
             networkCallbackRegistered = false
@@ -345,6 +346,7 @@ private const val LEGACY_QUICK_ADD_SHORTCUT_ID = "add-transaction"
 private const val STALE_SHARED_FILE_MILLIS = 60L * 60 * 1000
 
 internal const val ACTION_ADD_TRANSACTION = "app.tandemforactual.action.ADD_TRANSACTION"
+internal const val EXTRA_WIDGET_ACCOUNT = "app.tandemforactual.extra.ACCOUNT"
 
 internal fun usesSecureWindowFlag(
     sdkInt: Int,
