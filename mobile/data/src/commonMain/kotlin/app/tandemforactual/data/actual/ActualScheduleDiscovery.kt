@@ -57,10 +57,11 @@ internal class ActualScheduleDiscovery(
             accounts.flatMap { row ->
                 val account = row["id"] as String
                 val latest =
-                    db.first(
-                        "SELECT date FROM v_transactions WHERE account = ? AND parent_id IS NULL ORDER BY date DESC LIMIT 1",
-                        account,
-                    )?.get("date") as Number?
+                    db
+                        .first(
+                            "SELECT date FROM v_transactions WHERE account = ? AND parent_id IS NULL ORDER BY date DESC LIMIT 1",
+                            account,
+                        )?.get("date") as Number?
                 latest?.let { patterns(Day.parse(ActualMonths.dateString(it.toLong())), account) }.orEmpty()
             }
         return candidates
