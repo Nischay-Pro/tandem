@@ -173,7 +173,9 @@ internal fun DataHealthScreen(
                 ) { item -> openTransaction(state, navigation, item, isLive = true) }
             }
         }
-        if (ruleFindings.isNotEmpty()) item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
+        if (ruleFindings.isNotEmpty()) {
+            item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
+        }
     }
     CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
     RuleFindingActions(state, navigation, mobileSession, openFinding, ruleTexts, { openFinding = null }, { reload++ }) { failure = it }
