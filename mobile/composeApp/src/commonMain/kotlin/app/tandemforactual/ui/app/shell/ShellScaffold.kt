@@ -3,6 +3,7 @@
 package app.tandemforactual.ui.app.shell
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -22,7 +23,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -43,9 +48,12 @@ import app.tandemforactual.ui.core.state.WorkspaceLayout
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.shouldRenderRouteHeader
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
+import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.tandemBottomBarEnter
 import app.tandemforactual.ui.design.theme.tandemBottomBarExit
+import app.tandemforactual.ui.design.theme.tandemFadeEnter
+import app.tandemforactual.ui.design.theme.tandemFadeExit
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
@@ -91,11 +99,16 @@ internal fun ShellScaffold(chrome: ShellChromeState) {
                 .background(appBackgroundBrush(state.backgroundStyle, tandemPalette))
                 .safeDrawingPadding(),
     ) {
-        if (layout.showRail) ShellRail(chrome, layout, Modifier.align(Alignment.CenterStart))
+        val railInset by animateDpAsState(
+            if (layout.showRail) TandemLayout.railWidth else 0.dp,
+            tandemMotionSpec(ctx.reduceMotion, TandemMotion.ROUTE_MILLIS),
+            label = "tandem-rail-inset",
+        )
+        ShellRail(chrome, layout, Modifier.align(Alignment.CenterStart))
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(start = if (layout.showRail) 80.dp else 0.dp),
+                .padding(start = railInset),
         ) {
             if (!layout.workspaceActive && shouldRenderRouteHeader(ctx.route, layout.tabShellRoute != null)) {
                 AnimatedContent(
@@ -142,18 +155,7 @@ private fun shellLayout(chrome: ShellChromeState): ShellLayout {
         }
     val workspaceLayout =
         if (chrome.useRail && state.selectedBudgetId.isNotBlank()) {
-            with(
-                LocalDensity.current,
-            ) {
-                state.workspace.effective(
-                    chrome.windowSize.width
-                        .toDp()
-                        .value - 80f,
-                    chrome.windowSize.height
-                        .toDp()
-                        .value,
-                )
-            }
+            state.workspace.effective(chrome.window.contentWidthDp, chrome.window.heightDp)
         } else {
             WorkspaceLayout.SINGLE
         }
@@ -169,7 +171,6 @@ private fun shellLayout(chrome: ShellChromeState): ShellLayout {
         chrome.useRail &&
             tabShellRoute != null &&
             route.showsBottomNavigation() &&
-            !imeVisible &&
             !ctx.transactionSheetActive
     return ShellLayout(tabShellRoute, shellHeaderRoute, workspaceLayout, workspaceActive, workspacePanes, showRail, imeVisible)
 }
@@ -181,10 +182,30 @@ private fun ShellRail(
     modifier: Modifier,
 ) {
     val ctx = chrome.ctx
+    var lastSelected by remember { mutableStateOf(layout.tabShellRoute) }
+    SideEffect { if (layout.showRail) lastSelected = layout.tabShellRoute }
+    val selected = (if (layout.showRail) layout.tabShellRoute else lastSelected) ?: return
+    androidx.compose.animation.AnimatedVisibility(
+        visible = layout.showRail,
+        modifier = modifier,
+        enter = tandemFadeEnter(ctx.reduceMotion, TandemMotion.CROSSFADE_MILLIS),
+        exit = tandemFadeExit(ctx.reduceMotion, TandemMotion.CROSSFADE_MILLIS),
+    ) {
+        ShellRailContent(chrome, layout, selected)
+    }
+}
+
+@Composable
+private fun ShellRailContent(
+    chrome: ShellChromeState,
+    layout: ShellLayout,
+    selected: AppRoute,
+) {
+    val ctx = chrome.ctx
     val state = ctx.state
     val workspacePanes = layout.workspacePanes
     SideNavigationRail(
-        selected = requireNotNull(layout.tabShellRoute),
+        selected = selected,
         selectTab = { tab ->
             if (layout.workspaceActive && tab !in workspacePanes) {
                 state.workspace = state.workspace.place(tab, workspacePanes.indexOf(ctx.route), workspacePanes)
@@ -195,20 +216,9 @@ private fun ShellRail(
                 ctx.navigation.selectTab(tab)
             }
         },
-        modifier = modifier,
         layouts =
             if (state.selectedBudgetId.isNotBlank()) {
-                with(LocalDensity.current) {
-                    val width =
-                        chrome.windowSize.width
-                            .toDp()
-                            .value - 80f
-                    val height =
-                        chrome.windowSize.height
-                            .toDp()
-                            .value
-                    WorkspaceLayout.entries.filter { it.fits(width, height) }
-                }
+                WorkspaceLayout.entries.filter { it.fits(chrome.window.contentWidthDp, chrome.window.heightDp) }
             } else {
                 emptyList()
             },
@@ -241,7 +251,7 @@ internal fun ShellBottomBar(
                 shrinkVertically(tandemMotionSpec(reduceMotion, TandemMotion.ROUTE_MILLIS)) + tandemBottomBarExit(reduceMotion),
         ) {
             Box(
-                modifier = Modifier.fillMaxWidth().height(88.dp),
+                modifier = Modifier.fillMaxWidth().height(TandemLayout.bottomBarHeight),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 BottomNavigation(

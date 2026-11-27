@@ -7,17 +7,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -42,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.WorkspaceLayout
 import app.tandemforactual.ui.design.buttons.TandemIconButton
+import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -65,71 +69,89 @@ internal fun SideNavigationRail(
     val palette = tandemPalette
     val items =
         navigationTabs()
-    Column(
-        modifier =
-            modifier
-                .width(80.dp)
-                .fillMaxHeight()
-                .background(palette.surface)
-                .padding(vertical = TandemSpacing.extraSmall),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
+    BoxWithConstraints(
+        modifier
+            .width(TandemLayout.railWidth)
+            .fillMaxHeight()
+            .background(palette.surface),
     ) {
-        if (onOpenMenu != null) TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
-        items.forEach { (route, label) ->
-            val active = route == selected
-            val tabColor by
-                animateColorAsState(
-                    targetValue = if (active) palette.accent else palette.muted,
-                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
-                    label = "rail-tab-color-${route.name.lowercase()}",
-                )
-            val iconScale by
-                animateFloatAsState(
-                    targetValue = if (active) 1.08f else 1f,
-                    animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
-                    label = "rail-tab-icon-scale-${route.name.lowercase()}",
-                )
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 52.dp)
-                        .clip(RoundedCornerShape(TandemShapes.medium))
-                        .selectable(
-                            selected = active,
-                            role = Role.Tab,
-                            onClick = { selectTab(route) },
-                        ).semantics(mergeDescendants = true) {
-                            contentDescription = label
-                            this.selected = active
-                        }.padding(vertical = TandemSpacing.xxSmall),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
+                    .padding(vertical = TandemSpacing.extraSmall),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            RailItems(items, selected, selectTab, onOpenMenu)
+            if (layouts.size > 1) WorkspaceLayoutButton(layouts, layout, onLayout)
+        }
+    }
+}
+
+@Composable
+private fun RailItems(
+    items: List<Pair<AppRoute, String>>,
+    selected: AppRoute,
+    selectTab: (AppRoute) -> Unit,
+    onOpenMenu: (() -> Unit)?,
+) {
+    val palette = tandemPalette
+    if (onOpenMenu != null) TandemIconButton(Lucide.Menu, "Menu", containerColor = palette.background, onClick = onOpenMenu)
+    items.forEach { (route, label) ->
+        val active = route == selected
+        val tabColor by
+            animateColorAsState(
+                targetValue = if (active) palette.accent else palette.muted,
+                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.COLOR_MILLIS),
+                label = "rail-tab-color-${route.name.lowercase()}",
+            )
+        val iconScale by
+            animateFloatAsState(
+                targetValue = if (active) 1.08f else 1f,
+                animationSpec = tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTROL_MILLIS),
+                label = "rail-tab-icon-scale-${route.name.lowercase()}",
+            )
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 52.dp)
+                    .clip(RoundedCornerShape(TandemShapes.medium))
+                    .selectable(
+                        selected = active,
+                        role = Role.Tab,
+                        onClick = { selectTab(route) },
+                    ).semantics(mergeDescendants = true) {
+                        contentDescription = label
+                        this.selected = active
+                    }.padding(vertical = TandemSpacing.xxSmall),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
+        ) {
+            Box(
+                Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (active) palette.accentSurface else Color.Transparent),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (active) palette.accentSurface else Color.Transparent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    NavigationGlyph(route, tabColor, iconScale)
-                }
-                CompositionLocalProvider(LocalDensity provides navigationLabelDensity(LocalDensity.current)) {
-                    Text(
-                        label,
-                        color = tabColor,
-                        fontSize = TandemTypography.micro,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                NavigationGlyph(route, tabColor, iconScale)
+            }
+            CompositionLocalProvider(LocalDensity provides navigationLabelDensity(LocalDensity.current)) {
+                Text(
+                    label,
+                    color = tabColor,
+                    fontSize = TandemTypography.micro,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
-        if (layouts.size > 1) WorkspaceLayoutButton(layouts, layout, onLayout)
     }
 }
 

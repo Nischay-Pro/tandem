@@ -9,12 +9,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.unit.IntSize
 import app.tandemforactual.ui.app.AppHeader
-import app.tandemforactual.ui.app.isLandscapeViewport
-import app.tandemforactual.ui.app.usesRailNavigation
 import app.tandemforactual.ui.core.security.hidesContentInAppSwitcher
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
@@ -27,6 +22,8 @@ import app.tandemforactual.ui.core.state.resolveMainCloudStatus
 import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSystemBars
 import app.tandemforactual.ui.design.theme.ThemeMode
+import app.tandemforactual.ui.design.theme.WindowSizeInfo
+import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.sync.conflictPayeeTitle
 import kotlinx.coroutines.delay
@@ -34,12 +31,12 @@ import kotlinx.coroutines.delay
 /** Window and sync status values the shell chrome shares within one composition. */
 internal class ShellChromeState(
     val ctx: ShellContext,
-    val windowSize: IntSize,
-    val isLandscape: Boolean,
-    val useRail: Boolean,
+    val window: WindowSizeInfo,
     val mainCloudStatus: MainCloudStatus,
     private val headerClockMs: State<Long>,
 ) {
+    val useRail get() = window.usesRail
+
     fun syncCaption(): String? =
         headerSyncCaption(
             mainCloudStatus,
@@ -57,9 +54,7 @@ internal fun ShellFrame(
 ) {
     val state = ctx.state
     val palette = tandemPalette
-    val windowSize = LocalWindowInfo.current.containerSize
-    val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
-    val useRail = usesRailNavigation(with(LocalDensity.current) { windowSize.width.toDp().value }, isLandscape)
+    val window = currentWindowSizeInfo()
     val isDark =
         state.theme == ThemeMode.DARK ||
             state.theme == ThemeMode.PURE_BLACK ||
@@ -76,7 +71,7 @@ internal fun ShellFrame(
         onBackProgress = ctx.navigator::updateBackGesture,
     )
     val headerClockMs = rememberHeaderClock(ctx, isAppInForeground)
-    val chrome = ShellChromeState(ctx, windowSize, isLandscape, useRail, mainCloudStatus(ctx), headerClockMs)
+    val chrome = ShellChromeState(ctx, window, mainCloudStatus(ctx), headerClockMs)
     ShellScaffold(chrome)
     ShellOverlays(chrome, isAppInForeground)
 }
@@ -130,7 +125,7 @@ internal fun mainCloudStatus(ctx: ShellContext): MainCloudStatus {
     )
 }
 
-/** The app header for [headerRoute], with the sync status, budget switcher and landscape add action. */
+/** The app header for [headerRoute], with the sync status, budget switcher and short-window add action. */
 @Composable
 internal fun ShellHeader(
     chrome: ShellChromeState,
@@ -164,9 +159,9 @@ internal fun ShellHeader(
         liveBudgetMonth = ctx.shell.liveBudgetMonth,
         activitySelectionTotalMinor = ctx.budgetScoped.activitySelectionTotalMinor,
         conflictTitle = conflictTitle,
-        compactLandscape = chrome.isLandscape,
+        compactHeight = chrome.window.compactHeight,
         onAddTransaction =
-            if (chrome.isLandscape &&
+            if (chrome.window.compactHeight &&
                 !ctx.transactionSheetActive &&
                 headerRoute == AppRoute.BUDGET &&
                 shouldShowBudgetCreateAction(state.selectedBudgetId.isNotBlank(), ctx.budgetScoped.budgetGroupReorderActive)

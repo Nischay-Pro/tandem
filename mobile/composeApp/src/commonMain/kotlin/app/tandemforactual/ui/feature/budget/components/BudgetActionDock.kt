@@ -18,17 +18,16 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.FloatingAction
 import app.tandemforactual.ui.app.FloatingTransactionAction
-import app.tandemforactual.ui.app.isLandscapeViewport
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.design.theme.tandemFloatingEnter
 import app.tandemforactual.ui.design.theme.tandemFloatingExit
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -100,8 +99,7 @@ internal fun BudgetScreenDock(
                     (routeListState?.firstVisibleItemScrollOffset ?: 0) > 72
             }
         }
-    val windowSize = LocalWindowInfo.current.containerSize
-    val isLandscape = isLandscapeViewport(windowSize.width, windowSize.height)
+    val compactHeight = currentWindowSizeInfo().compactHeight
     val showCreateActions =
         shouldShowBudgetCreateAction(
             isLiveBudget,
@@ -111,7 +109,7 @@ internal fun BudgetScreenDock(
     BudgetActionDock(
         visible = showCreateActions && !actionDockScrolledAway,
         readOnlyMode = state.readOnlyMode,
-        showTransactionAction = showCreateActions && !isLandscape,
+        showTransactionAction = showCreateActions && !compactHeight,
         transactionActionCompact = createActionsCompact,
         onAddGroup = onAddGroup,
         onNewTransaction = { navigation.newTransaction(null) },
