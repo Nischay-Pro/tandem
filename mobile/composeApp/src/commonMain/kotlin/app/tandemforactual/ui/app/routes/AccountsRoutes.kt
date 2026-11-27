@@ -28,6 +28,7 @@ import app.tandemforactual.ui.app.paneStackTransform
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
 import app.tandemforactual.ui.design.theme.TandemBackHandler
+import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.feature.accounts.AccountDetailScreen
@@ -94,7 +95,7 @@ private fun AccountDetailPane(ctx: ScreenContext) {
         var transactionOpen by remember { mutableStateOf(false) }
         val closeTransaction: () -> Unit = { transactionOpen = false }
         val reduceMotion = tandemReduceMotion
-        val background = appBackgroundBrush(state.backgroundStyle, tandemPalette)
+        val background = appBackgroundBrush(state.backgroundStyle, tandemPalette, state.theme == ThemeMode.PURE_BLACK)
         TandemBackHandler(enabled = transactionOpen, onBack = closeTransaction, onBackProgress = { _, _ -> })
         AnimatedContent(
             targetState = transactionOpen,

@@ -108,7 +108,7 @@ private fun ShellWorkspace(
     val ctx = chrome.ctx
     val focused = layout.tabShellRoute ?: ctx.route
     val savedStacks = remember(ctx.shell.savedTabBackStacks) { decodeAppTabBackStacks(ctx.shell.savedTabBackStacks) }
-    val routeBackground = appBackgroundBrush(ctx.state.backgroundStyle, tandemPalette)
+    val routeBackground = appBackgroundBrush(ctx.state.backgroundStyle, tandemPalette, ctx.state.theme == ThemeMode.PURE_BLACK)
     WorkspacePanes(
         layout.workspaceLayout,
         layout.workspacePanes,
