@@ -15,6 +15,9 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +27,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
@@ -58,6 +62,7 @@ import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LockOpen
 import com.composables.icons.lucide.Lucide
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -68,10 +73,21 @@ internal fun ServerAddressScreen(
     val completedAddress = completeServerAddress(state.serverUrl)
     val canContinue = serverAddressIsValid(completedAddress)
     val secureAddress = completedAddress.startsWith("https://", ignoreCase = true)
+    val scope = rememberCoroutineScope()
+    val lanAccess = LocalLanAccess.current
+    var continuing by remember { mutableStateOf(false) }
     val continueToSignIn = {
-        if (canContinue) {
+        if (canContinue && !continuing) {
             state.serverUrl = completedAddress
-            navigation.open(AppRoute.SIGN_IN)
+            continuing = true
+            scope.launch {
+                try {
+                    lanAccess?.request(completedAddress)
+                    navigation.open(AppRoute.SIGN_IN)
+                } finally {
+                    continuing = false
+                }
+            }
         }
     }
     val suggestions = serverAddressSuggestions(state.serverUrl, recentServerAddresses(state.recentServerUrls))

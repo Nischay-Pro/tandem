@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.WebDavClient
 import app.tandemforactual.api.client.WebDavException
+import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
@@ -47,6 +48,7 @@ internal fun WebDavBackupDialog(
     var checking by remember(visible) { mutableStateOf(false) }
     var problem by remember(visible) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val lanAccess = LocalLanAccess.current
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
         SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
             Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
@@ -70,6 +72,7 @@ internal fun WebDavBackupDialog(
                     scope.launch {
                         problem =
                             try {
+                                lanAccess?.request(address.trim())
                                 WebDavClient.connect(address.trim(), name.trim(), password).check()
                                 null
                             } catch (error: WebDavException) {

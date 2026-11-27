@@ -49,7 +49,7 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room3 = { id = "androidx.room3", version.ref = "room3" }
 
 [libraries]
-robolectricSdk = { module = "org.robolectric:android-all-instrumented", version = "16-robolectric-13921718-2-i7" }
+robolectricSdk = { module = "org.robolectric:android-all-instrumented", version = "17-robolectric-16653203-i7" }
 ktorClientMock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktorClientJava = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktorClientOkhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
