@@ -23,7 +23,9 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.TransactionItem
+import app.tandemforactual.ui.core.ui.ScheduledOccurrencesCard
 import app.tandemforactual.ui.core.ui.TransactionRow
+import app.tandemforactual.ui.core.ui.rememberRegisterOccurrences
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -94,6 +96,7 @@ internal fun AccountDetailScreen(
             if (!statementImport.showDialog) {
                 budgetActionFeedbackMessage(mobileSession)
             }
+            ScheduledOccurrencesCard(state, navigation, rememberRegisterOccurrences(mobileSession, liveAccount.id))
             AccountRecentActivity(shownAccountActivity, state, navigation, liveAccount) {
                 scrollRestore.pending = routeScrollState?.value ?: -1
             }

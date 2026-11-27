@@ -28,15 +28,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
+import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.search.ActivitySearchRecord
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
+import app.tandemforactual.ui.core.state.ScheduledOccurrence
 import app.tandemforactual.ui.core.ui.ActivitySearchInput
+import app.tandemforactual.ui.core.ui.ScheduledOccurrencesCard
 import app.tandemforactual.ui.core.ui.TransactionRow
 import app.tandemforactual.ui.core.ui.TransactionSelectionFloatingBar
+import app.tandemforactual.ui.core.ui.rememberRegisterOccurrences
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
@@ -174,6 +178,8 @@ private fun ColumnScope.ActivitySearchResults(
 ) {
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     val filters = state.activitySearchFilters
+    val registerAccount = filters.singleOrNull()?.takeIf { it.field == ActivitySearchField.ACCOUNT && search.isBlank() }?.value
+    val scheduled = rememberRegisterOccurrences(mobileSession, registerAccount)
     if (
         isLiveBudget &&
         (
@@ -186,6 +192,7 @@ private fun ColumnScope.ActivitySearchResults(
     } else if (evaluation.isEvaluatingSearch && evaluation.resultIndices.isEmpty()) {
         SkeletonRows(modifier = Modifier.weight(1f))
     } else if (evaluation.resultIndices.isEmpty()) {
+        ScheduledOccurrencesCard(state, navigation, scheduled)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             EmptyState(
                 if (filters.isEmpty() &&
@@ -207,6 +214,7 @@ private fun ColumnScope.ActivitySearchResults(
             index.searchableRecords,
             selection,
             resultsListState,
+            scheduled,
         )
     }
 }
@@ -221,6 +229,7 @@ private fun ColumnScope.ActivitySearchResultList(
     searchableRecords: List<ActivitySearchRecord>,
     selection: ActivitySelectionState,
     resultsListState: LazyListState,
+    scheduled: List<ScheduledOccurrence>,
 ) {
     val todayIso = rememberTodayIsoDate()
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
@@ -230,6 +239,7 @@ private fun ColumnScope.ActivitySearchResultList(
         contentPadding = PaddingValues(bottom = if (selection.selectionMode) 88.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
     ) {
+        if (scheduled.isNotEmpty()) item(key = "register-scheduled") { ScheduledOccurrencesCard(state, navigation, scheduled) }
         itemsIndexed(
             sortedResultIndices,
             key = { _, index ->
