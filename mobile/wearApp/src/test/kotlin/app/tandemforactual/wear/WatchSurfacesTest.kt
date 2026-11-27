@@ -4,6 +4,7 @@ import androidx.wear.protolayout.DeviceParametersBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
 import androidx.wear.protolayout.LayoutElementBuilders.LayoutElement
 import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
@@ -110,6 +111,23 @@ class WatchSurfacesTest {
         assertEquals(HIDDEN_AMOUNT, text(hidden))
         assertEquals("Locked", text(locked))
         assertTrue(WatchComplications.toBudget(null, null) is NoDataComplicationData)
+    }
+
+    @Test
+    fun theNextBillComplicationNamesTheBillAndHidesItsAmountTheWayTheAppDoes() {
+        val short = WatchComplications.nextBill(summary(), ComplicationType.SHORT_TEXT, null) as ShortTextComplicationData
+        val long = WatchComplications.nextBill(summary(), ComplicationType.LONG_TEXT, null) as LongTextComplicationData
+        val hidden = WatchComplications.nextBill(summary(WatchState.AMOUNTS_HIDDEN), ComplicationType.SHORT_TEXT, null)
+        val locked = WatchComplications.nextBill(summary(WatchState.LOCKED), ComplicationType.LONG_TEXT, null)
+        val none = WatchComplications.nextBill(summary().copy(bills = emptyList()), ComplicationType.SHORT_TEXT, null)
+
+        assertEquals("$60", text(short))
+        assertEquals("Internet", short.title?.getTextAt(context.resources, Instant.now()).toString())
+        assertTrue(long.text.getTextAt(context.resources, Instant.now()).toString().startsWith("Internet · $60.00 · "))
+        assertEquals(HIDDEN_AMOUNT, text(hidden as ShortTextComplicationData))
+        assertEquals("Locked", text(locked as ShortTextComplicationData))
+        assertEquals("None", text(none as ShortTextComplicationData))
+        assertTrue(WatchComplications.nextBill(null, ComplicationType.SHORT_TEXT, null) is NoDataComplicationData)
     }
 
     private fun text(data: ShortTextComplicationData) = data.text.getTextAt(context.resources, Instant.now()).toString()
