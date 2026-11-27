@@ -39,6 +39,7 @@ internal class AppShellState(
     var nextRouteEntryId by nextRouteEntryIdState
     var savedTabBackStacks by savedTabBackStacksState
     var showDiscardTransactionDialog by showDiscardTransactionDialogState
+    var showShortcuts by mutableStateOf(false)
 
     var merchantIconMatcher by mutableStateOf<MerchantIconMatcherPack?>(null)
     var merchantIconMatcherLoadError by mutableStateOf<String?>(null)

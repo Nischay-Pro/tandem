@@ -15,7 +15,9 @@ the test fixtures.
   schedules advance and post the way Actual's apps do.
 - **Bank sync.** Linked accounts download through the Actual server's
   SimpleFIN, GoCardless, Enable Banking, Pluggy.ai and Akahu integrations and are
-  reconciled the way Actual's bank sync does.
+  reconciled the way Actual's bank sync does. A budget with its own SimpleFIN or
+  Pluggy.ai credentials uses them instead of the server's, and a SimpleFIN setup
+  token can be saved for one budget or, by an admin, for the whole server.
 - **Statement import.** CSV, QIF, OFX and QFX files are previewed on the device
   and matched against existing transactions, as Actual's import does.
 - **Sign-in.** Password and OpenID sign-in, using the Actual server's own

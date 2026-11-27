@@ -5,11 +5,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.BankCredentialSource
+import app.tandemforactual.api.client.TandemApiException
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.regions.global.bank.BankProvider
 import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.data.regions.global.bank.BankProviders
 import app.tandemforactual.data.regions.global.bank.BrowserBankProvider
+import app.tandemforactual.data.regions.us.bank.simplefin.SimpleFin
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
@@ -21,7 +24,10 @@ internal sealed interface BankProviderState {
 
     data object Loading : BankProviderState
 
-    data object NotSetUp : BankProviderState
+    /** Not usable for the budget; [source] is set when the budget has its own credentials that aren't working. */
+    data class NotSetUp(
+        val source: BankCredentialSource? = null,
+    ) : BankProviderState
 
     data class Failed(
         val message: String,
@@ -29,6 +35,7 @@ internal sealed interface BankProviderState {
 
     data class Ready(
         val accounts: List<BankProviderAccount>,
+        val source: BankCredentialSource = BankCredentialSource.SERVER,
     ) : BankProviderState
 }
 
@@ -41,6 +48,7 @@ internal class BankConnectionsState {
     var unlinking by mutableStateOf<LinkedAccount?>(null)
     var relinkFor by mutableStateOf<LinkedAccount?>(null)
     var browserProvider by mutableStateOf<BrowserBankProvider?>(null)
+    var simpleFinSetup by mutableStateOf<SimpleFinSetup?>(null)
 }
 
 /** Links, relinks, unlinks and syncs bank accounts for the bank connections screen. */
@@ -59,10 +67,41 @@ internal class BankConnectionsActions(
         ui.providerStates[provider.source] = BankProviderState.Loading
         scope.launch {
             ui.providerStates[provider.source] =
-                runCatching { mobileSession.banking.loadBankProviderAccounts(provider) }.fold(
-                    { accounts -> accounts?.let { BankProviderState.Ready(it) } ?: BankProviderState.NotSetUp },
-                    { BankProviderState.Failed("Couldn’t reach ${provider.displayName} through your Actual server.") },
+                runCatching { mobileSession.banking.loadBankProviderAccounts(provider, state.selectedBudgetId) }.fold(
+                    { access ->
+                        access.accounts?.let { BankProviderState.Ready(it, access.source ?: BankCredentialSource.SERVER) }
+                            ?: BankProviderState.NotSetUp(access.source)
+                    },
+                    { BankProviderState.Failed(providerFailure(provider, it)) },
                 )
+        }
+    }
+
+    fun openSimpleFinSetup(current: BankCredentialSource?) {
+        ui.simpleFinSetup = SimpleFinSetup(current)
+        scope.launch {
+            val admin = runCatching { mobileSession.banking.canManageServerBankCredentials() }.getOrDefault(false)
+            ui.simpleFinSetup = ui.simpleFinSetup?.copy(allowServer = admin)
+        }
+    }
+
+    fun saveSimpleFinToken(
+        token: String,
+        target: BankCredentialSource,
+    ) = updateSimpleFin { mobileSession.banking.saveSimpleFinToken(state.selectedBudgetId, token, target) }
+
+    fun removeSimpleFinBudgetToken() = updateSimpleFin { mobileSession.banking.removeSimpleFinBudgetToken(state.selectedBudgetId) }
+
+    private fun updateSimpleFin(change: suspend () -> Unit) {
+        ui.simpleFinSetup = ui.simpleFinSetup?.copy(saving = true, error = null) ?: return
+        scope.launch {
+            runCatching { change() }.fold(
+                {
+                    ui.simpleFinSetup = null
+                    loadAccounts(SimpleFin)
+                },
+                { ui.simpleFinSetup = ui.simpleFinSetup?.copy(saving = false, error = credentialFailure(it)) },
+            )
         }
     }
 
@@ -139,3 +178,28 @@ internal class BankConnectionsActions(
         }
     }
 }
+
+/** The SimpleFIN setup sheet: whose token the budget uses now, and whether this user may set the server's. */
+internal data class SimpleFinSetup(
+    val current: BankCredentialSource?,
+    val allowServer: Boolean = false,
+    val saving: Boolean = false,
+    val error: String? = null,
+)
+
+internal fun providerFailure(
+    provider: BankProvider,
+    error: Throwable,
+): String =
+    if (provider == SimpleFin && (error as? TandemApiException)?.errorCode == "bank_sync_failed") {
+        "SimpleFIN didn’t accept the token. Get a new setup token and set it up again."
+    } else {
+        "Couldn’t reach ${provider.displayName} through your Actual server."
+    }
+
+internal fun credentialFailure(error: Throwable): String =
+    when ((error as? TandemApiException)?.errorCode) {
+        "not_admin" -> "Only an Actual server admin can set a token for every budget."
+        "file_access_denied" -> "Only this budget’s owner or a server admin can change its bank credentials."
+        else -> "Couldn’t reach your Actual server. Try again."
+    }

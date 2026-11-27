@@ -9,6 +9,7 @@ import app.tandemforactual.data.actual.ActualDataHealth
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ActualMessageStore
+import app.tandemforactual.data.actual.ActualRuleDiagnostics
 import app.tandemforactual.data.actual.ActualRuleEngine
 import app.tandemforactual.data.actual.ActualStoreGuard
 import app.tandemforactual.data.actual.ActualSyncEngine
@@ -20,6 +21,7 @@ import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.LinkedAccount
 import app.tandemforactual.data.actual.OperationOutcome
+import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.actual.UnsupportedRuleException
 import app.tandemforactual.data.actual.ZipArchive
@@ -255,6 +257,8 @@ class ActualDirectBudget private constructor(
         syncWhenPossible()
         return locked { ActualDataHealth(db).check(today) }
     }
+
+    suspend fun ruleDiagnostics(): List<RuleFinding> = locked { ActualRuleDiagnostics(db).check() }
 
     suspend fun changeHistory(limit: Int): List<ChangeSet> {
         syncWhenPossible()
