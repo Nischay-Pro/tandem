@@ -76,12 +76,14 @@ object IosWatch : WatchLink {
                 runCatching {
                     quickAdds.withLock {
                         val database = iosTandemDatabase
+                        val preferences = AppPreferencesStore(database).read()
                         addWatchQuickAdd(
                             database,
-                            AppPreferencesStore(database).read(),
+                            preferences,
                             entry,
                             platformTodayIsoDate(),
                             Clock.System.now().toEpochMilliseconds(),
+                            IosInboxFile.forBudget(preferences["selectedBudgetId"].orEmpty()),
                         )
                     }
                 }.getOrElse { WatchQuickAddReply(entryId, added = false, message = "Tandem couldn’t save it. Open Tandem and try again.") }
