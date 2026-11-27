@@ -115,6 +115,41 @@ jobs:
           shoot ipad "$(pick 'iPad Pro 13')"
           ls -la "$out"
 
+      - name: Capture Apple Watch screenshots
+        run: |
+          watch_app="$RUNNER_TEMP/TandemForActual.app/Watch/TandemWatch.app"
+          bundle="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$watch_app/Info.plist")"
+          out="$RUNNER_TEMP/screenshots"
+          runtime="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["platform"]=="watchOS" and x["isAvailable"]]; print(r[-1]["identifier"] if r else "")')"
+          if [ -z "$runtime" ]; then
+            echo "::notice::No watchOS simulator runtime on this runner image; skipping Apple Watch screenshots."
+            exit 0
+          fi
+          summary="$(cat scripts/screenshots/watch-demo-summary.json)"
+          pick() {
+            xcrun simctl list devicetypes -j | python3 -c 'import json,re,sys; t=[d for d in json.load(sys.stdin)["devicetypes"] if re.search(sys.argv[1], d["name"])]; print(t[-1]["identifier"] if t else "")' "$1"
+          }
+          shoot_watch() {
+            local name="$1" type="$2" udid
+            [ -n "$type" ] || { echo "No simulator for $name"; return; }
+            udid="$(xcrun simctl create "$name" "$type" "$runtime")"
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl install "$udid" "$watch_app"
+            for screen in glance bills add; do
+              xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1 || true
+              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SUMMARY="$summary" \
+              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SCREEN="$screen" \
+                xcrun simctl launch "$udid" "$bundle"
+              sleep 15
+              xcrun simctl io "$udid" screenshot "$out/$name-$screen.png"
+            done
+            xcrun simctl shutdown "$udid"
+          }
+          shoot_watch apple-watch-46mm "$(pick '^Apple Watch Series .*46mm')"
+          shoot_watch apple-watch-ultra "$(pick '^Apple Watch Ultra')"
+          ls -la "$out"
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
