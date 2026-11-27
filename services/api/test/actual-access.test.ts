@@ -111,7 +111,7 @@ describe("Actual budget access", () => {
       () => now,
     );
     for (let i = 0; i < 10_000; i++) await access.check(`t${i}`, "a");
-    now = 5_000;
+    now = 4_000;
     await access.check("newest", "a");
     const size = (access as unknown as { cache: Map<string, unknown> }).cache
       .size;
@@ -121,5 +121,62 @@ describe("Actual budget access", () => {
     expect(
       (access as unknown as { cache: Map<string, unknown> }).cache.size,
     ).toBe(1);
+  });
+
+  it("rechecks a budget missing from the cached list", async () => {
+    let now = 0;
+    const { urls, fetcher } = fakeFetch([
+      { ok: true, status: 200, body: { data: [{ groupId: "a" }] } },
+      {
+        ok: true,
+        status: 200,
+        body: { data: [{ groupId: "a" }, { groupId: "new" }] },
+      },
+      { ok: false, status: 502 },
+    ]);
+    const access = new ActualBudgetAccess(
+      "https://actual.example",
+      fetcher,
+      () => now,
+    );
+    expect(await access.check("t", "a")).toBe("allowed");
+    expect(await access.check("t", "new")).toBe("denied");
+    expect(urls).toHaveLength(1);
+    now = 2_000;
+    expect(await access.check("t", "new")).toBe("allowed");
+    expect(urls).toHaveLength(2);
+    now = 4_000;
+    expect(await access.check("t", "other")).toBe("unavailable");
+    expect(await access.check("t", "a")).toBe("allowed");
+  });
+
+  it("forgets an accepted token after fifteen seconds", async () => {
+    let now = 0;
+    const { fetcher } = fakeFetch([
+      { ok: true, status: 200, body: { data: [{ groupId: "a" }] } },
+      { ok: false, status: 401 },
+    ]);
+    const access = new ActualBudgetAccess(
+      "https://actual.example",
+      fetcher,
+      () => now,
+    );
+    expect(await access.check("t", "a")).toBe("allowed");
+    now = 14_999;
+    expect(await access.check("t", "a")).toBe("allowed");
+    now = 15_000;
+    expect(await access.check("t", "a")).toBe("denied");
+    expect(access.isKnown("t")).toBe(false);
+  });
+
+  it("shares one Actual lookup between concurrent checks", async () => {
+    const { urls, fetcher } = fakeFetch([
+      { ok: true, status: 200, body: { data: [{ groupId: "a" }] } },
+    ]);
+    const access = new ActualBudgetAccess("https://actual.example", fetcher);
+    expect(
+      await Promise.all([access.check("t", "a"), access.check("t", "b")]),
+    ).toEqual(["allowed", "denied"]);
+    expect(urls).toHaveLength(1);
   });
 });
