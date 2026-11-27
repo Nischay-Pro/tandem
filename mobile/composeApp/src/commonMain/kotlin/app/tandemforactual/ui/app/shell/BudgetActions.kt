@@ -62,7 +62,10 @@ internal class BudgetActions(
         val originalAmount = state.selectedTransactionAmountMinor
         if (state.transactionSplit != null || state.selectedTransactionSplit != null) return saveSplit(onComplete)
         if (!state.readOnlyMode && transactionId.isNotBlank() && originalAmount != null && !mobileSession.isSavingTransaction) {
+            val before = state.savedCategoryEntries(mobileSession)
+            val after = state.formCategoryEntries(mobileSession)
             coroutineScope.launch {
+                val notice = CategorySaveNotice.prepare(state.selectedBudgetId, mobileSession, before, after)
                 val saved =
                     mobileSession.transactions.updateTransaction(
                         budgetId = state.selectedBudgetId,
@@ -82,6 +85,7 @@ internal class BudgetActions(
                 if (saved) {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                     rememberSavedTransaction(originalAmount)
+                    notice?.show(state, mobileSession)
                 }
                 onComplete(saved)
             }
@@ -116,12 +120,16 @@ internal class BudgetActions(
                 payeeId = formPayeeId(),
                 unsplitCategoryId = state.newTransactionCategoryId.takeIf(String::isNotBlank),
             )
+        val before = state.savedCategoryEntries(mobileSession)
+        val after = state.formCategoryEntries(mobileSession)
         coroutineScope.launch {
+            val notice = CategorySaveNotice.prepare(state.selectedBudgetId, mobileSession, before, after)
             val saved = mobileSession.transactions.updateSplit(state.selectedBudgetId, edit)
             if (saved) {
                 haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                 rememberSavedTransaction(originalAmount)
                 state.selectedTransactionSplit = state.transactionSplit
+                notice?.show(state, mobileSession)
             }
             onComplete(saved)
         }
@@ -165,7 +173,9 @@ internal class BudgetActions(
                     val unsignedAmount = kotlin.math.abs(amount)
                     state.formatAmount(if (state.transactionType == "Income") unsignedAmount else -unsignedAmount)
                 } ?: state.transactionAmount
+            val after = state.formCategoryEntries(mobileSession)
             coroutineScope.launch {
+                val notice = CategorySaveNotice.prepare(state.selectedBudgetId, mobileSession, emptyList(), after)
                 val created =
                     mobileSession.transactions.createTransaction(
                         budgetId = state.selectedBudgetId,
@@ -189,6 +199,7 @@ internal class BudgetActions(
                     state.lastTransactionAccountId = state.newTransactionAccountId
                     restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)
                     navigation.back()
+                    notice?.show(state, mobileSession)
                 }
             }
         }

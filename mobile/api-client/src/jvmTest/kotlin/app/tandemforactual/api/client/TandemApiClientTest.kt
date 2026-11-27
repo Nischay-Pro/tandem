@@ -315,6 +315,7 @@ class TandemApiClientTest {
             val group = client.createBudgetCategoryGroup("group", "Travel", false, null)
             val flights = client.createBudgetCategory("group", group, "Flights", null)
             client.renameBudgetCategory("group", flights, "Air", null)
+            client.setBudgetCategoryNote("group", flights, "Book early", null)
             client.manageBudgetCategory("group", flights, "hide", null, null)
             client.manageBudgetCategoryGroup("group", group, "rename", "Trips", null, null)
             client.setBudgetCategoryAmount("group", groceries, "2026-11", 50_000, null)
