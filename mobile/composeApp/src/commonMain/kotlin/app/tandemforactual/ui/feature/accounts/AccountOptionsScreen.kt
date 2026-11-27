@@ -65,9 +65,8 @@ internal fun AccountOptionsScreen(
                 liveAccount,
                 liveAccount.balanceMinor?.let { state.formatAccountMoney(it, currency) } ?: "Unavailable",
                 currency ?: state.budgetCurrencyCode,
-                onKindChange = { kind ->
-                    scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, kind) }
-                },
+                onKindChange = { scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, it) } },
+                onNetworkChange = { scope.launch { mobileSession.planning.saveCardNetwork(state.selectedBudgetId, liveAccount.id, it) } },
             ) { navigation.open(AppRoute.EXCHANGE_RATES) }
             SurfaceCard { WhereUsedRow { showUsage = true } }
             AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {

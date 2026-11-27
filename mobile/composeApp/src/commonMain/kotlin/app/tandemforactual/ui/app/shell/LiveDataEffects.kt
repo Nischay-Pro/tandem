@@ -71,7 +71,8 @@ private fun AccountAndScheduleEffects(
     val accountNameOverrides = rememberDerived(mobileSession, state) { budgetQueue.accountNameOverridesFor(state.selectedBudgetId) }
     val accountClosedOverrides = rememberDerived(mobileSession, state) { budgetQueue.accountClosedOverridesFor(state.selectedBudgetId) }
     val accountKinds = mobileSession.planning.accountKinds
-    LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides, accountKinds) {
+    val cardNetworks = mobileSession.planning.accountCardNetworks
+    LaunchedEffect(accountRecords, accountNameOverrides, accountClosedOverrides, accountKinds, cardNetworks) {
         shell.liveAccounts =
             withContext(Dispatchers.Default) {
                 liveAccountSummaries(
@@ -80,6 +81,7 @@ private fun AccountAndScheduleEffects(
                     accountNameOverrides,
                     accountClosedOverrides,
                     accountKinds,
+                    cardNetworks,
                 )
             }
     }

@@ -197,7 +197,10 @@ internal fun TransactionAccountPickerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                         ) {
-                            if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.kind)
+                            if (live) {
+                                val account = accounts.firstOrNull { it.id == item.id }
+                                AccountIconTile(item.label, account?.kind, network = account?.cardNetwork)
+                            }
                             Box(Modifier.weight(1f)) {
                                 ChoiceRow(
                                     item.label,

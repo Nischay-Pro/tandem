@@ -3,6 +3,7 @@ package app.tandemforactual.ui.core.state
 import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.BudgetReorderQueueState
 import app.tandemforactual.ui.core.session.QueuedBudgetReorder
@@ -55,6 +56,21 @@ class LiveBudgetModelsTest {
             ),
             accounts,
         )
+    }
+
+    @Test
+    fun aCardNetworkShowsOnlyOnACreditCard() {
+        val accounts =
+            liveAccountSummaries(
+                listOf(
+                    record(type = "account", id = "card", name = "Rewards", json = """{"id":"card","type":"credit"}"""),
+                    record(type = "account", id = "checking", name = "Checking", json = """{"id":"checking","type":"checking"}"""),
+                ),
+                cardNetworks = mapOf("card" to CardNetwork.VISA, "checking" to CardNetwork.AMEX),
+            )
+
+        assertEquals(CardNetwork.VISA, accounts.first { it.id == "card" }.cardNetwork)
+        assertNull(accounts.first { it.id == "checking" }.cardNetwork)
     }
 
     @Test
