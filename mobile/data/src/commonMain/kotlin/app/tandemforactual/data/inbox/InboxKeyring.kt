@@ -44,8 +44,7 @@ class InboxKeyring(
         store.putValue(appliedName, JsonArray((applied() + entryId).takeLast(MAX_APPLIED).map(::JsonPrimitive)).toString())
     }
 
-    private suspend fun applied(): List<String> =
-        parse(appliedName).mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    private suspend fun applied(): List<String> = parse(appliedName).mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
 
     private suspend fun stored(): List<StoredPair> =
         parse(keysName).mapNotNull { element ->
@@ -126,6 +125,10 @@ object InboxPublicKeys {
 
     suspend fun forgetAll(database: TandemDatabase) {
         val store = AppPreferencesStore(database)
-        store.read().filter { (name, value) -> name.startsWith(PREFIX) && value.isNotEmpty() }.keys.forEach { store.putValue(it, "") }
+        store
+            .read()
+            .filter { (name, value) -> name.startsWith(PREFIX) && value.isNotEmpty() }
+            .keys
+            .forEach { store.putValue(it, "") }
     }
 }
