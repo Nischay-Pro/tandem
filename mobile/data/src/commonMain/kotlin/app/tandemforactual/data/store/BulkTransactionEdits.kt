@@ -208,7 +208,7 @@ fun bulkDuplicateSources(selected: List<BulkTarget>): List<BulkTarget> {
         val source = target.parent ?: target
         val pairedWith = source.body.text("transferId")
         if (pairedWith != null && (pairedWith in sources || sources.values.any { it.body.text("transferId") == source.id })) continue
-        sources.putIfAbsent(source.id, source)
+        sources.getOrPut(source.id) { source }
     }
     return sources.values.toList()
 }
