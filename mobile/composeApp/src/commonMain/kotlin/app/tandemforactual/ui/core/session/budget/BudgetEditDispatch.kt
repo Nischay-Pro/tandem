@@ -66,6 +66,7 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
         BudgetReorderKind.IMPORT_STATEMENT,
         -> Dispatched(sendPayeeEdit(request))
+        BudgetReorderKind.SET_CATEGORY_NOTE -> Dispatched(sendCategoryNote(request))
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
         BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -346,6 +347,25 @@ private suspend fun BudgetEditQueue.sendAccountOrderEdit(request: QueuedBudgetRe
         }
         else -> error("Not an account edit: ${request.kind}")
     }
+
+/** A category's note, saved in Actual's notes under the category's id. */
+private suspend fun BudgetEditQueue.sendCategoryNote(request: QueuedBudgetReorder): Boolean {
+    val payload = request.requirePayload()
+    return host.feedback.performBudgetAction(
+        request.budgetId,
+        request.encryptionPassword,
+        "Couldn’t save this category’s note.",
+        null,
+    ) {
+        host.apiClient.setBudgetCategoryNote(
+            request.budgetId,
+            request.itemId,
+            payload.requiredString("note"),
+            request.encryptionPassword,
+            request.operationId,
+        )
+    }
+}
 
 /** Payee changes and statement imports. */
 private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder): Boolean =
