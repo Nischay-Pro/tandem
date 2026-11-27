@@ -132,12 +132,7 @@ internal fun DataHealthScreen(
             val ordered = if (issue.kind == HealthIssueKind.POSSIBLE_DUPLICATES) rows.sortedWith(duplicateOrder) else rows
             ordered.takeIf { it.isNotEmpty() }?.let { HealthIssue(issue.kind, it) }
         }
-    val ruleFindings =
-        mobileSession.insights.ruleFindingsCache
-            ?.takeIf { it.first == state.selectedBudgetId }
-            ?.second
-            .orEmpty()
-            .filterNot { it.key in ignored }
+    val ruleFindings = visibleRuleFindings(mobileSession, state.selectedBudgetId, ignored)
     val ruleTexts = rememberRuleTexts(mobileSession)
     var acting by remember { mutableStateOf<Pair<HealthIssue, HealthRow>?>(null) }
     var openFinding by remember { mutableStateOf<RuleFinding?>(null) }
@@ -180,7 +175,6 @@ internal fun DataHealthScreen(
                 ) { item -> openTransaction(state, navigation, item, isLive = true) }
             }
         }
-    }
         if (ruleFindings.isNotEmpty()) {
             item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
         }
@@ -188,6 +182,17 @@ internal fun DataHealthScreen(
     CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
     RuleFindingActions(state, navigation, mobileSession, openFinding, ruleTexts, { openFinding = null }, { reload++ }) { failure = it }
 }
+
+private fun visibleRuleFindings(
+    mobileSession: TandemMobileSession,
+    budgetId: String,
+    ignored: Set<String>,
+): List<RuleFinding> =
+    mobileSession.insights.ruleFindingsCache
+        ?.takeIf { it.first == budgetId }
+        ?.second
+        .orEmpty()
+        .filterNot { it.key in ignored }
 
 @Composable
 private fun rememberRuleTexts(mobileSession: TandemMobileSession): Map<String, RuleText> {
