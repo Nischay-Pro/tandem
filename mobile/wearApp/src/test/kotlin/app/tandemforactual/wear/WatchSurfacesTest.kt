@@ -77,10 +77,10 @@ class WatchSurfacesTest {
     @Test
     fun theGlanceLeadsWithTheAmountADayUnlessThePhoneSaysOtherwise() {
         val split = summary().copy(perDayMinor = 9_362, daysLeft = 9)
-        assertEquals(Headline(9_362, "A day · 9 days left", "$1,234.56 left this month"), WatchText.headline(split))
+        assertEquals(Headline(9_362, "A day · 9 days left", "$1,234.56 left this month", "A day"), WatchText.headline(split))
         assertEquals("Left for today", WatchText.headline(split.copy(daysLeft = 1)).label)
         assertEquals(
-            Headline(123_456, WatchText.LEFT_TO_SPEND, "$93.62 a day · 9 days left"),
+            Headline(123_456, WatchText.LEFT_TO_SPEND, "$93.62 a day · 9 days left", WatchText.LEFT_TO_SPEND),
             WatchText.headline(split.copy(perDayFirst = false)),
         )
         val hidden = summary(WatchState.AMOUNTS_HIDDEN).copy(perDayMinor = 1, daysLeft = 3)
