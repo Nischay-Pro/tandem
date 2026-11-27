@@ -13,12 +13,16 @@ data class PayeeUsage(
     val transactions: Int,
 )
 
-/** Payees that look like the same merchant, the name they'd share, the one kept and what made them look different. */
+/**
+ * Payees that look like the same merchant, the name they'd share, the one kept and what made them look different.
+ * [safe] when their cleaned names are the same apart from letter case, so only bank detail told them apart.
+ */
 data class PayeeDuplicateGroup(
     val name: String,
     val keepId: String,
     val members: List<PayeeUsage>,
     val stripped: List<String>,
+    val safe: Boolean,
 )
 
 private const val MIN_BOILERPLATE_PAYEES = 3
@@ -112,6 +116,7 @@ fun payeeDuplicateGroups(payees: List<PayeeUsage>): List<PayeeDuplicateGroup> {
                 keep.id,
                 ordered,
                 members.flatMap { cleaned.getValue(it).stripped }.distinct(),
+                members.map { cleaned.getValue(it).name.lowercase() }.toSet().size == 1,
             )
         }.sortedByDescending { group -> group.members.sumOf { it.transactions } }
 }
