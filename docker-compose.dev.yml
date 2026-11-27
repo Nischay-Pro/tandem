@@ -75,6 +75,46 @@ services:
     networks:
       - tandem-private
 
+  demo-actual:
+    image: ghcr.io/actualbudget/actual:26.11.0@sha256:06cf186569cf58d93e12659ff1a517b65b5b0ebee7050a3991d4bd8a1d398da6
+    volumes:
+      - demo-actual-data:/data
+    ports:
+      - "127.0.0.1:${DEMO_ACTUAL_HOST_PORT:-5006}:5006"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5006/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      - demo
+
+  demo-seed:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile.dev
+    command: ["node", "scripts/screenshots/seed-demo.mjs"]
+    environment:
+      ACTUAL_URL: http://demo-actual:5006
+      ACTUAL_PASSWORD: ${DEMO_PASSWORD:-demo-password}
+      DEMO_TODAY: ${DEMO_TODAY:-}
+    depends_on:
+      demo-actual:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - demo
+
+volumes:
+  demo-actual-data:
+
 networks:
   tandem-private:
     internal: true
+  demo: {}

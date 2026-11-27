@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.LiveAccountSummary
@@ -70,7 +71,7 @@ internal fun AccountDetailHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
     ) {
-        AccountIconTile(accountName, account?.type)
+        AccountIconTile(accountName, account?.kind)
         Box(Modifier.weight(1f)) {
             if (description.isNotBlank()) Badge(description, tandemPalette.muted)
         }
@@ -84,20 +85,18 @@ internal fun AccountDetailHeader(
         }
     }
     AmountHero(
-        accountBalanceLabel(account?.type, account?.balanceMinor),
+        accountBalanceLabel(account?.kind, account?.balanceMinor),
         balance,
         listOfNotNull(converted, accountName, description).joinToString(" · "),
     )
 }
 
-private val DEBT_ACCOUNT_TYPES = setOf("credit", "credit-card", "credit card", "loan", "mortgage", "debt")
-
 /** The balance hero's label: debts show what is owed, and only money you hold is called available. */
 internal fun accountBalanceLabel(
-    type: String?,
+    kind: AccountKind?,
     balanceMinor: Long?,
 ): String {
-    val debt = type?.trim()?.lowercase()?.let { it in DEBT_ACCOUNT_TYPES } == true
+    val debt = kind?.owesMoney == true
     return when {
         debt && (balanceMinor == null || balanceMinor <= 0) -> "Balance owed"
         debt || (balanceMinor != null && balanceMinor < 0) -> "Balance"

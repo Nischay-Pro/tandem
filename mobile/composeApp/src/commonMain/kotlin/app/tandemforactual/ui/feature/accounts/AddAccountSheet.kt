@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.planning.AccountKind
+import app.tandemforactual.data.planning.guessAccountKind
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.createBudgetAccount
 import app.tandemforactual.ui.core.session.budgetActionFeedbackMessage
@@ -59,16 +61,22 @@ internal class AddAccountSheetState(
     name: MutableState<String>,
     offBudget: MutableState<Boolean>,
     groupId: MutableState<String>,
+    kindKey: MutableState<String>,
 ) {
     var visible by visible
     var name by name
     var offBudget by offBudget
     var groupId by groupId
+    var kindKey by kindKey
+
+    /** The kind picked, else one guessed from the name so far. */
+    val kind: AccountKind? get() = AccountKind.fromKey(kindKey) ?: guessAccountKind(name)
 
     fun open(mobileSession: TandemMobileSession) {
         name = ""
         offBudget = false
         groupId = ""
+        kindKey = ""
         mobileSession.feedback.clearBudgetActionMessage()
         visible = true
     }
@@ -80,7 +88,8 @@ internal fun rememberAddAccountSheetState(): AddAccountSheetState {
     val name = rememberSaveable { mutableStateOf("") }
     val offBudget = rememberSaveable { mutableStateOf(false) }
     val groupId = rememberSaveable { mutableStateOf("") }
-    return remember { AddAccountSheetState(visible, name, offBudget, groupId) }
+    val kindKey = rememberSaveable { mutableStateOf("") }
+    return remember { AddAccountSheetState(visible, name, offBudget, groupId, kindKey) }
 }
 
 /** Task sheet for creating a new account with a name, group and off-budget flag. */
@@ -125,6 +134,7 @@ internal fun AddAccountSheet(
                                     sheet.offBudget,
                                     sheet.groupId.ifBlank { null },
                                     state.encryptedPassword.takeIf { it.isNotBlank() },
+                                    sheet.kind,
                                 )
                             if (created) sheet.visible = false
                         }
@@ -133,6 +143,9 @@ internal fun AddAccountSheet(
             },
         ) {
             TextFieldCard("Name", sheet.name, { sheet.name = it }, TextFieldOptions(placeholder = "Checking"))
+            AccountKindPicker(sheet.kind ?: AccountKind.OTHER, suggested = sheet.kindKey.isBlank() && sheet.name.isNotBlank()) {
+                sheet.kindKey = it.key
+            }
             AccountGroupPicker(mobileSession, sheet.groupId) { sheet.groupId = it }
             SurfaceCard {
                 CheckBoxRow(

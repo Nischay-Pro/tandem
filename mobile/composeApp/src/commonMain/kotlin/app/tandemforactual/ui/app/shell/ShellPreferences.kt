@@ -47,6 +47,9 @@ internal fun AppSettingsEffects(
             )
         }
     }
+    LaunchedEffect(state.settingsStorageReady, state.automaticBackup.network, env.onAutomaticBackupNetworkChanged) {
+        if (state.settingsStorageReady) env.onAutomaticBackupNetworkChanged?.invoke(state.automaticBackup.network)
+    }
     LaunchedEffect(mobileSession.budgetCatalogVersion) {
         if (mobileSession.budgetCatalogVersion > 0) {
             state.cachedBudgetCatalogJson = encodeCachedBudgetCatalog(mobileSession.budgets)

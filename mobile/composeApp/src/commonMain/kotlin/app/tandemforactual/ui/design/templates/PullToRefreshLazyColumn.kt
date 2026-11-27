@@ -14,7 +14,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -43,7 +42,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.theme.TandemMotion
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
@@ -84,7 +82,7 @@ internal fun PullToRefreshLazyColumn(
         LazyColumn(
             state = routeListState,
             modifier = Modifier.fillMaxSize().nestedScroll(refreshConnection),
-            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = TandemSpacing.medium),
+            contentPadding = pageContentPadding(horizontalPadding),
             verticalArrangement = Arrangement.spacedBy(verticalSpacing),
             content = content,
         )

@@ -50,6 +50,8 @@ internal enum class AppRoute(
     SECURITY_PRIVACY("Security and privacy"),
     NOTIFICATIONS("Notifications"),
     LOCAL_DATA("Local data and storage"),
+    AUTOMATION("Automation"),
+    CONNECTED_SERVICES("Connected services"),
     ABOUT("About and help"),
     MERCHANT_ICON_LICENSES("Licenses"),
     CHANGE_HISTORY("Change history"),

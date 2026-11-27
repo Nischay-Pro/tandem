@@ -113,7 +113,7 @@ internal class TandemMobileSession(
     override val repository: LocalBudgetRepository? get() = storage?.repository
 
     /** Goals, debts, retirement, reimbursements and the other planning records Actual doesn't hold. */
-    val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
+    override val planning = PlanningController(apiClient, { storage?.database }, nowEpochMillis)
 
     override val budgetMutationQueuePersistence: BudgetMutationQueuePersistence?
         get() = queuePersistenceOverride ?: storage?.queuePersistence

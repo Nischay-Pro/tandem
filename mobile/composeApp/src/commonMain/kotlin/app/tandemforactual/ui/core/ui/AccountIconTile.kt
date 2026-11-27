@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.rows.LocalRowLogos
@@ -27,7 +28,7 @@ import app.tandemforactual.ui.design.theme.tandemPalette
 @Composable
 internal fun AccountIconTile(
     accountName: String,
-    accountType: String? = null,
+    kind: AccountKind? = null,
     modifier: Modifier = Modifier,
 ) {
     val logos = LocalRowLogos.current
@@ -50,7 +51,7 @@ internal fun AccountIconTile(
             )
         } else {
             Icon(
-                accountTypeIcon(accountName, accountType),
+                accountTypeIcon(accountName, kind),
                 contentDescription = null,
                 modifier = Modifier.size(TandemLayout.listRowIconSize),
                 tint = tandemPalette.accent,

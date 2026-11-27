@@ -48,4 +48,5 @@ internal class ShellEnvironment(
     val openSignInPage: ((url: String, onCancelled: () -> Unit) -> Unit)? = null,
     val onAppSwitcherPrivacyChanged: ((hidden: Boolean) -> Unit)? = null,
     val tabletopFold: StateFlow<TabletopFold?> = MutableStateFlow(null),
+    val onAutomaticBackupNetworkChanged: ((SyncNetwork) -> Unit)? = null,
 )

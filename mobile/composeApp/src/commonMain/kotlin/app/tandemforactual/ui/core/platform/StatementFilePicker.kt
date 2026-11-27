@@ -2,14 +2,16 @@ package app.tandemforactual.ui.core.platform
 
 import androidx.compose.runtime.Composable
 
-internal data class PickedStatementFile(
+internal class PickedStatementFile(
     val name: String,
     val contents: String?,
     val errorMessage: String? = null,
+    val bytes: ByteArray? = null,
 )
 
 internal const val MAX_STATEMENT_IMPORT_CHARS = 10_000_000
 internal const val MAX_STATEMENT_IMPORT_BYTES = 10_000_000
+internal const val MAX_BINARY_FILE_BYTES = 200_000_000
 
 internal fun decodeStatementBytes(bytes: ByteArray): String =
     decodeUtf16(bytes) ?: runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }
@@ -74,5 +76,9 @@ private fun decodeUtf16(bytes: ByteArray): String? {
     }.concatToString()
 }
 
+/** Picks a file; a [binary] pick keeps the raw bytes, up to [MAX_BINARY_FILE_BYTES], instead of decoding text. */
 @Composable
-internal expect fun rememberStatementFilePicker(onPicked: (PickedStatementFile) -> Unit): () -> Unit
+internal expect fun rememberStatementFilePicker(
+    binary: Boolean = false,
+    onPicked: (PickedStatementFile) -> Unit,
+): () -> Unit

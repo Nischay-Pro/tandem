@@ -126,7 +126,7 @@ internal fun AccountsSummaryCard(
         shown.forEach { account ->
             ListRow(
                 account.name,
-                leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
+                leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.kind)),
                 trailingContent = { money(account.balanceMinor ?: 0) },
                 onClick = {
                     state.selectedAccountId = account.id
