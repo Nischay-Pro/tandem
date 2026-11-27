@@ -2,12 +2,10 @@ package app.tandemforactual.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -97,11 +95,7 @@ class ExternalConnectionsTest {
             }
         }
 
-        composeTestRule.onAllNodesWithText("What’s shared").assertCountEquals(2)
-        composeTestRule
-            .onNodeWithText(
-                "Tandem downloads each linked bank’s logo from that bank’s website. The bank can see that your device asked, but nothing about your budget.",
-            ).assertExists()
+        composeTestRule.onNodeWithText("From each bank’s own website").assertExists()
         composeTestRule
             .onNodeWithText("Show bank logos")
             .performScrollTo()
@@ -110,6 +104,11 @@ class ExternalConnectionsTest {
         assertTrue(state.bankIconsEnabled)
         composeTestRule.onNodeWithText("Show bank logos").performClick()
         assertFalse(state.bankIconsEnabled)
+
+        composeTestRule.onNodeWithText("Only currency codes and dates are sent").assertDoesNotExist()
+        composeTestRule.onNodeWithText("What’s shared").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("The bank sees that your device asked, nothing about your budget").assertExists()
+        composeTestRule.onNodeWithText("Only currency codes and dates are sent").assertExists()
     }
 
     @Test

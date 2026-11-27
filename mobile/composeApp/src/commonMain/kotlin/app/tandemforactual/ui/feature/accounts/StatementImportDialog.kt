@@ -31,6 +31,8 @@ import app.tandemforactual.ui.core.importing.StatementCsvColumnMapping
 import app.tandemforactual.ui.core.importing.StatementCsvLayout
 import app.tandemforactual.ui.core.importing.StatementDateOrder
 import app.tandemforactual.ui.core.importing.StatementParseResult
+import app.tandemforactual.ui.core.importing.isAlreadyIn
+import app.tandemforactual.ui.core.importing.newRows
 import app.tandemforactual.ui.core.importing.statementCount
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
@@ -59,6 +61,7 @@ internal fun StatementImportDialog(
     currencyDisplaySettings: BudgetDisplaySettings?,
     accountName: String,
     filename: String,
+    showDateOrder: Boolean,
     parseResult: StatementParseResult?,
     parseError: String?,
     actionMessage: String?,
@@ -93,7 +96,7 @@ internal fun StatementImportDialog(
             actionMessage?.let {
                 InlineMessage(it, actionMessageKind)
             }
-            if (parseResult != null && filename.substringAfterLast('.', "").equals("qif", ignoreCase = true)) {
+            if (parseResult != null && showDateOrder) {
                 StatementDateOrderPicker(
                     dateOrder = dateOrder,
                     enabled = !busy,
@@ -120,7 +123,7 @@ internal fun StatementImportDialog(
                     importPreviewLoading,
                     busy,
                     currencyDisplaySettings,
-                ) { onImport(result) }
+                ) { onImport(importPreview?.takeIf { it.serverChecked }?.let(result::newRows) ?: result) }
             }
         }
     }
@@ -223,10 +226,18 @@ private fun StatementImportResult(
         if (preview.serverChecked) {
             ListRow(
                 "New in Actual",
-                trailing = preview.newRowCount(result.transactions.size).toString(),
+                trailing =
+                    result
+                        .newRows(preview)
+                        .transactions.size
+                        .toString(),
                 leading = RowLeading.None,
             )
-            ListRow("Already in Actual", trailing = preview.existingImportedIds.size.toString(), leading = RowLeading.None)
+            ListRow(
+                "Already in Actual",
+                trailing = result.transactions.count { it.isAlreadyIn(preview) }.toString(),
+                leading = RowLeading.None,
+            )
         } else {
             InlineMessage(STATEMENT_IMPORT_CONNECTION_REQUIRED, InlineMessageKind.ERROR)
         }
@@ -248,7 +259,7 @@ private fun StatementImportResult(
             "${transaction.date} · ${transaction.payeeName}",
             subtitle =
                 buildList {
-                    if (importPreview?.existingImportedIds?.contains(transaction.importedId) == true) {
+                    if (importPreview?.let(transaction::isAlreadyIn) == true) {
                         add("Already in Actual")
                     }
                     transaction.notes?.let { add(it) }
@@ -257,7 +268,7 @@ private fun StatementImportResult(
             leading = RowLeading.Icon(Lucide.Receipt),
         )
     }
-    val newRows = importPreview?.takeIf { it.serverChecked }?.newRowCount(result.transactions.size)
+    val newRows = importPreview?.takeIf { it.serverChecked }?.let { result.newRows(it).transactions.size }
     TandemActionButton(
         statementImportButtonLabel(result.transactions.size, newRows, busy),
         TandemActionButtonTone.PRIMARY,

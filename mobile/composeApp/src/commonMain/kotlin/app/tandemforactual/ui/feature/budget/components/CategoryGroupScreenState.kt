@@ -22,6 +22,7 @@ internal class CategoryGroupScreenState(
     showCreateCategoryDialog: MutableState<Boolean>,
     groupNameDraft: MutableState<String>,
     newCategoryName: MutableState<String>,
+    showUsageSheet: MutableState<Boolean>,
 ) {
     var showHidden by showHidden
     var selectedCategoryOrderId by selectedCategoryOrderId
@@ -31,6 +32,7 @@ internal class CategoryGroupScreenState(
     var showCreateCategoryDialog by showCreateCategoryDialog
     var groupNameDraft by groupNameDraft
     var newCategoryName by newCategoryName
+    var showUsageSheet by showUsageSheet
 }
 
 @Composable
@@ -50,6 +52,7 @@ internal fun rememberCategoryGroupScreenState(
     val showCreateCategoryDialog = rememberSaveable(budgetId, groupId) { mutableStateOf(false) }
     val groupNameDraft = rememberSaveable(budgetId, groupId) { mutableStateOf(groupName.orEmpty()) }
     val newCategoryName = rememberSaveable(budgetId, groupId) { mutableStateOf("") }
+    val showUsageSheet = rememberSaveable(budgetId, groupId) { mutableStateOf(false) }
     return remember(
         showHidden,
         selectedCategoryOrderId,
@@ -59,6 +62,7 @@ internal fun rememberCategoryGroupScreenState(
         showCreateCategoryDialog,
         groupNameDraft,
         newCategoryName,
+        showUsageSheet,
     ) {
         CategoryGroupScreenState(
             showHidden,
@@ -69,6 +73,7 @@ internal fun rememberCategoryGroupScreenState(
             showCreateCategoryDialog,
             groupNameDraft,
             newCategoryName,
+            showUsageSheet,
         )
     }
 }

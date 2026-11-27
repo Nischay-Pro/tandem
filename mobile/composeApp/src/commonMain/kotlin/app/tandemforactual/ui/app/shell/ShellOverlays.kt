@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BudgetSwitchSplash
 import app.tandemforactual.ui.app.UNDO_NOTICE_MILLIS
+import app.tandemforactual.ui.app.navigationTabs
+import app.tandemforactual.ui.core.keyboard.shortcutTable
 import app.tandemforactual.ui.core.session.ForgetBankIconsWhenOff
 import app.tandemforactual.ui.core.session.planning.FetchExchangeRatesWhenOn
 import app.tandemforactual.ui.core.session.transactions.undoTransactionDeletes
@@ -27,7 +29,7 @@ import app.tandemforactual.ui.feature.onboarding.nextSetupRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The layers drawn above the scaffold: undo notice, discard dialog, menu, budget switch cover and app lock. */
+/** The layers drawn above the scaffold: undo notice, discard dialog, menu, shortcut sheet, budget switch cover and app lock. */
 @Composable
 internal fun ShellOverlays(
     chrome: ShellChromeState,
@@ -41,6 +43,11 @@ internal fun ShellOverlays(
     UndoNotice(ctx)
     if (shell.showDiscardTransactionDialog) DiscardTransactionDialog(ctx)
     ShellMenu(chrome)
+    ShortcutSheet(
+        visible = shell.showShortcuts,
+        shortcuts = shortcutTable(navigationTabs(state.interfaceMode).map { it.second }),
+        onClose = { shell.showShortcuts = false },
+    )
     BudgetSwitchSplash(
         state.selectedBudget.takeIf { state.modeSwitchTarget == null && state.budgetSwitchSplashId != null },
         state.modeSwitchTarget,

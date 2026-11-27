@@ -26,6 +26,7 @@ internal class CategoryDetailSheetState(
     iconSearch: MutableState<String>,
     selectedIconChoice: MutableState<String>,
     deleteDestinationId: MutableState<String?>,
+    showUsageSheet: MutableState<Boolean>,
 ) {
     var showEditDialog by showEditDialog
     var showDeleteDialog by showDeleteDialog
@@ -41,6 +42,7 @@ internal class CategoryDetailSheetState(
     var iconSearch by iconSearch
     var selectedIconChoice by selectedIconChoice
     var deleteDestinationId by deleteDestinationId
+    var showUsageSheet by showUsageSheet
 }
 
 @Composable
@@ -64,6 +66,7 @@ internal fun rememberCategoryDetailSheetState(
     val iconSearch = rememberSaveable(budgetId, categoryId) { mutableStateOf("") }
     val selectedIconChoice = rememberSaveable(budgetId, categoryId) { mutableStateOf("Automatic") }
     val deleteDestinationId = rememberSaveable(budgetId, categoryId) { mutableStateOf<String?>(null) }
+    val showUsageSheet = rememberSaveable(budgetId, categoryId) { mutableStateOf(false) }
     return remember(budgetId, categoryId, monthId) {
         CategoryDetailSheetState(
             showEditDialog,
@@ -80,6 +83,7 @@ internal fun rememberCategoryDetailSheetState(
             iconSearch,
             selectedIconChoice,
             deleteDestinationId,
+            showUsageSheet,
         )
     }
 }

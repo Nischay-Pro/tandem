@@ -26,11 +26,17 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.connections_bank_logos
 import app.tandemforactual.ui.generated.resources.connections_bank_logos_detail
+import app.tandemforactual.ui.generated.resources.connections_bank_logos_shared_limit
+import app.tandemforactual.ui.generated.resources.connections_bank_logos_shared_source
 import app.tandemforactual.ui.generated.resources.connections_bank_logos_short
+import app.tandemforactual.ui.generated.resources.connections_bank_logos_subtitle
 import app.tandemforactual.ui.generated.resources.connections_detail
 import app.tandemforactual.ui.generated.resources.connections_exchange_rates
 import app.tandemforactual.ui.generated.resources.connections_exchange_rates_detail
+import app.tandemforactual.ui.generated.resources.connections_exchange_rates_shared_limit
+import app.tandemforactual.ui.generated.resources.connections_exchange_rates_shared_source
 import app.tandemforactual.ui.generated.resources.connections_exchange_rates_short
+import app.tandemforactual.ui.generated.resources.connections_exchange_rates_subtitle
 import app.tandemforactual.ui.generated.resources.connections_rate_server
 import app.tandemforactual.ui.generated.resources.connections_rate_server_invalid
 import app.tandemforactual.ui.generated.resources.connections_rate_server_save
@@ -44,6 +50,8 @@ internal class ExternalConnection(
     val title: StringResource,
     val detail: StringResource,
     val shortTitle: StringResource,
+    val subtitle: StringResource,
+    val shared: List<StringResource>,
     val isOn: (AppState) -> Boolean,
     val turn: (AppState, Boolean) -> Unit,
     val advanced: (@Composable (AppState) -> Unit)? = null,
@@ -55,6 +63,8 @@ internal val externalConnections =
             Res.string.connections_bank_logos,
             Res.string.connections_bank_logos_detail,
             Res.string.connections_bank_logos_short,
+            Res.string.connections_bank_logos_subtitle,
+            listOf(Res.string.connections_bank_logos_shared_source, Res.string.connections_bank_logos_shared_limit),
             isOn = { it.bankIconsEnabled },
             turn = { state, on -> state.bankIconsEnabled = on },
         ),
@@ -62,6 +72,8 @@ internal val externalConnections =
             Res.string.connections_exchange_rates,
             Res.string.connections_exchange_rates_detail,
             Res.string.connections_exchange_rates_short,
+            Res.string.connections_exchange_rates_subtitle,
+            listOf(Res.string.connections_exchange_rates_shared_source, Res.string.connections_exchange_rates_shared_limit),
             isOn = { it.exchangeRateFetching.enabled },
             turn = { state, on -> state.exchangeRateFetching = state.exchangeRateFetching.copy(enabled = on) },
             advanced = { ExchangeRateServerField(it) },

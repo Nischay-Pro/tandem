@@ -67,6 +67,21 @@ Markdown run the full suite.
    a hook is missing, rerun the installer. Hooks do not replace CI; use CI to
    check Xcode and simulator behavior.
 
+## Demo budget
+
+`pnpm demo:up` starts a local Actual server on `http://localhost:5006`
+(password `demo-password`) and loads two fictional budgets: "Demo household"
+(envelope) and "Demo household (tracking)". Each has 13 months of history
+ending today, built from a fixed seed by `scripts/demo-budget/generate.mjs`.
+`docker compose -f docker-compose.dev.yml up` starts the same server alongside
+the API. The data persists in a Compose volume; `pnpm dev:down --volumes`
+clears it.
+
+`scripts/demo-budget/manifest.json` lists what the budgets contain. After
+changing the generator, run `pnpm demo:manifest` and commit the new manifest;
+CI checks it with `node --test scripts/demo-budget/generate.test.mjs`. Set
+`DEMO_TODAY=YYYY-MM-DD` to load the exact data the manifest describes.
+
 Optional: `pnpm test:mutation` runs incremental API mutation tests;
 `pnpm test:mutation:full` forces the full configured set. GitHub Actions also
 runs the full suite weekly and on manual dispatch. See
