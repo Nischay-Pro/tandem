@@ -58,6 +58,19 @@ final class WatchSummaryTests: XCTestCase {
         XCTAssertEqual(try summary(self.ready).headlineLabel, "Left to spend")
     }
 
+    func testTheGlanceShowsTheNextBillAndCategoriesAsTheIPhoneIsSet() throws {
+        let plain = try summary(ready)
+        XCTAssertNil(plain.glanceNextBill)
+        XCTAssertTrue(plain.categoriesOnGlance)
+
+        let billOnly = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","u":[{"n":"Water","d":"2026-11-27","a":"$40.00"}],"gb":true,"gc":false}"#)
+        XCTAssertEqual(billOnly.glanceNextBill?.name, "Water")
+        XCTAssertFalse(billOnly.categoriesOnGlance)
+
+        let locked = try summary(#"{"v":1,"s":"locked","g":1,"b":"Home","u":[{"n":"Water","d":"2026-11-27"}],"gb":true}"#)
+        XCTAssertNil(locked.glanceNextBill)
+    }
+
     func testSummariesOverTheLimitOrFromAnotherVersionAreIgnored() {
         XCTAssertNil(WatchSummary.decode(nil))
         XCTAssertNil(WatchSummary.decode(Data(#"{"v":2,"s":"ready","g":1}"#.utf8)))

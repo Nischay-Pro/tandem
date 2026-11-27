@@ -6,6 +6,8 @@ data class WatchSettings(
     val quickAddEnabled: Boolean = true,
     val summaryAfterUnlock: Boolean = true,
     val perDayFirst: Boolean = true,
+    val nextBillOnGlance: Boolean = false,
+    val categoriesOnGlance: Boolean = true,
 ) {
     fun toPreferences(): Map<String, String> =
         mapOf(
@@ -13,6 +15,8 @@ data class WatchSettings(
             QUICK_ADD to quickAddEnabled.toString(),
             AFTER_UNLOCK to summaryAfterUnlock.toString(),
             PER_DAY_FIRST to perDayFirst.toString(),
+            BILL_ON_GLANCE to nextBillOnGlance.toString(),
+            CATEGORIES_ON_GLANCE to categoriesOnGlance.toString(),
         )
 
     fun pinning(
@@ -33,6 +37,8 @@ data class WatchSettings(
         const val QUICK_ADD = "watchQuickAddEnabled"
         const val AFTER_UNLOCK = "watchSummaryAfterUnlock"
         const val PER_DAY_FIRST = "watchPerDayFirst"
+        const val BILL_ON_GLANCE = "watchNextBillOnGlance"
+        const val CATEGORIES_ON_GLANCE = "watchCategoriesOnGlance"
 
         fun from(preferences: Map<String, String>): WatchSettings =
             WatchSettings(
@@ -46,6 +52,8 @@ data class WatchSettings(
                 quickAddEnabled = preferences[QUICK_ADD]?.toBooleanStrictOrNull() ?: true,
                 summaryAfterUnlock = preferences[AFTER_UNLOCK]?.toBooleanStrictOrNull() ?: true,
                 perDayFirst = preferences[PER_DAY_FIRST]?.toBooleanStrictOrNull() ?: true,
+                nextBillOnGlance = preferences[BILL_ON_GLANCE]?.toBooleanStrictOrNull() ?: false,
+                categoriesOnGlance = preferences[CATEGORIES_ON_GLANCE]?.toBooleanStrictOrNull() ?: true,
             )
     }
 }

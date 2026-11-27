@@ -11,11 +11,18 @@ struct GlanceView: View {
                     LeftToSpendHeader(summary: summary)
                 }
                 .listRowBackground(Color.clear)
+                if let bill = summary.glanceNextBill {
+                    Section {
+                        NextBillRow(bill: bill, summary: summary)
+                    }
+                }
                 PendingAdditions()
-                Section {
-                    ForEach(summary.categories ?? []) { category in
-                        NavigationLink(value: category) {
-                            CategoryRow(category: category, summary: summary)
+                if summary.categoriesOnGlance {
+                    Section {
+                        ForEach(summary.categories ?? []) { category in
+                            NavigationLink(value: category) {
+                                CategoryRow(category: category, summary: summary)
+                            }
                         }
                     }
                 }
@@ -27,6 +34,30 @@ struct GlanceView: View {
                 PendingAdditions()
             }
         }
+    }
+}
+
+private struct NextBillRow: View {
+    let bill: WatchSummary.Bill
+    let summary: WatchSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Next: \(bill.name)")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(summary.amount(bill.amount))
+                    .font(.headline)
+                    .monospacedDigit()
+                    .privacySensitive()
+            }
+            Text(WatchDates.relative(bill.date, now: Date()))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

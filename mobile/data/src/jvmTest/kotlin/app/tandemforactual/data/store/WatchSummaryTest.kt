@@ -52,7 +52,7 @@ class WatchSummaryTest {
         var settings = WatchSettings()
         (1..8).forEach { settings = settings.pinning("c$it", true) }
         assertEquals((1..6).map { "c$it" }, settings.pinnedCategoryIds)
-        settings = settings.pinning("c2", false).copy(perDayFirst = false)
+        settings = settings.pinning("c2", false).copy(perDayFirst = false, nextBillOnGlance = true, categoriesOnGlance = false)
         assertEquals(listOf("c1", "c3", "c4", "c5", "c6"), settings.pinnedCategoryIds)
         assertEquals(settings, WatchSettings.from(settings.toPreferences()))
         assertEquals(WatchSettings(), WatchSettings.from(emptyMap()))
@@ -156,6 +156,12 @@ class WatchSummaryTest {
             val monthFirst = pinned + WatchSettings(perDayFirst = false).toPreferences()
             val monthly = decode(watchSummaryJson(repository, monthFirst, TODAY, NOW, opened = false, format))
             assertEquals("false", monthly.text("pf"))
+            assertEquals("false", ready.text("gb"))
+            assertEquals("true", ready.text("gc"))
+            val billNoCategories = pinned + WatchSettings(nextBillOnGlance = true, categoriesOnGlance = false).toPreferences()
+            val glance = decode(watchSummaryJson(repository, billNoCategories, TODAY, NOW, opened = false, format))
+            assertEquals("true", glance.text("gb"))
+            assertEquals("false", glance.text("gc"))
             assertEquals("E-50", ready.text("r"))
             assertEquals("true", ready.getValue("ro").jsonPrimitive.content)
             val categories = ready.getValue("c").jsonArray.map { it.jsonObject }

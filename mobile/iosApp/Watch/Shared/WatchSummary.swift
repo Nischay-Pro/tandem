@@ -100,6 +100,8 @@ struct WatchSummary: Codable, Equatable {
     let perDay: String?
     let daysLeft: Int?
     let perDayFirst: Bool?
+    let glanceBill: Bool?
+    let glanceCategories: Bool?
     let categories: [Category]?
     let bills: [Bill]?
     let quickAdd: QuickAdd?
@@ -118,6 +120,8 @@ struct WatchSummary: Codable, Equatable {
         case perDay = "pd"
         case daysLeft = "dl"
         case perDayFirst = "pf"
+        case glanceBill = "gb"
+        case glanceCategories = "gc"
         case categories = "c"
         case bills = "u"
         case quickAdd = "q"
@@ -152,6 +156,11 @@ struct WatchSummary: Codable, Equatable {
     }
 
     var headlineAmount: String { amount(leadsWithPerDay ? perDay : leftToSpend) }
+
+    /// The bill the glance shows under the headline, when the iPhone is set to show one.
+    var glanceNextBill: Bill? { glanceBill == true && state != .locked ? bills?.first : nil }
+
+    var categoriesOnGlance: Bool { glanceCategories != false }
 
     /// The headline's name where only a word or two fits, as on complications.
     var headlineShort: String { leadsWithPerDay ? (daysLeft == 1 ? "Today" : "A day") : "Left to spend" }

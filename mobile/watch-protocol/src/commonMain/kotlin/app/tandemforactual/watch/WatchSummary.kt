@@ -87,6 +87,8 @@ data class WatchSummary(
     @SerialName("pd") val perDayMinor: Long? = null,
     @SerialName("dl") val daysLeft: Int? = null,
     @SerialName("pf") val perDayFirst: Boolean = true,
+    @SerialName("gb") val nextBillOnGlance: Boolean = false,
+    @SerialName("gc") val categoriesOnGlance: Boolean = true,
     @SerialName("c") val categories: List<WatchCategory> = emptyList(),
     @SerialName("qc") val quickCategories: List<WatchChoice> = emptyList(),
     @SerialName("py") val recentPayees: List<String> = emptyList(),

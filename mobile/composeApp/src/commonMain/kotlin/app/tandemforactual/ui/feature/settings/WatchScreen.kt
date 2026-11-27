@@ -28,6 +28,10 @@ import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.watch_after_unlock
 import app.tandemforactual.ui.generated.resources.watch_after_unlock_detail
+import app.tandemforactual.ui.generated.resources.watch_bill_on_glance
+import app.tandemforactual.ui.generated.resources.watch_bill_on_glance_detail
+import app.tandemforactual.ui.generated.resources.watch_categories_on_glance
+import app.tandemforactual.ui.generated.resources.watch_categories_on_glance_detail
 import app.tandemforactual.ui.generated.resources.watch_detail
 import app.tandemforactual.ui.generated.resources.watch_per_day_first
 import app.tandemforactual.ui.generated.resources.watch_per_day_first_detail
@@ -71,6 +75,20 @@ internal fun WatchScreen(
                 subtitle = stringResource(Res.string.watch_per_day_first_detail),
                 checked = settings.perDayFirst,
                 onChange = { state.watchSettings = state.watchSettings.copy(perDayFirst = it) },
+            )
+            DividerLine()
+            ToggleRow(
+                stringResource(Res.string.watch_bill_on_glance),
+                subtitle = stringResource(Res.string.watch_bill_on_glance_detail),
+                checked = settings.nextBillOnGlance,
+                onChange = { state.watchSettings = state.watchSettings.copy(nextBillOnGlance = it) },
+            )
+            DividerLine()
+            ToggleRow(
+                stringResource(Res.string.watch_categories_on_glance),
+                subtitle = stringResource(Res.string.watch_categories_on_glance_detail),
+                checked = settings.categoriesOnGlance,
+                onChange = { state.watchSettings = state.watchSettings.copy(categoriesOnGlance = it) },
             )
         }
         PinnedCategories(state, mobileSession)

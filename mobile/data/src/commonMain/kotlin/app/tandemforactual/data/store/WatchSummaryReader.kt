@@ -63,6 +63,7 @@ suspend fun watchSummary(
     val payeeNames = payeeNames(repository, budgetId)
     val recent = recentTransactions(repository, budgetId, ActualDates.addDays(todayIso, -RECENT_DAYS))
     val allowance = month?.long("totalBalance")?.let { dailyAllowance(it, todayIso) }
+    val glance = WatchSettings.from(preferences)
     return WatchSummary(
         state = state,
         generatedAtEpochMs = nowEpochMs,
@@ -75,7 +76,9 @@ suspend fun watchSummary(
         toBudgetNegative = (month?.long("toBudget") ?: 0) < 0,
         perDay = allowance?.let { money(it.perDayMinor) },
         daysLeft = allowance?.daysLeft,
-        perDayFirst = WatchSettings.from(preferences).perDayFirst,
+        perDayFirst = glance.perDayFirst,
+        nextBillOnGlance = glance.nextBillOnGlance,
+        categoriesOnGlance = glance.categoriesOnGlance,
         categories =
             shown.map { category ->
                 val lines = if (amounts) recent.filter { it.categoryId == category.id }.take(TRANSACTION_COUNT) else emptyList()

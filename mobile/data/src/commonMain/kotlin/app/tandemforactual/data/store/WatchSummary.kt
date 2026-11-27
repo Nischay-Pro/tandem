@@ -103,6 +103,8 @@ data class WatchSummary(
     val perDay: String? = null,
     val daysLeft: Int? = null,
     val perDayFirst: Boolean = true,
+    val nextBillOnGlance: Boolean = false,
+    val categoriesOnGlance: Boolean = true,
     val categories: List<WatchCategory> = emptyList(),
     val bills: List<WatchBill> = emptyList(),
     val quickAdd: WatchQuickAdd = WatchQuickAdd(open = false),
@@ -206,6 +208,8 @@ private fun encode(summary: WatchSummary): String =
                 }
             }
         }
+        put("gb", summary.nextBillOnGlance)
+        put("gc", summary.categoriesOnGlance)
         putJsonObject("q") { putQuickAdd(summary.quickAdd) }
     }.toString()
 

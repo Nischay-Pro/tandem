@@ -119,6 +119,8 @@ private suspend fun visibleSummary(
         perDayMinor = allowance?.perDayMinor,
         daysLeft = allowance?.daysLeft,
         perDayFirst = settings.perDayFirst,
+        nextBillOnGlance = settings.nextBillOnGlance,
+        categoriesOnGlance = settings.categoriesOnGlance,
         categories = pinned.map { it.toWatch(recent.filter { record -> record.categoryId == it.id }, payees) },
         quickCategories =
             recent

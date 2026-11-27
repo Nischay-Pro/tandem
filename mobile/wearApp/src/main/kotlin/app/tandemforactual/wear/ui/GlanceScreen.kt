@@ -121,7 +121,16 @@ private fun GlanceScreen(
                     )
                 }
             }
-            summary?.categories?.forEach { category ->
+            val nextBill = summary?.takeIf { it.nextBillOnGlance && it.state != WatchState.LOCKED }?.bills?.firstOrNull()
+            if (summary != null && nextBill != null) {
+                item(key = "next-bill") {
+                    Panel(Modifier.transformedHeight(this, spec)) {
+                        LabelledRow("Next: ${nextBill.name}", WatchText.billAmount(summary, nextBill.amountMinor))
+                        Text(WatchText.billDate(nextBill.date), style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
+                    }
+                }
+            }
+            summary?.categories?.takeIf { summary.categoriesOnGlance }?.forEach { category ->
                 item(key = category.id) {
                     CategoryCard(
                         summary,
