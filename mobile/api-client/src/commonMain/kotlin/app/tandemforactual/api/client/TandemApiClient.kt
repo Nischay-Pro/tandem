@@ -61,7 +61,7 @@ class TandemApiClient(
     var budgetFiles: ActualBudgetFiles? = null,
     var today: () -> String = ::localTodayIsoDate,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
-    private val newId: () -> String = { Uuid.random().toString() },
+    internal val newId: () -> String = { Uuid.random().toString() },
 ) : AutoCloseable {
     internal val sessionMutex = Mutex()
     private val budgetMutex = processBudgetMutex

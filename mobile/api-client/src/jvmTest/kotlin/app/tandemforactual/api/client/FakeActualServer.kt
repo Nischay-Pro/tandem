@@ -39,6 +39,10 @@ internal class FakeActualServer {
             """{"name":"Bare"}]}}"""
     var syncFailure: String? = null
     var failUploads = false
+    var failFileUploads = false
+    val uploaded = linkedMapOf<String, UploadedFile>()
+    val createdKeys = mutableListOf<String>()
+    val resets = mutableListOf<String>()
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
 
@@ -102,9 +106,44 @@ internal class FakeActualServer {
                             respond("""{"status":"error","reason":"invalid-password"}""", HttpStatusCode.BadRequest)
                         }
                     }
-                    "/sync/list-user-files" -> respond(files)
+                    "/sync/list-user-files" ->
+                        respond(
+                            files.trimEnd().removeSuffix("]}") +
+                                uploaded.values.joinToString("") {
+                                    """,{"fileId":"${it.fileId}","groupId":"${it.groupId}","name":"${it.name}"${
+                                        it.encryptMeta?.let { ",\"encryptKeyId\":\"key\"" }.orEmpty()
+                                    }}"""
+                                } + "]}",
+                        )
+                    "/sync/upload-user-file" -> {
+                        if (failFileUploads) return@MockEngine respond("", HttpStatusCode.InternalServerError)
+                        val fileId = checkNotNull(request.headers["x-actual-file-id"])
+                        val file =
+                            UploadedFile(
+                                fileId,
+                                "restored-${uploaded.size + 1}",
+                                java.net.URLDecoder.decode(request.headers["x-actual-name"], "UTF-8"),
+                                (request.body as OutgoingContent.ByteArrayContent).bytes(),
+                                request.headers["x-actual-encrypt-meta"],
+                            )
+                        uploaded[fileId] = file
+                        respond("""{"status":"ok","groupId":"${file.groupId}"}""")
+                    }
+                    "/sync/user-create-key" -> {
+                        createdKeys += (request.body as TextContent).text
+                        respond("""{"status":"ok"}""")
+                    }
+                    "/sync/reset-user-file" -> {
+                        resets += (request.body as TextContent).text
+                        respond("""{"status":"ok"}""")
+                    }
                     "/sync/get-user-file-info" ->
-                        if (request.headers["x-actual-file-id"] == "encrypted") {
+                        uploaded[request.headers["x-actual-file-id"]]?.let { file ->
+                            respond(
+                                """{"status":"ok","data":{"fileId":"${file.fileId}","groupId":"${file.groupId}",""" +
+                                    """"name":"${file.name}"${file.encryptMeta?.let { ",\"encryptMeta\":$it" }.orEmpty()}}}""",
+                            )
+                        } ?: if (request.headers["x-actual-file-id"] == "encrypted") {
                             respond(
                                 """{"status":"ok","data":{"fileId":"encrypted","groupId":"locked","name":"Locked",""" +
                                     """"encryptMeta":{"keyId":"key","iv":"${b64(
@@ -116,6 +155,7 @@ internal class FakeActualServer {
                         }
                     "/sync/download-user-file" -> {
                         downloads.incrementAndGet()
+                        uploaded[request.headers["x-actual-file-id"]]?.let { return@MockEngine respond(it.body) }
                         respond(
                             if (request.headers["x-actual-file-id"] ==
                                 "encrypted"
@@ -147,19 +187,24 @@ internal class FakeActualServer {
                         val sent = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                         if (failUploads && sent.messages.isNotEmpty()) return@MockEngine respond("", HttpStatusCode.ServiceUnavailable)
                         val locked = sent.fileId == "encrypted"
-                        val store = if (locked) lockedMessages else messages
+                        val restored = uploaded[sent.fileId]
+                        val store = restored?.messages ?: if (locked) lockedMessages else messages
                         val reply =
                             synchronized(syncLock) {
                                 for (message in sent.messages) {
                                     if (store.putIfAbsent(message.timestamp, message) == null) {
                                         val stamp = checkNotNull(ActualTimestamp.parse(message.timestamp))
-                                        if (locked) lockedMerkle = lockedMerkle.insert(stamp) else merkle = merkle.insert(stamp)
+                                        when {
+                                            restored != null -> restored.merkle = restored.merkle.insert(stamp)
+                                            locked -> lockedMerkle = lockedMerkle.insert(stamp)
+                                            else -> merkle = merkle.insert(stamp)
+                                        }
                                     }
                                 }
                                 val sentTimestamps = sent.messages.map { it.timestamp }.toSet()
                                 SyncResponse(
                                     store.values.filter { it.timestamp > sent.since && it.timestamp !in sentTimestamps },
-                                    (if (locked) lockedMerkle else merkle).prune().toJson().toString(),
+                                    (restored?.merkle ?: if (locked) lockedMerkle else merkle).prune().toJson().toString(),
                                 )
                             }
                         respond(SyncProtocol.encode(reply))
@@ -171,6 +216,18 @@ internal class FakeActualServer {
                 }
             },
         )
+}
+
+/** A budget uploaded to the fake server, kept in its own sync group with its own messages. */
+internal class UploadedFile(
+    val fileId: String,
+    val groupId: String,
+    val name: String,
+    val body: ByteArray,
+    val encryptMeta: String?,
+) {
+    val messages = linkedMapOf<String, MessageEnvelope>()
+    var merkle = MerkleTrie.fromJson("{}")
 }
 
 private fun b64(bytes: ByteArray) =
@@ -254,6 +311,11 @@ internal class SealingBudgetFiles(
         keys[budgetId] = key.copyOf()
         this.keyInfo[budgetId] = keyInfo
         return checkNotNull(openSealed(budgetId, key))
+    }
+
+    override fun remove(budgetId: String) {
+        plain.remove(budgetId)
+        sealed(budgetId).delete()
     }
 
     override fun sealBudget(
