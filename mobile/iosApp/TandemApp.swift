@@ -148,7 +148,7 @@ private final class TandemSceneDelegate: NSObject, UIWindowSceneDelegate {
 
     static func handle(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
         guard shortcutItem.type == addTransaction else { return false }
-        QuickActionEvents.shared.requestAddTransaction()
+        QuickActionEvents.shared.requestAddTransaction(accountId: nil)
         return true
     }
 
