@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.core.importing
 
 import app.tandemforactual.api.client.StatementImportItem
+import app.tandemforactual.api.client.StatementImportPreview
 import app.tandemforactual.api.client.StatementImportSummary
 import app.tandemforactual.ui.core.format.MIN_TRANSACTION_DATE
 import app.tandemforactual.ui.core.format.displayTransactionDate
@@ -12,6 +13,8 @@ internal data class StatementImportDraft(
     val payeeName: String,
     val notes: String?,
     val importedId: String,
+    val bankId: String? = null,
+    val rowNumber: Int = 0,
 )
 
 internal data class StatementParseResult(
@@ -30,6 +33,13 @@ internal fun StatementParseResult.toStatementImportItems(): List<StatementImport
             importedId = row.importedId,
         )
     }
+
+/** Whether Actual already has this row: its own id, or the bank's id an earlier import stored as `imported_id`. */
+internal fun StatementImportDraft.isAlreadyIn(preview: StatementImportPreview): Boolean =
+    importedId in preview.existingImportedIds || bankId?.let(preview.existingImportedIds::contains) == true
+
+internal fun StatementParseResult.newRows(preview: StatementImportPreview): StatementParseResult =
+    copy(transactions = transactions.filterNot { it.isAlreadyIn(preview) })
 
 internal class StatementImportParseException(
     message: String,
@@ -63,6 +73,7 @@ internal fun formatStatementImportSummary(summary: StatementImportSummary): Stri
     return messages.joinToString(" ").ifBlank { "No new transactions." }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun parseStatementImport(
     filename: String,
     contents: String,
@@ -77,15 +88,11 @@ internal fun parseStatementImport(
     val content = contents.removePrefix("\uFEFF").trim()
     if (content.isBlank()) throw StatementImportParseException("This statement is empty.")
     if (content.length > MAX_STATEMENT_IMPORT_CHARS) throw StatementImportParseException("Choose a statement smaller than 10 MB.")
-    val extension = filename.substringAfterLast('.', "").lowercase()
     val parsed =
-        when {
-            extension == "qif" || content.startsWith("!Type:", ignoreCase = true) ->
-                parseQif(content, dateOrder, currencyFractionDigits, numberFormat)
-            extension == "ofx" || extension == "qfx" || content.contains("<STMTTRN", ignoreCase = true) ->
-                parseOfx(content, currencyFractionDigits, numberFormat)
-            extension == "csv" -> parseCsv(content, dateOrder, currencyFractionDigits, numberFormat, csvMapping)
-            else -> throw StatementImportParseException("Choose a CSV, QIF, OFX, or QFX statement.")
+        when (detectStatementFormat(content)) {
+            StatementFormat.QIF -> parseQif(content, dateOrder, currencyFractionDigits, numberFormat)
+            StatementFormat.OFX -> parseOfx(content, currencyFractionDigits, numberFormat)
+            StatementFormat.DELIMITED -> parseCsv(content, dateOrder, currencyFractionDigits, numberFormat, csvMapping)
         }
     if (parsed.transactions.isEmpty()) {
         throw StatementImportParseException(parsed.firstSkippedReason ?: "No usable transactions were found in this statement.")
@@ -120,207 +127,20 @@ internal fun parseStatementImport(
 
 private const val MAX_STATEMENT_IMPORT_ROWS = 1_000
 
-private fun parseCsv(
-    content: String,
-    dateOrder: StatementDateOrder,
-    currencyFractionDigits: Int,
-    numberFormat: String?,
-    csvMapping: StatementCsvColumnMapping?,
-): StatementParseResult {
-    val rows = parseCsvRows(content, detectCsvDelimiter(content)).filter { row -> row.any(String::isNotBlank) }
-    val header = rows.firstOrNull() ?: throw StatementImportParseException("The CSV has no header row.")
-    val columns = resolveCsvColumns(header, csvMapping ?: inspectStatementCsv(content).suggestedMapping)
-    var skipped = 0
-    var firstSkippedReason: String? = null
-    val generatedIds = mutableMapOf<String, Int>()
-    val usedIds = mutableSetOf<String>()
-    val duplicateSourceIds = duplicateCsvSourceIds(rows, columns.id)
-    val fileDateOrder = statementDateOrderFor(rows.drop(1).map { it.cell(columns.date) }, dateOrder)
-    val transactions =
-        rows.drop(1).mapIndexedNotNull { index, row ->
-            val rowNumber = index + 2
-            try {
-                val date = parseStatementDate(row.cell(columns.date), fileDateOrder)
-                val amount = csvRowAmount(row, columns, currencyFractionDigits, numberFormat)
-                if (amount == 0L) {
-                    skipped++
-                    if (firstSkippedReason == null) firstSkippedReason = "Row $rowNumber: Zero-value transactions are skipped."
-                    return@mapIndexedNotNull null
-                }
-                val payee = row.cell(columns.payee).ifBlank { "Imported transaction" }.take(200)
-                val sourceId =
-                    row
-                        .cell(columns.id)
-                        .take(200)
-                        .takeUnless { it.isBlank() || it in duplicateSourceIds }
-                        .orEmpty()
-                val importedId = uniqueImportId(sourceId, date, amount, payee, generatedIds, usedIds)
-                StatementImportDraft(
-                    date = date,
-                    amountMinor = amount,
-                    payeeName = payee,
-                    notes = row.cell(columns.notes).take(500).ifBlank { null },
-                    importedId = importedId,
-                )
-            } catch (error: IllegalArgumentException) {
-                skipped++
-                if (firstSkippedReason == null) firstSkippedReason = statementImportRowFailure(rowNumber, error)
-                null
-            }
-        }
-    return StatementParseResult(transactions, skipped, firstSkippedReason)
-}
+/** Actual `imported_id`s derived from each row, so the same statement gives the same ids however often it's read. */
+internal class StatementImportIds {
+    private val occurrences = mutableMapOf<String, Int>()
+    private val used = mutableSetOf<String>()
 
-private class CsvColumns(
-    val date: Int,
-    val amount: Int?,
-    val debit: Int?,
-    val credit: Int?,
-    val payee: Int?,
-    val notes: Int?,
-    val id: Int?,
-    val type: Int?,
-)
-
-private val CSV_ID_COLUMNS =
-    setOf(
-        "fitid",
-        "transactionid",
-        "transactionreference",
-        "transactionref",
-        "reference",
-        "referenceid",
-        "bankreference",
-        "traceid",
-        "id",
-    )
-
-private fun resolveCsvColumns(
-    header: List<String>,
-    mapping: StatementCsvColumnMapping,
-): CsvColumns {
-    fun validColumn(index: Int?): Int? = index?.takeIf { it in header.indices }
-    val dateColumn = validColumn(mapping.dateColumn)
-    if (dateColumn == null) {
-        throw StatementImportParseException("Choose the column that contains each transaction date.")
+    fun next(
+        date: String,
+        amount: Long,
+        payee: String,
+    ): String {
+        var generated = stableImportId(date, amount, payee, occurrences)
+        while (!used.add(generated)) generated = stableImportId(date, amount, payee, occurrences)
+        return generated
     }
-    val amountColumn = validColumn(mapping.amountColumn)
-    val debitColumn = validColumn(mapping.debitColumn)
-    val creditColumn = validColumn(mapping.creditColumn)
-    if (amountColumn == null && debitColumn == null && creditColumn == null) {
-        throw StatementImportParseException("The CSV needs an Amount, Debit, or Credit column.")
-    }
-    val normalizedColumns = header.map(::normalizeColumn)
-    val detectedIdColumn = normalizedColumns.indexOfFirst { it in CSV_ID_COLUMNS }.takeIf { it >= 0 }
-    return CsvColumns(
-        date = dateColumn,
-        amount = amountColumn,
-        debit = debitColumn,
-        credit = creditColumn,
-        payee = validColumn(mapping.payeeColumn),
-        notes = validColumn(mapping.notesColumn),
-        id = validColumn(mapping.referenceColumn) ?: detectedIdColumn,
-        type = normalizedColumns.indexOfFirst { it in setOf("type", "transactiontype") }.takeIf { it >= 0 },
-    )
-}
-
-private fun duplicateCsvSourceIds(
-    rows: List<List<String>>,
-    idColumn: Int?,
-): Set<String> =
-    rows
-        .drop(1)
-        .mapNotNull { row -> row.cell(idColumn).takeIf(String::isNotBlank)?.let { it.take(200) } }
-        .groupingBy { it }
-        .eachCount()
-        .filterValues { it > 1 }
-        .keys
-
-private fun csvRowAmount(
-    row: List<String>,
-    columns: CsvColumns,
-    currencyFractionDigits: Int,
-    numberFormat: String?,
-): Long {
-    val debit = parseOptionalMoney(row.cell(columns.debit), currencyFractionDigits, numberFormat)
-    val credit = parseOptionalMoney(row.cell(columns.credit), currencyFractionDigits, numberFormat)
-    if (debit != null || credit != null) return kotlin.math.abs(credit ?: 0L) - kotlin.math.abs(debit ?: 0L)
-    val rawAmount = parseMoney(row.cell(columns.amount), currencyFractionDigits, numberFormat)
-    val type = row.cell(columns.type).lowercase()
-    return if (type.containsAny("debit", "purchase", "withdrawal", "outflow")) {
-        -kotlin.math.abs(rawAmount)
-    } else {
-        rawAmount
-    }
-}
-
-internal fun detectCsvDelimiter(content: String): Char {
-    val firstLine = content.substringBefore('\n').substringBefore('\r')
-    val counts = mutableMapOf(',' to 0, ';' to 0, '\t' to 0)
-    var quoted = false
-    var index = 0
-    while (index < firstLine.length) {
-        val char = firstLine[index]
-        when {
-            char == '"' && quoted && firstLine.getOrNull(index + 1) == '"' -> index++
-            char == '"' -> quoted = !quoted
-            !quoted && char in counts.keys -> counts[char] = counts.getValue(char) + 1
-        }
-        index++
-    }
-    return counts.maxBy { it.value }.key
-}
-
-internal fun parseCsvRows(
-    content: String,
-    delimiter: Char,
-): List<List<String>> {
-    val rows = mutableListOf<List<String>>()
-    val row = mutableListOf<String>()
-    val cell = StringBuilder()
-    var quoted = false
-    var index = 0
-    while (index < content.length) {
-        val char = content[index]
-        when {
-            char == '"' && quoted && content.getOrNull(index + 1) == '"' -> {
-                cell.append('"')
-                index++
-            }
-            char == '"' -> quoted = !quoted
-            char == delimiter && !quoted -> {
-                row += cell.toString().trim()
-                cell.clear()
-            }
-            (char == '\n' || char == '\r') && !quoted -> {
-                row += cell.toString().trim()
-                cell.clear()
-                rows += row.toList()
-                row.clear()
-                if (char == '\r' && content.getOrNull(index + 1) == '\n') index++
-            }
-            else -> cell.append(char)
-        }
-        index++
-    }
-    row += cell.toString().trim()
-    if (row.any(String::isNotBlank)) rows += row.toList()
-    if (quoted) throw StatementImportParseException("The CSV contains an unfinished quoted value.")
-    return rows
-}
-
-internal fun uniqueImportId(
-    preferred: String,
-    date: String,
-    amount: Long,
-    payee: String,
-    occurrences: MutableMap<String, Int>,
-    usedIds: MutableSet<String>,
-): String {
-    if (preferred.isNotBlank() && usedIds.add(preferred)) return preferred
-    var generated = stableImportId(date, amount, payee, occurrences)
-    while (!usedIds.add(generated)) generated = stableImportId(date, amount, payee, occurrences)
-    return generated
 }
 
 private fun stableImportId(

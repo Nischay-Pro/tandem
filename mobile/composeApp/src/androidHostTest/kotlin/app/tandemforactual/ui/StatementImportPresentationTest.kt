@@ -43,6 +43,7 @@ class StatementImportPresentationTest {
                     currencyDisplaySettings = usdSettings,
                     accountName = "Checking",
                     filename = "statement.csv",
+                    showDateOrder = false,
                     parseResult = parsedStatement,
                     parseError = null,
                     actionMessage = null,
@@ -78,6 +79,7 @@ class StatementImportPresentationTest {
                     currencyDisplaySettings = usdSettings,
                     accountName = "Checking",
                     filename = "statement.csv",
+                    showDateOrder = false,
                     parseResult = parsedStatement,
                     parseError = null,
                     actionMessage = null,
@@ -114,6 +116,7 @@ class StatementImportPresentationTest {
                     currencyDisplaySettings = usdSettings,
                     accountName = "Checking",
                     filename = "statement.csv",
+                    showDateOrder = false,
                     parseResult = parsedStatement,
                     parseError = null,
                     actionMessage = null,
@@ -168,6 +171,7 @@ class StatementImportPresentationTest {
                     currencyDisplaySettings = usdSettings,
                     accountName = "Checking",
                     filename = "unusual-bank.csv",
+                    showDateOrder = false,
                     parseResult = parsed,
                     parseError = null,
                     actionMessage = null,
@@ -199,7 +203,7 @@ class StatementImportPresentationTest {
         composeTestRule.onNodeWithText("New in Actual").assertExists()
         composeTestRule.onNodeWithText("Import 1 new transaction").performScrollTo().performClick()
 
-        assertEquals(parsed.toStatementImportItems(), itemsPassedToImport)
+        assertEquals(parsed.toStatementImportItems().take(1), itemsPassedToImport)
     }
 
     private companion object {
