@@ -142,6 +142,7 @@ private suspend fun runSelectedBudgetBackgroundSync(): IosBackgroundSyncAlerts {
     } catch (_: Exception) {
         IosBackgroundSyncAlerts(taskSucceeded = false, notifySyncFailure = syncRemindersEnabled)
     } finally {
+        apiClient?.close()
         database.close()
     }
 }

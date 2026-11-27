@@ -36,6 +36,9 @@ import app.tandemforactual.data.actual.setPayeeDefaultCategory
 import app.tandemforactual.data.actual.updateRule
 import app.tandemforactual.data.database.ActualBudgetFiles
 import io.ktor.client.HttpClient
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.plugins.HttpTimeout
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
@@ -56,16 +59,16 @@ import kotlinx.serialization.json.put
 
 /**
  * Talks to the user's Actual server directly. Budgets are downloaded into [budgetFiles], synced with Actual's own
- * protocol, and edited on the device with Actual's rules.
+ * protocol, and edited on the device with Actual's rules. [close] closes the open budgets and [http].
  */
 class TandemApiClient(
     private val allowInsecurePrivateNetwork: Boolean = false,
-    private val http: HttpClient = HttpClient(),
+    private val http: HttpClient = actualHttpClient(),
     var budgetFiles: ActualBudgetFiles? = null,
     var today: () -> String = ::localTodayIsoDate,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val newId: () -> String = { Uuid.random().toString() },
-) {
+) : AutoCloseable {
     internal val sessionMutex = Mutex()
     private val budgetMutex = Mutex()
     private var server: ActualServerClient? = null
@@ -641,6 +644,11 @@ class TandemApiClient(
 
     private suspend fun closeBudgets() = budgetMutex.withLock { closeBudgetsNow() }
 
+    override fun close() {
+        closeBudgetsNow()
+        http.close()
+    }
+
     private fun closeBudgetsNow() {
         openBudgets.values.forEach { runCatching { it.closeNow() } }
         openBudgets.clear()
@@ -664,6 +672,10 @@ class TandemApiClient(
             throw TandemApiException(error.reason.replace('-', '_'), null, error)
         } catch (error: InvalidTransactionRequestException) {
             throw TandemApiException("invalid_request", 422, error, error.message)
+        } catch (error: HttpRequestTimeoutException) {
+            throw TandemApiException("server_timeout", null, error)
+        } catch (error: SocketTimeoutException) {
+            throw TandemApiException("server_timeout", null, error)
         } catch (error: IOException) {
             throw TandemApiException("address_unreachable", null, error)
         } catch (error: Exception) {
@@ -687,6 +699,16 @@ private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-ed
 
 private const val EXTENSION_RETRY_MIN_MILLIS = 30_000L
 private const val EXTENSION_RETRY_MAX_MILLIS = 15 * 60_000L
+
+/** The platform's HTTP engine with limits, so a stalled server fails the call instead of holding it forever. */
+fun actualHttpClient(): HttpClient =
+    HttpClient {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 60_000
+            requestTimeoutMillis = 10 * 60_000
+        }
+    }
 
 /** The budget's recent edits, and which device id is this one so the list can say "This device". */
 data class BudgetChangeHistory(
