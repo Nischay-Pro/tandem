@@ -1,6 +1,7 @@
 package app.tandemforactual.ui.core.watch
 
 import app.tandemforactual.data.database.TandemDatabase
+import app.tandemforactual.data.inbox.InboxFile
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.ui.core.automation.AutomatedTransaction
@@ -10,6 +11,7 @@ import app.tandemforactual.ui.core.automation.AutomationTarget
 import app.tandemforactual.ui.core.automation.AutomationTransactionInput
 import app.tandemforactual.ui.core.automation.addAutomatedTransaction
 import app.tandemforactual.ui.core.automation.automationDecimal
+import app.tandemforactual.ui.core.automation.sealAutomatedTransaction
 import app.tandemforactual.watch.WatchQuickAdd
 import app.tandemforactual.watch.WatchQuickAddResult
 import app.tandemforactual.watch.WatchQuickAddStatus
@@ -18,6 +20,8 @@ import app.tandemforactual.watch.WatchQuickAddStatus
 const val WATCH_SOURCE = "Watch"
 
 const val WATCH_LOCKED_MESSAGE = "Open Tandem to unlock"
+
+const val WATCH_SEALED_MESSAGE = "Saved · added when you unlock"
 
 class WatchQuickAddOutcome(
     val result: WatchQuickAddResult,
@@ -55,17 +59,7 @@ suspend fun addFromWatch(
         }
     return try {
         val account = watchAccount(LocalBudgetRepository(database) { nowEpochMs }, budgetId, preferences)?.first
-        val input =
-            AutomationTransactionInput(
-                amount = (if (entry.amountMinor < 0) "" else "+") + automationDecimal(entry.amountMinor, 2),
-                payee = entry.payee,
-                category = entry.categoryId,
-                account = account,
-                date = entryDateIso,
-                externalId = "watch:${entry.entryId}",
-                amountFormat = AutomationAmountFormat.PLAIN,
-            )
-        val added = addAutomatedTransaction(database, budgetId, input, WATCH_SOURCE, entryDateIso, nowEpochMs)
+        val added = addAutomatedTransaction(database, budgetId, entry.input(account, entryDateIso), WATCH_SOURCE, entryDateIso, nowEpochMs)
         val status = if (added.repeated) WatchQuickAddStatus.REPEATED else WatchQuickAddStatus.ADDED
         WatchQuickAddOutcome(WatchQuickAddResult(entry.entryId, status, added.summary.takeUnless { added.repeated }), target, added)
     } catch (error: AutomationException) {
@@ -74,3 +68,39 @@ suspend fun addFromWatch(
         if (database !== mainDatabase) database.close()
     }
 }
+
+/**
+ * Seals a watch entry for a locked encrypted budget so it's added when the budget is next unlocked, to the account
+ * used last. Null when it can't be sealed yet, such as before the budget's first unlock, so the watch holds it.
+ */
+suspend fun sealFromWatch(
+    mainDatabase: TandemDatabase,
+    inbox: InboxFile,
+    preferences: Map<String, String>,
+    target: AutomationTarget,
+    entry: WatchQuickAdd,
+    entryDateIso: String,
+    nowEpochMs: Long,
+): WatchQuickAddOutcome? {
+    val input = entry.input(preferences["lastTransactionAccountId"], entryDateIso)
+    val sealed =
+        try {
+            sealAutomatedTransaction(mainDatabase, inbox, target.budgetId, input, WATCH_SOURCE, entryDateIso, nowEpochMs)
+        } catch (_: AutomationException) {
+            return null
+        }
+    return WatchQuickAddOutcome(WatchQuickAddResult(entry.entryId, WatchQuickAddStatus.ADDED, WATCH_SEALED_MESSAGE), target, sealed)
+}
+
+private fun WatchQuickAdd.input(
+    account: String?,
+    entryDateIso: String,
+) = AutomationTransactionInput(
+    amount = (if (amountMinor < 0) "" else "+") + automationDecimal(amountMinor, 2),
+    payee = payee,
+    category = categoryId,
+    account = account,
+    date = entryDateIso,
+    externalId = "watch:$entryId",
+    amountFormat = AutomationAmountFormat.PLAIN,
+)

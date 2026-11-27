@@ -1,6 +1,7 @@
 package app.tandemforactual.android.watch
 
 import android.content.Context
+import app.tandemforactual.android.AndroidInboxFile
 import app.tandemforactual.android.TandemProcess
 import app.tandemforactual.android.tasker.AutomationCalls
 import app.tandemforactual.android.tasker.AutomationNotifications
@@ -9,6 +10,7 @@ import app.tandemforactual.data.store.WatchSettings
 import app.tandemforactual.ui.core.watch.WATCH_SOURCE
 import app.tandemforactual.ui.core.watch.WatchPairing
 import app.tandemforactual.ui.core.watch.addFromWatch
+import app.tandemforactual.ui.core.watch.sealFromWatch
 import app.tandemforactual.ui.core.watch.watchSummary
 import app.tandemforactual.watch.WatchLink
 import app.tandemforactual.watch.WatchQuickAdd
@@ -91,20 +93,24 @@ internal object PhoneWatch {
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate()
                 .toString()
+        val now = System.currentTimeMillis()
         val outcome =
             addFromWatch(
                 database,
                 preferences,
                 entry,
                 date,
-                System.currentTimeMillis(),
+                now,
                 openBudget = { AutomationCalls.open(context, it) },
+                whenLocked = { target, locked ->
+                    sealFromWatch(database, AndroidInboxFile.forBudget(context, target.budgetId), preferences, target, locked, date, now)
+                },
             )
         val added = outcome.added
         val target = outcome.target
         if (outcome.result.status == WatchQuickAddStatus.ADDED && added != null && target != null) {
             AutomationNotifications.added(context, target, added, WATCH_SOURCE)
-            AutomationCalls.requestSync(context)
+            if (!added.sealed) AutomationCalls.requestSync(context)
         }
         publish(context, afterUnlock = false)
         return outcome.result
