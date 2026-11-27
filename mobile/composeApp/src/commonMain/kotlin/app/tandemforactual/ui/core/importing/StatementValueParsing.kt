@@ -229,9 +229,12 @@ internal fun statementDateOrderFor(
             throw StatementImportParseException("This statement mixes day-first and month-first dates. Check the dates in the file.")
         dayFirst -> StatementDateOrder.DAY_MONTH_YEAR
         monthFirst -> StatementDateOrder.MONTH_DAY_YEAR
+        dates.any { dottedDate.matches(it.trim()) } -> StatementDateOrder.DAY_MONTH_YEAR
         else -> selected
     }
 }
+
+private val dottedDate = Regex("^\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}$")
 
 private data class NumericDate(
     val first: Int,

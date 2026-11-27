@@ -5,11 +5,12 @@ import androidx.compose.ui.Modifier
 
 internal enum class DroppedFileKind { STATEMENT, IMAGE }
 
-private val STATEMENT_EXTENSIONS = setOf("csv", "ofx", "qfx", "qif")
+private val STATEMENT_EXTENSIONS = setOf("csv", "tsv", "ofx", "qfx", "qif")
 private val STATEMENT_MIME_TYPES =
     setOf(
         "text/csv",
         "text/comma-separated-values",
+        "text/tab-separated-values",
         "application/csv",
         "application/ofx",
         "application/x-ofx",
@@ -20,7 +21,7 @@ private val STATEMENT_MIME_TYPES =
     )
 private val UNTYPED_MIME_TYPES = setOf("application/octet-stream", "text/plain")
 
-/** A photo goes to the receipt reader and a CSV, OFX, QFX or QIF file to the statement import; anything else is refused. */
+/** A photo goes to the receipt reader and a CSV, TSV, OFX, QFX or QIF file to the statement import; anything else is refused. */
 internal fun droppedFileKind(
     mimeType: String?,
     name: String?,
