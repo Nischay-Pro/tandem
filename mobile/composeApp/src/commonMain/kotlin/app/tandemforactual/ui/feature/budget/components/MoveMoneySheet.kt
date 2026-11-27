@@ -4,11 +4,8 @@ package app.tandemforactual.ui.feature.budget.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Text
@@ -30,9 +27,9 @@ import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.MoneyAmountInput
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -68,40 +65,41 @@ internal fun MoveMoneySheet(
             val parsedMoveAmount = state.parseAmountMinorUnits(sheets.moveMoneyAmountDraft)
             val fromLabel = moveMoneyCategories.firstOrNull { it.second.id == sheets.moveMoneyFromId }?.second?.name ?: "Choose category"
             val toLabel = moveMoneyCategories.firstOrNull { it.second.id == sheets.moveMoneyToId }?.second?.name ?: "Choose category"
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
+            SheetCard(
+                maxWidth = 480.dp,
+                header = {
                     BudgetSheetTitle(Lucide.WalletCards, "Move money", mobileSession) { sheets.showMoveMoneyDialog = false }
-                    MoveMoneyCategoryPicker(
-                        label = "From",
-                        selectedLabel = fromLabel,
-                        leadingIcon = RowLeading.Icon(Lucide.Minus),
-                        expanded = moveMoneyFromExpanded,
-                        onExpandedChange = { moveMoneyFromExpanded = it },
-                        candidates = moveMoneyCategories,
-                        onSelect = { sheets.moveMoneyFromId = it },
-                    )
-                    MoveMoneyCategoryPicker(
-                        label = "To",
-                        selectedLabel = toLabel,
-                        leadingIcon = RowLeading.Icon(Lucide.Plus),
-                        expanded = moveMoneyToExpanded,
-                        onExpandedChange = { moveMoneyToExpanded = it },
-                        candidates = moveMoneyCategories.filter { it.second.id != sheets.moveMoneyFromId },
-                        onSelect = { sheets.moveMoneyToId = it },
-                    )
-                    MoneyAmountInput(
-                        label = "Amount",
-                        value = sheets.moveMoneyAmountDraft,
-                        placeholder = state.formatAmount(0),
-                        onValueChange = { sheets.moveMoneyAmountDraft = it },
-                        fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
-                    )
-                    budgetActionFeedbackMessage(mobileSession)
+                },
+                actions = {
                     MoveMoneyActions(state, mobileSession, sheets, parsedMoveAmount, scope)
-                }
+                },
+            ) {
+                MoveMoneyCategoryPicker(
+                    label = "From",
+                    selectedLabel = fromLabel,
+                    leadingIcon = RowLeading.Icon(Lucide.Minus),
+                    expanded = moveMoneyFromExpanded,
+                    onExpandedChange = { moveMoneyFromExpanded = it },
+                    candidates = moveMoneyCategories,
+                    onSelect = { sheets.moveMoneyFromId = it },
+                )
+                MoveMoneyCategoryPicker(
+                    label = "To",
+                    selectedLabel = toLabel,
+                    leadingIcon = RowLeading.Icon(Lucide.Plus),
+                    expanded = moveMoneyToExpanded,
+                    onExpandedChange = { moveMoneyToExpanded = it },
+                    candidates = moveMoneyCategories.filter { it.second.id != sheets.moveMoneyFromId },
+                    onSelect = { sheets.moveMoneyToId = it },
+                )
+                MoneyAmountInput(
+                    label = "Amount",
+                    value = sheets.moveMoneyAmountDraft,
+                    placeholder = state.formatAmount(0),
+                    onValueChange = { sheets.moveMoneyAmountDraft = it },
+                    fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                )
+                budgetActionFeedbackMessage(mobileSession)
             }
         }
     }

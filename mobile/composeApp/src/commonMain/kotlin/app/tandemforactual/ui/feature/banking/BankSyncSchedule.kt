@@ -5,8 +5,6 @@ package app.tandemforactual.ui.feature.banking
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -17,12 +15,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.ActualBankSync
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.inputs.FilterPills
 import app.tandemforactual.ui.design.rows.DividerLine
@@ -30,6 +26,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -105,16 +102,18 @@ private fun SyncIntervalDialog(
     var custom by remember { mutableStateOf(isCustomSyncInterval(current)) }
     LaunchedEffect(visible) { if (visible) custom = isCustomSyncInterval(current) }
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SheetCard(
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader("Sync accounts", onClose = onDismiss, leadingIcon = Lucide.Clock)
-                SYNC_INTERVAL_PRESETS.forEach { (minutes, label) ->
-                    IntervalRow(label, selected = !custom && minutes == current) { onPick(minutes) }
-                }
-                DividerLine()
-                IntervalRow("Custom interval", selected = custom) { custom = true }
-                AnimatedReveal(custom) { CustomInterval(current, onPick) }
+            },
+        ) {
+            SYNC_INTERVAL_PRESETS.forEach { (minutes, label) ->
+                IntervalRow(label, selected = !custom && minutes == current) { onPick(minutes) }
             }
+            DividerLine()
+            IntervalRow("Custom interval", selected = custom) { custom = true }
+            AnimatedReveal(custom) { CustomInterval(current, onPick) }
         }
     }
 }

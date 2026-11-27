@@ -2,10 +2,8 @@
 
 package app.tandemforactual.ui.feature.accounts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,7 +18,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -51,11 +49,8 @@ internal fun RenameAccountSheet(
         onDismissed = {},
     ) {
         if (account != null) {
-            SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
+            SheetCard(
+                header = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "Rename account",
@@ -74,8 +69,8 @@ internal fun RenameAccountSheet(
                             onClick = onClose,
                         )
                     }
-                    TextFieldCard("Name", value, onValueChange, TextFieldOptions(placeholder = "Account name"))
-                    budgetActionFeedbackMessage(mobileSession)
+                },
+                actions = {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             "Cancel",
@@ -105,7 +100,10 @@ internal fun RenameAccountSheet(
                             }
                         }
                     }
-                }
+                },
+            ) {
+                TextFieldCard("Name", value, onValueChange, TextFieldOptions(placeholder = "Account name"))
+                budgetActionFeedbackMessage(mobileSession)
             }
         }
     }

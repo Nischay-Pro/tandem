@@ -35,6 +35,7 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
 import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.ui.DatePickerDialog
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.BodyText
 import app.tandemforactual.ui.design.feedback.FeedbackMessageOwner
@@ -50,7 +51,6 @@ import app.tandemforactual.ui.design.templates.TransactionAmountField
 import app.tandemforactual.ui.design.templates.TransactionPickerRow
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.feature.transactions.TransactionDatePickerDialog
 import app.tandemforactual.ui.feature.transactions.TransactionTypePicker
 import app.tandemforactual.ui.feature.transactions.selectTransactionType
 import com.composables.icons.lucide.CalendarDays
@@ -269,14 +269,14 @@ internal fun TransactionFormDatePicker(
     state: AppState,
     pickers: TransactionFormPickerState,
 ) {
-    TransactionDatePickerDialog(
+    DatePickerDialog(
         visible = pickers.showDatePicker,
-        selectedDate = state.transactionDate,
+        initialDate = state.transactionDate,
+        onDismiss = { pickers.showDatePicker = false },
         onSelect = {
             state.transactionDate = it
             pickers.showDatePicker = false
         },
-        onDismiss = { pickers.showDatePicker = false },
     )
 }
 

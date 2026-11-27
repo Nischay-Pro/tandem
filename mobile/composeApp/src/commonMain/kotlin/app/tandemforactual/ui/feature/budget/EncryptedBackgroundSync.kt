@@ -2,18 +2,13 @@
 
 package app.tandemforactual.ui.feature.budget
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.state.AppState
@@ -21,11 +16,10 @@ import app.tandemforactual.ui.design.buttons.SecondaryButton
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.BodyText
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.ToggleRow
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.ShieldAlert
 
@@ -61,25 +55,28 @@ internal fun EncryptedBackgroundSyncToggle(state: AppState) {
         }
     }
     TandemChoiceDialog(visible = confirming, onDismissRequest = { confirming = false }) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader("Sync while locked?", onClose = { confirming = false }, leadingIcon = Lucide.ShieldAlert)
-                BodyText(
-                    "To sync in the background, Tandem keeps this budget’s password in this device’s protected storage, " +
-                        "where it can be used without your fingerprint or the password.",
-                )
-                BodyText(
-                    "Your budget stays encrypted on the server, but anyone who gets into this device and its apps could open it. " +
-                        "Leave this off to keep the password only in your head and sync while unlocked.",
-                )
-                TandemActionButton("Allow on this device", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
-                    val saved =
-                        runCatching { store?.write(BackgroundBudgetKey.encode(state.selectedBudgetId, state.encryptedPassword)) }.isSuccess
-                    allowed = saved && store != null
-                    state.backgroundSyncEnabled = allowed
-                    confirming = false
-                }
+            },
+            actions = {
                 SecondaryButton("Keep it off", Modifier.fillMaxWidth()) { confirming = false }
+            },
+        ) {
+            BodyText(
+                "To sync in the background, Tandem keeps this budget’s password in this device’s protected storage, " +
+                    "where it can be used without your fingerprint or the password.",
+            )
+            BodyText(
+                "Your budget stays encrypted on the server, but anyone who gets into this device and its apps could open it. " +
+                    "Leave this off to keep the password only in your head and sync while unlocked.",
+            )
+            TandemActionButton("Allow on this device", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
+                val saved =
+                    runCatching { store?.write(BackgroundBudgetKey.encode(state.selectedBudgetId, state.encryptedPassword)) }.isSuccess
+                allowed = saved && store != null
+                state.backgroundSyncEnabled = allowed
+                confirming = false
             }
         }
     }

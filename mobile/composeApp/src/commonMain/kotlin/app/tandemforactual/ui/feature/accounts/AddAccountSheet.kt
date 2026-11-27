@@ -4,12 +4,9 @@ package app.tandemforactual.ui.feature.accounts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
@@ -39,6 +36,7 @@ import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.CheckBoxRow
 import app.tandemforactual.ui.design.templates.TextFieldCard
@@ -97,26 +95,12 @@ internal fun AddAccountSheet(
         onDismissRequest = { if (!mobileSession.isPerformingBudgetAction) sheet.visible = false },
         onDismissed = {},
     ) {
-        SurfaceCard(
-            Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = 16.dp),
-        ) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            maxWidth = 480.dp,
+            header = {
                 AddAccountSheetHeader(enabled = !mobileSession.isPerformingBudgetAction) { sheet.visible = false }
-                TextFieldCard("Name", sheet.name, { sheet.name = it }, TextFieldOptions(placeholder = "Checking"))
-                AccountGroupPicker(mobileSession, sheet.groupId) { sheet.groupId = it }
-                SurfaceCard {
-                    CheckBoxRow(
-                        "Off budget",
-                        "Excluded from the budget",
-                        checked = sheet.offBudget,
-                        enabled = !mobileSession.isPerformingBudgetAction,
-                        onChange = { sheet.offBudget = it },
-                    )
-                }
-                budgetActionFeedbackMessage(mobileSession)
+            },
+            actions = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                     TandemActionButton(
                         "Cancel",
@@ -145,7 +129,20 @@ internal fun AddAccountSheet(
                         }
                     }
                 }
+            },
+        ) {
+            TextFieldCard("Name", sheet.name, { sheet.name = it }, TextFieldOptions(placeholder = "Checking"))
+            AccountGroupPicker(mobileSession, sheet.groupId) { sheet.groupId = it }
+            SurfaceCard {
+                CheckBoxRow(
+                    "Off budget",
+                    "Excluded from the budget",
+                    checked = sheet.offBudget,
+                    enabled = !mobileSession.isPerformingBudgetAction,
+                    onChange = { sheet.offBudget = it },
+                )
             }
+            budgetActionFeedbackMessage(mobileSession)
         }
     }
 }

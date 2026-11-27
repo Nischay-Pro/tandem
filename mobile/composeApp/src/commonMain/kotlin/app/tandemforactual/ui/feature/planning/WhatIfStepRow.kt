@@ -5,8 +5,6 @@ package app.tandemforactual.ui.feature.planning
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -15,15 +13,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.inputs.FilterPills
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -83,29 +80,32 @@ internal fun WhatIfAmountDialog(
     val settings = state.budgetDisplaySettings
     val amount = parseAmountMinorUnits(draft, settings)?.takeIf { it > 0 }
     TandemChoiceDialog(visible = increase != null, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader(
                     if (increase == true) "Custom increase" else "Custom decrease",
                     onClose = onDismiss,
                     leadingIcon = Lucide.SlidersHorizontal,
                 )
-                TextFieldCard(
-                    "Amount each month",
-                    draft,
-                    { draft = it },
-                    TextFieldOptions(
-                        placeholder = "0",
-                        currencySymbol = settings?.currencySymbol ?: "$",
-                        currencySymbolAfter = settings?.currencySymbolPosition == "after",
-                        currencySymbolSpace = settings?.currencySpaceBetweenAmountAndSymbol == true,
-                        amountFractionDigits = settings?.currencyFractionDigits ?: 2,
-                    ),
-                )
+            },
+            actions = {
                 TandemActionButton("Apply", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = amount != null) {
                     amount?.let { onConfirm(if (increase == true) it else -it) }
                 }
-            }
+            },
+        ) {
+            TextFieldCard(
+                "Amount each month",
+                draft,
+                { draft = it },
+                TextFieldOptions(
+                    placeholder = "0",
+                    currencySymbol = settings?.currencySymbol ?: "$",
+                    currencySymbolAfter = settings?.currencySymbolPosition == "after",
+                    currencySymbolSpace = settings?.currencySpaceBetweenAmountAndSymbol == true,
+                    amountFractionDigits = settings?.currencyFractionDigits ?: 2,
+                ),
+            )
         }
     }
 }

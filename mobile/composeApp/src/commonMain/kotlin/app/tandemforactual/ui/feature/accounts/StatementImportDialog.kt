@@ -7,11 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
@@ -40,12 +36,12 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -84,51 +80,47 @@ internal fun StatementImportDialog(
     onImport: (StatementParseResult) -> Unit,
 ) {
     TandemTaskSheet(visible = visible, onDismissRequest = onDismiss, onDismissed = onDismissed) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 720.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            modifier = Modifier.heightIn(max = 720.dp),
+            maxWidth = 480.dp,
+            header = {
                 StatementImportHeader(busy, onDismiss)
-                ListRow("File", trailing = filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
-                ListRow("Account", trailing = accountName, leading = RowLeading.Account(accountName))
-                StatementParseStatus(parseResult != null, parseError, importPreviewLoading, importPreviewError, busy, onRetryImportPreview)
-                actionMessage?.let {
-                    InlineMessage(it, actionMessageKind)
-                }
-                if (parseResult != null && filename.substringAfterLast('.', "").equals("qif", ignoreCase = true)) {
-                    StatementDateOrderPicker(
-                        dateOrder = dateOrder,
-                        enabled = !busy,
-                        onDateOrderChange = onDateOrderChange,
-                    )
-                }
-                if (csvLayout != null) {
-                    StatementCsvSection(
-                        csvLayout,
-                        csvMapping,
-                        dateOrder,
-                        showCsvMapping,
-                        busy,
-                        onToggleCsvMapping,
-                        onCsvMappingChange,
-                        onDateOrderChange,
-                    )
-                }
-                parseResult?.let { result ->
-                    StatementImportResult(
-                        state,
-                        result,
-                        importPreview,
-                        importPreviewLoading,
-                        busy,
-                        currencyDisplaySettings,
-                    ) { onImport(result) }
-                }
+            },
+        ) {
+            ListRow("File", trailing = filename.ifBlank { "Unavailable" }, leading = RowLeading.Icon(Lucide.Receipt))
+            ListRow("Account", trailing = accountName, leading = RowLeading.Account(accountName))
+            StatementParseStatus(parseResult != null, parseError, importPreviewLoading, importPreviewError, busy, onRetryImportPreview)
+            actionMessage?.let {
+                InlineMessage(it, actionMessageKind)
+            }
+            if (parseResult != null && filename.substringAfterLast('.', "").equals("qif", ignoreCase = true)) {
+                StatementDateOrderPicker(
+                    dateOrder = dateOrder,
+                    enabled = !busy,
+                    onDateOrderChange = onDateOrderChange,
+                )
+            }
+            if (csvLayout != null) {
+                StatementCsvSection(
+                    csvLayout,
+                    csvMapping,
+                    dateOrder,
+                    showCsvMapping,
+                    busy,
+                    onToggleCsvMapping,
+                    onCsvMappingChange,
+                    onDateOrderChange,
+                )
+            }
+            parseResult?.let { result ->
+                StatementImportResult(
+                    state,
+                    result,
+                    importPreview,
+                    importPreviewLoading,
+                    busy,
+                    currencyDisplaySettings,
+                ) { onImport(result) }
             }
         }
     }

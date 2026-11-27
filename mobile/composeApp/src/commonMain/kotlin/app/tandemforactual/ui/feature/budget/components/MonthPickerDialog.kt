@@ -3,13 +3,9 @@
 package app.tandemforactual.ui.feature.budget.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +21,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.buttons.PeriodStepper
 import app.tandemforactual.ui.design.buttons.SelectableTile
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -43,28 +39,28 @@ internal fun MonthPickerDialog(
     }
     val months = (1..12).map { month -> month to formatShortMonth(selectedYear, month) }
     TandemChoiceDialog(visible, onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
+        SheetCard(
+            maxWidth = 480.dp,
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader(
                     title = "Choose month",
                     titleSize = TandemTypography.cardTitle,
                     onClose = onDismiss,
                 )
-                PeriodStepper(
-                    title = selectedYear.toString(),
-                    previousLabel = "Previous year",
-                    nextLabel = "Next year",
-                    onPrevious = { selectedYear -= 1 },
-                    onNext = { selectedYear += 1 },
-                )
-                months.chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
-                        row.forEach { (monthNumber, monthLabel) ->
-                            MonthTile(state, selectedYear, monthNumber, monthLabel, onDismiss)
-                        }
+            },
+        ) {
+            PeriodStepper(
+                title = selectedYear.toString(),
+                previousLabel = "Previous year",
+                nextLabel = "Next year",
+                onPrevious = { selectedYear -= 1 },
+                onNext = { selectedYear += 1 },
+            )
+            months.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+                    row.forEach { (monthNumber, monthLabel) ->
+                        MonthTile(state, selectedYear, monthNumber, monthLabel, onDismiss)
                     }
                 }
             }

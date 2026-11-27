@@ -2,11 +2,7 @@
 
 package app.tandemforactual.ui.feature.export
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,20 +10,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.api.client.WebDavClient
 import app.tandemforactual.api.client.WebDavException
 import app.tandemforactual.ui.core.session.LocalLanAccess
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.BodyText
 import app.tandemforactual.ui.design.feedback.FieldErrorMessage
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import com.composables.icons.lucide.Cloud
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.launch
@@ -50,16 +44,11 @@ internal fun WebDavBackupDialog(
     val scope = rememberCoroutineScope()
     val lanAccess = LocalLanAccess.current
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader("Upload to WebDAV", onClose = onDismiss, leadingIcon = Lucide.Cloud)
-                BodyText("Each backup is also copied to this folder, such as one on Nextcloud or a NAS. Old copies are removed too.")
-                TextFieldCard("Folder address", address, {
-                    address = it
-                }, TextFieldOptions(placeholder = "https://cloud.example/remote.php/dav/files/sam/Tandem"))
-                TextFieldCard("Username", name, { name = it })
-                TextFieldCard("Password", password, { password = it }, TextFieldOptions(isSecret = true))
-                FieldErrorMessage(problem)
+            },
+            actions = {
                 TandemActionButton(
                     "Check and save",
                     TandemActionButtonTone.PRIMARY,
@@ -87,7 +76,15 @@ internal fun WebDavBackupDialog(
                 if (onRemove != null) {
                     TandemActionButton("Stop uploading", TandemActionButtonTone.NEUTRAL, Modifier.fillMaxWidth(), onClick = onRemove)
                 }
-            }
+            },
+        ) {
+            BodyText("Each backup is also copied to this folder, such as one on Nextcloud or a NAS. Old copies are removed too.")
+            TextFieldCard("Folder address", address, {
+                address = it
+            }, TextFieldOptions(placeholder = "https://cloud.example/remote.php/dav/files/sam/Tandem"))
+            TextFieldCard("Username", name, { name = it })
+            TextFieldCard("Password", password, { password = it }, TextFieldOptions(isSecret = true))
+            FieldErrorMessage(problem)
         }
     }
 }

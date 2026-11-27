@@ -2,12 +2,8 @@
 
 package app.tandemforactual.ui.feature.banking
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
@@ -21,10 +17,10 @@ import app.tandemforactual.data.regions.global.bank.BankProviderAccount
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.ui.accountTypeIcon
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -45,36 +41,40 @@ internal fun LinkBankAccountDialog(
 ) {
     val palette = tandemPalette
     TandemChoiceDialog(visible = target != null, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SheetCard(
+            scrollBody = false,
+            maxWidth = 480.dp,
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader("Link ${target?.second?.name.orEmpty()}", onClose = onDismiss, leadingIcon = Lucide.Landmark)
-                Text(
-                    "Choose the budget account it should sync into, or create one.",
-                    color = palette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
-                val candidates =
-                    remember(target, liveAccounts, linked) {
-                        val open = liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }
-                        target?.let { rankLinkCandidates(it.second, open) }.orEmpty()
-                    }
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    candidates.forEach { candidate ->
-                        val account = candidate.account
-                        ListRow(
-                            account.name,
-                            listOfNotNull(
-                                "Best match".takeIf { isBestMatch(candidates, candidate) },
-                                if (account.offBudget) "Off budget" else "On budget",
-                            ).joinToString(" · "),
-                            leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
-                            onClick = { onPick(account) },
-                        )
-                    }
+            },
+        ) {
+            Text(
+                "Choose the budget account it should sync into, or create one.",
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
+            val candidates =
+                remember(target, liveAccounts, linked) {
+                    val open = liveAccounts.filter { account -> !account.closed && linked.none { it.id == account.id } }
+                    target?.let { rankLinkCandidates(it.second, open) }.orEmpty()
                 }
-                DividerLine()
-                NewLinkedAccountRows(target?.second?.name.orEmpty(), onCreate)
+            Column(Modifier.weight(1f, fill = false).heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                candidates.forEach { candidate ->
+                    val account = candidate.account
+                    ListRow(
+                        account.name,
+                        listOfNotNull(
+                            "Best match".takeIf { isBestMatch(candidates, candidate) },
+                            if (account.offBudget) "Off budget" else "On budget",
+                        ).joinToString(" · "),
+                        leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.type)),
+                        onClick = { onPick(account) },
+                    )
+                }
             }
+            DividerLine()
+            NewLinkedAccountRows(target?.second?.name.orEmpty(), onCreate)
         }
     }
 }

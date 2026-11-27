@@ -3,11 +3,8 @@
 package app.tandemforactual.ui.feature.activity.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -58,21 +55,15 @@ internal fun SaveActivitySearchSheet(
         onDismissRequest = { saveState.showSaveSearchDialog = false },
         onDismissed = {},
     ) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            maxWidth = 400.dp,
+            header = {
                 TandemModalHeader(
                     title = "Save search",
                     onClose = { saveState.showSaveSearchDialog = false },
                 )
-                TextFieldCard(
-                    "Name",
-                    saveState.savedSearchNameDraft,
-                    { saveState.savedSearchNameDraft = it.take(80) },
-                    TextFieldOptions(placeholder = "Name this search"),
-                )
+            },
+            actions = {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
@@ -94,7 +85,14 @@ internal fun SaveActivitySearchSheet(
                         },
                     )
                 }
-            }
+            },
+        ) {
+            TextFieldCard(
+                "Name",
+                saveState.savedSearchNameDraft,
+                { saveState.savedSearchNameDraft = it.take(80) },
+                TextFieldOptions(placeholder = "Name this search"),
+            )
         }
     }
 }

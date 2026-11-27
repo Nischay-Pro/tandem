@@ -3,12 +3,9 @@
 package app.tandemforactual.ui.feature.budget.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +26,7 @@ import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.MoneyAmountInput
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -62,21 +59,12 @@ internal fun AssignedAmountSheet(
             val parsedAmount = state.parseAmountMinorUnits(sheets.assignedAmountDraft)
             val canSaveAssignedAmount =
                 parsedAmount != null && parsedAmount >= 0 && parsedAmount != category.assignedMinor
-            SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 460.dp).padding(horizontal = 16.dp)) {
-                Column(
-                    Modifier.fillMaxWidth().padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
+            SheetCard(
+                maxWidth = 460.dp,
+                header = {
                     BudgetSheetTitle(Lucide.WalletCards, "Assigned amount", mobileSession) { sheets.showAssignedAmountDialog = false }
-                    Text("${category.name} · ${state.selectedMonth}", color = tandemPalette.muted, fontSize = TandemTypography.caption)
-                    MoneyAmountInput(
-                        label = "Amount",
-                        value = sheets.assignedAmountDraft,
-                        placeholder = state.formatAmount(0),
-                        onValueChange = { sheets.assignedAmountDraft = it },
-                        fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
-                    )
-                    budgetActionFeedbackMessage(mobileSession)
+                },
+                actions = {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                         TandemActionButton(
                             "Cancel",
@@ -105,7 +93,17 @@ internal fun AssignedAmountSheet(
                             }
                         }
                     }
-                }
+                },
+            ) {
+                Text("${category.name} · ${state.selectedMonth}", color = tandemPalette.muted, fontSize = TandemTypography.caption)
+                MoneyAmountInput(
+                    label = "Amount",
+                    value = sheets.assignedAmountDraft,
+                    placeholder = state.formatAmount(0),
+                    onValueChange = { sheets.assignedAmountDraft = it },
+                    fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2,
+                )
+                budgetActionFeedbackMessage(mobileSession)
             }
         }
     }

@@ -2,15 +2,10 @@
 
 package app.tandemforactual.ui.feature.rules
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +30,7 @@ import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -103,44 +99,35 @@ internal fun ManagePayeeSheet(
         },
     ) {
         if (selectedPayee != null) {
-            SurfaceCard(
-                Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 480.dp)
-                    .padding(horizontal = TandemSpacing.large),
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 620.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(TandemSpacing.large),
-                    verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-                ) {
+            SheetCard(
+                modifier = Modifier.heightIn(max = 620.dp),
+                maxWidth = 480.dp,
+                header = {
                     ManagePayeeSheetHeader(payee.mode, selectedPayee.second, !mobileSession.isPerformingBudgetAction) {
                         payee.sheetVisible = false
                     }
-                    when (payee.mode) {
-                        "default-category" -> defaultCategoryContent()
-                        "rename" -> RenamePayeeSection(payee, selectedPayee, state, mobileSession, scope)
-                        "merge" -> MergePayeeSection(payee, selectedPayee, payees, mobileSession)
-                        "confirm-merge" -> {
-                            Text("Confirm the merge in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                        }
-                        "delete" -> {
-                            Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
-                        }
-                        else ->
-                            ManagePayeeMenu(
-                                payee,
-                                selectedPayee,
-                                payees,
-                                selectedDefaultCategoryId,
-                                selectedDefaultCategoryLabel,
-                                state,
-                                mobileSession,
-                            )
+                },
+            ) {
+                when (payee.mode) {
+                    "default-category" -> defaultCategoryContent()
+                    "rename" -> RenamePayeeSection(payee, selectedPayee, state, mobileSession, scope)
+                    "merge" -> MergePayeeSection(payee, selectedPayee, payees, mobileSession)
+                    "confirm-merge" -> {
+                        Text("Confirm the merge in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                     }
+                    "delete" -> {
+                        Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
+                    }
+                    else ->
+                        ManagePayeeMenu(
+                            payee,
+                            selectedPayee,
+                            payees,
+                            selectedDefaultCategoryId,
+                            selectedDefaultCategoryLabel,
+                            state,
+                            mobileSession,
+                        )
                 }
             }
         }

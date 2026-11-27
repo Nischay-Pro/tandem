@@ -5,7 +5,6 @@ package app.tandemforactual.ui.feature.transactions
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -33,6 +32,7 @@ import app.tandemforactual.ui.core.ui.AccountIconTile
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyState
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.ChoiceRow
 import app.tandemforactual.ui.design.templates.PageLazyColumn
@@ -173,36 +173,37 @@ internal fun TransactionAccountPickerDialog(
         }
     val filtered = values.filter { it.label.contains(query, ignoreCase = true) }
     TandemChoiceDialog(visible, onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-            ) {
+        SheetCard(
+            scrollBody = false,
+            modifier = Modifier.heightIn(max = 640.dp),
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader(
                     title = "Choose account",
                     titleSize = TandemTypography.cardTitle,
                     onClose = onDismiss,
                 )
-                if (values.size > 6) {
-                    TextFieldCard("Search accounts", query, { query = it }, TextFieldOptions(placeholder = "Find an account"))
-                }
-                if (filtered.isEmpty()) {
-                    EmptyState("No accounts found", modifier = Modifier.padding(TandemSpacing.large))
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
-                        items(filtered, key = { "account-choice-${it.id}" }) { item ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
-                            ) {
-                                if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.type)
-                                Box(Modifier.weight(1f)) {
-                                    ChoiceRow(
-                                        item.label,
-                                        selected = if (live) selectedId == item.id else selectedName == item.label,
-                                        onClick = { onSelect(item) },
-                                    )
-                                }
+            },
+        ) {
+            if (values.size > 6) {
+                TextFieldCard("Search accounts", query, { query = it }, TextFieldOptions(placeholder = "Find an account"))
+            }
+            if (filtered.isEmpty()) {
+                EmptyState("No accounts found", modifier = Modifier.padding(TandemSpacing.large))
+            } else {
+                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall)) {
+                    items(filtered, key = { "account-choice-${it.id}" }) { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small),
+                        ) {
+                            if (live) AccountIconTile(item.label, accounts.firstOrNull { it.id == item.id }?.type)
+                            Box(Modifier.weight(1f)) {
+                                ChoiceRow(
+                                    item.label,
+                                    selected = if (live) selectedId == item.id else selectedName == item.label,
+                                    onClick = { onSelect(item) },
+                                )
                             }
                         }
                     }

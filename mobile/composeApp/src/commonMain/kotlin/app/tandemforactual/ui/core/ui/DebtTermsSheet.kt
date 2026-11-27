@@ -2,13 +2,7 @@
 
 package app.tandemforactual.ui.core.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.planning.DebtKind
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.store.BudgetDisplaySettings
@@ -26,15 +19,14 @@ import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
 import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.inputs.FilterPills
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
 import app.tandemforactual.ui.design.templates.ToggleRow
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import kotlin.uuid.ExperimentalUuidApi
@@ -58,28 +50,11 @@ internal fun DebtTermsSheet(
     var keepPrivate by remember(account) { mutableStateOf(terms?.shared == false) }
     var error by remember(account) { mutableStateOf<String?>(null) }
     TandemTaskSheet(visible = account != null, onDismissRequest = onDismiss, onDismissed = {}) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(TandemSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
-            ) {
+        SheetCard(
+            header = {
                 TandemModalHeader(account?.name.orEmpty(), onClose = onDismiss)
-                Text(
-                    "Used to estimate payoff. Leave anything you don’t know blank.",
-                    color = palette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
-                DebtKindPills(kind, paysInFull, { kind = it }, { paysInFull = it })
-                TextFieldCard("APR (%)", apr, { apr = it.take(6) }, TextFieldOptions(placeholder = "19.99"))
-                TextFieldCard("Minimum payment", minimum, { minimum = it }, settings.amountOptions())
-                TextFieldCard(
-                    "Due day of the month",
-                    dueDay,
-                    { dueDay = it.filter(Char::isDigit).take(2) },
-                    TextFieldOptions(placeholder = "12"),
-                )
-                ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
-                error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
+            },
+            actions = {
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
                     val rate = apr.takeIf { it.isNotBlank() }?.let(::parseRateBasisPoints)
                     val payment = minimum.takeIf { it.isNotBlank() }?.let { parseAmountMinorUnits(it, settings) }
@@ -106,7 +81,24 @@ internal fun DebtTermsSheet(
                         )
                     }
                 }
-            }
+            },
+        ) {
+            Text(
+                "Used to estimate payoff. Leave anything you don’t know blank.",
+                color = palette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
+            DebtKindPills(kind, paysInFull, { kind = it }, { paysInFull = it })
+            TextFieldCard("APR (%)", apr, { apr = it.take(6) }, TextFieldOptions(placeholder = "19.99"))
+            TextFieldCard("Minimum payment", minimum, { minimum = it }, settings.amountOptions())
+            TextFieldCard(
+                "Due day of the month",
+                dueDay,
+                { dueDay = it.filter(Char::isDigit).take(2) },
+                TextFieldOptions(placeholder = "12"),
+            )
+            ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
+            error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
     }
 }

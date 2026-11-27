@@ -2,14 +2,8 @@
 
 package app.tandemforactual.ui.feature.checkup
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.HealthIssue
@@ -17,10 +11,10 @@ import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -79,40 +73,43 @@ internal fun CheckupActionDialog(
         val (issue, row) = target ?: return@TandemChoiceDialog
         val payee = issue.kind == HealthIssueKind.UNUSED_PAYEES
         val group = duplicatesOf(issue, row)
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SheetCard(
+            maxWidth = 480.dp,
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader(row.name ?: "No payee", onClose = onDismiss, leadingIcon = icon)
-                Text(
-                    if (payee) {
-                        "No transactions or rules use this payee."
-                    } else {
-                        "${group.size} transactions share this date, amount and payee."
-                    },
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
-                if (!payee && canOpen) {
-                    ListRow("Open transaction", leading = RowLeading.Icon(Lucide.ExternalLink), onClick = onOpen)
-                }
-                ListRow(
-                    if (payee) "Delete payee" else "Delete this copy",
-                    when {
-                        payee -> "Removes it from your payee list"
-                        group.size == 2 -> "Keeps the other copy"
-                        else -> "Keeps the other ${group.size - 1}"
-                    },
-                    leading = RowLeading.Icon(Lucide.Trash2),
-                    options = ListRowOptions(showChevron = false),
-                    onClick = { onDelete(group) },
-                )
-                ListRow(
-                    if (payee) "Ignore" else "Not a duplicate",
-                    if (payee) "Stop listing this payee here" else "Stop listing these here",
-                    leading = RowLeading.Icon(Lucide.EyeOff),
-                    options = ListRowOptions(showChevron = false),
-                    onClick = { onIgnore(group) },
-                )
+            },
+        ) {
+            Text(
+                if (payee) {
+                    "No transactions or rules use this payee."
+                } else {
+                    "${group.size} transactions share this date, amount and payee."
+                },
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
+            if (!payee && canOpen) {
+                ListRow("Open transaction", leading = RowLeading.Icon(Lucide.ExternalLink), onClick = onOpen)
             }
+            ListRow(
+                if (payee) "Delete payee" else "Delete this copy",
+                when {
+                    payee -> "Removes it from your payee list"
+                    group.size == 2 -> "Keeps the other copy"
+                    else -> "Keeps the other ${group.size - 1}"
+                },
+                leading = RowLeading.Icon(Lucide.Trash2),
+                options = ListRowOptions(showChevron = false),
+                onClick = { onDelete(group) },
+            )
+            ListRow(
+                if (payee) "Ignore" else "Not a duplicate",
+                if (payee) "Stop listing this payee here" else "Stop listing these here",
+                leading = RowLeading.Icon(Lucide.EyeOff),
+                options = ListRowOptions(showChevron = false),
+                onClick = { onIgnore(group) },
+            )
         }
     }
 }

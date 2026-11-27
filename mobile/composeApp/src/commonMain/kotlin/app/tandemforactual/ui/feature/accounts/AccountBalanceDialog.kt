@@ -2,11 +2,7 @@
 
 package app.tandemforactual.ui.feature.accounts
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -18,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.store.observeAccountBalanceThrough
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -30,11 +25,10 @@ import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.Lucide
@@ -66,28 +60,31 @@ internal fun AccountBalanceDialog(
     val target = state.parseAmountMinorUnits(draft)
     val adjustment = target?.let { balanceAdjustmentMinor(current, it) }
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
+        SheetCard(
+            header = {
                 TandemModalHeader("Update balance", onClose = onDismiss, leadingIcon = Lucide.Scale)
-                TextFieldCard(
-                    "New balance",
-                    draft,
-                    { draft = it },
-                    TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
-                )
-                Text(
-                    when {
-                        target == null -> "Enter the balance as a number."
-                        adjustment == null -> "That’s already the balance."
-                        else -> "Adds a ${state.formatAmount(adjustment)} adjustment dated today."
-                    },
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.compactBody,
-                )
+            },
+            actions = {
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth(), enabled = adjustment != null) {
                     adjustment?.let(onSave)
                 }
-            }
+            },
+        ) {
+            TextFieldCard(
+                "New balance",
+                draft,
+                { draft = it },
+                TextFieldOptions(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)),
+            )
+            Text(
+                when {
+                    target == null -> "Enter the balance as a number."
+                    adjustment == null -> "That’s already the balance."
+                    else -> "Adds a ${state.formatAmount(adjustment)} adjustment dated today."
+                },
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.compactBody,
+            )
         }
     }
 }

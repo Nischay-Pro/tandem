@@ -2,12 +2,8 @@
 
 package app.tandemforactual.ui.feature.review
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -24,9 +20,9 @@ import app.tandemforactual.ui.core.session.transactions.updateTransaction
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
-import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
+import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemChoiceDialog
 import app.tandemforactual.ui.design.templates.TextFieldCard
 import app.tandemforactual.ui.design.templates.TextFieldOptions
@@ -73,17 +69,21 @@ internal fun ReviewCategoryPicker(
     var query by remember(visible) { mutableStateOf("") }
     val shown = categories.filter { it.second.contains(query.trim(), ignoreCase = true) }
     TandemChoiceDialog(visible = visible, onDismissRequest = onDismiss) {
-        SurfaceCard(Modifier.fillMaxWidth().widthIn(max = 480.dp).padding(horizontal = TandemSpacing.large)) {
-            Column(Modifier.padding(TandemSpacing.large), verticalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
+        SheetCard(
+            scrollBody = false,
+            maxWidth = 480.dp,
+            spacing = TandemSpacing.small,
+            header = {
                 TandemModalHeader("Choose category", onClose = onDismiss, leadingIcon = Lucide.Tags)
-                TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Groceries"))
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    shown.forEachIndexed { index, (id, name) ->
-                        if (index > 0) DividerLine()
-                        ListRow(name, onClick = { onPick(id) })
-                    }
-                    if (shown.isEmpty()) ListRow("No matching categories")
+            },
+        ) {
+            TextFieldCard("Search", query, { query = it }, TextFieldOptions(placeholder = "Groceries"))
+            Column(Modifier.weight(1f, fill = false).heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                shown.forEachIndexed { index, (id, name) ->
+                    if (index > 0) DividerLine()
+                    ListRow(name, onClick = { onPick(id) })
                 }
+                if (shown.isEmpty()) ListRow("No matching categories")
             }
         }
     }

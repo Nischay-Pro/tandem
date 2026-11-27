@@ -89,9 +89,9 @@ internal fun EditCategorySheet(
         if (category != null) {
             SurfaceCard(
                 Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 520.dp)
                     .padding(horizontal = 16.dp)
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth()
                     .heightIn(max = 720.dp),
             ) {
                 Column(
@@ -100,7 +100,7 @@ internal fun EditCategorySheet(
                 ) {
                     EditCategoryHeader(mobileSession) { sheets.showEditDialog = false }
                     Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(TandemSpacing.small),
                     ) {
                         TextFieldCard("Name", sheets.editName, { sheets.editName = it }, TextFieldOptions(placeholder = category.name))
