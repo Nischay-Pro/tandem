@@ -63,6 +63,9 @@ jobs:
       - name: Test documentation checks
         run: node --test scripts/check-docs.test.mjs
 
+      - name: Check the demo budget is deterministic
+        run: node --test scripts/demo-budget/generate.test.mjs
+
       - name: Check local documentation links and toolchain versions
         run: node scripts/check-docs.mjs
 
