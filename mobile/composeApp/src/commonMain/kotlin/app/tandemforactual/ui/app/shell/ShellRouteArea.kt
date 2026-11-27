@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,7 @@ import app.tandemforactual.ui.app.WorkspacePanes
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppRouteEntry
 import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.decodeAppTabBackStacks
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
 import app.tandemforactual.ui.design.templates.appBackgroundBrush
@@ -85,31 +87,55 @@ internal fun ColumnScope.ShellRouteArea(
                 ),
     ) {
         if (layout.workspaceActive) {
-            val route = ctx.route
-            WorkspacePanes(layout.workspaceLayout, layout.workspacePanes, route, onFocus = {
-                if (it !=
-                    route
-                ) {
-                    ctx.navigator.selectTabRoot(it)
-                }
-            }) { paneRoute ->
-                ShellHeader(chrome, paneRoute)
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    ShellRoute(
-                        chrome,
-                        if (paneRoute == route) ctx.routeEntry else AppRouteEntry(paneRoute, -1L - paneRoute.ordinal),
-                        Modifier.fillMaxSize(),
-                        true,
-                        false,
-                    )
-                }
-            }
+            ShellWorkspace(chrome, layout)
         } else {
             ShellRouteTransitions(chrome, layout)
         }
     }
     ShellBottomBar(chrome, layout)
     if (ctx.transactionSheetActive) TransactionTaskSheet(chrome, transitionInputModifier)
+}
+
+/**
+ * The workspace panes. Each shows the top of its tab's stack, so a screen opened from a pane stays in that pane and
+ * slides in there; touching another pane brings back that tab's own stack.
+ */
+@Composable
+private fun ShellWorkspace(
+    chrome: ShellChromeState,
+    layout: ShellLayout,
+) {
+    val ctx = chrome.ctx
+    val focused = layout.tabShellRoute ?: ctx.route
+    val savedStacks = remember(ctx.shell.savedTabBackStacks) { decodeAppTabBackStacks(ctx.shell.savedTabBackStacks) }
+    val routeBackground = appBackgroundBrush(ctx.state.backgroundStyle, tandemPalette)
+    WorkspacePanes(
+        layout.workspaceLayout,
+        layout.workspacePanes,
+        focused,
+        onFocus = { if (it != focused) ctx.navigator.selectTab(it) },
+    ) { paneRoute ->
+        val entry =
+            if (paneRoute == focused) {
+                ctx.routeEntry
+            } else {
+                savedStacks[paneRoute]?.lastOrNull() ?: AppRouteEntry(paneRoute, -1L - paneRoute.ordinal)
+            }
+        AnimatedContent(
+            targetState = entry,
+            modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds(),
+            transitionSpec = { routeTransform(ctx.reduceMotion, ctx.shell) },
+            contentKey = { it.stateKey },
+            label = "tandem-workspace-pane",
+        ) { paneEntry ->
+            Column(Modifier.fillMaxSize().background(routeBackground)) {
+                ShellHeader(chrome, paneEntry.route)
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    ShellRoute(chrome, paneEntry, Modifier.fillMaxSize(), true, false)
+                }
+            }
+        }
+    }
 }
 
 /** Counts pointer sequences and swallows touches while a route transition is still running. */

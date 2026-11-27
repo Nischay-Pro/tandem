@@ -3,9 +3,14 @@
 package app.tandemforactual.ui.feature.schedules.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -50,13 +55,6 @@ internal fun ScheduleActionsSheet(
     scope: CoroutineScope,
     editForm: @Composable () -> Unit,
 ) {
-    val pendingScheduleActions =
-        selectedSchedule?.let { mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, it.id) }.orEmpty()
-    val pendingActionBlocksChoice =
-        pendingScheduleActions.size > 1 ||
-            pendingScheduleActions.any { pendingAction ->
-                selectedSchedule != null && !mobileSession.schedules.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
-            }
     TandemTaskSheet(
         visible = selection.showScheduleEditor && selectedSchedule != null,
         onDismissRequest = {
@@ -82,29 +80,71 @@ internal fun ScheduleActionsSheet(
                     ScheduleSheetHeader(state, mobileSession, selection, dialog, selectedSchedule)
                 },
             ) {
-                when {
-                    dialog.dialogMode == "delete" -> {
-                        Text(
-                            "Confirm deleting this schedule in the alert.",
-                            color = tandemPalette.muted,
-                            fontSize = TandemTypography.body,
-                        )
-                    }
-                    dialog.dialogMode == "edit" -> editForm()
-                    else ->
-                        ScheduleActionMenu(
-                            state,
-                            mobileSession,
-                            selection,
-                            dialog,
-                            selectedSchedule,
-                            pendingScheduleActions,
-                            pendingActionBlocksChoice,
-                            scope,
-                        )
-                }
+                ScheduleActionsBody(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
             }
         }
+    }
+}
+
+/** The selected schedule's actions in the pane beside the list of upcoming bills. */
+@Composable
+internal fun ScheduleActionsPane(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+    selectedSchedule: LiveScheduleSummary,
+    scope: CoroutineScope,
+    editForm: @Composable () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = TandemSpacing.screen, vertical = TandemSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium),
+    ) {
+        ScheduleSheetHeader(state, mobileSession, selection, dialog, selectedSchedule)
+        ScheduleActionsBody(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
+    }
+}
+
+@Composable
+private fun ScheduleActionsBody(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+    selectedSchedule: LiveScheduleSummary,
+    scope: CoroutineScope,
+    editForm: @Composable () -> Unit,
+) {
+    val pendingScheduleActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, selectedSchedule.id)
+    val pendingActionBlocksChoice =
+        pendingScheduleActions.size > 1 ||
+            pendingScheduleActions.any { pendingAction ->
+                !mobileSession.schedules.scheduleActionCanBeReplaced(pendingAction, selectedSchedule.nextDate)
+            }
+    when {
+        dialog.dialogMode == "delete" -> {
+            Text(
+                "Confirm deleting this schedule in the alert.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.body,
+            )
+        }
+        dialog.dialogMode == "edit" -> editForm()
+        else ->
+            ScheduleActionMenu(
+                state,
+                mobileSession,
+                selection,
+                dialog,
+                selectedSchedule,
+                pendingScheduleActions,
+                pendingActionBlocksChoice,
+                scope,
+            )
     }
 }
 

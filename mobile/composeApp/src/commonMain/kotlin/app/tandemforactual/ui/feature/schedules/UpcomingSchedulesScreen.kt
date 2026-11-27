@@ -13,6 +13,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.ui.app.ListDetailPanes
 import app.tandemforactual.ui.core.format.amountLabel
 import app.tandemforactual.ui.core.format.parseIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -31,8 +32,10 @@ import app.tandemforactual.ui.design.feedback.InlineMessageKind
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.templates.PageLazyColumn
+import app.tandemforactual.ui.design.theme.TandemBackHandler
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.feature.schedules.components.ScheduleActionsPane
 import app.tandemforactual.ui.feature.schedules.components.ScheduleActionsSheet
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDeleteConfirmationDialog
 import app.tandemforactual.ui.feature.schedules.components.ScheduleDialogState
@@ -76,39 +79,35 @@ internal fun UpcomingSchedulesScreen(
     val dateValue = rememberScheduleDateValue(selectedSchedule)
     val draft = rememberScheduleEditDraft(state, selection.selectedScheduleId, selectedSchedule, dateValue)
     val scope = rememberCoroutineScope()
-    PageLazyColumn {
-        upcomingScheduleItems(state, mobileSession, schedules) { schedule ->
-            selection.selectedScheduleId = schedule.id
-            selection.showScheduleEditor = true
-            dialog.dialogMode = "menu"
-            mobileSession.feedback.clearBudgetActionMessage()
-        }
-    }
-
-    ScheduleActionsSheet(
-        state,
-        mobileSession,
-        selection,
-        dialog,
-        selectedSchedule,
-        scope,
-    ) {
+    val accountOptions = rememberScheduleAccountOptions(accounts)
+    val payeeOptions = rememberSchedulePayeeOptions(payeeRecords, selectedSchedule)
+    val editForm: @Composable () -> Unit = {
         ScheduleEditForm(
             state,
             mobileSession,
             draft,
-            rememberScheduleAccountOptions(accounts),
-            rememberSchedulePayeeOptions(payeeRecords, selectedSchedule),
+            accountOptions,
+            payeeOptions,
             onSave = {
-                if (selectedSchedule !=
-                    null
-                ) {
+                if (selectedSchedule != null) {
                     saveScheduleEdit(state, mobileSession, scope, draft, dateValue as? JsonObject, selectedSchedule, selection)
                 }
             },
             onCancel = { dialog.dialogMode = "menu" },
         )
     }
+    ListDetailPanes(
+        detailKey = selectedSchedule?.id?.takeIf { selection.showScheduleEditor },
+        emptyTitle = "Choose a bill",
+        emptyMessage = "Post it, skip it or change it here.",
+        list = { detailInPane ->
+            UpcomingScheduleList(state, mobileSession, schedules, selection, dialog, detailInPane)
+            if (!detailInPane) ScheduleActionsSheet(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
+        },
+        detail = {
+            if (selectedSchedule != null) ScheduleActionsPane(state, mobileSession, selection, dialog, selectedSchedule, scope, editForm)
+        },
+    )
     if (dialog.showDeleteScheduleConfirmation && selectedSchedule != null) {
         ScheduleDeleteConfirmationDialog(
             mobileSession,
@@ -123,6 +122,37 @@ internal fun UpcomingSchedulesScreen(
         )
     }
     ScheduleEditDatePicker(draft)
+}
+
+/** The upcoming bills; in a pane layout the open one is marked and back closes it. */
+@Composable
+private fun UpcomingScheduleList(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    schedules: List<LiveScheduleSummary>,
+    selection: ScheduleSelectionState,
+    dialog: ScheduleDialogState,
+    detailInPane: Boolean,
+) {
+    val openId = selection.selectedScheduleId.takeIf { detailInPane && selection.showScheduleEditor }
+    TandemBackHandler(
+        enabled = openId != null,
+        onBack = {
+            if (!mobileSession.isPerformingBudgetAction) {
+                selection.showScheduleEditor = false
+                dialog.dialogMode = "menu"
+            }
+        },
+        onBackProgress = { _, _ -> },
+    )
+    PageLazyColumn {
+        upcomingScheduleItems(state, mobileSession, schedules, openId) { schedule ->
+            selection.selectedScheduleId = schedule.id
+            selection.showScheduleEditor = true
+            dialog.dialogMode = "menu"
+            mobileSession.feedback.clearBudgetActionMessage()
+        }
+    }
 }
 
 @Composable
@@ -152,6 +182,7 @@ private fun LazyListScope.upcomingScheduleItems(
     state: AppState,
     mobileSession: TandemMobileSession,
     schedules: List<LiveScheduleSummary>,
+    openId: String?,
     onOpen: (LiveScheduleSummary) -> Unit,
 ) {
     if (schedules.isEmpty()) {
@@ -168,7 +199,7 @@ private fun LazyListScope.upcomingScheduleItems(
         items(schedules.size, key = { index -> schedules[index].id }) { index ->
             val schedule = schedules[index]
             val pendingActions = mobileSession.schedules.pendingScheduleActionsFor(state.selectedBudgetId, schedule.id)
-            SurfaceCard {
+            SurfaceCard(highlighted = schedule.id == openId) {
                 pendingActions.forEach { pendingAction ->
                     InlineMessage(
                         text = mobileSession.schedules.scheduleActionStatusMessage(pendingAction),
