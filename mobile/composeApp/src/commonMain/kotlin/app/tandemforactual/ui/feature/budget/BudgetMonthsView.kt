@@ -27,6 +27,9 @@ import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.feature.budget.grid.BudgetGridIo
+import app.tandemforactual.ui.feature.budget.grid.BudgetGridState
+import app.tandemforactual.ui.feature.budget.grid.rememberBudgetGridIo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -38,6 +41,9 @@ internal class BudgetMonthsView(
     summaries: Map<String, LiveBudgetMonthSummary>,
     val enabled: Boolean,
     val band: State<Float>,
+    val grid: BudgetGridState,
+    val gridIo: BudgetGridIo,
+    budgetMonthIds: List<String>,
     val onEnabledChange: (Boolean) -> Unit,
 ) {
     /** More than one month fits, so the choice between one month and several is offered. */
@@ -58,6 +64,11 @@ internal class BudgetMonthsView(
     ): LiveCategoryGroupSummary? = groups[monthId]?.get(groupId)
 
     fun toBudget(monthId: String): Long? = toBudget[monthId]
+
+    /** The calendar month before the first one shown, loaded so "copy last month" works on the first column. */
+    val previousMonth: String? = monthIds.firstOrNull()?.let(::previousMonthId)
+    val earlierMonth: String? = monthIds.firstOrNull()?.let { first -> budgetMonthIds.filter { it < first }.maxOrNull() }
+    val laterMonth: String? = monthIds.lastOrNull()?.let { last -> budgetMonthIds.filter { it > last }.minOrNull() }
 }
 
 @Composable
@@ -75,7 +86,7 @@ internal fun rememberBudgetMonthsView(
             if (count < 2) emptyList() else budgetMonthWindow(mobileSession.budgetMonthIds, state.selectedMonthId, count, start)
         }
     LaunchedEffect(monthIds.firstOrNull()) { monthIds.firstOrNull()?.let { start = it } }
-    val loaded = if (enabled && monthIds.size >= 2) monthIds else emptyList()
+    val loaded = if (enabled && monthIds.size >= 2) listOfNotNull(previousMonthId(monthIds.first())) + monthIds else emptyList()
     val summaries = rememberBudgetMonthSummaries(state, mobileSession, loaded, selectedMonth)
     val band =
         animateFloatAsState(
@@ -83,7 +94,12 @@ internal fun rememberBudgetMonthsView(
             tandemMotionSpec(tandemReduceMotion, TandemMotion.CONTENT_SIZE_MILLIS),
             label = "budget month band",
         )
-    return remember(monthIds, summaries, enabled) { BudgetMonthsView(monthIds, summaries, enabled, band) { enabled = it } }
+    val grid = remember(state.selectedBudgetId) { BudgetGridState() }
+    val gridIo = rememberBudgetGridIo(state, mobileSession)
+    val budgetMonthIds = mobileSession.budgetMonthIds
+    return remember(monthIds, summaries, enabled, grid, gridIo, budgetMonthIds) {
+        BudgetMonthsView(monthIds, summaries, enabled, band, grid, gridIo, budgetMonthIds) { enabled = it }
+    }
 }
 
 /** Each shown month's summary with edits still waiting on this device; the selected month reuses the screen's own. */

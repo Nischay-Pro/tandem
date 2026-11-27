@@ -75,7 +75,7 @@ internal fun shortcutSections(shortcuts: List<Shortcut>): List<Pair<String, List
 internal fun shortcutKeyText(key: ShortcutKey): String =
     buildList {
         if (key.command) add(commandKeyLabel)
-        if (key.shift && !key.printable) add("Shift")
+        if (key.shift && (!key.printable || key.symbol.single().isLetter())) add("Shift")
         add(if (key.printable) key.symbol.uppercase() else key.symbol)
     }.joinToString(" ")
 
