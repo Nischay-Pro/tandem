@@ -14,7 +14,7 @@
       android:name=".MainActivity"
       android:launchMode="singleTask"
       android:windowSoftInputMode="adjustResize"
-      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden"
+      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboardHidden|uiMode|locale|layoutDirection|fontScale"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
       <intent-filter>

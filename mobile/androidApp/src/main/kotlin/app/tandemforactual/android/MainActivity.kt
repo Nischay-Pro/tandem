@@ -31,9 +31,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
-import app.tandemforactual.data.database.TandemDatabase
-import app.tandemforactual.data.database.openTandemDatabase
-import app.tandemforactual.data.database.tandemDatabaseBuilder
 import app.tandemforactual.ui.app.AuthReturnEvents
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.ScreenshotScript
@@ -54,7 +51,6 @@ class MainActivity : FragmentActivity() {
     private val deviceAuthenticator by lazy { AndroidDeviceAuthenticator(this) }
     private val deviceCredentialStore by lazy { AndroidDeviceCredentialStore(applicationContext) }
     private val encryptedBudgetVault by lazy { AndroidEncryptedBudgetVault(applicationContext) }
-    private var tandemDatabase: TandemDatabase? = null
     private var notificationPermissionEnabled by mutableStateOf(false)
     private var openSettingsIfBlocked = false
     private val notificationPermissionLauncher =
@@ -109,7 +105,7 @@ class MainActivity : FragmentActivity() {
         }
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
-        crashReports.install()
+        TandemProcess.installCrashHandler(crashReports::record)
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { removeStaleSharedFiles() }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -118,13 +114,12 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-        handleQuickAction(intent)
+        if (isFreshLaunchIntent(savedInstanceState != null, intent?.flags ?: 0)) handleQuickAction(intent)
         runCatching { ShortcutManagerCompat.removeDynamicShortcuts(this, listOf(LEGACY_QUICK_ADD_SHORTCUT_ID)) }
         notificationPermissionEnabled = hasNotificationPermission()
         BudgetSystemNotifications.initialize(applicationContext)
         AutomaticBackupScheduler.ensureScheduled(applicationContext)
-        val database = openTandemDatabase(tandemDatabaseBuilder(applicationContext))
-        tandemDatabase = database
+        val database = TandemProcess.database(applicationContext)
         setContent {
             val onBackgroundSyncSettingsChanged: (Boolean, SyncNetwork, String) -> Unit =
                 remember(applicationContext) {
@@ -288,12 +283,6 @@ class MainActivity : FragmentActivity() {
             syncSignalState.onActivityStopped()
         }
         super.onStop()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        tandemDatabase?.close()
-        tandemDatabase = null
     }
 }
 
