@@ -1,6 +1,5 @@
 package app.tandemforactual.api.client
 
-import app.tandemforactual.data.actual.GoalTemplateOutcome
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
 import app.tandemforactual.data.actual.UndoResult
@@ -60,18 +59,3 @@ suspend fun TandemApiClient.undoBudgetChange(
     changeId: String,
     encryptionPassword: String?,
 ): UndoResult = call { budget(budgetId, encryptionPassword).undoChange(changeId) }
-
-/** What "Apply templates" would budget for [month], from the device's copy, without changing it. */
-suspend fun TandemApiClient.previewBudgetGoalTemplates(
-    budgetId: String,
-    month: String,
-    force: Boolean,
-    categoryIds: List<String>?,
-    encryptionPassword: String?,
-): GoalTemplateOutcome = call { budget(budgetId, encryptionPassword).goalTemplates(today()) { it.preview(month, force, categoryIds) } }
-
-/** Template lines that don't parse and schedules they name that don't exist, worded as Actual's check words them. */
-suspend fun TandemApiClient.checkBudgetGoalTemplates(
-    budgetId: String,
-    encryptionPassword: String?,
-): List<String> = call { budget(budgetId, encryptionPassword).goalTemplates(today()) { it.check() } }

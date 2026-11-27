@@ -6,7 +6,6 @@ import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
 import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.applyBudgetTemplate
-import app.tandemforactual.data.actual.applyGoalTemplates
 import app.tandemforactual.data.actual.closeAccount
 import app.tandemforactual.data.actual.copyBudgetMonth
 import app.tandemforactual.data.actual.createAccount
@@ -546,16 +545,6 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKeyOverride: String? = null,
     ) = edit(budgetId, encryptionPassword) { it.applyBudgetTemplate(month, assignments) }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun applyBudgetGoalTemplates(
-        budgetId: String,
-        month: String,
-        force: Boolean,
-        categoryIds: List<String>?,
-        encryptionPassword: String?,
-        idempotencyKeyOverride: String? = null,
-    ) = edit(budgetId, encryptionPassword) { it.applyGoalTemplates(month, force, categoryIds) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun holdBudgetForNextMonth(
