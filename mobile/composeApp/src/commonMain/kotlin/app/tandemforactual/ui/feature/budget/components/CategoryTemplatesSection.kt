@@ -20,14 +20,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.GoalTemplateStatus
 import app.tandemforactual.data.actual.noteWithoutTemplateLine
+import app.tandemforactual.ui.core.session.BudgetReorderKind
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.applyGoalTemplates
 import app.tandemforactual.ui.core.session.budget.goalTemplateStatus
+import app.tandemforactual.ui.core.session.budget.noteOverridesFor
 import app.tandemforactual.ui.core.session.budget.previewGoalTemplates
 import app.tandemforactual.ui.core.session.budget.setBudgetCategoryNote
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.ui.noteWithPendingEdit
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemIconButton
@@ -66,7 +69,12 @@ internal fun CategoryTemplatesSection(
     category: LiveCategorySummary,
     scope: CoroutineScope,
 ) {
-    val note = categoryNote(mobileSession, state.selectedBudgetId, category.id)
+    val note =
+        noteWithPendingEdit(
+            mobileSession.budgetQueue.noteOverridesFor(state.selectedBudgetId, BudgetReorderKind.SET_CATEGORY_NOTE),
+            mobileSession.categoryRecords.firstOrNull { it.recordId == category.id },
+            category.id,
+        )
     val password = state.encryptedPassword.takeIf { it.isNotBlank() }
     var status by remember(state.selectedBudgetId, category.id) { mutableStateOf<GoalTemplateStatus?>(null) }
     var adding by rememberSaveable(state.selectedBudgetId, category.id) { mutableStateOf(false) }
