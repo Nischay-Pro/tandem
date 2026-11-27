@@ -1,5 +1,6 @@
 package app.tandemforactual.data.store
 
+import app.tandemforactual.data.actual.daysInMonth
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
@@ -99,6 +100,8 @@ data class WatchSummary(
     val leftToSpendNegative: Boolean = false,
     val toBudget: String? = null,
     val toBudgetNegative: Boolean = false,
+    val perDay: String? = null,
+    val daysLeft: Int? = null,
     val categories: List<WatchCategory> = emptyList(),
     val bills: List<WatchBill> = emptyList(),
     val quickAdd: WatchQuickAdd = WatchQuickAdd(open = false),
@@ -185,6 +188,10 @@ private fun encode(summary: WatchSummary): String =
             put("r", it)
             put("ro", summary.toBudgetNegative)
         }
+        summary.perDay?.let {
+            put("pd", it)
+            put("dl", summary.daysLeft)
+        }
         if (summary.categories.isNotEmpty()) putJsonArray("c") { summary.categories.forEach { addJsonObject { putCategory(it) } } }
         if (summary.bills.isNotEmpty()) {
             putJsonArray("u") {
@@ -237,4 +244,20 @@ private fun JsonObjectBuilder.putQuickAdd(quickAdd: WatchQuickAdd) {
 private fun JsonObjectBuilder.putChoice(choice: WatchChoice) {
     put("i", choice.id)
     put("n", choice.name)
+}
+
+/** What's left split evenly over the rest of the month, today included. */
+data class DailyAllowance(
+    val perDayMinor: Long,
+    val daysLeft: Int,
+)
+
+/** An even split of [leftMinor] over the days left in [todayIso]'s month; an overspend is shown whole, not divided. */
+fun dailyAllowance(
+    leftMinor: Long,
+    todayIso: String,
+): DailyAllowance {
+    val (year, month, day) = todayIso.split('-').map(String::toLong)
+    val daysLeft = (daysInMonth(year, month) - day + 1).toInt()
+    return DailyAllowance(if (leftMinor > 0) leftMinor / daysLeft else leftMinor, daysLeft)
 }

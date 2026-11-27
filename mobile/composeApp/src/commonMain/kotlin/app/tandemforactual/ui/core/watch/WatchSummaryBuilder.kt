@@ -6,6 +6,7 @@ import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.WatchSettings
+import app.tandemforactual.data.store.dailyAllowance
 import app.tandemforactual.data.store.dueSchedules
 import app.tandemforactual.data.store.findRecord
 import app.tandemforactual.data.store.findRecords
@@ -85,6 +86,7 @@ fun WatchSummary.withoutAmounts(): WatchSummary =
         state = WatchState.AMOUNTS_HIDDEN,
         toBudgetMinor = null,
         leftToSpendMinor = null,
+        perDayMinor = null,
         categories = categories.map { WatchCategory(it.id, it.name) },
         bills = bills.map { it.copy(amountMinor = null) },
     )
@@ -108,11 +110,14 @@ private suspend fun visibleSummary(
             .sortedByDescending { it.recordDate }
     val payees = payeeNames(repository, budgetId, recent)
     val pinnedIds = pinned.map { it.id }.toSet()
+    val allowance = month?.longValue("totalBalance")?.let { dailyAllowance(it, todayIso) }
     return base.copy(
         state = WatchState.VISIBLE,
         syncedAtEpochMs = repository.readSyncState(budgetId)?.lastSyncedAtEpochMs,
         toBudgetMinor = month?.longValue("toBudget"),
         leftToSpendMinor = month?.longValue("totalBalance"),
+        perDayMinor = allowance?.perDayMinor,
+        daysLeft = allowance?.daysLeft,
         categories = pinned.map { it.toWatch(recent.filter { record -> record.categoryId == it.id }, payees) },
         quickCategories =
             recent

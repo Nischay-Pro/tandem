@@ -19,6 +19,7 @@ import app.tandemforactual.wear.tiles.nextBillLayout
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,6 +62,14 @@ class WatchSurfacesTest {
         assertTrue(texts.toString(), "$1,234.56" in texts)
         assertTrue(texts.toString(), WatchText.LEFT_TO_SPEND in texts)
         assertTrue(texts.toString(), "+ Add" in texts)
+    }
+
+    @Test
+    fun theGlanceSplitsWhatIsLeftOverTheDaysLeft() {
+        assertEquals("$93.62 a day · 9 days left", WatchText.perDay(summary().copy(perDayMinor = 9_362, daysLeft = 9)))
+        assertEquals("$10.00 for today", WatchText.perDay(summary().copy(perDayMinor = 1_000, daysLeft = 1)))
+        assertNull(WatchText.perDay(summary(WatchState.AMOUNTS_HIDDEN).copy(perDayMinor = 1_000, daysLeft = 3)))
+        assertNull(WatchText.perDay(summary()))
     }
 
     @Test

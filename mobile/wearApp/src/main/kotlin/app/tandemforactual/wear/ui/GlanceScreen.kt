@@ -166,6 +166,9 @@ private fun LeftToSpend(
                     maxLines = 1,
                 )
                 Text(WatchText.LEFT_TO_SPEND, style = MaterialTheme.typography.labelMedium, color = WearColors.muted)
+                WatchText.perDay(summary)?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = WearColors.muted, textAlign = TextAlign.Center)
+                }
                 WatchText.synced(summary)?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
                 }

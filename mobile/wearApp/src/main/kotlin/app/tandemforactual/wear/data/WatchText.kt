@@ -21,6 +21,14 @@ object WatchText {
     const val LEFT_TO_SPEND = "Left to spend"
     const val TO_BUDGET = "To budget"
 
+    /** "$93.62 a day · 9 days left", or "$93.62 for today" on the month's last day; null while amounts can't be shown. */
+    fun perDay(summary: WatchSummary): String? {
+        val minor = summary.perDayMinor?.takeIf { summary.amountsShown } ?: return null
+        val days = summary.daysLeft ?: return null
+        val amount = summary.money(minor)
+        return if (days == 1) "$amount for today" else "$amount a day · $days days left"
+    }
+
     /** "Synced 10:42", or null before the phone has synced. */
     fun synced(
         summary: WatchSummary,

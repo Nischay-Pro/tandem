@@ -132,6 +132,7 @@ class WatchSummaryTest {
             val hidden = decode(watchSummaryJson(repository, open + ("privacyModeEnabled" to "true"), TODAY, NOW, false, format))
             assertEquals("hidden", hidden.text("s"))
             assertNull(hidden["l"])
+            assertNull(hidden["pd"])
             val hiddenFood = hidden.getValue("c").jsonArray[0].jsonObject
             assertEquals("Food", hiddenFood.text("n"))
             assertNull(hiddenFood["l"])
@@ -149,6 +150,8 @@ class WatchSummaryTest {
 
             assertEquals("ready", ready.text("s"))
             assertEquals("E32000", ready.text("l"))
+            assertEquals("E6400", ready.text("pd"))
+            assertEquals("5", ready.text("dl"))
             assertEquals("E-50", ready.text("r"))
             assertEquals("true", ready.getValue("ro").jsonPrimitive.content)
             val categories = ready.getValue("c").jsonArray.map { it.jsonObject }
@@ -170,6 +173,15 @@ class WatchSummaryTest {
             assertEquals(listOf("savings", "checking"), quickAdd.getValue("a").jsonArray.map { it.jsonObject.text("i") })
             assertEquals(listOf("Corner Café"), quickAdd.getValue("p").jsonArray.map { it.jsonPrimitive.content })
         }
+
+    @Test
+    fun theDailyAllowanceSplitsWhatIsLeftOverTheRestOfTheMonth() {
+        assertEquals(DailyAllowance(6_400, 5), dailyAllowance(32_000, "2026-11-26"))
+        assertEquals(DailyAllowance(1_000, 1), dailyAllowance(1_000, "2026-12-31"))
+        assertEquals(DailyAllowance(1_034, 29), dailyAllowance(30_000, "2028-02-01"))
+        assertEquals(DailyAllowance(-500, 3), dailyAllowance(-500, "2026-11-28"))
+        assertEquals(DailyAllowance(0, 28), dailyAllowance(0, "2027-02-01"))
+    }
 
     @Test
     fun everyRefusalNamesItsReason() {

@@ -97,6 +97,8 @@ struct WatchSummary: Codable, Equatable {
     let leftToSpendNegative: Bool?
     let toBudget: String?
     let toBudgetNegative: Bool?
+    let perDay: String?
+    let daysLeft: Int?
     let categories: [Category]?
     let bills: [Bill]?
     let quickAdd: QuickAdd?
@@ -112,6 +114,8 @@ struct WatchSummary: Codable, Equatable {
         case leftToSpendNegative = "lo"
         case toBudget = "r"
         case toBudgetNegative = "ro"
+        case perDay = "pd"
+        case daysLeft = "dl"
         case categories = "c"
         case bills = "u"
         case quickAdd = "q"
@@ -130,6 +134,13 @@ struct WatchSummary: Codable, Equatable {
     }
 
     var showsAmounts: Bool { state == .ready }
+
+    /// "$93.62 a day · 9 days left", or "$93.62 for today" on the month's last day; nil while amounts are hidden.
+    var perDayText: String? {
+        guard showsAmounts, let perDay, let daysLeft else { return nil }
+        return daysLeft == 1 ? "\(perDay) for today" : "\(perDay) a day · \(daysLeft) days left"
+    }
+
     var canQuickAdd: Bool { quickAdd?.open == true && state != .none }
 
     /// An amount as the watch shows it: dots while amounts are hidden, a dash when it isn't known yet.

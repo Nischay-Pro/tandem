@@ -84,6 +84,8 @@ data class WatchSummary(
     @SerialName("sy") val syncedAtEpochMs: Long? = null,
     @SerialName("tb") val toBudgetMinor: Long? = null,
     @SerialName("lf") val leftToSpendMinor: Long? = null,
+    @SerialName("pd") val perDayMinor: Long? = null,
+    @SerialName("dl") val daysLeft: Int? = null,
     @SerialName("c") val categories: List<WatchCategory> = emptyList(),
     @SerialName("qc") val quickCategories: List<WatchChoice> = emptyList(),
     @SerialName("py") val recentPayees: List<String> = emptyList(),

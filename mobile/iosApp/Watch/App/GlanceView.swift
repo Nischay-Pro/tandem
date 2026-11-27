@@ -45,6 +45,12 @@ private struct LeftToSpendHeader: View {
                 .lineLimit(1)
                 .foregroundStyle(summary.showsAmounts && summary.leftToSpendNegative == true ? Color.tandemOver : .primary)
                 .privacySensitive()
+            if let perDay = summary.perDayText {
+                Text(perDay)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .privacySensitive()
+            }
             Text(summary.syncedText())
                 .font(.caption2)
                 .foregroundStyle(.secondary)

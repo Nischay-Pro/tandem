@@ -32,6 +32,16 @@ final class WatchSummaryTests: XCTestCase {
         XCTAssertNil(summary.statusMessage)
     }
 
+    func testPerDaySplitsWhatIsLeftAndHidesWithTheAmounts() throws {
+        let split = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","l":"$842.65","pd":"$93.62","dl":9}"#)
+        XCTAssertEqual(split.perDayText, "$93.62 a day · 9 days left")
+        let lastDay = try summary(#"{"v":1,"s":"ready","g":1,"b":"Home","pd":"$10.00","dl":1}"#)
+        XCTAssertEqual(lastDay.perDayText, "$10.00 for today")
+        let hidden = try summary(#"{"v":1,"s":"hidden","g":1,"b":"Home","pd":"$10.00","dl":3}"#)
+        XCTAssertNil(hidden.perDayText)
+        XCTAssertNil(try summary(self.ready).perDayText)
+    }
+
     func testSummariesOverTheLimitOrFromAnotherVersionAreIgnored() {
         XCTAssertNil(WatchSummary.decode(nil))
         XCTAssertNil(WatchSummary.decode(Data(#"{"v":2,"s":"ready","g":1}"#.utf8)))
