@@ -300,8 +300,7 @@ class ActualServerClient(
     }
 
     /** Whether the signed-in user is an admin, who alone may set server-wide bank credentials. */
-    suspend fun isAdmin(): Boolean =
-        json(http.get("$base/account/validate") { auth() })["data"]?.jsonObject?.text("permission") == "ADMIN"
+    suspend fun isAdmin(): Boolean = json(http.get("$base/account/validate") { auth() })["data"]?.jsonObject?.text("permission") == "ADMIN"
 
     /** Asks the Actual server for an account's transactions from its bank provider; the server holds the provider secrets. */
     suspend fun bankTransactions(
