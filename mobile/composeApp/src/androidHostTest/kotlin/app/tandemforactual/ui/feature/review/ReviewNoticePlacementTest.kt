@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,8 @@ class ReviewNoticePlacementTest {
     private val navigation =
         AppNavigation(open = {}, reset = {}, replaceTop = {}, newTransaction = {}, selectTab = {}, back = {}, backToList = {})
 
+    private val noticeVisible = mutableStateOf(false)
+
     private fun showWithNotice(screen: @Composable () -> Unit) {
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
@@ -64,7 +67,7 @@ class ReviewNoticePlacementTest {
                 CompositionLocalProvider(LocalNoticeClearance provides clearance) {
                     Box(Modifier.fillMaxSize()) {
                         screen()
-                        NoticeHost(visible = true) {
+                        NoticeHost(visible = noticeVisible.value) {
                             SurfaceCard(Modifier.widthIn(max = 560.dp).testTag(NOTICE)) {
                                 FeedbackMessageView(
                                     FeedbackMessage(
@@ -82,6 +85,8 @@ class ReviewNoticePlacementTest {
                 }
             }
         }
+        composeTestRule.waitForIdle()
+        noticeVisible.value = true
         composeTestRule.waitForIdle()
     }
 

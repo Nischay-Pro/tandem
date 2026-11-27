@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -178,12 +179,13 @@ internal fun NoticeHost(
     }
     Layout(
         content = {
-            AnimatedVisibility(
-                visible = visible,
-                modifier = Modifier.onSizeChanged { size = it },
-                enter = fadeIn() + slideInVertically { if (atTop) -it / 2 else it / 2 },
-                exit = fadeOut() + slideOutVertically { if (atTop) -it / 2 else it / 2 },
-            ) { content() }
+            Box(Modifier.onSizeChanged { size = it }) {
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn() + slideInVertically { if (atTop) -it / 2 else it / 2 },
+                    exit = fadeOut() + slideOutVertically { if (atTop) -it / 2 else it / 2 },
+                ) { content() }
+            }
         },
         modifier =
             modifier
