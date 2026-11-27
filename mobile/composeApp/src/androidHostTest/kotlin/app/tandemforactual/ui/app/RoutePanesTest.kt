@@ -117,7 +117,7 @@ class RoutePanesTest {
 
         composeTestRule.runOnIdle { paneKey = "rent" }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag(PANE_TAG).assertWidthIsEqualTo(TandemLayout.listPaneWidth)
+        composeTestRule.onNodeWithTag(PANE_TAG).assertWidthIsEqualTo(TandemLayout.wideListPaneWidth)
 
         composeTestRule.runOnIdle { paneKey = null }
         composeTestRule.waitForIdle()
