@@ -122,7 +122,11 @@ class DashboardGridLayoutTest {
 
     private fun bounds(tag: String): DpRect = composeTestRule.onNodeWithTag(tag).getUnclippedBoundsInRoot()
 
-    private fun columnCount(): Int = CARD_HEIGHTS.indices.map { bounds("card-$it").left }.distinct().size
+    private fun columnCount(): Int =
+        CARD_HEIGHTS.indices
+            .map { bounds("card-$it").left }
+            .distinct()
+            .size
 
     private fun assertReadingOrderTopToBottom() {
         val tops = CARD_HEIGHTS.indices.map { bounds("card-$it").top }
