@@ -22,16 +22,21 @@ import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthIssueKind
 import app.tandemforactual.data.actual.HealthRow
+import app.tandemforactual.data.actual.RuleFinding
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.session.TandemMobileSession
+import app.tandemforactual.ui.core.session.budget.deleteBudgetRule
+import app.tandemforactual.ui.core.session.budget.editBudgetRule
 import app.tandemforactual.ui.core.session.budget.manageBudgetPayee
 import app.tandemforactual.ui.core.session.transactions.deleteTransactionsWithUndo
 import app.tandemforactual.ui.core.state.AppNavigation
+import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.formatLiveDate
+import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.feedback.AnimatedReveal
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.feedback.InlineMessage
@@ -47,6 +52,9 @@ import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
 import app.tandemforactual.ui.design.theme.tandemPalette
+import app.tandemforactual.ui.core.format.RuleText
+import app.tandemforactual.ui.core.format.ruleNamesByField
+import app.tandemforactual.ui.core.format.ruleText
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.CircleCheck
@@ -110,7 +118,9 @@ internal fun DataHealthScreen(
     val shown = remember { mutableStateMapOf<String, Int>() }
     LaunchedEffect(state.selectedBudgetId, reload) {
         loading = true
-        mobileSession.insights.loadDataHealth(state.selectedBudgetId, state.encryptedPassword.takeIf { it.isNotBlank() })
+        val password = state.encryptedPassword.takeIf { it.isNotBlank() }
+        mobileSession.insights.loadDataHealth(state.selectedBudgetId, password)
+        mobileSession.insights.loadRuleFindings(state.selectedBudgetId, password)
         loading = false
     }
     val ignored =
@@ -122,12 +132,20 @@ internal fun DataHealthScreen(
             val ordered = if (issue.kind == HealthIssueKind.POSSIBLE_DUPLICATES) rows.sortedWith(duplicateOrder) else rows
             ordered.takeIf { it.isNotEmpty() }?.let { HealthIssue(issue.kind, it) }
         }
+    val ruleFindings =
+        mobileSession.insights.ruleFindingsCache
+            ?.takeIf { it.first == state.selectedBudgetId }
+            ?.second
+            .orEmpty()
+            .filterNot { it.key in ignored }
+    val ruleTexts = rememberRuleTexts(mobileSession)
     var acting by remember { mutableStateOf<Pair<HealthIssue, HealthRow>?>(null) }
+    var openFinding by remember { mutableStateOf<RuleFinding?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     val palette = tandemPalette
     PageLazyColumn(isRefreshing = loading && issues != null && reload > 0, onRefresh = { reload++ }) {
         val found = issues
-        item(key = "summary") { DataHealthSummary(state.selectedBudget, found, loading) }
+        item(key = "summary") { DataHealthSummary(state.selectedBudget, found, ruleFindings.size, loading) }
         failure?.let { text -> item(key = "failure") { InlineMessage(text, InlineMessageKind.ERROR, onDismiss = { failure = null }) } }
         when {
             found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
@@ -135,9 +153,9 @@ internal fun DataHealthScreen(
                 item(key = "error") {
                     EmptyStateCard("Couldn’t check this budget", "Open it while connected to Actual, then pull to try again.")
                 }
-            found.isEmpty() ->
+            found.isEmpty() && ruleFindings.isEmpty() ->
                 item(key = "clear") {
-                    SectionCard("Nothing needs attention", "Categories, payees and reconciliation all look good") {
+                    SectionCard("Nothing needs attention", "Categories, payees, rules and reconciliation all look good") {
                         ListRow(
                             "Checked just now",
                             leading = RowLeading.Icon(Lucide.CircleCheck),
@@ -163,7 +181,72 @@ internal fun DataHealthScreen(
             }
         }
     }
+        if (ruleFindings.isNotEmpty()) {
+            item(key = "rules") { RuleFindingsSection(ruleFindings, ruleTexts) { openFinding = it } }
+        }
+    }
     CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
+    RuleFindingActions(state, navigation, mobileSession, openFinding, ruleTexts, { openFinding = null }, { reload++ }) { failure = it }
+}
+
+@Composable
+private fun rememberRuleTexts(mobileSession: TandemMobileSession): Map<String, RuleText> {
+    val rules = mobileSession.ruleRecords
+    val names =
+        remember(mobileSession.accountRecords, mobileSession.categoryRecords, mobileSession.categoryGroupRecords, mobileSession.payeeRecords) {
+            ruleNamesByField(
+                mobileSession.accountRecords,
+                mobileSession.categoryRecords,
+                mobileSession.categoryGroupRecords,
+                mobileSession.payeeRecords,
+            )
+        }
+    return remember(rules, names) { rules.associate { it.recordId to ruleText(it.recordBody(), names) } }
+}
+
+@Composable
+private fun RuleFindingActions(
+    state: AppState,
+    navigation: AppNavigation,
+    mobileSession: TandemMobileSession,
+    finding: RuleFinding?,
+    rules: Map<String, RuleText>,
+    onDone: () -> Unit,
+    onChanged: () -> Unit,
+    onFailure: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val password = state.encryptedPassword.takeIf { it.isNotBlank() }
+    val budgetId = state.selectedBudgetId
+    RuleFindingDialog(
+        finding,
+        rules,
+        canEdit = mobileSession.canEditRules && !state.readOnlyMode,
+        onDismiss = onDone,
+        onEdit = { id ->
+            onDone()
+            state.ruleEditorRuleId = id
+            navigation.open(AppRoute.BUDGET_RULES)
+        },
+        onMerge = { shown ->
+            onDone()
+            scope.launch {
+                val edits = mobileSession.budgetEdits
+                val kept = shown.merged?.let { edits.editBudgetRule(budgetId, shown.ruleId, it, password) } ?: true
+                val merged = kept && shown.related.all { edits.deleteBudgetRule(budgetId, it, password) }
+                if (merged) {
+                    mobileSession.insights.dropRuleFindings(setOf(shown.key))
+                    onChanged()
+                } else {
+                    onFailure(mobileSession.budgetActionMessage ?: "Tandem couldn’t merge these rules. Pull to check again.")
+                }
+            }
+        },
+        onIgnore = { shown ->
+            onDone()
+            scope.launch { mobileSession.planning.ignoreChecks(budgetId, listOf(shown.key)) }
+        },
+    )
 }
 
 @Composable
@@ -235,6 +318,7 @@ private fun CheckupActions(
 private fun DataHealthSummary(
     budgetName: String,
     found: List<HealthIssue>?,
+    ruleFindings: Int,
     loading: Boolean,
 ) {
     val palette = tandemPalette
@@ -248,8 +332,8 @@ private fun DataHealthSummary(
             when {
                 found == null && loading -> "Checking…"
                 found == null -> "Couldn’t check"
-                found.isEmpty() -> "All clear"
-                else -> "${found.sumOf { it.rows.size }} things to look at"
+                found.isEmpty() && ruleFindings == 0 -> "All clear"
+                else -> "${found.sumOf { it.rows.size } + ruleFindings} things to look at"
             },
             color = palette.text,
             fontSize = TandemTypography.heroTitle,
