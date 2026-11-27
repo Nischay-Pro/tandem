@@ -205,6 +205,9 @@ internal enum class BudgetReorderKind {
     DELETE_PAYEE,
     SET_PAYEE_DEFAULT_CATEGORY,
     SET_CATEGORY_NOTE,
+    SET_CATEGORY_GROUP_NOTE,
+    SET_ACCOUNT_NOTE,
+    SET_MONTH_NOTE,
     IMPORT_STATEMENT,
 
     /** One request that saves every folded reorder draft (see [BudgetReorderQueueState.foldOrderDrafts]). */
@@ -290,7 +293,11 @@ internal fun budgetMutationFailureMessage(
             BudgetReorderKind.MERGE_PAYEE -> "Couldn’t merge this payee."
             BudgetReorderKind.DELETE_PAYEE -> "Couldn’t delete this payee."
             BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
-            BudgetReorderKind.SET_CATEGORY_NOTE -> "Couldn’t save this category’s note."
+            BudgetReorderKind.SET_CATEGORY_NOTE,
+            BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
+            BudgetReorderKind.SET_ACCOUNT_NOTE,
+            BudgetReorderKind.SET_MONTH_NOTE,
+            -> "Couldn’t save this note."
             BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
             BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
         }

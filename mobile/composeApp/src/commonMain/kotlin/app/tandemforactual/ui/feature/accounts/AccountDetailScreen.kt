@@ -117,6 +117,7 @@ internal fun AccountDetailScreen(
             AccountRecentActivity(shownAccountActivity, state, navigation, liveAccount) {
                 scrollRestore.pending = routeScrollState?.value ?: -1
             }
+            AccountNoteSection(state, mobileSession, liveAccount)
             SettingRow(
                 "Account options",
                 "Close account",

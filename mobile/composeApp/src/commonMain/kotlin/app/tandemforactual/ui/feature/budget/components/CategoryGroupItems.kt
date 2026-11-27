@@ -103,6 +103,9 @@ internal fun LazyListScope.categoryGroupHeaderItems(
             },
         )
     }
+    if (context.isLiveBudget) {
+        item(key = "category-group-note:${group.id}") { CategoryGroupNoteSection(state, mobileSession, group) }
+    }
 }
 
 /** Reorder failure or warning with a retry action while moves are still queued. */

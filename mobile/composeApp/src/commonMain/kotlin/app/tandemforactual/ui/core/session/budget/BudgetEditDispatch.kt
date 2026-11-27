@@ -66,7 +66,11 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
         BudgetReorderKind.IMPORT_STATEMENT,
         -> Dispatched(sendPayeeEdit(request))
-        BudgetReorderKind.SET_CATEGORY_NOTE -> Dispatched(sendCategoryNote(request))
+        BudgetReorderKind.SET_CATEGORY_NOTE,
+        BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
+        BudgetReorderKind.SET_ACCOUNT_NOTE,
+        BudgetReorderKind.SET_MONTH_NOTE,
+        -> Dispatched(sendNote(request))
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
         BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -348,22 +352,21 @@ private suspend fun BudgetEditQueue.sendAccountOrderEdit(request: QueuedBudgetRe
         else -> error("Not an account edit: ${request.kind}")
     }
 
-/** A category's note, saved in Actual's notes under the category's id. */
-private suspend fun BudgetEditQueue.sendCategoryNote(request: QueuedBudgetReorder): Boolean {
-    val payload = request.requirePayload()
-    return host.feedback.performBudgetAction(
-        request.budgetId,
-        request.encryptionPassword,
-        "Couldn’t save this category’s note.",
-        null,
-    ) {
-        host.apiClient.setBudgetCategoryNote(
-            request.budgetId,
-            request.itemId,
-            payload.requiredString("note"),
-            request.encryptionPassword,
-            request.operationId,
-        )
+/** A note saved in Actual's notes table; the item id is the category, group or account id, or the `YYYY-MM` month. */
+private suspend fun BudgetEditQueue.sendNote(request: QueuedBudgetReorder): Boolean {
+    val note = request.requirePayload().requiredString("note")
+    val budgetId = request.budgetId
+    val id = request.itemId
+    val password = request.encryptionPassword
+    val key = request.operationId
+    val api = host.apiClient
+    return host.feedback.performBudgetAction(budgetId, password, "Couldn’t save this note.", null) {
+        when (request.kind) {
+            BudgetReorderKind.SET_CATEGORY_GROUP_NOTE -> api.setBudgetCategoryGroupNote(budgetId, id, note, password, key)
+            BudgetReorderKind.SET_ACCOUNT_NOTE -> api.setBudgetAccountNote(budgetId, id, note, password, key)
+            BudgetReorderKind.SET_MONTH_NOTE -> api.setBudgetMonthNote(budgetId, id, note, password, key)
+            else -> api.setBudgetCategoryNote(budgetId, id, note, password, key)
+        }
     }
 }
 

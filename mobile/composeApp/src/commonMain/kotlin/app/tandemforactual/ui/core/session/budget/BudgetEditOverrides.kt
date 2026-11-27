@@ -94,9 +94,13 @@ internal fun BudgetEditQueue.accountNameOverridesFor(budgetId: String): Map<Stri
         .filter { it.budgetId == budgetId && it.kind == BudgetReorderKind.RENAME_ACCOUNT }
         .associate { it.itemId to (it.payloadJson?.let(::parseQueuePayload)?.stringValue("name") ?: it.itemId) }
 
-internal fun BudgetEditQueue.categoryNoteOverridesFor(budgetId: String): Map<String, String> =
+/** Notes of one [kind] still waiting to sync, by item id; the latest queued edit wins. */
+internal fun BudgetEditQueue.noteOverridesFor(
+    budgetId: String,
+    kind: BudgetReorderKind,
+): Map<String, String> =
     budgetReorderQueue.moves
-        .filter { it.budgetId == budgetId && it.kind == BudgetReorderKind.SET_CATEGORY_NOTE }
+        .filter { it.budgetId == budgetId && it.kind == kind }
         .associate { move ->
             val payload = move.payloadJson?.let(::parseQueuePayload)
             move.itemId to payload?.stringValue("note").orEmpty()

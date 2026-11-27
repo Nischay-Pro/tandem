@@ -37,21 +37,18 @@ class ActualBudgetReader(
         db.query("SELECT id, name FROM account_groups WHERE tombstone = 0 ORDER BY sort_order, id").forEach {
             records += record("account-group", obj("id" to jsonString(it["id"]), "name" to jsonString(it["name"])))
         }
-        readAccounts(today, records)
+        val notes = notes()
+        readAccounts(today, records, notes)
         val categories = categories()
         val groups = categoryGroups(categories)
-        groups.forEach { records += record("category-group", JsonObject(it.external())) }
-        val notes = categoryNotes()
-        categories.forEach { category ->
-            val fields = category.external()
-            records += record("category", JsonObject(notes[category.id]?.let { fields + ("note" to JsonPrimitive(it)) } ?: fields))
-        }
+        groups.forEach { records += record("category-group", withNote(it.external(), notes[it.id])) }
+        categories.forEach { records += record("category", withNote(it.external(), notes[it.id])) }
         readPayees(records)
         val rules = rules()
         refreshScheduleJsonPaths(rules)
         scheduleRows().forEach { records += record("schedule", it) }
         rules.forEach { records += record("rule", it) }
-        budgetMonths(today, preferences, groups).forEach { (month, body) -> records += record("budget-month", body, month) }
+        budgetMonths(today, preferences, groups, notes).forEach { (month, body) -> records += record("budget-month", body, month) }
         records += transactions()
         return ActualSnapshot(records, budgetDisplaySettings(preferences))
     }
@@ -73,17 +70,20 @@ class ActualBudgetReader(
         month: String,
     ): JsonObject? {
         val preferences = db.query("SELECT id, value FROM preferences").associate { it["id"] as String to it["value"] as String? }
-        return budgetMonths(today, preferences, categoryGroups(categories())).firstOrNull { it.first == month }?.second
+        return budgetMonths(today, preferences, categoryGroups(categories()), notes()).firstOrNull { it.first == month }?.second
     }
 
     private fun budgetMonths(
         today: String,
         preferences: Map<String, String?>,
         groups: List<BudgetGroup>,
+        notes: Map<String, String>,
     ): List<Pair<String, JsonObject>> {
         val months = ActualBudgetMonths(db, groups, preferences["budgetType"] == "tracking")
         val created = months.createdMonths(ActualMonths.fromIsoDate(today))
-        return months.compute(created, created.dropLast(1))
+        return months.compute(created, created.dropLast(1)).map { (month, body) ->
+            month to withNote(body, notes[ActualNoteIds.month(month)])
+        }
     }
 
     private fun rules(): List<JsonObject> {
@@ -102,6 +102,7 @@ class ActualBudgetReader(
     private fun readAccounts(
         today: String,
         records: MutableList<ActualRecord>,
+        notes: Map<String, String>,
     ) {
         val balances =
             db
@@ -121,7 +122,7 @@ class ActualBudgetReader(
                     "account_group_id" to jsonString(it["account_group_id"]),
                 )
             (it["sort_order"] as? Number)?.let { order -> fields["sort_order"] = jsonNumber(order) }
-            records += record("account", JsonObject(fields))
+            records += record("account", withNote(fields, notes[ActualNoteIds.account(it["id"] as String)]))
         }
     }
 
@@ -187,10 +188,15 @@ class ActualBudgetReader(
             )
         }
 
-    private fun categoryNotes(): Map<String, String> =
+    private fun notes(): Map<String, String> =
         db
             .query("SELECT id, note FROM notes WHERE note IS NOT NULL AND note != ''")
             .associate { it["id"] as String to it["note"] as String }
+
+    private fun withNote(
+        fields: Map<String, JsonElement>,
+        note: String?,
+    ): JsonObject = JsonObject(if (note == null) fields else fields + ("note" to JsonPrimitive(note)))
 
     private fun categoryGroups(categories: List<BudgetCategory>): List<BudgetGroup> {
         val byGroup = categories.groupBy { it.groupId }

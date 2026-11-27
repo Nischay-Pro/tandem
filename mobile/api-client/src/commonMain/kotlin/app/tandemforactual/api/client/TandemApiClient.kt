@@ -27,9 +27,12 @@ import app.tandemforactual.data.actual.renameCategory
 import app.tandemforactual.data.actual.renamePayee
 import app.tandemforactual.data.actual.reopenAccount
 import app.tandemforactual.data.actual.resetBudgetHold
+import app.tandemforactual.data.actual.setAccountNote
 import app.tandemforactual.data.actual.setBudgetAmount
 import app.tandemforactual.data.actual.setBudgetCarryover
+import app.tandemforactual.data.actual.setCategoryGroupNote
 import app.tandemforactual.data.actual.setCategoryNote
+import app.tandemforactual.data.actual.setMonthNote
 import app.tandemforactual.data.actual.setOrders
 import app.tandemforactual.data.actual.setPayeeDefaultCategory
 import app.tandemforactual.data.actual.updateRule
@@ -449,6 +452,33 @@ class TandemApiClient(
         encryptionPassword: String?,
         idempotencyKey: String? = null,
     ) = edit(budgetId, encryptionPassword) { it.setCategoryNote(categoryId, note) }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setBudgetCategoryGroupNote(
+        budgetId: String,
+        groupId: String,
+        note: String,
+        encryptionPassword: String?,
+        idempotencyKey: String? = null,
+    ) = edit(budgetId, encryptionPassword) { it.setCategoryGroupNote(groupId, note) }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setBudgetAccountNote(
+        budgetId: String,
+        accountId: String,
+        note: String,
+        encryptionPassword: String?,
+        idempotencyKey: String? = null,
+    ) = edit(budgetId, encryptionPassword) { it.setAccountNote(accountId, note) }
+
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun setBudgetMonthNote(
+        budgetId: String,
+        month: String,
+        note: String,
+        encryptionPassword: String?,
+        idempotencyKey: String? = null,
+    ) = edit(budgetId, encryptionPassword) { it.setMonthNote(month, note) }
 
     @Suppress("UNUSED_PARAMETER")
     suspend fun createBudgetCategory(

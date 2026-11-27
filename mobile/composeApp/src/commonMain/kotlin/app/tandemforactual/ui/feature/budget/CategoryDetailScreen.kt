@@ -203,7 +203,7 @@ private fun CategoryDetailContent(
         isTrackingBudget,
         scope,
     )
-    if (isLiveBudget) CategoryNoteSection(state, mobileSession, category, scope)
+    if (isLiveBudget) CategoryNoteSection(state, mobileSession, category)
     if (isLiveBudget) {
         SecondaryButton(
             if (state.isCategoryPinned(category.id)) "Unpin" else "Pin",
