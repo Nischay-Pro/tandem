@@ -49,7 +49,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -84,26 +84,30 @@ internal fun BillCalendarScreen(
                         .map { BillEvent(it, schedule.name, schedule.payeeId, amount) }
                 }.sortedBy { it.date }
         }
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        val year = monthId.take(4).toInt()
-        val month = monthId.drop(5).toInt()
-        PeriodStepper(
-            formatMonth(year, month),
-            "Previous month",
-            "Next month",
-            { monthId = SpendingInsights.shiftMonth(monthId, -1) },
-            { monthId = SpendingInsights.shiftMonth(monthId, 1) },
-        )
-        MonthTotals(state, events)
-        SurfaceCard {
-            MonthGrid(monthId, today, selected, events) { selected = it }
-        }
-        if (schedules.isEmpty()) {
-            EmptyStateCard("No schedules yet", "Bills and paydays scheduled in Actual show on this calendar.")
-        } else {
-            DayList(state, selected, events)
-        }
-    }
+    PageColumns(
+        primary = {
+            val year = monthId.take(4).toInt()
+            val month = monthId.drop(5).toInt()
+            PeriodStepper(
+                formatMonth(year, month),
+                "Previous month",
+                "Next month",
+                { monthId = SpendingInsights.shiftMonth(monthId, -1) },
+                { monthId = SpendingInsights.shiftMonth(monthId, 1) },
+            )
+            MonthTotals(state, events)
+            SurfaceCard {
+                MonthGrid(monthId, today, selected, events) { selected = it }
+            }
+        },
+        secondary = {
+            if (schedules.isEmpty()) {
+                EmptyStateCard("No schedules yet", "Bills and paydays scheduled in Actual show on this calendar.")
+            } else {
+                DayList(state, selected, events)
+            }
+        },
+    )
 }
 
 @Composable

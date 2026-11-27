@@ -40,6 +40,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemAlloFamily
@@ -79,31 +80,36 @@ internal fun DebtPayoffScreen(
     val minimumsOnly = remember(ready) { PlanningMath.plan(ready, 0, strategy) }
     val today = platformTodayIsoDate()
 
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        if (debts.isEmpty()) {
-            EmptyStateCard("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
-            return@PageColumn
+    if (ready.isEmpty()) {
+        PageColumn(verticalSpacing = TandemSpacing.large) {
+            if (debts.isEmpty()) {
+                EmptyStateCard("No debts to plan", "Accounts with a balance owed, like credit cards and loans, appear here.")
+            } else {
+                EmptyStateCard("Add your debt details", "Enter each debt’s APR and minimum payment to see when you’ll be debt-free.")
+                YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
+            }
         }
-        val palette = tandemPalette
-        if (ready.isEmpty()) {
-            EmptyStateCard("Add your debt details", "Enter each debt’s APR and minimum payment to see when you’ll be debt-free.")
-            YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
-            return@PageColumn
-        }
-        DebtPayoffSummary(state, plan, scrub, { monthLabel(today, it) })
-        plan?.let { DebtPayoffChart(ready, it, scrub) { i -> scrub = i } }
-        DebtPayoffControls(state, strategy, extra, { strategy = it }, { extra = it })
-        if (plan != null) {
-            DebtPayoffComparison(state, plan, other, minimumsOnly, ready.size, strategy)
-            PayoffOrderCard(state, plan, strategy, debts, terms, { monthLabel(today, it) }) { editors.debtAccount = it }
-        }
-        YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
-        Text(
-            "Estimates use the APR and minimums you entered, compounded monthly. Promotional rates and fees aren’t included.",
-            color = palette.muted,
-            fontSize = TandemTypography.label,
-        )
+        return
     }
+    PageColumns(
+        primary = {
+            DebtPayoffSummary(state, plan, scrub, { monthLabel(today, it) })
+            plan?.let { DebtPayoffChart(ready, it, scrub) { i -> scrub = i } }
+            DebtPayoffControls(state, strategy, extra, { strategy = it }, { extra = it })
+            if (plan != null) DebtPayoffComparison(state, plan, other, minimumsOnly, ready.size, strategy)
+        },
+        secondary = {
+            if (plan != null) {
+                PayoffOrderCard(state, plan, strategy, debts, terms, { monthLabel(today, it) }) { editors.debtAccount = it }
+            }
+            YourDebts(debts, ::termsFor, state) { editors.debtAccount = it }
+            Text(
+                "Estimates use the APR and minimums you entered, compounded monthly. Promotional rates and fees aren’t included.",
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+            )
+        },
+    )
 }
 
 /** Total owed each month until every debt is paid off, scrubbable to a month. */

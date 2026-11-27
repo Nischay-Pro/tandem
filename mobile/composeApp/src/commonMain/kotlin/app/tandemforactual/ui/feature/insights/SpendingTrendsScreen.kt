@@ -37,6 +37,7 @@ import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.rows.SkeletonRows
 import app.tandemforactual.ui.design.templates.PageColumn
+import app.tandemforactual.ui.design.templates.PageColumns
 import app.tandemforactual.ui.design.templates.financeIcon
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -63,45 +64,52 @@ internal fun SpendingTrendsScreen(
             TrendBaseline.LAST_MONTH -> "last month"
             else -> "your ${report?.baselineMonths ?: baseline.months}-month average"
         }
-    PageColumn(verticalSpacing = TandemSpacing.large) {
-        if (report == null) {
-            SkeletonRows()
-            return@PageColumn
-        }
-        SpendingTrendsHeadline(state, report, comparedWith)
-        FilterPills(
-            listOf(
-                TrendBaseline.LAST_MONTH to "Last month",
-                TrendBaseline.AVERAGE_3 to "3-month average",
-                TrendBaseline.AVERAGE_6 to "6-month average",
-            ),
-            baseline,
-            { baseline = it },
-        )
-        report.throughDay?.let { day ->
-            InlineMessage(
-                "${state.selectedMonth} isn’t over yet, so each month is counted up to day $day.",
-                InlineMessageKind.INFO,
-            )
-        }
-        when {
-            report.baselineMonths == 0 ->
-                EmptyStateCard("Not enough history yet", "Trends appear once there’s a month of spending before ${state.selectedMonth}.")
-            report.categories.isEmpty() ->
-                EmptyStateCard(
-                    "No spending to compare",
-                    "Nothing was spent in ${state.selectedMonth} or before it.",
-                )
-            else -> {
-                CategoryTrendsSection(state, report, names, baseline, comparedWith)
-            }
-        }
-        Text(
-            "Transfers and income aren’t counted. Changes within 5% show as about the same.",
-            color = palette.muted,
-            fontSize = TandemTypography.label,
-        )
+    if (report == null) {
+        PageColumn(verticalSpacing = TandemSpacing.large) { SkeletonRows() }
+        return
     }
+    PageColumns(
+        primary = {
+            SpendingTrendsHeadline(state, report, comparedWith)
+            FilterPills(
+                listOf(
+                    TrendBaseline.LAST_MONTH to "Last month",
+                    TrendBaseline.AVERAGE_3 to "3-month average",
+                    TrendBaseline.AVERAGE_6 to "6-month average",
+                ),
+                baseline,
+                { baseline = it },
+            )
+            report.throughDay?.let { day ->
+                InlineMessage(
+                    "${state.selectedMonth} isn’t over yet, so each month is counted up to day $day.",
+                    InlineMessageKind.INFO,
+                )
+            }
+        },
+        secondary = {
+            when {
+                report.baselineMonths == 0 ->
+                    EmptyStateCard(
+                        "Not enough history yet",
+                        "Trends appear once there’s a month of spending before ${state.selectedMonth}.",
+                    )
+                report.categories.isEmpty() ->
+                    EmptyStateCard(
+                        "No spending to compare",
+                        "Nothing was spent in ${state.selectedMonth} or before it.",
+                    )
+                else -> {
+                    CategoryTrendsSection(state, report, names, baseline, comparedWith)
+                }
+            }
+            Text(
+                "Transfers and income aren’t counted. Changes within 5% show as about the same.",
+                color = palette.muted,
+                fontSize = TandemTypography.label,
+            )
+        },
+    )
 }
 
 /** This month's spending total and how it compares with the baseline. */

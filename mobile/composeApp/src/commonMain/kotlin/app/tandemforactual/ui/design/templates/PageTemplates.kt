@@ -30,6 +30,7 @@ import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemPalette
 import app.tandemforactual.ui.design.theme.TandemSpacing
+import app.tandemforactual.ui.design.theme.currentWindowSizeInfo
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 
 @Composable
@@ -118,6 +119,30 @@ internal fun PageLazyColumn(
             onRefresh,
             content,
         )
+    }
+}
+
+/** A lazy page whose content learns how many card columns fit, for dashboards that spread out on wide windows. */
+@Composable
+internal fun PageDashboardLazyColumn(
+    verticalSpacing: Dp = TandemSpacing.large,
+    horizontalPadding: Dp = TandemSpacing.screen,
+    isRefreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    content: LazyListScope.(columns: Int) -> Unit,
+) {
+    val routeListState = LocalRouteLazyListState.current ?: rememberLazyListState()
+    val widthClass = currentWindowSizeInfo().widthClass
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val columns = dashboardColumnCount(widthClass, maxWidth - horizontalPadding * 2, verticalSpacing)
+        PageLazyColumnContent(
+            verticalSpacing,
+            dashboardPadding(maxWidth, horizontalPadding, columns),
+            Modifier.fillMaxSize(),
+            routeListState,
+            isRefreshing,
+            onRefresh,
+        ) { content(columns) }
     }
 }
 

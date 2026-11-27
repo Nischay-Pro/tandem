@@ -2,11 +2,9 @@
 
 package app.tandemforactual.ui.feature.home
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,12 +49,12 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.design.templates.PageLazyColumn
-import app.tandemforactual.ui.design.templates.tandemListItemModifier
+import app.tandemforactual.ui.design.templates.DashboardCard
+import app.tandemforactual.ui.design.templates.PageDashboardLazyColumn
+import app.tandemforactual.ui.design.templates.dashboardItems
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
-import app.tandemforactual.ui.design.theme.tandemReduceMotion
 import app.tandemforactual.ui.generated.resources.Res
 import app.tandemforactual.ui.generated.resources.home_more
 import app.tandemforactual.ui.generated.resources.home_set_up
@@ -121,45 +119,38 @@ internal fun HomeScreen(
             money,
         )
     }
-    PageLazyColumn(
+    val cards =
+        homeCards(
+            pinned =
+                listOfNotNull(
+                    month?.toBudgetMinor?.let { toBudget ->
+                        DashboardCard("home-to-budget", fullWidth = true) {
+                            HomeToBudgetCard(
+                                toBudget,
+                                settings,
+                                state.privacyModeEnabled,
+                                onOpenBudget = { navigation.selectTab(AppRoute.BUDGET) },
+                                onAutoAssign = { autoAssigning = true }.takeUnless { state.readOnlyMode },
+                            )
+                        }
+                    },
+                    DashboardCard("home-review", fullWidth = true) {
+                        ReviewInboxCard(HomeModule.REVIEW_INBOX, state, navigation, uncategorized, money)
+                    }.takeIf { showReview },
+                    DashboardCard("home-sync", fullWidth = true) {
+                        SyncNoticeCard(Lucide.CircleAlert, tandemPalette.warning, "Needs attention", mobileSession.syncError.orEmpty(), {
+                            navigation.open(AppRoute.SYNC_CENTER)
+                        })
+                    }.takeIf { mobileSession.syncError != null && !mobileSession.isSyncing },
+                ),
+            plan = plan,
+            card = card,
+        )
+    PageDashboardLazyColumn(
         isRefreshing = mobileSession.isSyncing,
         onRefresh = onSyncNow.takeIf { state.selectedBudgetId.isNotBlank() && mobileSession.isAuthenticated },
-    ) {
-        month?.toBudgetMinor?.let { toBudget ->
-            item(key = "home-to-budget") {
-                HomeToBudgetCard(
-                    toBudget,
-                    settings,
-                    state.privacyModeEnabled,
-                    onOpenBudget = { navigation.selectTab(AppRoute.BUDGET) },
-                    onAutoAssign = { autoAssigning = true }.takeUnless { state.readOnlyMode },
-                )
-            }
-        }
-        if (showReview) {
-            item(key = "home-review") { ReviewInboxCard(HomeModule.REVIEW_INBOX, state, navigation, uncategorized, money) }
-        }
-        if (mobileSession.syncError != null && !mobileSession.isSyncing) {
-            item(key = "home-sync") {
-                SyncNoticeCard(Lucide.CircleAlert, tandemPalette.warning, "Needs attention", mobileSession.syncError.orEmpty(), {
-                    navigation.open(AppRoute.SYNC_CENTER)
-                })
-            }
-        }
-        homeEntryItems(plan.prominent, "home-", card)
-        if (plan.more.isNotEmpty()) {
-            item(key = "home-more-title") {
-                Text(
-                    modifier = tandemListItemModifier(tandemReduceMotion),
-                    text =
-                        stringResource(Res.string.home_more),
-                    color = tandemPalette.muted,
-                    fontSize = TandemTypography.label,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            homeEntryItems(plan.more, "home-more-", card)
-        }
+    ) { columns ->
+        dashboardItems("home-dashboard", columns, TandemSpacing.large, cards)
     }
     AutoAssignSheet(autoAssigning, state, mobileSession, month) { autoAssigning = false }
 }
@@ -187,21 +178,24 @@ private fun rememberHomeData(
         )
     }
 
-/** One lazy item per Home entry, keyed by its module. */
-private fun LazyListScope.homeEntryItems(
-    entries: List<HomeEntry>,
-    keyPrefix: String,
+/** Home's cards in reading order: the pinned cards, the arranged modules, then the rest under a heading. */
+private fun homeCards(
+    pinned: List<DashboardCard>,
+    plan: HomePlan,
     card: @Composable (HomeEntry) -> Unit,
-) {
-    entries.forEach { entry ->
-        item(
-            key = "$keyPrefix${entry.module.name}",
-        ) {
-            Box(tandemListItemModifier(tandemReduceMotion)) {
-                card(entry)
-            }
+): List<DashboardCard> {
+    val prominent = plan.prominent.map { entry -> DashboardCard("home-${entry.module.name}") { card(entry) } }
+    if (plan.more.isEmpty()) return pinned + prominent
+    val title =
+        DashboardCard("home-more-title", fullWidth = true) {
+            Text(
+                stringResource(Res.string.home_more),
+                color = tandemPalette.muted,
+                fontSize = TandemTypography.label,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-    }
+    return pinned + prominent + title + plan.more.map { entry -> DashboardCard("home-more-${entry.module.name}") { card(entry) } }
 }
 
 @Composable

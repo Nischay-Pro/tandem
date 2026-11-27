@@ -200,7 +200,7 @@ internal fun TimeSeriesReportChart(
         )
         BoxWithConstraints(Modifier.weight(1f)) {
             val viewportWidth = maxOf(1.dp, maxWidth)
-            val slotWidth = viewportWidth / 6
+            val slotWidth = viewportWidth / reportVisibleMonths(viewportWidth)
             val chartWidth = maxOf(viewportWidth, slotWidth * monthIds.size.coerceAtLeast(1))
             val viewportWidthPx = with(LocalDensity.current) { viewportWidth.toPx() }
             val scrollState = rememberScrollState()
