@@ -16,7 +16,6 @@ import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,13 +28,14 @@ class FormShortcutsTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun keysMapToSaveEnterAndEscape() {
-        assertEquals(FormKey.SAVE, formKey(Key.S, command = true, otherModifier = false))
-        assertEquals(FormKey.SAVE, formKey(Key.Enter, command = true, otherModifier = false))
-        assertEquals(FormKey.ENTER, formKey(Key.Enter, command = false, otherModifier = false))
-        assertEquals(FormKey.ESCAPE, formKey(Key.Escape, command = false, otherModifier = false))
-        assertNull(formKey(Key.S, command = false, otherModifier = false))
-        assertNull(formKey(Key.Enter, command = false, otherModifier = true))
+    fun bareLettersNeverSaveAForm() {
+        var saves = 0
+        setSheet { TandemActionButton("Save", TandemActionButtonTone.PRIMARY) { saves++ } }
+
+        composeTestRule.onRoot().performKeyInput { pressKey(Key.S) }
+        composeTestRule.onRoot().performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Enter) } }
+
+        assertEquals(0, saves)
     }
 
     @Test

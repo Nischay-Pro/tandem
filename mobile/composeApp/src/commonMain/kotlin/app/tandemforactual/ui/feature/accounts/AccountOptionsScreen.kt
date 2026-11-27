@@ -9,11 +9,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.budgetCurrencyCode
 import app.tandemforactual.ui.core.format.formatAccountMoney
+import app.tandemforactual.ui.core.navigation.openAccountActivity
+import app.tandemforactual.ui.core.navigation.openRulesUsing
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveAccountSummary
+import app.tandemforactual.ui.core.usage.UsageLinks
+import app.tandemforactual.ui.core.usage.UsageSubject
+import app.tandemforactual.ui.core.usage.UsageTarget
+import app.tandemforactual.ui.core.usage.WhereUsedRow
+import app.tandemforactual.ui.core.usage.WhereUsedSheet
+import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
 import app.tandemforactual.ui.design.templates.PageColumn
 import kotlinx.coroutines.launch
@@ -42,6 +50,7 @@ internal fun AccountOptionsScreen(
     var renameValue by rememberSaveable(state.selectedAccountId) { mutableStateOf(liveAccount?.name.orEmpty()) }
     var transferAccountId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
     var transferCategoryId by rememberSaveable(state.selectedAccountId) { mutableStateOf("") }
+    var showUsage by rememberSaveable(state.selectedAccountId) { mutableStateOf(false) }
     PageColumn {
         if (liveAccount == null) {
             EmptyStateCard("Account unavailable", "This account isn’t saved on this device.")
@@ -60,6 +69,7 @@ internal fun AccountOptionsScreen(
                     scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, kind) }
                 },
             ) { navigation.open(AppRoute.EXCHANGE_RATES) }
+            SurfaceCard { WhereUsedRow { showUsage = true } }
             AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {
                 transferAccountId = ""
                 transferCategoryId = ""
@@ -77,6 +87,7 @@ internal fun AccountOptionsScreen(
         state = state,
         mobileSession = mobileSession,
     )
+    if (liveAccount != null) AccountUsageSheet(showUsage, liveAccount, state, mobileSession, navigation) { showUsage = false }
     if (confirmClose && liveAccount != null) {
         CloseAccountDialog(
             liveAccount = liveAccount,
@@ -92,4 +103,36 @@ internal fun AccountOptionsScreen(
             scope = scope,
         )
     }
+}
+
+@Composable
+private fun AccountUsageSheet(
+    visible: Boolean,
+    account: LiveAccountSummary,
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onDismiss: () -> Unit,
+) {
+    val currency = mobileSession.planning.accountCurrencies[account.id]
+    WhereUsedSheet(
+        visible = visible,
+        mobileSession = mobileSession,
+        target =
+            UsageTarget(state.selectedBudgetId, UsageSubject.ACCOUNT, account.id, account.name) {
+                state.formatAccountMoney(it, currency)
+            },
+        links =
+            UsageLinks(
+                transactions = {
+                    onDismiss()
+                    openAccountActivity(state, navigation, account.id, account.name)
+                },
+                rules = {
+                    onDismiss()
+                    openRulesUsing(state, navigation, listOf(account.id), account.name)
+                },
+            ),
+        onDismiss = onDismiss,
+    )
 }

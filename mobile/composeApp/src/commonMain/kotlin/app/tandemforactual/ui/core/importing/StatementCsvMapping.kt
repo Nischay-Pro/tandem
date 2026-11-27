@@ -60,37 +60,127 @@ internal fun inspectStatementCsv(contents: String): StatementCsvLayout {
     val content = contents.removePrefix("\uFEFF").trim()
     if (content.isBlank()) throw StatementImportParseException("This statement is empty.")
     if (content.length > MAX_STATEMENT_IMPORT_CHARS) throw StatementImportParseException("Choose a statement smaller than 10 MB.")
-    val rows = parseCsvRows(content, detectCsvDelimiter(content)).filter { row -> row.any(String::isNotBlank) }
-    val header = rows.firstOrNull() ?: throw StatementImportParseException("The CSV has no header row.")
-    val normalized = header.map(::normalizeColumn)
-
-    fun column(vararg aliases: String): Int? = normalized.indexOfFirst { it in aliases }.takeIf { it >= 0 }
-
+    val structure = readStatementCsvStructure(content)
     return StatementCsvLayout(
-        columns = header.mapIndexed { index, name -> StatementCsvColumn(index, name.ifBlank { "Column ${index + 1}" }) },
-        suggestedMapping =
-            StatementCsvColumnMapping(
-                dateColumn = column("date", "transactiondate", "posteddate", "postingdate", "transactiondateposted"),
-                amountColumn = column("amount", "transactionamount", "value"),
-                debitColumn = column("debit", "withdrawal", "outflow", "moneyout"),
-                creditColumn = column("credit", "deposit", "inflow", "moneyin"),
-                referenceColumn =
-                    column(
-                        "fitid",
-                        "transactionid",
-                        "transactionreference",
-                        "transactionref",
-                        "reference",
-                        "referenceid",
-                        "bankreference",
-                        "traceid",
-                        "id",
-                    ),
-                payeeColumn = column("payee", "name", "description", "merchant", "transaction"),
-                notesColumn = column("memo", "notes", "note"),
-            ),
+        columns = structure.header.mapIndexed { index, name -> StatementCsvColumn(index, name.ifBlank { "Column ${index + 1}" }) },
+        suggestedMapping = suggestedCsvMapping(structure),
     )
 }
+
+internal val CSV_REFERENCE_COLUMNS =
+    setOf(
+        "fitid",
+        "transactionid",
+        "transactionreference",
+        "transactionref",
+        "reference",
+        "referenceid",
+        "referencenumber",
+        "bankreference",
+        "traceid",
+        "id",
+    )
+
+/** Columns named the way banks name them, with the date, amount and payee found from the rows when a name doesn't say. */
+internal fun suggestedCsvMapping(structure: StatementCsvStructure): StatementCsvColumnMapping {
+    val normalized = if (structure.headerIndex == null) emptyList() else structure.header.map(::normalizeColumn)
+
+    fun column(
+        aliases: Collection<String>,
+        prefix: String? = null,
+    ): Int? =
+        aliases.firstNotNullOfOrNull { alias -> normalized.indexOf(alias).takeIf { it >= 0 } }
+            ?: prefix?.let { p -> normalized.indexOfFirst { it.startsWith(p) }.takeIf { it >= 0 } }
+
+    val samples = structure.dataRows.take(CONTENT_SAMPLE_ROWS).map { it.value }
+    val dateColumn = column(DATE_COLUMNS) ?: columnWhereMost(samples, structure.header.size) { looksLikeStatementDate(it) }
+    val debitColumn = column(DEBIT_COLUMNS)
+    val creditColumn = column(CREDIT_COLUMNS)
+    val amountColumn =
+        column(AMOUNT_COLUMNS, prefix = "amount")
+            ?: if (debitColumn == null && creditColumn == null) onlyAmountColumn(samples, structure.header.size, dateColumn) else null
+    val referenceColumn = column(CSV_REFERENCE_COLUMNS)
+    val taken = setOfNotNull(dateColumn, amountColumn, debitColumn, creditColumn, referenceColumn)
+    return StatementCsvColumnMapping(
+        dateColumn = dateColumn,
+        amountColumn = amountColumn,
+        debitColumn = debitColumn,
+        creditColumn = creditColumn,
+        referenceColumn = referenceColumn,
+        payeeColumn = column(PAYEE_COLUMNS) ?: longestTextColumn(samples, taken + setOfNotNull(column(NOTES_COLUMNS))),
+        notesColumn = column(NOTES_COLUMNS),
+    )
+}
+
+private const val CONTENT_SAMPLE_ROWS = 50
+
+private val DATE_COLUMNS =
+    listOf(
+        "date",
+        "transactiondate",
+        "posteddate",
+        "postingdate",
+        "postedon",
+        "transactiondateposted",
+        "bookingdate",
+        "valuedate",
+        "datum",
+        "buchungsdatum",
+        "buchungstag",
+        "fecha",
+    )
+private val AMOUNT_COLUMNS = listOf("amount", "transactionamount", "value", "betrag", "bedrag", "importe", "montant")
+private val DEBIT_COLUMNS =
+    setOf("debit", "debits", "debitamount", "withdrawal", "withdrawals", "outflow", "moneyout", "paidout")
+private val CREDIT_COLUMNS =
+    setOf("credit", "credits", "creditamount", "deposit", "deposits", "inflow", "moneyin", "paidin")
+private val PAYEE_COLUMNS =
+    listOf(
+        "payee",
+        "name",
+        "merchant",
+        "description",
+        "transactiondescription",
+        "counterparty",
+        "narrative",
+        "details",
+        "transaction",
+        "empfänger",
+        "auftraggeberempfänger",
+        "begünstigterzahlungspflichtiger",
+    )
+private val NOTES_COLUMNS = listOf("memo", "notes", "note", "verwendungszweck")
+
+private fun columnWhereMost(
+    rows: List<List<String>>,
+    width: Int,
+    test: (String) -> Boolean,
+): Int? =
+    (0 until width)
+        .map { index -> index to rows.count { test(it.cell(index)) } }
+        .filter { (_, count) -> count > 0 && count * 2 >= rows.size }
+        .maxByOrNull { it.second }
+        ?.first
+
+private fun onlyAmountColumn(
+    rows: List<List<String>>,
+    width: Int,
+    dateColumn: Int?,
+): Int? =
+    (0 until width)
+        .filter { index -> index != dateColumn && rows.isNotEmpty() && rows.all { looksLikeStatementAmount(it.cell(index)) } }
+        .singleOrNull()
+
+private fun longestTextColumn(
+    rows: List<List<String>>,
+    taken: Set<Int>,
+): Int? =
+    (0 until (rows.maxOfOrNull { it.size } ?: 0))
+        .filter { it !in taken }
+        .map { index -> index to rows.sumOf { row -> row.cell(index).count(Char::isLetter) } }
+        .filter { it.second > 0 }
+        .maxByOrNull { it.second }
+        ?.first
 
 internal fun decodeStatementCsvMappingPreferences(serialized: String): List<StatementCsvMappingPreference> {
     val root = runCatching { Json.parseToJsonElement(serialized) as? JsonArray }.getOrNull() ?: return emptyList()

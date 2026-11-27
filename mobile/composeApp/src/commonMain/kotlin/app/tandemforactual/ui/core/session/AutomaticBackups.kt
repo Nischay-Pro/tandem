@@ -65,6 +65,7 @@ data class AutomaticBackupSettings(
         const val WEBDAV_URL = "autoBackupWebDavUrl"
         const val WEBDAV_USER = "autoBackupWebDavUser"
         const val LAST_RUN = "internal:auto-backup-last-run"
+        const val LAST_MADE = "internal:auto-backup-last-made"
 
         fun from(preferences: Map<String, String>): AutomaticBackupSettings {
             val defaults = AutomaticBackupSettings()
@@ -85,7 +86,13 @@ data class AutomaticBackupSettings(
 object AutomaticBackups {
     const val FILE_PREFIX = "tandem-backup-"
 
-    /** Whether a backup is due: switched on, with a folder or WebDAV to go to, and the interval has passed since the last. */
+    /** How long the device's copy can go without syncing before a backup's status says when it last synced. */
+    const val STALE_AFTER_MILLIS = 24 * 3_600_000L
+
+    /**
+     * Whether a backup is due: switched on, with a folder or WebDAV to go to, and the interval has passed since the
+     * last one was made.
+     */
     fun due(
         settings: AutomaticBackupSettings,
         lastRun: Long?,
@@ -94,6 +101,12 @@ object AutomaticBackups {
         settings.enabled &&
             (settings.folder != null || settings.webDavUrl != null) &&
             (lastRun == null || now - lastRun >= settings.intervalHours * 3_600_000L)
+
+    /** When the device's copy last synced, if that was long enough before [now] for the status to mention it. */
+    fun staleSince(
+        lastSyncedAt: Long?,
+        now: Long,
+    ): Long? = lastSyncedAt?.takeIf { now - it >= STALE_AFTER_MILLIS }
 
     /** Whether automatic backups of this budget can't run until a backup passphrase is set. */
     fun needsPassphrase(
@@ -171,8 +184,8 @@ object AutomaticBackups {
     }
 
     /**
-     * A whole-budget backup made outside a running app session: the budget from [client] and the planning records
-     * this device can open with its keys in [planningKeys].
+     * A whole-budget backup made outside a running app session from the device's copy, without reaching Actual: the
+     * budget from [client] and the planning records this device can open with its keys in [planningKeys].
      */
     suspend fun build(
         client: TandemApiClient,
@@ -192,7 +205,7 @@ object AutomaticBackups {
                     PlanningBackupSource(budgetId, budgetName, platformTodayIsoDate()),
                 )
             }
-        return client.budgetBackup(budgetId, encryptionPassword, budgetName, planning, passphrase)
+        return client.budgetBackup(budgetId, encryptionPassword, budgetName, planning, passphrase, download = false)
     }
 }
 

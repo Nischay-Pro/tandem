@@ -1,0 +1,320 @@
+{
+  "seed": "tandem-demo-household-1",
+  "referenceToday": "2026-11-20",
+  "historyMonths": 13,
+  "months": [
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09",
+    "2026-10",
+    "2026-11"
+  ],
+  "accounts": [
+    {
+      "name": "Everyday checking",
+      "offbudget": false,
+      "opening": 412000
+    },
+    {
+      "name": "High-yield savings",
+      "offbudget": false,
+      "opening": 850000
+    },
+    {
+      "name": "Rewards credit card",
+      "offbudget": false,
+      "opening": -63500
+    },
+    {
+      "name": "Cash wallet",
+      "offbudget": false,
+      "opening": 8000
+    },
+    {
+      "name": "Brokerage",
+      "offbudget": true,
+      "opening": 2150000
+    },
+    {
+      "name": "Car loan",
+      "offbudget": true,
+      "opening": -1420000
+    }
+  ],
+  "events": [
+    {
+      "month": "2025-12",
+      "events": ["holiday season"]
+    },
+    {
+      "month": "2026-03",
+      "events": ["annual bonus", "annual car insurance"]
+    },
+    {
+      "month": "2026-04",
+      "events": ["tax refund"]
+    },
+    {
+      "month": "2026-05",
+      "events": ["major car repair"]
+    },
+    {
+      "month": "2026-07",
+      "events": ["summer holiday"]
+    },
+    {
+      "month": "2026-11",
+      "events": ["new tyres"]
+    }
+  ],
+  "netByMonth": {
+    "2025-11": 167509,
+    "2025-12": 54389,
+    "2026-01": 154067,
+    "2026-02": 182357,
+    "2026-03": 336102,
+    "2026-04": 268702,
+    "2026-05": 59165,
+    "2026-06": 186414,
+    "2026-07": -17580,
+    "2026-08": 176836,
+    "2026-09": 189473,
+    "2026-10": 195424,
+    "2026-11": 33227
+  },
+  "goodMonths": [
+    "2025-11",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-06",
+    "2026-08",
+    "2026-09",
+    "2026-10"
+  ],
+  "badMonths": ["2025-12", "2026-05", "2026-07"],
+  "tags": ["vacation", "reimbursable", "gift"],
+  "variants": {
+    "envelope": {
+      "name": "Demo household",
+      "budgetType": "envelope",
+      "sha256": "460343464ccee68d780583503a9fbb2fd93ae6f7b0d02a5fa6f89973753aecbc",
+      "counts": {
+        "accounts": 6,
+        "categories": 24,
+        "payees": 40,
+        "transactions": 568,
+        "splits": 18,
+        "transfers": 64,
+        "uncategorized": 2,
+        "tagged": 11,
+        "reconciled": 213,
+        "budgetAmounts": 283,
+        "holds": 4,
+        "rolloverFlags": 7,
+        "schedules": 6,
+        "rules": 5,
+        "tags": 3
+      },
+      "holds": [
+        {
+          "month": "2026-03",
+          "amount": 100000
+        },
+        {
+          "month": "2026-08",
+          "amount": 113177
+        },
+        {
+          "month": "2026-09",
+          "amount": 232453
+        },
+        {
+          "month": "2026-10",
+          "amount": 345928
+        }
+      ],
+      "overspent": [
+        {
+          "month": "2025-11",
+          "category": "Groceries",
+          "amount": 6073
+        },
+        {
+          "month": "2025-12",
+          "category": "Groceries",
+          "amount": 5753
+        },
+        {
+          "month": "2025-12",
+          "category": "Dining out",
+          "amount": 29236
+        },
+        {
+          "month": "2025-12",
+          "category": "Gifts",
+          "amount": 11012
+        },
+        {
+          "month": "2026-01",
+          "category": "Household",
+          "amount": 9925
+        },
+        {
+          "month": "2026-05",
+          "category": "Car maintenance",
+          "amount": 93400
+        },
+        {
+          "month": "2026-11",
+          "category": "Car maintenance",
+          "amount": 13600
+        }
+      ]
+    },
+    "tracking": {
+      "name": "Demo household (tracking)",
+      "budgetType": "tracking",
+      "sha256": "35341632d47136c93759535f343df281de74177e54ac205a4c76baf5ee1e63bf",
+      "counts": {
+        "accounts": 6,
+        "categories": 24,
+        "payees": 40,
+        "transactions": 568,
+        "splits": 18,
+        "transfers": 64,
+        "uncategorized": 2,
+        "tagged": 11,
+        "reconciled": 213,
+        "budgetAmounts": 299,
+        "holds": 0,
+        "rolloverFlags": 13,
+        "schedules": 6,
+        "rules": 5,
+        "tags": 3
+      },
+      "holds": [],
+      "overspent": [
+        {
+          "month": "2025-11",
+          "category": "Groceries",
+          "amount": 6073
+        },
+        {
+          "month": "2025-12",
+          "category": "Utilities",
+          "amount": 185
+        },
+        {
+          "month": "2025-12",
+          "category": "Groceries",
+          "amount": 5753
+        },
+        {
+          "month": "2025-12",
+          "category": "Dining out",
+          "amount": 32078
+        },
+        {
+          "month": "2025-12",
+          "category": "Gifts",
+          "amount": 17012
+        },
+        {
+          "month": "2026-01",
+          "category": "Utilities",
+          "amount": 2557
+        },
+        {
+          "month": "2026-01",
+          "category": "Household",
+          "amount": 17920
+        },
+        {
+          "month": "2026-02",
+          "category": "Hobbies",
+          "amount": 382
+        },
+        {
+          "month": "2026-04",
+          "category": "Dining out",
+          "amount": 1865
+        },
+        {
+          "month": "2026-04",
+          "category": "Transit",
+          "amount": 38
+        },
+        {
+          "month": "2026-05",
+          "category": "Dining out",
+          "amount": 1687
+        },
+        {
+          "month": "2026-05",
+          "category": "Car maintenance",
+          "amount": 123400
+        },
+        {
+          "month": "2026-06",
+          "category": "Fuel",
+          "amount": 516
+        },
+        {
+          "month": "2026-07",
+          "category": "Household",
+          "amount": 86
+        },
+        {
+          "month": "2026-07",
+          "category": "Fuel",
+          "amount": 1184
+        },
+        {
+          "month": "2026-07",
+          "category": "Pharmacy",
+          "amount": 338
+        },
+        {
+          "month": "2026-08",
+          "category": "Utilities",
+          "amount": 1426
+        },
+        {
+          "month": "2026-08",
+          "category": "Household",
+          "amount": 11925
+        },
+        {
+          "month": "2026-08",
+          "category": "Fuel",
+          "amount": 1783
+        },
+        {
+          "month": "2026-10",
+          "category": "Dining out",
+          "amount": 2209
+        },
+        {
+          "month": "2026-11",
+          "category": "Car maintenance",
+          "amount": 33600
+        },
+        {
+          "month": "2026-11",
+          "category": "Entertainment",
+          "amount": 5118
+        }
+      ]
+    }
+  }
+}
