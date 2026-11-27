@@ -23,6 +23,7 @@ import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.categoryIconChoice
+import app.tandemforactual.ui.core.state.formatAmount
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isCategoryPinned
 import app.tandemforactual.ui.core.state.isTrackingBudget
@@ -102,7 +103,7 @@ internal fun CategoryDetailScreen(
         val preset = moveMoneyPreset(request, category, model.moveMoneyCategories.map { it.second })
         sheets.moveMoneyFromId = preset.fromId
         sheets.moveMoneyToId = preset.toId
-        sheets.moveMoneyAmountDraft = preset.amountMinor?.let(state::formatAmount).orEmpty()
+        sheets.moveMoneyAmountDraft = preset.amountMinor?.let { state.formatAmount(it) }.orEmpty()
         mobileSession.feedback.clearBudgetActionMessage()
         sheets.showMoveMoneyDialog = true
     }
