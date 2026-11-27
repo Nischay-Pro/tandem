@@ -9,8 +9,18 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Where Tandem-only planning records stand with extension sync. */
-enum class PlanningSyncStatus { OFF, SYNCED, WAITING, NEEDS_RECOVERY_KEY }
+/** Where Tandem-only planning records stand with extension sync; [retryable] ones are tried again on the next sync. */
+enum class PlanningSyncStatus(
+    val retryable: Boolean = false,
+) {
+    OFF,
+    SYNCED,
+    WAITING(retryable = true),
+    SIGN_IN_EXPIRED(retryable = true),
+    NO_ACCESS(retryable = true),
+    BUSY(retryable = true),
+    NEEDS_RECOVERY_KEY,
+}
 
 internal enum class FinancialGoal { ORGANIZE, SPENDING, DEBT, SAVINGS, ANALYSIS }
 

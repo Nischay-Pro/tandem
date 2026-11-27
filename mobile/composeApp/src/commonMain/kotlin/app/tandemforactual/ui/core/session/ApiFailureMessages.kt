@@ -21,6 +21,8 @@ internal fun apiFailureMessage(
             "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address."
         "address_unreachable", "network-error" -> "Actual isn’t responding at this address. Check the server address."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
+        "server_unavailable" -> "The Actual server isn’t responding right now. Try again shortly."
+        "rate_limited" -> "The Actual server is busy. Wait a moment and try again."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
         "tandem_route_unavailable" ->
             "Tandem isn’t available here. Check the server address."

@@ -18,7 +18,6 @@ import app.tandemforactual.data.store.retryUncertainWrite
 import app.tandemforactual.ui.core.session.budget.hasPendingTransactionDependency
 import app.tandemforactual.ui.core.session.budget.restoreBudgetReorderQueue
 import app.tandemforactual.ui.core.session.budget.retryQueuedBudgetReorders
-import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -235,7 +234,7 @@ internal suspend fun TandemMobileSession.retryFailedWork(
     synchronize(budgetId, encryptionPassword)
     loadLocalRecords(budgetId)
     if (banking.bankLinks.any { it.failure != null }) banking.runBankSync(budgetId, encryptionPassword)
-    if (planning.syncStatus == PlanningSyncStatus.WAITING) planning.sync(budgetId)
+    if (planning.syncStatus.retryable) planning.sync(budgetId)
 }
 
 internal suspend fun TandemMobileSession.loadBudgets() {

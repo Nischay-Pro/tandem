@@ -593,6 +593,8 @@ class TandemApiClientTest {
                 "file-has-reset" to "file_has_reset",
                 "file-has-new-key" to "file_has_new_key",
                 "network-failure" to "address_unreachable",
+                "server-unavailable" to "server_unavailable",
+                "rate-limited" to "rate_limited",
                 "something-else" to "something_else",
             )) {
                 assertEquals(expected, code(ActualServerException(reason)).errorCode)

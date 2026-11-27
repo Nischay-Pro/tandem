@@ -48,6 +48,8 @@ data class StatementImportPreview(
 private val errorMessages =
     mapOf(
         "address_unreachable" to "Tandem can’t reach an Actual server at this address. Check the server address.",
+        "server_unavailable" to "The Actual server isn’t responding right now. Try again shortly.",
+        "rate_limited" to "The Actual server is busy. Wait a moment and try again.",
         "sign_in_required" to "Sign in to open your budgets.",
         "sign_in_expired" to "Your sign-in is no longer active. Sign in again.",
         "invalid_credentials" to "That password doesn’t match this Actual server. Check the password.",

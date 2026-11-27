@@ -73,6 +73,8 @@ class TandemApiClient(
     private var device: AuthenticatedDevice? = null
     private val budgetPasswords = mutableMapOf<String, String>()
     private var extensionAvailable: Boolean? = null
+    private var extensionRetryAt = 0L
+    private var extensionBackoff = 0L
     private val openBudgets = mutableMapOf<String, ActualDirectBudget>()
 
     val isAuthenticated: Boolean get() = server?.token != null
@@ -216,7 +218,7 @@ class TandemApiClient(
             serverUrl = null
             device = null
             budgetPasswords.clear()
-            extensionAvailable = null
+            forgetExtension()
         }
     }
 
@@ -289,11 +291,31 @@ class TandemApiClient(
         }
     }
 
-    /** Planning sync for a budget when this server runs Tandem's extension service, otherwise null. */
+    /**
+     * Planning sync for a budget when this server runs Tandem's extension service, otherwise null. Throws
+     * [ExtensionSyncException] while the server can't say whether it does; it asks again after a growing pause.
+     */
     suspend fun planningTransport(budgetId: String): ExtensionSyncClient? {
         val url = serverUrl ?: return null
-        if (extensionAvailable == null) extensionAvailable = ExtensionSyncClient.available(http, url)
+        if (extensionAvailable == null) {
+            if (now() < extensionRetryAt) throw ExtensionSyncException(null)
+            val answer = ExtensionSyncClient.available(http, url)
+            if (url != serverUrl) return null
+            if (answer == null) {
+                extensionBackoff = (extensionBackoff * 2).coerceIn(EXTENSION_RETRY_MIN_MILLIS, EXTENSION_RETRY_MAX_MILLIS)
+                extensionRetryAt = now() + extensionBackoff
+                throw ExtensionSyncException(null)
+            }
+            extensionAvailable = answer
+            extensionBackoff = 0
+        }
         return if (extensionAvailable == true) ExtensionSyncClient(http, url, budgetId) { server?.token } else null
+    }
+
+    private fun forgetExtension() {
+        extensionAvailable = null
+        extensionRetryAt = 0
+        extensionBackoff = 0
     }
 
     /** The Actual key of an open encrypted budget, used to wrap its planning key. */
@@ -599,7 +621,10 @@ class TandemApiClient(
 
     private fun connect(serverUrl: String): ActualServerClient {
         val url = parse(serverUrl).toString().trimEnd('/')
-        if (url != this.serverUrl) closeBudgetsNow()
+        if (url != this.serverUrl) {
+            closeBudgetsNow()
+            forgetExtension()
+        }
         return ActualServerClient(http, url).also {
             server = it
             this.serverUrl = url
@@ -659,6 +684,9 @@ class TandemApiClient(
 }
 
 private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-edit")
+
+private const val EXTENSION_RETRY_MIN_MILLIS = 30_000L
+private const val EXTENSION_RETRY_MAX_MILLIS = 15 * 60_000L
 
 /** The budget's recent edits, and which device id is this one so the list can say "This device". */
 data class BudgetChangeHistory(

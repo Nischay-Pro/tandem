@@ -108,14 +108,19 @@ class ExtensionSyncClientTest {
                 status: HttpStatusCode,
                 body: String,
             ) = HttpClient(MockEngine { respond(body, status, headersOf("Content-Type", "application/json")) })
-            assertTrue(
+            assertEquals(
+                true,
                 ExtensionSyncClient.available(
                     server(HttpStatusCode.OK, """{"apiVersion":1,"features":["planning-records"]}"""),
                     "https://a",
                 ),
             )
-            assertFalse(ExtensionSyncClient.available(server(HttpStatusCode.OK, """{"apiVersion":1}"""), "https://a"))
-            assertFalse(ExtensionSyncClient.available(server(HttpStatusCode.NotFound, "Not found"), "https://a"))
-            assertFalse(ExtensionSyncClient.available(server(HttpStatusCode.OK, "not json"), "https://a"))
+            assertEquals(false, ExtensionSyncClient.available(server(HttpStatusCode.OK, """{"apiVersion":1}"""), "https://a"))
+            assertEquals(false, ExtensionSyncClient.available(server(HttpStatusCode.NotFound, "Not found"), "https://a"))
+            assertEquals(false, ExtensionSyncClient.available(server(HttpStatusCode.OK, "not json"), "https://a"))
+            assertNull(ExtensionSyncClient.available(server(HttpStatusCode.ServiceUnavailable, ""), "https://a"))
+            assertNull(ExtensionSyncClient.available(server(HttpStatusCode.TooManyRequests, ""), "https://a"))
+            assertNull(ExtensionSyncClient.available(server(HttpStatusCode.RequestTimeout, ""), "https://a"))
+            assertNull(ExtensionSyncClient.available(HttpClient(MockEngine { throw kotlinx.io.IOException("offline") }), "https://a"))
         }
 }

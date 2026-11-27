@@ -3,6 +3,7 @@ package app.tandemforactual.ui.core.session.planning
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.ExtensionSyncException
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.AccountCurrency
@@ -114,13 +115,13 @@ internal class PlanningController(
      */
     suspend fun sync(budgetId: String) {
         val dao = database()?.planningRecordDao() ?: return
-        val transport = apiClient.planningTransport(budgetId)
-        if (transport == null) {
-            syncStatus = PlanningSyncStatus.OFF
-            return
-        }
         syncStatus =
             try {
+                val transport = apiClient.planningTransport(budgetId)
+                if (transport == null) {
+                    syncStatus = PlanningSyncStatus.OFF
+                    return
+                }
                 withContext(Dispatchers.Default) {
                     val keyring = keyring
                     val sync = PlanningSync(dao, budgetId, transport)
@@ -138,6 +139,8 @@ internal class PlanningController(
                 throw error
             } catch (_: PlanningKeyMismatchException) {
                 PlanningSyncStatus.NEEDS_RECOVERY_KEY
+            } catch (error: ExtensionSyncException) {
+                extensionFailureStatus(error.status)
             } catch (_: Exception) {
                 PlanningSyncStatus.WAITING
             }
@@ -167,7 +170,12 @@ internal class PlanningController(
      */
     suspend fun replacePlanningKey(budgetId: String): Boolean {
         val dao = database()?.planningRecordDao() ?: return false
-        val transport = apiClient.planningTransport(budgetId) ?: return false
+        val transport =
+            try {
+                apiClient.planningTransport(budgetId)
+            } catch (_: ExtensionSyncException) {
+                null
+            } ?: return false
         if (apiClient.budgetSecret(budgetId) != null) return false
         val replaced =
             try {
@@ -362,3 +370,12 @@ internal class PlanningController(
         launch { store.savedSearches().collect { savedSearches = it } }
     }
 }
+
+/** What an extension sync failure with HTTP [status] (null when unreachable) means for planning details. */
+internal fun extensionFailureStatus(status: Int?): PlanningSyncStatus =
+    when (status) {
+        401 -> PlanningSyncStatus.SIGN_IN_EXPIRED
+        403 -> PlanningSyncStatus.NO_ACCESS
+        429 -> PlanningSyncStatus.BUSY
+        else -> PlanningSyncStatus.WAITING
+    }

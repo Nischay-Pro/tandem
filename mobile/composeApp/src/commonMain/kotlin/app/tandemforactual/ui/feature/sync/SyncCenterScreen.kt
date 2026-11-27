@@ -28,7 +28,6 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.state.LiveScheduleSummary
-import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.core.ui.SyncNoticeCard
 import app.tandemforactual.ui.design.feedback.EmptyStateCard
@@ -67,7 +66,7 @@ internal fun SyncCenterScreen(
     val vault = LocalEncryptedBudgetVault.current
     val retryable =
         work.transactionsNeedingReview.count { it.status == "uncertain" } + mobileSession.banking.bankLinks.count { it.failure != null } +
-            (if (mobileSession.planning.syncStatus == PlanningSyncStatus.WAITING) 1 else 0)
+            (if (mobileSession.planning.syncStatus.retryable) 1 else 0)
     val conflictCount = work.transactionsNeedingReview.count { it.status == "conflict" }
     var retrying by remember { mutableStateOf(false) }
     var confirmingDownload by remember { mutableStateOf(false) }

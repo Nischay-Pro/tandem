@@ -163,7 +163,10 @@ class ActualServerClientTest {
                 for ((code, reason) in listOf(
                     HttpStatusCode.Forbidden to "unauthorized",
                     HttpStatusCode.NotFound to "not-found",
-                    HttpStatusCode.BadGateway to "network-failure",
+                    HttpStatusCode.BadGateway to "server-unavailable",
+                    HttpStatusCode.ServiceUnavailable to "server-unavailable",
+                    HttpStatusCode.TooManyRequests to "rate-limited",
+                    HttpStatusCode.BadRequest to "network-failure",
                 )) {
                     status = code
                     assertEquals(reason, assertFailsWith<ActualServerException> { client.download("file") }.reason)
