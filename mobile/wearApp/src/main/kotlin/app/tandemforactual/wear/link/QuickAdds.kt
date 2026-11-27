@@ -63,14 +63,21 @@ object QuickAdds {
     suspend fun summaryArrived(context: Context) {
         val store = WatchStore.load(context)
         val state = store.summary.value?.state ?: return
-        if (state != WatchState.LOCKED && store.queue.value.items.any { it.waitingForUnlock }) {
+        if (state != WatchState.LOCKED &&
+            store.queue.value.items
+                .any { it.waitingForUnlock }
+        ) {
             store.updateQueue { it.unlocked() }
         }
         send(context)
     }
 
     private fun schedule(context: Context) {
-        val next = WatchStore.load(context).queue.value.nextAttemptAt() ?: return
+        val next =
+            WatchStore
+                .load(context)
+                .queue.value
+                .nextAttemptAt() ?: return
         val delay = (next - System.currentTimeMillis()).coerceAtLeast(0)
         val request =
             OneTimeWorkRequestBuilder<QuickAddWorker>()

@@ -9,7 +9,13 @@ fun WatchMoneyFormat.format(minor: Long): String {
     val magnitude = if (minor == Long.MIN_VALUE) Long.MAX_VALUE else abs(minor)
     val digits = fractionDigits.coerceIn(0, 2)
     val rounded = if (digits == 0) (magnitude + 50) / 100 else magnitude / 100
-    val whole = rounded.toString().reversed().chunked(3).joinToString(group).reversed()
+    val whole =
+        rounded
+            .toString()
+            .reversed()
+            .chunked(3)
+            .joinToString(group)
+            .reversed()
     val fraction =
         when (digits) {
             0 -> ""

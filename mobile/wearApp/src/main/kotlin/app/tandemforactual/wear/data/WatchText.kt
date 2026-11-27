@@ -69,7 +69,10 @@ object WatchText {
         if (!summary.amountsShown || minor == null) return HIDDEN_AMOUNT
         val units = abs(minor) / 100
         val sign = if (minor < 0) "−" else ""
-        val symbol = summary.money.symbol.takeIf { it.length <= 2 }.orEmpty()
+        val symbol =
+            summary.money.symbol
+                .takeIf { it.length <= 2 }
+                .orEmpty()
         val number =
             when {
                 units >= 1_000_000 -> "${units / 1_000_000}M"

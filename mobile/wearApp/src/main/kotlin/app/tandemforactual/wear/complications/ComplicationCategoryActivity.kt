@@ -18,15 +18,20 @@ class ComplicationCategoryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val complicationId = intent.getIntExtra(ComplicationDataSourceService.EXTRA_CONFIG_COMPLICATION_ID, -1)
         val store = WatchStore.load(this)
-        val categories = store.summary.value?.categories.orEmpty()
+        val categories =
+            store.summary.value
+                ?.categories
+                .orEmpty()
         setContent {
             TandemWearTheme {
                 AppScaffold {
                     CategoryChoiceScreen(categories.map { WatchChoice(it.id, it.name) }, "Whole budget") { choice ->
                         store.setComplicationCategory(complicationId, choice?.id)
                         ComplicationDataSourceUpdateRequester
-                            .create(this, ComponentName(this, LeftToSpendComplicationService::class.java))
-                            .requestUpdate(complicationId)
+                            .create(
+                                this@ComplicationCategoryActivity,
+                                ComponentName(this@ComplicationCategoryActivity, LeftToSpendComplicationService::class.java),
+                            ).requestUpdate(complicationId)
                         setResult(RESULT_OK)
                         finish()
                     }

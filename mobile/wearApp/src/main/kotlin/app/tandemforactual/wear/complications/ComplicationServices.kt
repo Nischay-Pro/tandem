@@ -20,8 +20,7 @@ class LeftToSpendComplicationService : SuspendingComplicationDataSourceService()
         return WatchComplications.leftToSpend(store.summary.value, categoryId, request.complicationType, openApp(this))
     }
 
-    override fun getPreviewData(type: ComplicationType): ComplicationData =
-        WatchComplications.leftToSpend(PREVIEW, null, type, null)
+    override fun getPreviewData(type: ComplicationType): ComplicationData = WatchComplications.leftToSpend(PREVIEW, null, type, null)
 }
 
 class ToBudgetComplicationService : SuspendingComplicationDataSourceService() {

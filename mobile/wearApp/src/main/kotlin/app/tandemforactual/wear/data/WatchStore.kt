@@ -39,9 +39,11 @@ object WatchStore {
     fun saveSummary(bytes: ByteArray?): Boolean {
         val summary = bytes?.let(WatchCodec::decodeSummary)
         if (bytes != null && summary == null) return false
-        preferences?.edit()?.apply {
-            if (bytes == null) remove(SUMMARY) else putString(SUMMARY, bytes.decodeToString())
-        }?.apply()
+        preferences
+            ?.edit()
+            ?.apply {
+                if (bytes == null) remove(SUMMARY) else putString(SUMMARY, bytes.decodeToString())
+            }?.apply()
         val changed = summaryState.value != summary
         summaryState.value = summary
         return changed
@@ -61,8 +63,10 @@ object WatchStore {
         complicationId: Int,
         categoryId: String?,
     ) {
-        preferences?.edit()?.apply {
-            if (categoryId == null) remove(COMPLICATION + complicationId) else putString(COMPLICATION + complicationId, categoryId)
-        }?.apply()
+        preferences
+            ?.edit()
+            ?.apply {
+                if (categoryId == null) remove(COMPLICATION + complicationId) else putString(COMPLICATION + complicationId, categoryId)
+            }?.apply()
     }
 }

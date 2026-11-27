@@ -9,7 +9,14 @@ data class AmountEntry(
     val spending: Boolean = true,
     val fractionDigits: Int = 2,
 ) {
-    private val step: Long get() = if (fractionDigits <= 0) 100 else if (fractionDigits == 1) 10 else 1
+    private val step: Long get() =
+        if (fractionDigits <= 0) {
+            100
+        } else if (fractionDigits == 1) {
+            10
+        } else {
+            1
+        }
 
     /** The signed amount in hundredths, negative for money out. */
     val signedMinor: Long get() = if (spending) -minor else minor
@@ -34,7 +41,12 @@ data class AmountEntry(
             text: String,
             fractionDigits: Int,
         ): Long? {
-            val number = SPOKEN.find(text)?.value?.filterNot(Char::isWhitespace)?.trimEnd(',', '.') ?: return null
+            val number =
+                SPOKEN
+                    .find(text)
+                    ?.value
+                    ?.filterNot(Char::isWhitespace)
+                    ?.trimEnd(',', '.') ?: return null
             val mark = number.indexOfLast { it == '.' || it == ',' }
             val decimals = if (mark >= 0) number.length - mark - 1 else 0
             val whole = if (mark >= 0 && decimals in 1..2) number.substring(0, mark) else number

@@ -208,7 +208,13 @@ fun SpendBar(
 ) {
     val shown by animateFloatAsState(progress, tween(durationMillis = 600), label = "spent")
     val shape = RoundedCornerShape(50)
-    Box(Modifier.fillMaxWidth().height(4.dp).clip(shape).background(WearColors.track)) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(shape)
+            .background(WearColors.track),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth(shown)

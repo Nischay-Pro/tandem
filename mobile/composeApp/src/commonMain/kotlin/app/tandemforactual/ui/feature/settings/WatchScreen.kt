@@ -63,7 +63,12 @@ private fun WatchCategories(
     month: LiveBudgetMonthSummary?,
     onToggle: (String) -> Unit,
 ) {
-    val categories = month?.groups.orEmpty().filterNot { it.isIncome }.flatMap { it.categories }
+    val categories =
+        month
+            ?.groups
+            .orEmpty()
+            .filterNot { it.isIncome }
+            .flatMap { it.categories }
     SectionCard(stringResource(Res.string.watch_categories), detail = stringResource(Res.string.watch_categories_detail)) {
         if (categories.isEmpty()) BodyText(stringResource(Res.string.watch_categories_empty))
         categories.forEachIndexed { index, category ->

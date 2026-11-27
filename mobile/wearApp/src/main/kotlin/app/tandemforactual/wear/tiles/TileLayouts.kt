@@ -139,8 +139,12 @@ private fun arc(
         .Builder()
         .setAnchorAngle(degrees(ARC_START))
         .setAnchorType(LayoutElementBuilders.ARC_ANCHOR_START)
-        .setModifiers(ModifiersBuilders.Modifiers.Builder().setPadding(padding).build())
-        .addContent(line)
+        .setModifiers(
+            ModifiersBuilders.Modifiers
+                .Builder()
+                .setPadding(padding)
+                .build(),
+        ).addContent(line)
         .build()
 }
 

@@ -60,6 +60,11 @@ class QuickAddQueueTest {
         val queue = (0..QuickAddQueue.MAX_ITEMS).fold(QuickAddQueue()) { acc, index -> acc.enqueue(entry("e$index")) }
 
         assertEquals(QuickAddQueue.MAX_ITEMS, queue.items.size)
-        assertEquals("e1", queue.items.first().entry.entryId)
+        assertEquals(
+            "e1",
+            queue.items
+                .first()
+                .entry.entryId,
+        )
     }
 }
