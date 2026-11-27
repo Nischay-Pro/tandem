@@ -13,6 +13,9 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.automation.AutomatedTransaction
 import app.tandemforactual.ui.core.automation.AutomationBudgetNumbers
 import app.tandemforactual.ui.core.automation.AutomationChoices
+import app.tandemforactual.ui.core.automation.AutomationEvent
+import app.tandemforactual.ui.core.automation.AutomationEventKind
+import app.tandemforactual.ui.core.automation.AutomationEventStore
 import app.tandemforactual.ui.core.automation.AutomationKind
 import app.tandemforactual.ui.core.automation.AutomationReadInput
 import app.tandemforactual.ui.core.automation.AutomationTarget
@@ -22,7 +25,10 @@ import app.tandemforactual.ui.core.automation.addAutomatedTransaction
 import app.tandemforactual.ui.core.automation.automationChoices
 import app.tandemforactual.ui.core.automation.automationDatabase
 import app.tandemforactual.ui.core.automation.automationTarget
+import app.tandemforactual.ui.core.automation.categoriesOverBudget
+import app.tandemforactual.ui.core.automation.overBudgetValues
 import app.tandemforactual.ui.core.automation.readAutomationBudget
+import app.tandemforactual.ui.core.automation.syncEventsAllowed
 import app.tandemforactual.ui.core.automation.undoAutomatedTransaction
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
@@ -57,6 +63,37 @@ internal object AutomationCalls {
         val target = automationTarget(preferences(context), AutomationKind.READ)
         return withBudget(context, target) { readAutomationBudget(it, target.budgetId, input, LocalDate.now().toString()) }
     }
+
+    /** A stored event for Tasker, once reads are allowed for it; null when it's gone, closed or the budget is locked. */
+    suspend fun event(
+        context: Context,
+        id: String,
+        kind: AutomationEventKind,
+    ): AutomationEvent? =
+        runCatching {
+            val preferences = preferences(context)
+            val now = System.currentTimeMillis()
+            if (kind == AutomationEventKind.SYNC_FAILED) {
+                if (!syncEventsAllowed(preferences)) return null
+                AutomationEventStore(TandemProcess.database(context)).find(id, now)
+            } else {
+                withBudget(context, automationTarget(preferences, AutomationKind.READ)) { AutomationEventStore(it).find(id, now) }
+            }?.takeIf { it.kind == kind }
+        }.getOrNull()
+
+    /** The "Category over budget" variables while [category], or any category, is over budget; null otherwise. */
+    suspend fun overBudget(
+        context: Context,
+        category: String?,
+    ): Map<String, String>? =
+        runCatching {
+            val target = automationTarget(preferences(context), AutomationKind.READ)
+            withBudget(context, target) { database ->
+                categoriesOverBudget(database, target.budgetId, category, LocalDate.now().toString())
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { overBudgetValues(database, target.budgetId, it) }
+            }
+        }.getOrNull()
 
     /** Names for an action's settings page; null while no budget is open or it's locked. */
     suspend fun choices(context: Context): AutomationChoices? =

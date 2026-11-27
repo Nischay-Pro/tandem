@@ -13,6 +13,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import app.tandemforactual.android.tasker.recheckTaskerStates
+import app.tandemforactual.android.tasker.sendToTasker
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
@@ -33,6 +35,9 @@ import app.tandemforactual.data.store.overspendingAlert
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
+import app.tandemforactual.ui.core.automation.announceAfterSync
+import app.tandemforactual.ui.core.automation.announceSyncFailure
+import app.tandemforactual.ui.core.automation.budgetEventsAllowed
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
@@ -142,6 +147,7 @@ class BackgroundBudgetSyncWorker(
                     summary = sessionClient.withExclusiveSession { coordinator.synchronize(budgetId, password) }
                 }
                 postAlerts(database, repository, budgetId, preferences, summary)
+                announceToTasker(database, budgetDatabase, budgetId, preferences)
             } finally {
                 if (budgetDatabase !== database) budgetDatabase.close()
             }
@@ -150,21 +156,53 @@ class BackgroundBudgetSyncWorker(
         } catch (error: CancellationException) {
             throw error
         } catch (error: TandemApiException) {
+            announceFailureToTasker(database, notificationPreferences, error)
             apiFailureResult(error, apiClient, credentialStore, notificationPreferences)
         } catch (error: BudgetSyncRemoteException) {
             if (syncFailureAlertAllowed(notificationPreferences)) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
+            announceFailureToTasker(database, notificationPreferences, error)
             error.httpStatus.toWorkResult()
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             if (syncFailureAlertAllowed(notificationPreferences)) {
                 BudgetSystemNotifications.syncFailed(applicationContext)
             }
+            announceFailureToTasker(database, notificationPreferences, error)
             Result.retry()
         } finally {
             apiClient?.close()
             progress.clear()
             database.close()
+        }
+    }
+
+    private suspend fun announceToTasker(
+        database: TandemDatabase,
+        budgetDatabase: TandemDatabase,
+        budgetId: String,
+        preferences: Map<String, String>,
+    ) {
+        runCatching {
+            announceAfterSync(database, budgetDatabase, budgetId, preferences, LocalDate.now().toString(), System.currentTimeMillis()) {
+                sendToTasker(applicationContext, it)
+            }
+            if (budgetEventsAllowed(preferences)) recheckTaskerStates(applicationContext)
+        }
+    }
+
+    private suspend fun announceFailureToTasker(
+        database: TandemDatabase,
+        preferences: Map<String, String>?,
+        error: Exception,
+    ) {
+        val signIn = (error as? TandemApiException)?.backgroundSyncFailureAction() == BackgroundSyncFailureAction.PAIR_AGAIN
+        val message =
+            if (signIn) "Sign in again to sync this budget." else "Tandem couldn’t refresh your budget. Open Tandem and try again."
+        runCatching {
+            announceSyncFailure(database, preferences ?: return, message, System.currentTimeMillis()) {
+                sendToTasker(applicationContext, it)
+            }
         }
     }
 

@@ -37,10 +37,23 @@ suspend fun overspendingAlert(
     preferences: AppPreferencesStore,
     budgetId: String,
     monthId: String,
-): String? {
+): String? =
+    newlyOverspentCategories(repository, preferences, "internal:overspent-categories", budgetId, monthId)?.let(::overspendingMessage)
+
+/**
+ * Categories that went over budget in [monthId] since the last check under [keyPrefix], or null when the month isn't
+ * on this device. Each caller keeps its own record, so one can announce what another already has.
+ */
+suspend fun newlyOverspentCategories(
+    repository: LocalBudgetRepository,
+    preferences: AppPreferencesStore,
+    keyPrefix: String,
+    budgetId: String,
+    monthId: String,
+): List<OverspentCategory>? {
     val record = repository.findRecord(budgetId, "budget-month", monthId) ?: return null
     val current = overspentCategories(record.localJson ?: record.remoteJson ?: return null)
-    val key = "internal:overspent-categories:$budgetId:$monthId"
+    val key = "$keyPrefix:$budgetId:$monthId"
     val previous =
         preferences
             .read()[key]
@@ -49,5 +62,5 @@ suspend fun overspendingAlert(
             .filter(String::isNotEmpty)
             .toSet()
     preferences.putValue(key, current.joinToString(",") { it.id })
-    return overspendingMessage(newlyOverspent(current, previous))
+    return newlyOverspent(current, previous)
 }

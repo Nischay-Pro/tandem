@@ -24,5 +24,19 @@
   <string name="tasker_output_to_budget">Ready to assign</string>
   <string name="tasker_output_to_budget_detail">What’s ready to assign in the month.</string>
   <string name="tasker_special_use">Runs an automation action that Tasker asked for, such as adding a transaction or reading budget numbers.</string>
+  <string name="tasker_overspent_event">Category overspent</string>
+  <string name="tasker_schedule_due_event">Schedule due today</string>
+  <string name="tasker_sync_failed_event">Sync failed</string>
+  <string name="tasker_over_budget_state">Category over budget</string>
+  <string name="tasker_output_category_detail">The category that went over budget, or the names of all that are over, separated by commas.</string>
+  <string name="tasker_output_overspent">Overspent by</string>
+  <string name="tasker_output_overspent_detail">How far over budget, as a positive number such as 12.40.</string>
+  <string name="tasker_output_schedule">Schedule</string>
+  <string name="tasker_output_schedule_detail">The schedule’s name in Actual.</string>
+  <string name="tasker_output_amount_detail">The scheduled amount, negative for money out, such as -45.00. Blank when it varies.</string>
+  <string name="tasker_output_due_detail">The due date as year-month-day.</string>
+  <string name="tasker_output_error">Error</string>
+  <string name="tasker_output_error_detail">What went wrong and what to do next.</string>
+  <string name="tasker_special_use_condition">Answers Tasker when it checks a Tandem event or state, such as a category going over budget, from this device’s copy of the budget.</string>
   <string name="running_tasker_plugin">Running a Tasker action</string>
 </resources>

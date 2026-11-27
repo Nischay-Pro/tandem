@@ -71,6 +71,11 @@ class OverspentCategoryTest {
                 assertEquals("Fuel is over budget this month.", overspendingAlert(repository, preferences, "budget", "2026-11"))
                 assertNull(overspendingAlert(repository, preferences, "budget", "2026-11"))
                 assertNull(overspendingAlert(repository, preferences, "budget", "2026-12"))
+                assertEquals(
+                    listOf("fuel"),
+                    newlyOverspentCategories(repository, preferences, "internal:other", "budget", "2026-11")?.map { it.id },
+                )
+                assertEquals(emptyList(), newlyOverspentCategories(repository, preferences, "internal:other", "budget", "2026-11"))
             } finally {
                 database.close()
             }
