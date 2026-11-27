@@ -12,20 +12,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.core.state.AppRoute
+import app.tandemforactual.ui.core.state.AppState
+import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LocalRouteScrollState
+import app.tandemforactual.ui.core.state.TransactionItem
 import app.tandemforactual.ui.design.feedback.EmptyState
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.WindowWidthClass
@@ -63,6 +71,83 @@ internal fun hingeSplit(
     return listWidth to (hinge.right - hinge.left) / density
 }
 
+/** Whether [ListDetailPanes] shows both panes in a container at [containerLeftPx] that is [containerWidthPx] wide. */
+internal fun showsListDetailPanes(
+    hinge: WindowHinge?,
+    containerLeftPx: Float,
+    containerWidthPx: Float,
+    density: Float,
+): Boolean =
+    hingeSplit(hinge, containerLeftPx, containerWidthPx, density) != null ||
+        (density > 0f && usesListDetailPanes(containerWidthPx / density))
+
+/** The page a list route pushes for its open item when only the list fits. */
+internal fun AppRoute.listDetailPage(): AppRoute? =
+    when (this) {
+        AppRoute.ACCOUNTS -> AppRoute.ACCOUNT_DETAIL
+        AppRoute.ACTIVITY -> AppRoute.TRANSACTION_DETAIL
+        else -> null
+    }
+
+internal fun accountDetailKey(
+    state: AppState,
+    liveAccounts: List<LiveAccountSummary>,
+): String? = state.selectedAccountId.takeIf { selected -> liveAccounts.any { it.id == selected } }
+
+internal fun activityDetailKey(
+    state: AppState,
+    liveActivityTransactions: List<TransactionItem>,
+): String? =
+    state.selectedTransactionRecordId.takeIf { selected ->
+        selected.isNotBlank() && liveActivityTransactions.any { it.recordId == selected }
+    }
+
+internal enum class ListDetailChange { SHOW_PAGE, SHOW_PANE }
+
+/**
+ * How the back stack follows the window so the open item stays open: a detail page above its list folds back into the
+ * pane once both fit, and an item open in the pane becomes a page when the window narrows to the list alone.
+ */
+internal fun listDetailChange(
+    routes: List<AppRoute>,
+    panes: Boolean,
+    panesJustChanged: Boolean,
+    detailOpen: (list: AppRoute) -> Boolean,
+): ListDetailChange? {
+    val top = routes.lastOrNull() ?: return null
+    return when {
+        panes ->
+            ListDetailChange.SHOW_PANE.takeIf {
+                val list = routes.getOrNull(routes.lastIndex - 1)
+                list != null && list.listDetailPage() == top && detailOpen(list)
+            }
+        panesJustChanged -> ListDetailChange.SHOW_PAGE.takeIf { top.listDetailPage() != null && detailOpen(top) }
+        else -> null
+    }
+}
+
+/** Reports a [ListDetailChange] whenever [routes] or the panes fitting in [bounds] (window pixels) call for one. */
+@Composable
+internal fun ListDetailContinuityEffect(
+    bounds: Rect?,
+    routes: List<AppRoute>,
+    detailOpen: (list: AppRoute) -> Boolean,
+    onChange: (ListDetailChange) -> Unit,
+) {
+    val hinge = LocalWindowHinge.current
+    val density = LocalDensity.current.density
+    val panes = bounds?.takeIf { it.width > 0f }?.let { showsListDetailPanes(hinge, it.left, it.width, density) }
+    val lastPanes = remember { mutableStateOf<Boolean?>(null) }
+    val currentDetailOpen by rememberUpdatedState(detailOpen)
+    val currentOnChange by rememberUpdatedState(onChange)
+    LaunchedEffect(panes, routes) {
+        if (panes == null) return@LaunchedEffect
+        val justChanged = lastPanes.value.let { it != null && it != panes }
+        lastPanes.value = panes
+        listDetailChange(routes, panes, justChanged, currentDetailOpen)?.let(currentOnChange)
+    }
+}
+
 /**
  * Shows [list] beside [detail] when there's room, and [list] alone otherwise. [detailKey] scopes the detail's scroll
  * position so each item opens at its top; a null key shows [emptyTitle] instead.
@@ -81,7 +166,7 @@ internal fun ListDetailPanes(
     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { containerLeft = it.positionInWindow().x }) {
         val width = maxWidth.value
         val split = hingeSplit(hinge, containerLeft, width * density, density)
-        if (split == null && !usesListDetailPanes(width)) {
+        if (!showsListDetailPanes(hinge, containerLeft, width * density, density)) {
             list(false)
             return@BoxWithConstraints
         }

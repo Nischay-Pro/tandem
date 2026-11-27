@@ -325,10 +325,7 @@ internal val tandemReduceMotion: Boolean
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal expect fun TandemSystemBars(
-    isDark: Boolean,
-    background: Color,
-)
+internal expect fun TandemSystemBars(isDark: Boolean)
 
 @Composable
 @Suppress("ktlint:standard:function-naming")

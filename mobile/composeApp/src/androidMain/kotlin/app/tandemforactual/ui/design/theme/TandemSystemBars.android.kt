@@ -2,44 +2,34 @@
 
 package app.tandemforactual.ui.design.theme
 
-import android.app.Activity
-import android.os.Build
+import android.graphics.Color
 import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-internal actual fun TandemSystemBars(
-    isDark: Boolean,
-    background: Color,
-) {
-    val view = LocalView.current
-    val window = (view.context as? Activity)?.window
-    if (window != null) {
-        SideEffect {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                @Suppress("DEPRECATION")
-                window.statusBarColor = background.toArgb()
-                @Suppress("DEPRECATION")
-                window.navigationBarColor = background.toArgb()
-            }
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !isDark
-                isAppearanceLightNavigationBars = !isDark
-            }
-        }
+internal actual fun TandemSystemBars(isDark: Boolean) {
+    val activity = LocalActivity.current as? ComponentActivity ?: return
+    LaunchedEffect(activity, isDark) {
+        activity.enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { isDark },
+            navigationBarStyle = SystemBarStyle.auto(LIGHT_NAVIGATION_SCRIM, DARK_NAVIGATION_SCRIM) { isDark },
+        )
     }
 }
+
+private val LIGHT_NAVIGATION_SCRIM = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+private val DARK_NAVIGATION_SCRIM = Color.argb(0x80, 0x1B, 0x1B, 0x1B)
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
