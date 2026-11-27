@@ -5,6 +5,10 @@ package app.tandemforactual.ui.design.theme
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -26,7 +30,15 @@ internal actual fun TandemBackHandler(
     enabled: Boolean,
     onBack: () -> Unit,
     onBackProgress: (progress: Float, direction: Float) -> Unit,
-) = Unit
+) {
+    val currentOnBack = rememberUpdatedState(onBack)
+    val entry = remember { IosBackHandlers.Entry(enabled) { currentOnBack.value() } }
+    SideEffect { entry.enabled = enabled }
+    DisposableEffect(entry) {
+        IosBackHandlers.add(entry)
+        onDispose { IosBackHandlers.remove(entry) }
+    }
+}
 
 @Composable
 @Suppress("ktlint:standard:function-naming")

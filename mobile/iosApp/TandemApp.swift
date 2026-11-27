@@ -6,6 +6,7 @@ import UIKit
 struct TandemApp: App {
     @UIApplicationDelegateAdaptor(TandemAppDelegate.self) private var appDelegate
     @State private var preferredScheme: ColorScheme?
+    @StateObject private var keyboardCommands = TandemKeyboardCommands()
 
     var body: some Scene {
         WindowGroup {
@@ -18,6 +19,47 @@ struct TandemApp: App {
                     }
                 }
         }
+        .commands {
+            TandemCommands(model: keyboardCommands)
+        }
+    }
+}
+
+/// Mirrors the shortcuts Compose offers, so the iPad menu bar lists them and sends the chosen one back.
+private final class TandemKeyboardCommands: ObservableObject {
+    @Published private(set) var commands: [KeyboardCommand] = []
+
+    init() {
+        KeyboardCommands.shared.observe { [weak self] commands in
+            self?.commands = commands
+        }
+    }
+}
+
+private struct TandemCommands: Commands {
+    static let newTransaction = "new-transaction"
+
+    @ObservedObject var model: TandemKeyboardCommands
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            ForEach(model.commands.filter { $0.commandId == Self.newTransaction }, id: \.commandId) { command in
+                button(command)
+            }
+        }
+        CommandMenu("Go") {
+            ForEach(model.commands.filter { $0.commandId != Self.newTransaction }, id: \.commandId) { command in
+                button(command)
+            }
+        }
+    }
+
+    private func button(_ command: KeyboardCommand) -> some View {
+        Button(command.title) {
+            KeyboardCommands.shared.perform(id: command.commandId)
+        }
+        .keyboardShortcut(KeyEquivalent(Character(command.key)), modifiers: .command)
+        .disabled(!command.enabled)
     }
 }
 

@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.ui.design.sheets.RegisterFormSubmit
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -47,6 +48,7 @@ internal fun FloatingTransactionSave(
     modifier: Modifier = Modifier,
 ) {
     val palette = tandemPalette
+    RegisterFormSubmit(enabled && !saved, onClick)
     Row(
         modifier =
             modifier

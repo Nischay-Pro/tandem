@@ -32,14 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.app.BottomNavigation
-import app.tandemforactual.ui.app.KeyboardShortcut
-import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.SideNavigationRail
-import app.tandemforactual.ui.app.keyboardShortcut
 import app.tandemforactual.ui.app.navigationRoutes
 import app.tandemforactual.ui.app.showsBottomNavigation
 import app.tandemforactual.ui.core.state.AppRoute
@@ -80,21 +76,13 @@ internal fun ShellScaffold(chrome: ShellChromeState) {
     val shortcutsEnabled = layout.tabShellRoute != null && state.selectedBudgetId.isNotBlank()
     val rootFocus = remember { FocusRequester() }
     LaunchedEffect(shortcutsEnabled) { if (shortcutsEnabled) runCatching { rootFocus.requestFocus() } }
+    ShellKeyboardCommands(ctx, shortcutsEnabled)
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .onPreviewKeyEvent { event ->
-                    val shortcut = event.keyboardShortcut()?.takeIf { shortcutsEnabled } ?: return@onPreviewKeyEvent false
-                    when (shortcut) {
-                        KeyboardShortcut.NewTransaction -> QuickActionEvents.requestAddTransaction()
-                        KeyboardShortcut.Search -> ctx.navigation.open(AppRoute.ACTIVITY_SEARCH)
-                        KeyboardShortcut.Sync -> ctx.budgetActions.syncNow()
-                        KeyboardShortcut.Back -> ctx.navigation.back()
-                        is KeyboardShortcut.Tab -> ctx.navigation.selectTab(shortcut.route)
-                    }
-                    true
-                }.focusRequester(rootFocus)
+                .shellKeyboard(ctx, shortcutsEnabled, navigationRoutes(state.interfaceMode))
+                .focusRequester(rootFocus)
                 .focusable()
                 .background(appBackgroundBrush(state.backgroundStyle, tandemPalette))
                 .safeDrawingPadding(),

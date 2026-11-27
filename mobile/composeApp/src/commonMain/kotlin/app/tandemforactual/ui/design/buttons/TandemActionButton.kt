@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.ui.design.feedback.TandemLoadingIndicator
+import app.tandemforactual.ui.design.sheets.RegisterFormSubmit
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.TandemTypography
@@ -42,6 +43,7 @@ internal fun TandemActionButton(
 ) {
     val palette = tandemPalette
     val shape = RoundedCornerShape(TandemShapes.medium)
+    if (tone == TandemActionButtonTone.PRIMARY) RegisterFormSubmit(enabled && !loading, onClick)
     val containerColor =
         when (tone) {
             TandemActionButtonTone.PRIMARY -> if (enabled) palette.accent else palette.raised
