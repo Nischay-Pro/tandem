@@ -21,6 +21,7 @@ import app.tandemforactual.ui.core.session.budget.hasPendingTransactionDependenc
 import app.tandemforactual.ui.core.session.localStorageFailureMessage
 import app.tandemforactual.ui.core.session.stringValue
 import app.tandemforactual.ui.core.session.transactions.TransactionController
+import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.isOffBudgetAccount
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.design.inputs.MAX_TRANSACTION_AMOUNT_MINOR_UNITS
@@ -164,6 +165,10 @@ private fun TransactionController.newTransactionAccount(accountId: String): Budg
     val account = host.accountRecords.firstOrNull { it.recordId == accountId }
     if (account == null) {
         host.reportTransactionWriteMessage("Choose an account from this budget before saving.")
+        return null
+    }
+    if (account.recordBody()?.booleanValue("closed") == true) {
+        host.reportTransactionWriteMessage("Choose an open account from this budget.")
         return null
     }
     return account

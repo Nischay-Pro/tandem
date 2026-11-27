@@ -29,6 +29,19 @@ class TransactionSplitDraftTest {
     }
 
     @Test
+    fun aNegativeLineRunsAgainstTheTransaction() {
+        val draft =
+            TransactionSplitDraft(
+                listOf(SplitLine(1, "60", "groceries", "Groceries"), SplitLine(2, "-10", "home", "Home")),
+            )
+        assertEquals(0, draft.remaining(5_000, parse))
+        assertTrue(draft.isReady(5_000, parse))
+        assertEquals(listOf(-6_000L to "groceries", 1_000L to "home"), draft.signedLines(parse, income = false))
+        assertEquals(listOf(6_000L to "groceries", -1_000L to "home"), draft.signedLines(parse, income = true))
+        assertFalse(draft.isReady(7_000, parse))
+    }
+
+    @Test
     fun refusesUnevenEmptyOrSingleLineSplits() {
         val draft =
             TransactionSplitDraft

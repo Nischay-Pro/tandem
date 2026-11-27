@@ -27,23 +27,46 @@ internal data class CategoryPace(
 
 private const val AHEAD_TOLERANCE = 1.1
 
-/** How spending compares with an even spread of the assigned amount through the month. */
+/** Money a category had for the month: the assigned amount plus anything carried in from last month. */
+internal fun categoryFundsMinor(
+    balanceMinor: Long,
+    activityMinor: Long,
+): Long = balanceMinor - activityMinor
+
+/** Net spending in a category; refunds offset it and never count as spending. */
+internal fun categorySpentMinor(activityMinor: Long): Long = (-activityMinor).coerceAtLeast(0)
+
+/** Share of a category's money already spent, for its progress bar. */
+internal fun categoryProgress(
+    balanceMinor: Long,
+    activityMinor: Long,
+): Float {
+    val funds = categoryFundsMinor(balanceMinor, activityMinor)
+    val spent = categorySpentMinor(activityMinor)
+    return when {
+        funds > 0L -> (spent.toDouble() / funds.toDouble()).toFloat().coerceIn(0f, 1f)
+        spent > 0L -> 1f
+        else -> 0f
+    }
+}
+
+/** How spending compares with an even spread of the category's money through the month. */
 internal fun categoryPace(
-    assignedMinor: Long,
+    fundsMinor: Long,
     activityMinor: Long,
     dayOfMonth: Int,
     daysInMonth: Int,
 ): CategoryPace? {
-    if (assignedMinor <= 0 || daysInMonth <= 0 || dayOfMonth !in 1..daysInMonth) return null
-    val spent = (-activityMinor).coerceAtLeast(0)
-    val expected = assignedMinor.toDouble() * dayOfMonth / daysInMonth
+    if (fundsMinor <= 0 || daysInMonth <= 0 || dayOfMonth !in 1..daysInMonth) return null
+    val spent = categorySpentMinor(activityMinor)
+    val expected = fundsMinor.toDouble() * dayOfMonth / daysInMonth
     val status =
         when {
-            spent > assignedMinor -> CategoryPaceStatus.OVER
+            spent > fundsMinor -> CategoryPaceStatus.OVER
             spent > expected * AHEAD_TOLERANCE -> CategoryPaceStatus.AHEAD
             else -> CategoryPaceStatus.ON_TRACK
         }
-    return CategoryPace(status, spent, assignedMinor - spent, daysInMonth - dayOfMonth)
+    return CategoryPace(status, spent, fundsMinor - spent, daysInMonth - dayOfMonth)
 }
 
 /** Money spent in one category in an Actual budget month record, or null when the category isn't there. */

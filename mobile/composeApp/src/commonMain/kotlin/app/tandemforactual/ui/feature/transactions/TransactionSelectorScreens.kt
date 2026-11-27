@@ -167,7 +167,7 @@ internal fun TransactionAccountPickerDialog(
     var query by remember { mutableStateOf("") }
     val values =
         if (live) {
-            accounts.map { SelectorItem(it.id, it.name) }
+            accounts.filter { !it.closed || it.id == selectedId }.map { SelectorItem(it.id, it.name) }
         } else {
             listOf("Checking", "Savings", "Credit card", "Cash").map { SelectorItem(it, it) }
         }

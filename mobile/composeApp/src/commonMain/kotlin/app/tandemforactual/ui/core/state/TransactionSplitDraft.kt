@@ -11,7 +11,8 @@ internal data class SplitLine(
 
 /**
  * A transaction being split across categories, and which line's category the picker is choosing, if any. Amounts are
- * unsigned minor units, like the form's total; [parse] reads a line's text in the budget's currency.
+ * minor units in the direction of the form's unsigned total, so a negative line runs the other way (a refund inside a
+ * purchase); [parse] reads a line's text in the budget's currency.
  */
 internal data class TransactionSplitDraft(
     val lines: List<SplitLine>,
@@ -24,14 +25,14 @@ internal data class TransactionSplitDraft(
         parse: (String) -> Long?,
     ): Long = totalMinor - amounts(parse).sumOf { it ?: 0L }
 
-    /** Ready to save: at least two lines, each with an amount and a category, adding up to the total exactly. */
+    /** Ready to save: at least two lines, each with a non-zero amount and a category, adding up to the total exactly. */
     fun isReady(
         totalMinor: Long,
         parse: (String) -> Long?,
     ): Boolean =
         lines.size >= 2 &&
             lines.all { it.categoryId.isNotBlank() } &&
-            amounts(parse).all { it != null && it > 0 } &&
+            amounts(parse).all { it != null && it != 0L } &&
             remaining(totalMinor, parse) == 0L
 
     /** Adds a line holding whatever is still unassigned. */

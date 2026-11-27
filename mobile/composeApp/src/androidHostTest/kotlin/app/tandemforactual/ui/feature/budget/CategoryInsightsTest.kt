@@ -9,6 +9,26 @@ class CategoryInsightsTest {
     private val format: (Long) -> String = { "$" + it / 100 }
 
     @Test
+    fun carriedOverMoneyCountsTowardsWhatACategoryCanSpend() {
+        val funds = categoryFundsMinor(balanceMinor = 150_00, activityMinor = -250_00)
+        assertEquals(400_00L, funds)
+        assertEquals(CategoryPaceStatus.ON_TRACK, categoryPace(funds, -250_00, 25, 30)?.status)
+        assertEquals(150_00L, categoryPace(funds, -250_00, 25, 30)?.remainingMinor)
+        assertEquals(CategoryPaceStatus.OVER, categoryPace(categoryFundsMinor(-10_00, -310_00), -310_00, 25, 30)?.status)
+        assertEquals(0.625f, categoryProgress(balanceMinor = 150_00, activityMinor = -250_00))
+    }
+
+    @Test
+    fun refundsOffsetSpendingInsteadOfAddingToIt() {
+        assertEquals(0L, categorySpentMinor(40_00))
+        assertEquals(60_00L, categorySpentMinor(-60_00))
+        assertEquals(0f, categoryProgress(balanceMinor = 340_00, activityMinor = 40_00))
+        assertEquals(1f, categoryProgress(balanceMinor = -20_00, activityMinor = -20_00))
+        assertEquals(0f, categoryProgress(balanceMinor = 0, activityMinor = 0))
+        assertEquals(1f, categoryProgress(balanceMinor = -50_00, activityMinor = -150_00))
+    }
+
+    @Test
     fun paceComparesSpendingWithAnEvenSpread() {
         assertEquals(CategoryPace(CategoryPaceStatus.ON_TRACK, 40_00, 260_00, 15), categoryPace(300_00, -40_00, 15, 30))
         assertEquals(CategoryPaceStatus.ON_TRACK, categoryPace(300_00, -160_00, 15, 30)?.status)

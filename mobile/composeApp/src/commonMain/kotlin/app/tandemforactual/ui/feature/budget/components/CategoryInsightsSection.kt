@@ -26,9 +26,11 @@ import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.feature.budget.CategoryPaceStatus
 import app.tandemforactual.ui.feature.budget.canQuickAssign
+import app.tandemforactual.ui.feature.budget.categoryFundsMinor
 import app.tandemforactual.ui.feature.budget.categoryPace
 import app.tandemforactual.ui.feature.budget.categoryPaceDetail
 import app.tandemforactual.ui.feature.budget.categorySpendingInMonth
+import app.tandemforactual.ui.feature.budget.categorySpentMinor
 import app.tandemforactual.ui.feature.budget.lastMonthSpendingDetail
 import app.tandemforactual.ui.feature.budget.previousMonthId
 import com.composables.icons.lucide.Gauge
@@ -54,7 +56,7 @@ internal fun CategoryInsightsSection(
             null
         } else {
             categoryPace(
-                category.assignedMinor,
+                categoryFundsMinor(category.balanceMinor, category.activityMinor),
                 category.activityMinor,
                 today.drop(8).take(2).toIntOrNull() ?: 0,
                 daysInMonth(monthId) ?: 0,
@@ -81,7 +83,7 @@ internal fun CategoryInsightsSection(
         lastMonth?.let {
             ListRow(
                 "Last month",
-                lastMonthSpendingDetail(it, (-category.activityMinor).coerceAtLeast(0), monthId < today.take(7), state::formatCurrency),
+                lastMonthSpendingDetail(it, categorySpentMinor(category.activityMinor), monthId < today.take(7), state::formatCurrency),
                 leading = RowLeading.Icon(Lucide.History),
             )
         }
