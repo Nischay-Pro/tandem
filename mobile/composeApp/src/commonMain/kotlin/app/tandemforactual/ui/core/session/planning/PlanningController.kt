@@ -284,7 +284,7 @@ internal class PlanningController(
         budgetId: String,
         keys: List<String>,
     ) {
-        planningStore(budgetId)?.save(settings.copy(ignoredChecks = (settings.ignoredChecks + keys).distinct()))
+        planningStore(budgetId)?.ignoreChecks(keys)
     }
 
     suspend fun saveSavingsGoal(

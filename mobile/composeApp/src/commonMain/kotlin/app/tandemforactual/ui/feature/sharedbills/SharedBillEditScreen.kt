@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import app.tandemforactual.data.planning.SharedBill
 import app.tandemforactual.data.planning.SharedBillMember
+import app.tandemforactual.data.planning.SharedBills
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.parseAmountMinorUnits
@@ -232,5 +233,4 @@ private fun buildSharedBill(
             )
         },
     dueDay = dueDay.toIntOrNull(),
-    startMonth = existing?.startMonth ?: platformTodayIsoDate().take(7),
-)
+).let { SharedBills.withEdits(existing, it, platformTodayIsoDate().take(7)) }

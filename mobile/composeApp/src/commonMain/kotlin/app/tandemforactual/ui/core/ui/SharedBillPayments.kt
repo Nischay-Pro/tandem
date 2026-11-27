@@ -16,6 +16,8 @@ import app.tandemforactual.ui.core.state.AppState
 
 internal const val HISTORY_MONTHS = 6
 
+private const val EARLIEST_MONTH = "2000-01"
+
 /** The last [HISTORY_MONTHS] months, oldest first, as yyyy-MM. */
 internal fun recentMonths(today: String = platformTodayIsoDate()): List<String> =
     (HISTORY_MONTHS - 1 downTo 0).map { back -> SpendingInsights.shiftMonth(today.take(7), -back) }
@@ -34,7 +36,10 @@ internal object PendingBillTags {
 private fun TaggedPayment.sameAs(other: TaggedPayment) =
     date == other.date && amountMinor == other.amountMinor && notes.trim() == other.notes.trim()
 
-/** Payments tagged for [bill] since it started, or over the recent months; null while loading or when the budget can't be read. */
+/**
+ * Payments tagged for [bill] from the month before it started, so an early first payment counts, or all of them for a bill
+ * saved without a start month, whose credits count from the earliest one; null while loading or when the budget can't be read.
+ */
 @Composable
 internal fun rememberSharedBillPayments(
     state: AppState,
@@ -42,7 +47,7 @@ internal fun rememberSharedBillPayments(
     bill: SharedBill,
 ): List<TaggedPayment>? {
     var stored by remember(state.selectedBudgetId, bill.tag) { mutableStateOf<List<TaggedPayment>?>(null) }
-    val from = listOfNotNull(bill.startMonth, recentMonths().first()).min()
+    val from = listOf(bill.startMonth?.let { SpendingInsights.shiftMonth(it, -1) } ?: EARLIEST_MONTH, recentMonths().first()).min()
     LaunchedEffect(state.selectedBudgetId, bill.tag, from, session.localSyncState?.lastSyncedAtEpochMs) {
         val loaded =
             session.insights.loadTaggedPayments(

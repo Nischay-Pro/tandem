@@ -28,7 +28,7 @@ internal fun ShareStateBadge(
     Badge(
         when (month.state) {
             ShareState.PAID -> "Paid"
-            ShareState.PARTLY_PAID -> "${money(month.paidMinor)} of ${money(month.member.shareMinor)}"
+            ShareState.PARTLY_PAID -> "${money(month.paidMinor)} of ${money(month.shareMinor)}"
             ShareState.NOT_YET_DUE -> "Not due yet"
             ShareState.MISSING -> "Not paid"
             ShareState.NOT_TRACKED -> "Not tracked"

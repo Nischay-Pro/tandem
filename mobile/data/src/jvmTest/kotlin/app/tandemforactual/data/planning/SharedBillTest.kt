@@ -87,13 +87,86 @@ class SharedBillTest {
         val late = listOf(paid("2026-10-04", 6_000, "#att-plan #alex"))
         assertEquals(mapOf("2026-09" to 4_000L, "2026-10" to 2_000L), SharedBills.credits(bill, alex, late))
         val earlier = listOf(paid("2026-07-30", 4_000, "#att-plan #alex"))
-        assertEquals(mapOf("2026-07" to 4_000L), SharedBills.credits(bill, alex, earlier))
+        assertEquals(mapOf("2026-09" to 4_000L), SharedBills.credits(bill, alex, earlier))
         assertEquals(emptyMap(), SharedBills.credits(bill, alex.copy(shareMinor = 0), twoMonths))
         assertEquals(emptyMap(), SharedBills.credits(bill, alex, listOf(paid("2026-09-04", -8_000, "#att-plan #alex"))))
         assertEquals(120, SharedBills.credits(bill, alex, listOf(paid("2026-09-04", 1_000_000, "#att-plan #alex"))).size)
         assertEquals("2026-10", SharedBills.paidThrough(bill, alex, twoMonths, "2026-09-20"))
         assertEquals(null, SharedBills.paidThrough(bill, alex, twoMonths, "2026-11-20"))
         assertEquals(null, SharedBills.paidThrough(bill, alex, emptyList(), "2026-09-20"))
+    }
+
+    @Test
+    fun aChangedShareKeepsEarlierMonthsSettled() {
+        val bill =
+            plan.copy(
+                startMonth = "2026-09",
+                members = listOf(alex.copy(shareMinor = 5_000, earlierShares = listOf(EarlierShare("2026-10", 4_000)))),
+            )
+        val member = bill.members.single()
+        assertEquals(4_000, member.shareFor("2026-09"))
+        assertEquals(4_000, member.shareFor("2026-10"))
+        assertEquals(5_000, member.shareFor("2026-11"))
+        val payments = listOf(paid("2026-09-03", 8_000, "#att-plan #alex"), paid("2026-11-03", 5_000, "#att-plan #alex"))
+        assertEquals(mapOf("2026-09" to 4_000L, "2026-10" to 4_000L, "2026-11" to 5_000L), SharedBills.credits(bill, member, payments))
+        val october = SharedBills.month(bill, payments, "2026-10", "2026-11-20").single()
+        assertEquals(ShareState.PAID, october.state)
+        assertEquals(4_000, october.shareMinor)
+        assertEquals("2026-11", SharedBills.paidThrough(bill, member, payments, "2026-11-20"))
+        assertEquals(member, SharedBillMember.fromJson(member.toJson()))
+        val odd =
+            kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"earlierShares":[1,{"through":"2026-01"},{"shareMinor":5},{"through":"2026-02","shareMinor":300}]}""",
+            ) as JsonObject
+        assertEquals(listOf(EarlierShare("2026-02", 300)), SharedBillMember.fromJson(odd).earlierShares)
+    }
+
+    @Test
+    fun savingEditsKeepsHistoryAndStartsNewPeopleThisMonth() {
+        val created = SharedBills.withEdits(null, plan.copy(startMonth = null), "2026-11")
+        assertEquals("2026-11", created.startMonth)
+        val raised = plan.copy(members = listOf(alex.copy(shareMinor = 5_000), sam, SharedBillMember("Kim", "kim", 4_000)))
+        val saved = SharedBills.withEdits(plan, raised, "2026-11")
+        assertEquals("2026-01", saved.startMonth)
+        assertEquals(listOf(EarlierShare("2026-10", 4_000)), saved.members[0].earlierShares)
+        assertEquals(emptyList(), saved.members[1].earlierShares)
+        assertEquals("2026-11", saved.members[2].startMonth)
+        assertEquals(null, saved.members[0].startMonth)
+        val again =
+            SharedBills.withEdits(
+                saved,
+                saved.copy(
+                    members =
+                        saved.members.map {
+                            it.copy(shareMinor = 6_000, earlierShares = emptyList())
+                        },
+                ),
+                "2026-11",
+            )
+        assertEquals(listOf(EarlierShare("2026-10", 4_000)), again.members[0].earlierShares)
+        assertEquals(emptyList(), again.members[2].earlierShares)
+        val fresh = SharedBills.withEdits(created, created.copy(members = listOf(alex.copy(shareMinor = 9_000))), "2026-11")
+        assertEquals(emptyList(), fresh.members.single().earlierShares)
+        val legacy = plan.copy(startMonth = null)
+        assertEquals(null, SharedBills.withEdits(legacy, legacy, "2026-11").startMonth)
+        val kim = saved.members[2]
+        val kimPaid = listOf(paid("2026-11-02", 4_000, "#att-plan #kim"))
+        assertEquals(mapOf("2026-11" to 4_000L), SharedBills.credits(saved, kim, kimPaid))
+        assertEquals(ShareState.NOT_TRACKED, SharedBills.month(saved, kimPaid, "2026-10", "2026-11-20")[2].state)
+    }
+
+    @Test
+    fun aBillWithoutAStartMonthCountsFromTheEarliestPaymentEvenForCycles() {
+        val legacy = plan.copy(startMonth = null, dueDay = null, members = listOf(alex.copy(everyMonths = 2)))
+        val member = legacy.members.single()
+        val payments = listOf(paid("2026-06-03", 8_000, "#att-plan #alex"))
+        assertEquals("2026-06", SharedBills.anchor(legacy, member, payments))
+        assertEquals(mapOf("2026-06" to 4_000L, "2026-07" to 4_000L), SharedBills.credits(legacy, member, payments))
+        assertEquals(ShareState.MISSING, SharedBills.month(legacy, payments, "2026-08", "2026-10-01").single().state)
+        assertEquals(ShareState.NOT_YET_DUE, SharedBills.month(legacy, payments, "2026-09", "2026-08-20").single().state)
+        assertEquals(ShareState.NOT_YET_DUE, SharedBills.month(legacy, payments, "2026-10", "2026-10-20").single().state)
+        assertEquals(ShareState.MISSING, SharedBills.month(legacy, payments, "2026-10", "2026-12-01").single().state)
+        assertEquals(null, SharedBills.anchor(legacy, member, emptyList()))
     }
 
     @Test
