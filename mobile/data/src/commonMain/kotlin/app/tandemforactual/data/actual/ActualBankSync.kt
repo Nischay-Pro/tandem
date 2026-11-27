@@ -301,7 +301,7 @@ class ActualBankSync(
                     ?.times(100)
                     ?.takeIf { it.isFinite() }
                     ?: error("Unreadable bank amount: ${amount.trim()}")
-            return kotlin.math.round(value).toLong()
+            return jsMathRound(value).toLong()
         }
     }
 }

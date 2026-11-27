@@ -469,7 +469,7 @@ internal fun scheduledAmount(value: JsonElement?): Long =
         is JsonObject -> {
             val low = (value["num1"] as? JsonPrimitive)?.longOrNull ?: 0L
             val high = (value["num2"] as? JsonPrimitive)?.longOrNull ?: 0L
-            kotlin.math.round((low + high) / 2.0).toLong()
+            jsMathRound((low + high) / 2.0).toLong()
         }
         else -> 0L
     }

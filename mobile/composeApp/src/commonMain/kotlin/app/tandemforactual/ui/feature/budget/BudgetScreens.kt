@@ -68,21 +68,12 @@ internal fun LazyListScope.budgetPendingChangeBannerItems(
     }
 }
 
-internal fun suggestedHoldAmount(
-    readyToAssignMinor: Long,
-    heldMinor: Long,
-): Long =
-    if (heldMinor > 0) {
-        minOf(heldMinor, (readyToAssignMinor + heldMinor).coerceAtLeast(0))
-    } else {
-        readyToAssignMinor.coerceAtLeast(0)
-    }
+internal fun suggestedHoldAmount(readyToAssignMinor: Long): Long = readyToAssignMinor.coerceAtLeast(0)
 
 internal fun holdAmountAllowed(
     amountMinor: Long,
     readyToAssignMinor: Long,
-    heldMinor: Long,
-): Boolean = amountMinor > 0 && amountMinor != heldMinor && amountMinor <= readyToAssignMinor + heldMinor
+): Boolean = amountMinor > 0 && amountMinor <= readyToAssignMinor
 
 /** Scroll movement between two list positions in pixels; a change of item counts as a full threshold in that direction. */
 internal fun scrollStep(
