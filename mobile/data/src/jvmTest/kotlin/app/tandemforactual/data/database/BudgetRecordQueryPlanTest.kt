@@ -69,7 +69,7 @@ class BudgetRecordQueryPlanTest {
                 database.budgetRecordDao().observeCategoryMonthAggregates("b", null, null).first(),
             )
             assertEquals(
-                listOf(MonthlyIncomeSpendingAggregate("2026-02", 1_270, 354)),
+                listOf(MonthlyIncomeSpendingAggregate("2026-02", 1_265, 346)),
                 database.budgetRecordDao().observeMonthlyIncomeAndSpending("b", "2026-02-01", "2026-02-28").first(),
             )
         }

@@ -18,7 +18,7 @@ private const val REPORT_INCOME_CATEGORIES = """SELECT recordId FROM budget_reco
               ELSE 0
             END,
             0
-          ) = 1"""
+          ) != 0"""
 
 private const val REPORT_OFF_BUDGET_ACCOUNTS = """SELECT recordId FROM budget_records
         WHERE budgetId = :budgetId AND recordType = 'account' AND $REPORT_LIVE
@@ -28,7 +28,7 @@ private const val REPORT_OFF_BUDGET_ACCOUNTS = """SELECT recordId FROM budget_re
               ELSE 0
             END,
             0
-          ) = 1"""
+          ) != 0"""
 
 private const val REPORT_CATEGORY_IS_INCOME = "(tx.categoryId IN ($REPORT_INCOME_CATEGORIES))"
 
