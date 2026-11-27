@@ -97,6 +97,11 @@ struct WatchSummary: Codable, Equatable {
     let leftToSpendNegative: Bool?
     let toBudget: String?
     let toBudgetNegative: Bool?
+    let perDay: String?
+    let daysLeft: Int?
+    let perDayFirst: Bool?
+    let glanceBill: Bool?
+    let glanceCategories: Bool?
     let categories: [Category]?
     let bills: [Bill]?
     let quickAdd: QuickAdd?
@@ -112,6 +117,11 @@ struct WatchSummary: Codable, Equatable {
         case leftToSpendNegative = "lo"
         case toBudget = "r"
         case toBudgetNegative = "ro"
+        case perDay = "pd"
+        case daysLeft = "dl"
+        case perDayFirst = "pf"
+        case glanceBill = "gb"
+        case glanceCategories = "gc"
         case categories = "c"
         case bills = "u"
         case quickAdd = "q"
@@ -130,6 +140,33 @@ struct WatchSummary: Codable, Equatable {
     }
 
     var showsAmounts: Bool { state == .ready }
+
+    /// "$93.62 a day · 9 days left", or "$93.62 for today" on the month's last day; nil while amounts are hidden.
+    var perDayText: String? {
+        guard showsAmounts, let perDay, let daysLeft else { return nil }
+        return daysLeft == 1 ? "\(perDay) for today" : "\(perDay) a day · \(daysLeft) days left"
+    }
+
+    /// Whether the glance leads with the amount a day, as it does unless the iPhone is set to lead with the month.
+    var leadsWithPerDay: Bool { showsAmounts && perDayFirst != false && perDay != nil && daysLeft != nil }
+
+    var headlineLabel: String {
+        guard leadsWithPerDay, let daysLeft else { return "Left to spend" }
+        return daysLeft == 1 ? "Left for today" : "A day · \(daysLeft) days left"
+    }
+
+    var headlineAmount: String { amount(leadsWithPerDay ? perDay : leftToSpend) }
+
+    /// The bill the glance shows under the headline, when the iPhone is set to show one.
+    var glanceNextBill: Bill? { glanceBill == true && state != .locked ? bills?.first : nil }
+
+    var categoriesOnGlance: Bool { glanceCategories != false }
+
+    /// The headline's name where only a word or two fits, as on complications.
+    var headlineShort: String { leadsWithPerDay ? (daysLeft == 1 ? "Today" : "A day") : "Left to spend" }
+
+    var headlineSecondary: String? { leadsWithPerDay ? "\(amount(leftToSpend)) left this month" : perDayText }
+
     var canQuickAdd: Bool { quickAdd?.open == true && state != .none }
 
     /// An amount as the watch shows it: dots while amounts are hidden, a dash when it isn't known yet.

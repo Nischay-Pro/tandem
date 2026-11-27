@@ -65,8 +65,9 @@ private struct LeftToSpendComplicationView: View {
     @Environment(\.widgetFamily) private var family
     let summary: WatchSummary?
 
-    private var amount: String { summary?.amount(summary?.leftToSpend) ?? "–" }
+    private var amount: String { summary?.headlineAmount ?? "–" }
     private var locked: Bool { summary?.state != .ready && summary?.state != .hidden }
+    private var title: String { summary?.headlineShort ?? "Left to spend" }
 
     var body: some View {
         switch family {
@@ -85,7 +86,7 @@ private struct LeftToSpendComplicationView: View {
                 }
                 .padding(2)
             }
-            .accessibilityLabel("Left to spend \(amount)")
+            .accessibilityLabel("\(summary?.headlineLabel ?? title) \(amount)")
         case .accessoryCorner:
             Image(systemName: locked ? "lock.fill" : "cart")
                 .font(.title3)
@@ -95,10 +96,10 @@ private struct LeftToSpendComplicationView: View {
                         .privacySensitive()
                 }
         case .accessoryInline:
-            Text(locked ? "Tandem · Locked" : "\(amount) left")
+            Text(locked ? "Tandem · Locked" : "\(amount) \(summary?.leadsWithPerDay == true ? "a day" : "left")")
                 .privacySensitive()
         default:
-            RectangularSummary(title: "Left to spend", amount: amount, negative: summary?.leftToSpendNegative == true, summary: summary)
+            RectangularSummary(title: title, amount: amount, negative: summary?.leftToSpendNegative == true, summary: summary)
         }
     }
 }
