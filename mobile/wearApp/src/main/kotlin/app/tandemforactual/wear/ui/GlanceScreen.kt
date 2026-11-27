@@ -39,6 +39,7 @@ import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
+import app.tandemforactual.watch.WatchBill
 import app.tandemforactual.watch.WatchCategory
 import app.tandemforactual.watch.WatchState
 import app.tandemforactual.watch.WatchSummary
@@ -123,12 +124,7 @@ private fun GlanceScreen(
             }
             val nextBill = summary?.takeIf { it.nextBillOnGlance && it.state != WatchState.LOCKED }?.bills?.firstOrNull()
             if (summary != null && nextBill != null) {
-                item(key = "next-bill") {
-                    Panel(Modifier.transformedHeight(this, spec)) {
-                        LabelledRow("Next: ${nextBill.name}", WatchText.billAmount(summary, nextBill.amountMinor))
-                        Text(WatchText.billDate(nextBill.date), style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
-                    }
-                }
+                item(key = "next-bill") { NextBillPanel(summary, nextBill, Modifier.transformedHeight(this, spec)) }
             }
             summary?.categories?.takeIf { summary.categoriesOnGlance }?.forEach { category ->
                 item(key = category.id) {
@@ -183,6 +179,18 @@ private fun LeftToSpend(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NextBillPanel(
+    summary: WatchSummary,
+    bill: WatchBill,
+    modifier: Modifier,
+) {
+    Panel(modifier) {
+        LabelledRow("Next: ${bill.name}", WatchText.billAmount(summary, bill.amountMinor))
+        Text(WatchText.billDate(bill.date), style = MaterialTheme.typography.labelSmall, color = WearColors.muted)
     }
 }
 
