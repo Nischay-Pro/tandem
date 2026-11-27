@@ -2,10 +2,12 @@ package app.tandemforactual.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -26,7 +28,7 @@ import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
 import app.tandemforactual.ui.design.theme.ThemeMode
 import app.tandemforactual.ui.feature.onboarding.FirstSyncScreen
-import app.tandemforactual.ui.feature.settings.SettingsScreen
+import app.tandemforactual.ui.feature.settings.ConnectedServicesScreen
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,16 +89,19 @@ class ExternalConnectionsTest {
     }
 
     @Test
-    fun settingsListsTheSameConnections() {
+    fun connectedServicesPageListsTheSameConnections() {
         val state = AppState()
-        val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SettingsScreen(state, navigation, mobileSession)
+                ConnectedServicesScreen(state, navigation)
             }
         }
 
-        composeTestRule.onNodeWithText("Connections to other services").performScrollTo()
+        composeTestRule.onAllNodesWithText("What’s shared").assertCountEquals(2)
+        composeTestRule
+            .onNodeWithText(
+                "Tandem downloads each linked bank’s logo from that bank’s website. The bank can see that your device asked, but nothing about your budget.",
+            ).assertExists()
         composeTestRule
             .onNodeWithText("Show bank logos")
             .performScrollTo()
@@ -131,12 +136,11 @@ class ExternalConnectionsTest {
     }
 
     @Test
-    fun settingsTakesACustomRateServerOnlyWhenItsAddressIsUsable() {
+    fun connectedServicesPageTakesACustomRateServerOnlyWhenItsAddressIsUsable() {
         val state = AppState()
-        val mobileSession = session()
         composeTestRule.setContent {
             TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
-                SettingsScreen(state, navigation, mobileSession)
+                ConnectedServicesScreen(state, navigation)
             }
         }
 

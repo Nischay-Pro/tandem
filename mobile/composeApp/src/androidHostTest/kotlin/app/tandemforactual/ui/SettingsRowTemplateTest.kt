@@ -75,7 +75,7 @@ class SettingsRowTemplateTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Personalization").assertExists()
+        composeTestRule.onNodeWithText("General").assertExists()
         composeTestRule.onAllNodesWithText("Appearance").assertCountEquals(1)
         composeTestRule.onNodeWithText("Appearance").performClick()
 
@@ -111,7 +111,7 @@ class SettingsRowTemplateTest {
         }
 
         composeTestRule.onNodeWithText("Your data").performScrollTo().assertExists()
-        composeTestRule.onNodeWithText("Automatic backups, recovery and exports").assertExists()
+        composeTestRule.onNodeWithText("Backups, restore and exports").assertExists()
         composeTestRule.onNodeWithText("Export & backup").performScrollTo().performClick()
 
         assertEquals(AppRoute.EXPORT, openedRoute)

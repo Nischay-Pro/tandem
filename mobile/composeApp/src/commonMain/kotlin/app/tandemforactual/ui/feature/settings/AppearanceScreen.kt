@@ -138,7 +138,7 @@ internal fun AppearanceScreen(state: AppState) {
     }
 }
 
-private val ThemeMode.labelRes: StringResource
+internal val ThemeMode.labelRes: StringResource
     get() =
         when (this) {
             ThemeMode.SYSTEM -> Res.string.theme_mode_system
@@ -147,7 +147,7 @@ private val ThemeMode.labelRes: StringResource
             ThemeMode.PURE_BLACK -> Res.string.theme_mode_pure_black
         }
 
-private val AccentChoice.labelRes: StringResource
+internal val AccentChoice.labelRes: StringResource
     get() =
         when (this) {
             AccentChoice.ACTUAL_PURPLE -> Res.string.accent_tandem_violet
