@@ -159,11 +159,11 @@ jobs:
           - set: phone
             profiles: pixel_7
           - set: foldable-1-1
-            profiles: foldable_1_1 pixel_9_pro_fold
+            profiles: foldable_1_1|pixel_9_pro_fold|8in Foldable
           - set: foldable-4-3
-            profiles: foldable_4_3 pixel_fold
+            profiles: foldable_4_3|pixel_fold|7.6in Foldable
           - set: tablet
-            profiles: medium_tablet pixel_tablet
+            profiles: medium_tablet|pixel_tablet
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,10 +187,13 @@ jobs:
         env:
           PROFILES: ${{ matrix.profiles }}
         run: |
-          available="$(avdmanager list device -c)"
-          echo "$available" | tr '\n' ' '
+          avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          [[ -x "$avdmanager" ]] || avdmanager="$(command -v avdmanager)"
+          available="$("$avdmanager" list device -c)"
+          echo "$available" | tr '\n' ','
           echo
-          for candidate in $PROFILES; do
+          IFS='|' read -ra candidates <<<"$PROFILES"
+          for candidate in "${candidates[@]}"; do
             if grep -qx "$candidate" <<<"$available"; then
               echo "id=$candidate" >> "$GITHUB_OUTPUT"
               echo "Using $candidate"
