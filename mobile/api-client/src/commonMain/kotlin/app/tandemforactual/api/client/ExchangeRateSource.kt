@@ -1,6 +1,7 @@
 package app.tandemforactual.api.client
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -58,17 +59,15 @@ sealed class ExchangeRateException(
  * Rates from a Frankfurter v2 server (blended central-bank reference rates). [baseUrl] is the server's `/v2` address;
  * only the base currency, quote currencies and dates are sent.
  */
-class FrankfurterRateSource(
-    http: HttpClient,
-    baseUrl: String = DEFAULT_URL,
-) : ExchangeRateSource {
-    private val http =
-        http.config {
-            install(HttpTimeout) {
-                requestTimeoutMillis = TIMEOUT_MILLIS
-                connectTimeoutMillis = TIMEOUT_MILLIS
-            }
-        }
+class FrankfurterRateSource private constructor(
+    private val http: HttpClient,
+    baseUrl: String,
+    @Suppress("UNUSED_PARAMETER") configured: Unit,
+) : ExchangeRateSource,
+    AutoCloseable {
+    constructor(http: HttpClient, baseUrl: String = DEFAULT_URL) : this(http.config { limits() }, baseUrl, Unit)
+
+    override fun close() = http.close()
 
     private val root = address(baseUrl) ?: throw ExchangeRateException.InvalidAddress()
 
@@ -168,7 +167,14 @@ class FrankfurterRateSource(
         private fun normalized(code: String) = code.trim().uppercase()
 
         /** A source using the platform's HTTP engine; a blank [baseUrl] means Frankfurter's public server. */
-        fun connect(baseUrl: String = DEFAULT_URL) = FrankfurterRateSource(HttpClient(), baseUrl.ifBlank { DEFAULT_URL })
+        fun connect(baseUrl: String = DEFAULT_URL) = FrankfurterRateSource(HttpClient { limits() }, baseUrl.ifBlank { DEFAULT_URL }, Unit)
+
+        private fun HttpClientConfig<*>.limits() {
+            install(HttpTimeout) {
+                requestTimeoutMillis = TIMEOUT_MILLIS
+                connectTimeoutMillis = TIMEOUT_MILLIS
+            }
+        }
 
         /** The server address [baseUrl] names, without a trailing slash, or null when it isn't one Tandem would use. */
         fun address(baseUrl: String): String? =

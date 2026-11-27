@@ -83,6 +83,17 @@ class AutomaticBackupWorker(
         val storedSession =
             AndroidDeviceCredentialStore(applicationContext).read() ?: return AutomaticBackupResult.skipped(BackupProblem.SIGNED_OUT)
         val client = TandemApiClient(allowInsecurePrivateNetwork = true, budgetFiles = sealedBudgetFiles(applicationContext))
+        return client.use { attemptWith(it, settings, budgetId, storedSession, database, progress) }
+    }
+
+    private suspend fun attemptWith(
+        client: TandemApiClient,
+        settings: AutomaticBackupSettings,
+        budgetId: String,
+        storedSession: String,
+        database: TandemDatabase,
+        progress: BackupProgress,
+    ): AutomaticBackupResult {
         progress.show(0)
         client.restoreStoredSession(storedSession)
         val budget =
@@ -169,10 +180,11 @@ class AutomaticBackupWorker(
         val password =
             runCatching { AndroidDeviceCredentialStore(applicationContext, BACKUP_WEBDAV_STORE).read() }.getOrNull()
                 ?: throw BackupProblemException(BackupProblem.WEBDAV_PASSWORD)
-        val dav = WebDavClient.connect(url, settings.webDavUser.orEmpty(), password)
-        dav.check()
-        AutomaticBackups.saveCompletely(name, { dav.upload(it, bytes) }, dav::move, dav::delete)
-        AutomaticBackups.toDelete(dav.list(), budgetName, budgetId, settings.keep).forEach { dav.delete(it) }
+        WebDavClient.connect(url, settings.webDavUser.orEmpty(), password).use { dav ->
+            dav.check()
+            AutomaticBackups.saveCompletely(name, { dav.upload(it, bytes) }, dav::move, dav::delete)
+            AutomaticBackups.toDelete(dav.list(), budgetName, budgetId, settings.keep).forEach { dav.delete(it) }
+        }
     }
 
     private fun networkAllows(network: SyncNetwork): Boolean {

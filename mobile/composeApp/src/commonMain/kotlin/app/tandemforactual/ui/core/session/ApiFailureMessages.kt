@@ -24,6 +24,7 @@ internal fun apiFailureMessage(
         "server_unavailable" -> "The Actual server isn’t responding right now. Try again shortly."
         "rate_limited" -> "The Actual server is busy. Wait a moment and try again."
         "tandem_not_ready" -> "Tandem is starting up. Try again in a moment."
+        "server_timeout" -> "The Actual server took too long to answer. Try again."
         "tandem_route_unavailable" ->
             "Tandem isn’t available here. Check the server address."
         "invalid_credentials" -> "That password doesn’t match this Actual server. Check the password."
