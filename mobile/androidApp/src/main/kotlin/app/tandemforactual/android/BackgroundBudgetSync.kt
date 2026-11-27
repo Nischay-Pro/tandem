@@ -101,9 +101,7 @@ class BackgroundBudgetSyncWorker(
             val sessionClient =
                 TandemApiClient(
                     allowInsecurePrivateNetwork = true,
-                    budgetFiles =
-                        app.tandemforactual.data.database
-                            .AndroidActualBudgetFiles(applicationContext),
+                    budgetFiles = sealedBudgetFiles(applicationContext),
                 )
             apiClient = sessionClient
             val authenticatedDevice = sessionClient.restoreStoredSession(storedSession)

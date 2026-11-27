@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.IntSize
 import app.tandemforactual.ui.app.AppHeader
 import app.tandemforactual.ui.app.isLandscapeViewport
 import app.tandemforactual.ui.app.usesRailNavigation
+import app.tandemforactual.ui.core.security.hidesContentInAppSwitcher
 import app.tandemforactual.ui.core.session.budget.budgetMutationsWaitingForConnection
 import app.tandemforactual.ui.core.session.budget.pendingBudgetMutationCount
 import app.tandemforactual.ui.core.session.shouldShowBudgetCreateAction
@@ -63,8 +64,10 @@ internal fun ShellFrame(
         state.theme == ThemeMode.DARK ||
             state.theme == ThemeMode.PURE_BLACK ||
             (state.theme == ThemeMode.SYSTEM && isSystemInDarkTheme())
+    val hideInAppSwitcher = hidesContentInAppSwitcher(state.biometricLockEnabled, state.privacyModeEnabled, state.selectedBudgetEncrypted)
     SideEffect {
         ctx.env.onSystemAppearanceChanged?.invoke(isDark, state.theme == ThemeMode.SYSTEM)
+        ctx.env.onAppSwitcherPrivacyChanged?.invoke(hideInAppSwitcher)
     }
     TandemSystemBars(isDark, palette.background)
     TandemBackHandler(
