@@ -151,7 +151,7 @@ class GoalTemplateEngine(
         start: Long,
     ) {
         var available = start
-        for (priority in contexts.flatMap { it.priorities }.toSortedSet()) {
+        for (priority in contexts.flatMap { it.priorities }.distinct().sorted()) {
             val availableAtStart = available
             contexts.forEach { available -= it.runPriority(priority, available, availableAtStart) }
         }
