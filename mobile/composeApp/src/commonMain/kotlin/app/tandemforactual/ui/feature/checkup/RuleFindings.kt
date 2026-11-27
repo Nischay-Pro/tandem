@@ -161,7 +161,13 @@ internal fun RuleFindingDialog(
             SeverityLabel(shown.severity)
             Text(shown.explanation(), color = tandemPalette.text, fontSize = TandemTypography.compactBody)
             (listOf(shown.ruleId) + shown.related).forEachIndexed { index, id ->
-                RuleCard(rules[id], label = if (shown.related.isEmpty()) null else if (index == 0) "First rule" else "Rule ${index + 1}") {
+                val label =
+                    when {
+                        shown.related.isEmpty() -> null
+                        index == 0 -> "First rule"
+                        else -> "Rule ${index + 1}"
+                    }
+                RuleCard(rules[id], label = label) {
                     onEdit(id)
                 }
             }
