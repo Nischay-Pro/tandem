@@ -97,7 +97,10 @@ internal fun BudgetEditQueue.accountNameOverridesFor(budgetId: String): Map<Stri
 internal fun BudgetEditQueue.categoryNoteOverridesFor(budgetId: String): Map<String, String> =
     budgetReorderQueue.moves
         .filter { it.budgetId == budgetId && it.kind == BudgetReorderKind.SET_CATEGORY_NOTE }
-        .associate { it.itemId to (it.payloadJson?.let(::parseQueuePayload)?.stringValue("note").orEmpty()) }
+        .associate { move ->
+            val payload = move.payloadJson?.let(::parseQueuePayload)
+            move.itemId to payload?.stringValue("note").orEmpty()
+        }
 
 internal fun BudgetEditQueue.accountClosedOverridesFor(budgetId: String): Map<String, Boolean> =
     budgetReorderQueue.moves
