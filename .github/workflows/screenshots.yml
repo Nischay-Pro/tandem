@@ -155,6 +155,8 @@ jobs:
           test -d "$RUNNER_TEMP/TandemForActual.app"
 
       - name: Capture Apple Watch screenshots
+        env:
+          DEMO_SUMMARY: '{"v":1,"s":"ready","g":1795255200000,"k":"demo","b":"Demo household","y":1795255200000,"l":"$842.65","lo":false,"r":"$125.00","ro":false,"c":[{"i":"groceries","n":"Groceries","l":"$181.70","o":false,"p":70,"bu":"$600.00","sp":"$418.30","x":[{"n":"Corner Market","a":"$64.20","d":"2026-11-19"},{"n":"Fresh Fields","a":"$31.15","d":"2026-11-17"}]},{"i":"dining","n":"Dining out","l":"$24.50","o":true,"p":100,"bu":"$200.00","sp":"$224.50"},{"i":"fuel","n":"Fuel","l":"$84.00","o":false,"p":53,"bu":"$180.00","sp":"$96.00"},{"i":"fun","n":"Fun money","l":"$65.00","o":false,"p":35,"bu":"$100.00","sp":"$35.00"}],"u":[{"n":"Internet","d":"2026-11-24","a":"$60.00"},{"n":"Phone","d":"2026-11-28","a":"$45.00"},{"n":"Rent","d":"2026-12-01","a":"$1,650.00"}],"q":{"on":true,"f":2,"a":[{"i":"checking","n":"Everyday checking"}],"p":["Corner Market","Bean There","City Transit"],"k":[{"i":"phone","n":"Phone"},{"i":"coffee","n":"Coffee"}]}}'
         run: |
           watch_app="$RUNNER_TEMP/TandemForActual.app/Watch/TandemWatch.app"
           bundle="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$watch_app/Info.plist")"
@@ -165,7 +167,6 @@ jobs:
             echo "::notice::No watchOS simulator runtime on this runner image; skipping Apple Watch screenshots."
             exit 0
           fi
-          summary="$(jq -c . < scripts/screenshots/watch-demo-summary.json)"
           pick() {
             xcrun simctl list devicetypes -j | python3 -c 'import json,re,sys; t=[d for d in json.load(sys.stdin)["devicetypes"] if re.search(sys.argv[1], d["name"])]; print(t[-1]["identifier"] if t else "")' "$1"
           }
@@ -178,7 +179,7 @@ jobs:
             xcrun simctl install "$udid" "$watch_app"
             for screen in glance bills add; do
               xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1 || true
-              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SUMMARY="$summary" \
+              SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SUMMARY="$DEMO_SUMMARY" \
               SIMCTL_CHILD_TANDEM_SCREENSHOT_WATCH_SCREEN="$screen" \
                 xcrun simctl launch "$udid" "$bundle"
               sleep 15
