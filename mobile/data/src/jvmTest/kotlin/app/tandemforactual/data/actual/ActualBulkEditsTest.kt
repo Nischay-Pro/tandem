@@ -139,10 +139,22 @@ class ActualBulkEditsTest {
             submit(first, "update", more, target(first).body, group = "three")
             repeat(11 * 60) { clock() }
             submit(second, "update", more, target(second).body, group = "three")
-            assertEquals(1, history.recent().first().rows.size)
+            assertEquals(
+                1,
+                history
+                    .recent()
+                    .first()
+                    .rows.size,
+            )
             submit(first, "update", notes, target(first).body)
             submit(second, "update", notes, target(second).body, group = "three")
-            assertEquals(1, history.recent().first().rows.size)
+            assertEquals(
+                1,
+                history
+                    .recent()
+                    .first()
+                    .rows.size,
+            )
         }
 
     @Test
@@ -154,7 +166,12 @@ class ActualBulkEditsTest {
             val line = target(records.first { it.body.value("parentId") == split.id }.id)
             val value = !(line.parent!!.body.value("cleared") as Boolean)
             val plan = planBulkEdit(listOf(line), BulkTransactionEdit.SetCleared(value))
-            assertEquals(split.id, plan.changes.single().first.id)
+            assertEquals(
+                split.id,
+                plan.changes
+                    .single()
+                    .first.id,
+            )
             apply(plan.changes)
             val lines = reader.transaction(split.id)?.get("subtransactions") as JsonArray
             assertTrue(lines.all { (it as JsonObject)["cleared"] == JsonPrimitive(value) })
@@ -243,6 +260,12 @@ class ActualBulkEditsTest {
             submit(plan.drop.id, "delete", JsonObject(emptyMap()), plan.drop.body, group = "merge")
             assertEquals(JsonPrimitive("from receipt"), reader.transaction(other)?.get("notes"))
             assertNull(reader.transaction(manual))
-            assertEquals(2, history.recent().first().rows.size)
+            assertEquals(
+                2,
+                history
+                    .recent()
+                    .first()
+                    .rows.size,
+            )
         }
 }

@@ -158,8 +158,7 @@ fun noteTagName(tag: String): String? =
     tag.trim().removePrefix("#").takeIf { name -> name.isNotEmpty() && name.none { it == '#' || it.isWhitespace() } }
 
 /** The tags in [notes], as Actual reads them: `#` followed by anything but spaces and another `#`. */
-fun noteTags(notes: String?): List<String> =
-    Regex("(?<!#)#([^#\\s]+)").findAll(notes.orEmpty()).map { it.groupValues[1] }.toList()
+fun noteTags(notes: String?): List<String> = Regex("(?<!#)#([^#\\s]+)").findAll(notes.orEmpty()).map { it.groupValues[1] }.toList()
 
 /** How two transactions merge: the one kept, the one removed, and what the kept one takes from the other. */
 data class BulkMergePlan(
@@ -244,7 +243,11 @@ fun bulkIdempotencyKey(
 
 /** The bulk action a write belongs to, or null for a write made on its own. */
 fun bulkGroupOf(idempotencyKey: String): String? =
-    idempotencyKey.takeIf { it.startsWith(BULK_KEY_PREFIX) }?.removePrefix(BULK_KEY_PREFIX)?.substringBefore(':', "")?.ifEmpty { null }
+    idempotencyKey
+        .takeIf { it.startsWith(BULK_KEY_PREFIX) }
+        ?.removePrefix(BULK_KEY_PREFIX)
+        ?.substringBefore(':', "")
+        ?.ifEmpty { null }
 
 private fun JsonObject.isSplit() = flag("isParent") || (this["subtransactions"] as? JsonArray)?.isNotEmpty() == true
 

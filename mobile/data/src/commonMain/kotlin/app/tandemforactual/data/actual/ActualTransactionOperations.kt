@@ -65,8 +65,7 @@ class ActualTransactionOperations(
         patch: JsonObject,
         baseSnapshot: JsonObject?,
         group: String? = null,
-    ): OperationOutcome =
-        find(operationId) ?: writer.inGroup(group) { submitNow(operationId, transactionId, action, patch, baseSnapshot) }
+    ): OperationOutcome = find(operationId) ?: writer.inGroup(group) { submitNow(operationId, transactionId, action, patch, baseSnapshot) }
 
     private fun submitNow(
         operationId: String,

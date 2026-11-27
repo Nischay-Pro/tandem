@@ -109,7 +109,7 @@ class BulkTransactionEditsTest {
         assertEquals("k", plan.keep.id)
         assertEquals("m", plan.drop.id)
         assertEquals(
-            mapOf("payee" to JsonPrimitive("cafe"), "notes" to JsonPrimitive("receipt"), "cleared" to JsonPrimitive(true)),
+            JsonObject(mapOf("payee" to JsonPrimitive("cafe"), "notes" to JsonPrimitive("receipt"), "cleared" to JsonPrimitive(true))),
             plan.keepFields,
         )
         val file = target("f", """"amount":-500,"importedPayee":"CAFE 123"""")
