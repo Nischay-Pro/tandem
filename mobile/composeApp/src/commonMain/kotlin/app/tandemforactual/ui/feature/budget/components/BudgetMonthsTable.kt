@@ -39,6 +39,8 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LiveCategoryGroupSummary
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.isTrackingBudget
+import app.tandemforactual.ui.design.buttons.SegmentedSelector
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.PrivacyAmountText
@@ -52,11 +54,15 @@ import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemMotionSpec
 import app.tandemforactual.ui.design.theme.tandemPalette
 import app.tandemforactual.ui.design.theme.tandemReduceMotion
+import app.tandemforactual.ui.feature.budget.BudgetEquation
 import app.tandemforactual.ui.feature.budget.BudgetMonthLabelWidth
 import app.tandemforactual.ui.feature.budget.BudgetMonthsView
+import app.tandemforactual.ui.feature.budget.EquationTerm
+import app.tandemforactual.ui.feature.budget.budgetEquation
 import app.tandemforactual.ui.feature.budget.grid.BudgetGridCell
 import app.tandemforactual.ui.feature.budget.grid.GridCellContext
 import app.tandemforactual.ui.feature.budget.grid.GridKey
+import app.tandemforactual.ui.feature.budget.grid.GridValue
 import app.tandemforactual.ui.feature.budget.grid.balanceColor
 import kotlin.math.abs
 
@@ -83,7 +89,10 @@ internal fun LazyListScope.budgetMonthsTableItems(
 
 /** Switches the budget between one month and several side by side. */
 @Composable
-internal fun BudgetMonthsToggle(months: BudgetMonthsView) {
+internal fun BudgetMonthsToggle(
+    months: BudgetMonthsView,
+    state: AppState,
+) {
     SurfaceCard {
         ToggleRow(
             "Months side by side",
@@ -91,7 +100,31 @@ internal fun BudgetMonthsToggle(months: BudgetMonthsView) {
             checked = months.enabled,
             onChange = months.onEnabledChange,
         )
+        if (months.sideBySide) {
+            SegmentedSelector(GridValue.entries.map { it.label to (it == months.grid.value) }) { months.grid.value = GridValue.entries[it] }
+            months.summary(state.selectedMonthId)?.let { budgetEquation(it, state.isTrackingBudget) }?.let { BudgetEquationText(state, it) }
+        }
     }
+}
+
+/** The selected month's figures written out as the sum that gives its result. */
+@Composable
+private fun BudgetEquationText(
+    state: AppState,
+    equation: BudgetEquation,
+) {
+    fun amount(term: EquationTerm) = if (state.privacyModeEnabled) "•••" else state.formatCurrency(term.minor)
+    val sum =
+        equation.terms.mapIndexed { index, term ->
+            val sign = if (term.subtract) "− " else if (index > 0) "+ " else ""
+            "$sign${term.label} ${amount(term)}"
+        }
+    Text(
+        (sum + "= ${equation.result.label} ${amount(equation.result)}").joinToString("  "),
+        Modifier.padding(horizontal = TandemLayout.listRowHorizontalInset, vertical = TandemSpacing.small),
+        color = tandemPalette.muted,
+        fontSize = TandemTypography.caption,
+    )
 }
 
 @Composable
@@ -170,9 +203,9 @@ private fun RowScope.BudgetMonthHeaderCell(
             }
         }
         Row {
-            listOf("Budgeted", "Spent", "Balance").forEach { column ->
+            months.grid.value.columns.forEach { column ->
                 Text(
-                    column,
+                    column.label,
                     Modifier.weight(1f),
                     color = palette.muted,
                     fontSize = TandemTypography.caption,
@@ -203,7 +236,7 @@ private fun BudgetMonthsGroupCard(
         BudgetMonthsRow(months, group.name, FontWeight.SemiBold, false, nameMonth, openGroup) { monthId ->
             BudgetMonthsTappableCell(group.name, monthId, openGroup) {
                 val month = months.group(monthId, group.id)
-                BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+                BudgetMonthAmounts(state, months.grid.value, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
             }
         }
         group.categories.forEach { category ->
@@ -219,7 +252,7 @@ private fun BudgetMonthsGroupCard(
                 if (group.isIncome) {
                     BudgetMonthsTappableCell(category.name, monthId, openCategory) {
                         val month = months.category(monthId, category.id)
-                        BudgetMonthAmounts(state, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
+                        BudgetMonthAmounts(state, months.grid.value, month?.assignedMinor, month?.activityMinor, month?.balanceMinor)
                     }
                 } else {
                     val key = GridKey(category.id, monthId)
@@ -296,14 +329,22 @@ private fun RowScope.BudgetMonthsTappableCell(
 @Composable
 private fun RowScope.BudgetMonthAmounts(
     state: AppState,
+    value: GridValue,
     assignedMinor: Long?,
     activityMinor: Long?,
     balanceMinor: Long?,
 ) {
     val palette = tandemPalette
-    BudgetMonthAmount(state, assignedMinor, palette.muted, FontWeight.Normal)
-    BudgetMonthAmount(state, activityMinor?.let { abs(it) }, palette.muted, FontWeight.Normal)
-    BudgetMonthAmount(state, balanceMinor, if (balanceMinor != null) balanceColor(balanceMinor) else palette.muted, FontWeight.SemiBold)
+    value.columns.forEach { column ->
+        when (column) {
+            GridValue.SPENT -> BudgetMonthAmount(state, activityMinor?.let { abs(it) }, palette.muted, FontWeight.Normal)
+            GridValue.BALANCE -> {
+                val tint = if (balanceMinor != null) balanceColor(balanceMinor) else palette.muted
+                BudgetMonthAmount(state, balanceMinor, tint, FontWeight.SemiBold)
+            }
+            else -> BudgetMonthAmount(state, assignedMinor, palette.muted, FontWeight.Normal)
+        }
+    }
 }
 
 @Composable

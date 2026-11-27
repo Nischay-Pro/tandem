@@ -120,17 +120,25 @@ private fun BoxScope.BudgetGridCellContent(
     editing: Boolean,
 ) {
     val amounts = context.data.amounts(key)
+    val balanceTint = amounts?.balance?.let { balanceColor(it) } ?: tandemPalette.muted
     Row(
         Modifier.fillMaxSize().padding(horizontal = TandemSpacing.small, vertical = TandemSpacing.extraSmall),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (editing) {
-            BudgetGridEditor(context, Modifier.weight(1f))
-        } else {
-            GridAmountText(context.state, amounts?.budgeted, tandemPalette.text, pending = amounts?.pending == true)
+        val value = context.grid.value
+        val columns = if (editing && value != GridValue.ALL) listOf(GridValue.BUDGETED) else value.columns
+        columns.forEach { column ->
+            when (column) {
+                GridValue.SPENT -> GridAmountText(context.state, amounts?.spent, tandemPalette.muted)
+                GridValue.BALANCE -> GridAmountText(context.state, amounts?.balance, balanceTint, bold = true)
+                else ->
+                    if (editing) {
+                        BudgetGridEditor(context, Modifier.weight(1f))
+                    } else {
+                        GridAmountText(context.state, amounts?.budgeted, tandemPalette.text, pending = amounts?.pending == true)
+                    }
+            }
         }
-        GridAmountText(context.state, amounts?.spent, tandemPalette.muted)
-        GridAmountText(context.state, amounts?.balance, amounts?.balance?.let { balanceColor(it) } ?: tandemPalette.muted, bold = true)
     }
     if (amounts != null) GridSpendingBar(amounts, Modifier.align(Alignment.BottomCenter))
 }

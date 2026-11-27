@@ -41,6 +41,7 @@ internal data class LiveBudgetMonthSummary(
     val heldForNextMonthMinor: Long? = null,
     val heldForNextMonthPending: Boolean = false,
     val totalIncomeMinor: Long? = null,
+    val lastMonthOverspentMinor: Long? = null,
 )
 
 internal fun BudgetRecordEntity.recordBody(): JsonObject? {
@@ -209,6 +210,7 @@ private class LiveBudgetMonthBuilder(
             heldForNextMonthMinor = heldForNextMonthOverride ?: month.longValue("forNextMonth"),
             heldForNextMonthPending = heldForNextMonthPending,
             totalIncomeMinor = month.longValue("totalIncome"),
+            lastMonthOverspentMinor = month.longValue("lastMonthOverspent"),
         )
     }
 
