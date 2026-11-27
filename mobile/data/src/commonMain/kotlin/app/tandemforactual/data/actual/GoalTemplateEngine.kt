@@ -112,6 +112,26 @@ class GoalTemplateEngine(
             contexts.map { it.values() }.let { GoalTemplateOutcome(it.size, emptyList(), it) }
         }
 
+    /** The category's templates, what they ask for in [month], and the goal Actual shows for it. */
+    fun status(
+        month: String,
+        categoryId: String,
+    ): GoalTemplateStatus {
+        val templates = templates()[categoryId].orEmpty()
+        val table = if (tracking) "reflect_budgets" else "zero_budgets"
+        val row = db.first("SELECT goal, long_goal FROM $table WHERE month = ? AND category = ?", ActualMonths.dbMonth(month), categoryId)
+        val preview = if (templates.isEmpty()) null else preview(month, true, listOf(categoryId))
+        val values = preview?.values?.firstOrNull()
+        val stored = (row?.get("goal") as Number?)?.toLong()
+        return GoalTemplateStatus(
+            templates,
+            values?.budgeted,
+            stored ?: values?.goal,
+            if (stored != null) truthy(row?.get("long_goal")) else values?.longGoal == true,
+            preview?.errors.orEmpty(),
+        )
+    }
+
     /** `computeTemplates`: every category's amount for [month]; [force] also refills categories that already have one. */
     internal fun compute(
         month: String,

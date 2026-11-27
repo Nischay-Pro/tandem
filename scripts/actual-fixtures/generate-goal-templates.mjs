@@ -634,11 +634,18 @@ async function recordLines() {
   const { data } = await api.aqlQuery(
     api.q("categories").select(["id", "goal_def"]),
   );
-  return lines.map((line, i) => {
+  const recorded = [];
+  for (const [i, line] of lines.entries()) {
     const templates = JSON.parse(data.find((c) => c.id === ids[i]).goal_def);
     const t = templates?.[0] ?? null;
-    return { line, template: t?.type === "error" ? { type: "error" } : t };
-  });
+    if (t === null || t.type === "error") {
+      recorded.push({ line, template: t && { type: "error" } });
+    } else {
+      const rendered = await send("budget/render-note-templates", [t]);
+      recorded.push({ line, template: t, rendered });
+    }
+  }
+  return recorded;
 }
 
 const splits = [];
