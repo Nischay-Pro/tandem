@@ -57,7 +57,7 @@ data class AssistantTransaction(
             }
         val signed = text.firstOrNull()?.takeIf { it in "+-−" }?.let { if (it == '+') "+" else "-" }
         if (signed != null && signed != sign) {
-            throw AutomationException(AutomationErrorCode.AMOUNT, "The amount's sign and direction disagree.")
+            throw AutomationException(AutomationErrorCode.AMOUNT, "The amount’s sign and direction disagree.")
         }
         return if (signed == null) sign + text else text
     }
