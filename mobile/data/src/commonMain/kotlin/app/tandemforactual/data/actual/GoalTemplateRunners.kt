@@ -86,9 +86,7 @@ internal class GoalTemplateRunners(
                 "all income" -> budget.value(month, "total-income")
                 "available funds" -> availStart
                 else -> {
-                    val source =
-                        incomeCategories(budget.db).firstOrNull { it.id == template.category || it.name.lowercase() == name }
-                            ?: throw GoalTemplateException("Income category \"${template.category}\" not found for percentage template")
+                    val source = incomeCategories(budget.db).first { it.id == template.category || it.name.lowercase() == name }
                     budget.value(month, "sum-amount-${source.id}")
                 }
             }

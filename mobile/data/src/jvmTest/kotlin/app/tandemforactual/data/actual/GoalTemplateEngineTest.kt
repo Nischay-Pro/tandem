@@ -65,4 +65,38 @@ class GoalTemplateEngineTest {
             goalTemplatesFromNote("#template average 2 months [increase 1000.5%]")[0].error,
         )
     }
+
+    @Test
+    fun aScheduleWithoutItsRuleOrAmountIsReported() {
+        val f = parity.fixture("editor")
+        val rule = f.db.first("SELECT rule FROM schedules WHERE name = 'Phone bill'")!!["rule"]
+        f.db.execute("UPDATE rules SET conditions = ? WHERE id = ?", """[{"op":"isapprox","field":"date","value":"2026-12-10"}]""", rule)
+        assertEquals("Schedule Phone bill has no amount", assertFailsWith<GoalTemplateException> { phonePreview(f) }.message)
+        f.db.execute("DELETE FROM rules WHERE id = ?", rule)
+        assertEquals("Schedule Phone bill has no rule", assertFailsWith<GoalTemplateException> { phonePreview(f) }.message)
+    }
+
+    @Test
+    fun aScheduleWithoutADateAddsNothing() {
+        val f = parity.fixture("editor")
+        val rule = f.db.first("SELECT rule FROM schedules WHERE name = 'Phone bill'")!!["rule"]
+        f.db.execute("UPDATE rules SET conditions = ? WHERE id = ?", """[{"op":"is","field":"amount","value":-4500}]""", rule)
+        assertEquals(0L, phonePreview(f).values.single().budgeted)
+    }
+
+    @Test
+    fun aYearlyScheduleIsSpreadOverItsYear() {
+        val f = parity.fixture("editor")
+        val rule = f.db.first("SELECT rule FROM schedules WHERE name = 'Phone bill'")!!["rule"]
+        f.db.execute(
+            "UPDATE rules SET conditions = ? WHERE id = ?",
+            """[{"op":"isapprox","field":"date","value":{"frequency":"yearly","start":"2027-05-20","interval":1,"endMode":"never"}},""" +
+                """{"op":"is","field":"amount","value":-1200}]""",
+            rule,
+        )
+        f.edits.setBudgetAmount(f.id("Phone"), "2026-10", 100_000)
+        assertEquals(100L, phonePreview(f).values.single().budgeted)
+    }
+
+    private fun phonePreview(f: GoalTemplateParityTest.Fixture) = f.engine().preview("2026-11", force = true, listOf(f.id("Phone")))
 }

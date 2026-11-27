@@ -81,11 +81,13 @@ internal class GoalScheduleTemplates(
     /** `createScheduleList` for one template: null for a schedule that is completed or already past. */
     private fun target(template: GoalTemplate): Target? {
         val row =
-            if (template.scheduleId != null) {
-                budget.db.first("SELECT id, rule, completed FROM schedules WHERE id = ? AND tombstone = 0", template.scheduleId)
-            } else {
-                budget.db.first("SELECT id, rule, completed FROM schedules WHERE TRIM(name) = ? AND tombstone = 0", template.name)
-            } ?: throw GoalTemplateException("Schedule ${template.name ?: template.scheduleId} does not exist")
+            checkNotNull(
+                if (template.scheduleId != null) {
+                    budget.db.first("SELECT id, rule, completed FROM schedules WHERE id = ? AND tombstone = 0", template.scheduleId)
+                } else {
+                    budget.db.first("SELECT id, rule, completed FROM schedules WHERE TRIM(name) = ? AND tombstone = 0", template.name)
+                },
+            )
         val rule =
             ActualRules.load(budget.db.query("SELECT * FROM rules WHERE id = ?", row["rule"]), emptyMap()).firstOrNull()
                 ?: throw GoalTemplateException("Schedule ${template.name} has no rule")

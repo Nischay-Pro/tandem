@@ -116,7 +116,7 @@ class GoalTemplateEngine(
     internal fun compute(
         month: String,
         force: Boolean,
-        categoryIds: Collection<String>? = null,
+        categoryIds: Collection<String>?,
     ): Computed {
         val budget =
             GoalTemplateBudget(db, month, ActualMonths.fromIsoDate(today), tracking, ActualBudgetReader(db).budgetCells(today, tracking))

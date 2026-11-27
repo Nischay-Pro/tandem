@@ -74,8 +74,7 @@ internal class GoalTemplateContext(
     private var limitMet = false
     var limitExcess = 0L
         private set
-    var limitAmount = 0L
-        private set
+    private var limitAmount = 0L
     private var limitCheck = false
 
     init {
