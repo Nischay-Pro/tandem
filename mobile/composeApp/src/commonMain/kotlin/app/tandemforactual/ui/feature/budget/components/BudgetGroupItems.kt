@@ -59,7 +59,8 @@ internal fun LazyListScope.budgetGroupItems(
         }
     val categoriesById = group.categories.associateBy { it.id }
     val orderedCategories =
-        categoryOrderIds.mapNotNull(categoriesById::get) + group.categories.filterNot { it.id in categoryOrderIds }
+        (categoryOrderIds.mapNotNull(categoriesById::get) + group.categories.filterNot { it.id in categoryOrderIds })
+            .filterNot { state.budgetHideSpentCategories && reorder.selectedCategoryGroupId != group.id && isFullySpent(group, it) }
     item(key = "$groupSectionKey:section") {
         BudgetGroupCard(
             group = group,
@@ -77,6 +78,12 @@ internal fun LazyListScope.budgetGroupItems(
         }
     }
 }
+
+/** A spending category whose money this month has all gone, leaving nothing over and nothing overspent. */
+internal fun isFullySpent(
+    group: LiveCategoryGroupSummary,
+    category: LiveCategorySummary,
+): Boolean = !group.isIncome && category.balanceMinor == 0L && category.activityMinor != 0L
 
 @Composable
 private fun LazyItemScope.BudgetCategoryItem(

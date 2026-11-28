@@ -35,6 +35,7 @@ import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.ChartNoAxesColumn
 import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.CloudSync
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.GripVertical
@@ -42,7 +43,9 @@ import com.composables.icons.lucide.Hash
 import com.composables.icons.lucide.Landmark
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Palette
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Sigma
 
 /** Overflow menu on the budget header: lock, switch budget, amount style and privacy. */
 @Composable
@@ -69,6 +72,17 @@ internal fun BudgetHeaderMenu(
         HeaderMenuChoice(Lucide.ChartNoAxesColumn, "Progress bars", selected = state.budgetShowProgressBars, onClick = {
             state.budgetShowProgressBars = true
             onDismiss()
+        })
+        HeaderMenuDivider()
+        HeaderMenuLabel("Show")
+        HeaderMenuChoice(Lucide.CircleCheck, "Fully spent categories", selected = !state.budgetHideSpentCategories, onClick = {
+            state.budgetHideSpentCategories = !state.budgetHideSpentCategories
+        })
+        HeaderMenuChoice(Lucide.Palette, "Status colours", selected = state.budgetStatusColors, onClick = {
+            state.budgetStatusColors = !state.budgetStatusColors
+        })
+        HeaderMenuChoice(Lucide.Sigma, "Group totals", selected = state.budgetGroupTotals, onClick = {
+            state.budgetGroupTotals = !state.budgetGroupTotals
         })
         HeaderMenuDivider()
         HeaderMenuLabel("Privacy")

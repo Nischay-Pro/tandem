@@ -130,6 +130,15 @@ internal class AppState {
     var homeLayout by mutableStateOf("Comfortable")
     var budgetShowProgressBars by mutableStateOf(false)
 
+    /** Whether the budget leaves out categories whose money has all been spent this month. */
+    var budgetHideSpentCategories by mutableStateOf(false)
+
+    /** Whether category amounts are green or red for what's left or overspent; plain text when off. */
+    var budgetStatusColors by mutableStateOf(true)
+
+    /** Whether each category group's header shows its totals. */
+    var budgetGroupTotals by mutableStateOf(true)
+
     /** The sort the accounts are in right now, or null after they were arranged by hand. */
     var accountsActiveSort by mutableStateOf<AccountSort?>(null)
     var privacyModeEnabled by mutableStateOf(false)
@@ -291,6 +300,9 @@ internal class AppState {
             "workspace" to workspace.encode(),
             "homeLayout" to homeLayout,
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
+            "budgetHideSpentCategories" to budgetHideSpentCategories.toString(),
+            "budgetStatusColors" to budgetStatusColors.toString(),
+            "budgetGroupTotals" to budgetGroupTotals.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
             "hideAmountsGesture" to hideAmountsGesture.toString(),
@@ -364,6 +376,9 @@ internal class AppState {
         workspace = saved["workspace"]?.let(Workspace::decode) ?: workspace
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
+        budgetHideSpentCategories = saved["budgetHideSpentCategories"]?.toBooleanStrictOrNull() ?: budgetHideSpentCategories
+        budgetStatusColors = saved["budgetStatusColors"]?.toBooleanStrictOrNull() ?: budgetStatusColors
+        budgetGroupTotals = saved["budgetGroupTotals"]?.toBooleanStrictOrNull() ?: budgetGroupTotals
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
         hideAmountsGesture = saved["hideAmountsGesture"]?.toBooleanStrictOrNull() ?: hideAmountsGesture

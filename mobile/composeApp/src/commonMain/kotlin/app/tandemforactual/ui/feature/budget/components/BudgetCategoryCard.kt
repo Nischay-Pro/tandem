@@ -157,6 +157,7 @@ private fun BudgetCategoryListCard(
                                 isOverspent = category.balanceMinor < 0,
                                 privacyModeEnabled = state.privacyModeEnabled,
                                 fractionDigits = state.currencyFractionDigitsForDisplay,
+                                statusColors = state.budgetStatusColors,
                             )
                         }
                     }
@@ -211,7 +212,12 @@ private fun BudgetCategoryProgressCard(
 ) {
     val palette = tandemPalette
     val overspent = category.balanceMinor < 0L
-    val statusColor = if (overspent) palette.negative else palette.positive
+    val statusColor =
+        when {
+            !state.budgetStatusColors -> palette.text
+            overspent -> palette.negative
+            else -> palette.positive
+        }
     SurfaceCard(
         modifier = modifier,
         onClick = onClick,
@@ -319,7 +325,7 @@ private fun RowScope.CategoryProgressDetails(
                     .fillMaxWidth(progress)
                     .fillMaxHeight()
                     .clip(CircleShape)
-                    .background(if (overspent) palette.negative else palette.accent),
+                    .background(if (overspent && state.budgetStatusColors) palette.negative else palette.accent),
             )
         }
     }
