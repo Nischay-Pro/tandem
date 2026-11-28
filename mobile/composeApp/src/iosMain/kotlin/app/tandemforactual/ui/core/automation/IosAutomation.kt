@@ -122,6 +122,19 @@ object IosAutomation {
         }
     }
 
+    /** [accountId]'s balance from this device's copy, with edits not yet synced. */
+    fun accountBalance(
+        accountId: String,
+        accountName: String,
+        completion: (AutomationAccountBalance?, IosAutomationFailure?) -> Unit,
+    ) = answer(completion) {
+        val target = automationTarget(AppPreferencesStore(iosTandemDatabase).read(), AutomationKind.READ)
+        withReadableBudget(target) { database ->
+            readAutomationBudget(database, target.budgetId, AutomationReadInput(account = accountId), platformTodayIsoDate())
+                .accountBalance(accountName)
+        }
+    }
+
     /** Accounts and categories to offer; empty while both opt-ins are off or an encrypted budget may not be read locked. */
     fun records(completion: (AutomationRecords) -> Unit) {
         scope.launch {

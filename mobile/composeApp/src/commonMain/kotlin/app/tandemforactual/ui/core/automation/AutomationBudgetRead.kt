@@ -55,6 +55,21 @@ data class AutomationBudgetNumbers(
     }
 }
 
+/** [value] is plain decimal text for Shortcuts to do maths with; [sentence] is what Siri says, such as "Checking has $1,240.00." */
+data class AutomationAccountBalance(
+    val amountText: String,
+    val sentence: String,
+    val value: String,
+)
+
+/** The account's balance as Siri says and shows it; a balance below zero reads as owed. */
+fun AutomationBudgetNumbers.accountBalance(accountName: String): AutomationAccountBalance {
+    val balance = accountBalanceMinor ?: 0L
+    val amount = formatCurrency(kotlin.math.abs(balance), displaySettings)
+    val sentence = if (balance < 0) "$accountName owes $amount." else "$accountName has $amount."
+    return AutomationAccountBalance(formatCurrency(balance, displaySettings), sentence, text(balance))
+}
+
 /** [value] is plain decimal text for Shortcuts to do maths with; the rest is formatted the way Tandem shows amounts. */
 data class AutomationLeftToSpend(
     val amountText: String,

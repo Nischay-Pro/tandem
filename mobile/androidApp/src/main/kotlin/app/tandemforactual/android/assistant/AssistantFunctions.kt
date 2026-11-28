@@ -6,6 +6,7 @@ import androidx.appfunctions.AppFunctionService
 import androidx.appfunctions.AppFunctionServiceEntryPoint
 import app.tandemforactual.android.tasker.AutomationCalls
 import app.tandemforactual.ui.core.automation.AutomationReadInput
+import app.tandemforactual.ui.core.automation.accountBalance
 
 /** What assistants such as Gemini can do in Tandem on Android 16 and later, under the same Settings › Automation rules as Tasker. */
 @RequiresApi(36)
@@ -63,6 +64,21 @@ abstract class AssistantFunctions : AppFunctionService() {
                 overspent = left.overspent,
                 sentence = left.sentence,
             )
+        }
+
+    /**
+     * Reads an account's balance from this device's copy of the budget open in Tandem, including changes not yet synced.
+     * Works only after the user allows automation apps to read balances, and never while Tandem's app lock or Hide
+     * budget amounts is on.
+     *
+     * @param account The account's name, such as Checking.
+     * @return The balance and a sentence to say or show.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true)
+    suspend fun accountBalance(account: String): AssistantAccountBalance =
+        assistantCall {
+            val balance = AutomationCalls.read(this, AutomationReadInput(account = account)).accountBalance(account.trim())
+            AssistantAccountBalance(balance = balance.value, sentence = balance.sentence)
         }
 }
 
