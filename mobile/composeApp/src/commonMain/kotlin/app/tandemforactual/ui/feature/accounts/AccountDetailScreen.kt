@@ -99,13 +99,7 @@ internal fun AccountDetailScreen(
             AccountRecentActivity(shownAccountActivity, state, navigation, liveAccount) {
                 scrollRestore.pending = routeScrollState?.value ?: -1
             }
-            CardStatementsCard(state, mobileSession, liveAccount)
-            AccountNoteSection(state, mobileSession, liveAccount)
-            SettingRow(
-                "Account options",
-                "Close account",
-                onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) },
-            )
+            AccountDetailFooter(state, mobileSession, navigation, liveAccount)
         }
     }
     if (reconcile.showDialog && liveAccount != null) {
@@ -115,6 +109,19 @@ internal fun AccountDetailScreen(
         StatementImportFlow(statementImport, state, mobileSession, liveAccount, scope)
         AccountBalanceUpdate(balanceUpdate, state, mobileSession, liveAccount, scope)
     }
+}
+
+/** Card statements, the account's note and the way to its options. */
+@Composable
+private fun AccountDetailFooter(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    liveAccount: LiveAccountSummary,
+) {
+    CardStatementsCard(state, mobileSession, liveAccount)
+    AccountNoteSection(state, mobileSession, liveAccount)
+    SettingRow("Account options", "Close account", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
 }
 
 /** The account's six most recent transactions, or an empty state. */

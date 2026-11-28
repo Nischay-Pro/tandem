@@ -15,7 +15,6 @@ import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
 import app.tandemforactual.ui.design.rows.SectionCard
-import app.tandemforactual.ui.feature.budget.previousMonthId
 
 /** One closed card statement: what was charged and paid in the cycle, what was owed at closing, and what was paid on it since. */
 internal data class CardStatement(
@@ -49,7 +48,7 @@ internal fun cardStatements(
     count: Int,
 ): List<CardStatement> {
     val closes =
-        generateSequence(today.take(7)) { previousMonthId(it) }
+        generateSequence(today.take(7), ::monthBefore)
             .mapNotNull { statementCloseDate(it, closeDay) }
             .filter { it <= today }
             .take(count + 1)
@@ -67,6 +66,12 @@ internal fun cardStatements(
             paidSinceMinor = since.filter { it.second > 0 }.sumOf { it.second },
         )
     }
+}
+
+private fun monthBefore(monthId: String): String? {
+    val year = monthId.substringBefore('-').toIntOrNull() ?: return null
+    val month = monthId.substringAfter('-', "").toIntOrNull()?.takeIf { it in 1..12 } ?: return null
+    return if (month == 1) "${year - 1}-12" else "$year-${(month - 1).toString().padStart(2, '0')}"
 }
 
 /** A credit card's recent statements, shown once its closing day is known. */
