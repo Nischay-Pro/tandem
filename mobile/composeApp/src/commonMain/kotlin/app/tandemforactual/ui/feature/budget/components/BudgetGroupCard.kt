@@ -137,7 +137,7 @@ private fun RowScope.BudgetGroupHeading(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        val headingAmount = budgetGroupHeadingAmount(group, isTrackingBudget)
+        val headingAmount = budgetGroupHeadingAmount(group, isTrackingBudget).takeIf { state.budgetGroupTotals }
         when {
             isReordering || headingAmount == null -> {
                 Text(
@@ -213,6 +213,22 @@ private fun BudgetGroupBalance(
     groupExpanded: Boolean,
     groupSectionKey: String,
 ) {
+    if (state.budgetGroupTotals) {
+        BudgetGroupTotal(state, group, isTrackingBudget)
+    }
+    TandemIconButton(
+        if (groupExpanded) Lucide.ChevronDown else Lucide.ChevronRight,
+        if (groupExpanded) "Collapse ${group.name}" else "Expand ${group.name}",
+        onClick = { state.toggleBudgetSection(groupSectionKey) },
+    )
+}
+
+@Composable
+private fun BudgetGroupTotal(
+    state: AppState,
+    group: LiveCategoryGroupSummary,
+    isTrackingBudget: Boolean,
+) {
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall),
@@ -235,11 +251,6 @@ private fun BudgetGroupBalance(
             overflow = TextOverflow.Ellipsis,
         )
     }
-    TandemIconButton(
-        if (groupExpanded) Lucide.ChevronDown else Lucide.ChevronRight,
-        if (groupExpanded) "Collapse ${group.name}" else "Expand ${group.name}",
-        onClick = { state.toggleBudgetSection(groupSectionKey) },
-    )
 }
 
 /** The planned amount a group header shows under its name, and the word for it; envelope income has none. */

@@ -23,6 +23,7 @@ internal fun AvailableAmountPill(
     isOverspent: Boolean,
     privacyModeEnabled: Boolean = false,
     fractionDigits: Int = 2,
+    statusColors: Boolean = true,
 ) {
     val palette = tandemPalette
     val amountSemantics =
@@ -42,7 +43,12 @@ internal fun AvailableAmountPill(
         PrivacyAmountText(
             amount,
             privacyModeEnabled = privacyModeEnabled,
-            color = if (isOverspent) palette.negative else palette.positive,
+            color =
+                when {
+                    !statusColors -> palette.text
+                    isOverspent -> palette.negative
+                    else -> palette.positive
+                },
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,
             fractionDigits = fractionDigits,
