@@ -22,6 +22,7 @@ import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
+import app.tandemforactual.ui.core.session.CardDueReminders
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -205,6 +206,10 @@ private suspend fun postSyncAlerts(
     val post = { alert: LocalAlert -> postIosLocalAlert(policy.forBudget(alert, choices.encrypted)) }
     if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
         upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(post)
+    }
+    if (policy.allows(AlertKind.CARD_DUE, minute)) {
+        val keys = IosDeviceCredentialStore(SecurityIosKeychainClient("planning-keys"))
+        CardDueReminders.alert(database, keys, repository, budgetId, today, policy, format)?.let(post)
     }
     if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
         largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(post)

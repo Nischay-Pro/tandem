@@ -70,6 +70,7 @@ class NotificationPolicyTest {
             mapOf(
                 AlertKind.OVERSPENDING to "A category is over budget this month.",
                 AlertKind.UPCOMING_BILLS to "A bill is due soon.",
+                AlertKind.CARD_DUE to "A card payment is due soon.",
                 AlertKind.LARGE_TRANSACTION to "New transaction to review.",
                 AlertKind.UNCATEGORIZED to "New transaction to review.",
                 AlertKind.BANK_SYNC_FAILURE to "A bank connection needs attention.",
