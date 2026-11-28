@@ -62,9 +62,9 @@ internal fun AccountDetailScreen(
     StatementImportEffects(statementImport, state, mobileSession, liveAccount)
     AccountActivityEffects(activity, state, mobileSession, liveAccount, merchantIconMatcher)
     AccountDetailScrollRestoreEffect(scrollRestore, isForegroundRoute, accountName, activity.activity.size, routeScrollState)
-    val shownAccountActivity = activity.activity
-    val reconciliationCandidates =
-        shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
+    val review = rememberImportReview(state, mobileSession, liveAccount?.id)
+    val shownAccountActivity = activity.activity.filter { it.recordId !in review.waiting }
+    val reconciliationCandidates = shownAccountActivity.filter { !it.isSplitParent && it.reconciled != true && it.recordId != null }
     val description = liveAccount?.let { if (it.offBudget) "Off budget" else "On budget" }.orEmpty()
     val accountCurrency = liveAccount?.let { mobileSession.planning.accountCurrencies[it.id] }
     val balance = liveAccount?.balanceMinor?.let { state.formatAccountMoney(it, accountCurrency) } ?: "Unavailable"
@@ -95,6 +95,7 @@ internal fun AccountDetailScreen(
             )
             if (!statementImport.showDialog) budgetActionFeedbackMessage(mobileSession)
             ScheduledOccurrencesCard(state, navigation, rememberRegisterOccurrences(mobileSession, liveAccount.id))
+            ImportApprovalCard(review, activity.activity.filter { it.recordId in review.waiting }, state, navigation, mobileSession)
             AccountRecentActivity(shownAccountActivity, state, navigation, liveAccount) {
                 scrollRestore.pending = routeScrollState?.value ?: -1
             }
