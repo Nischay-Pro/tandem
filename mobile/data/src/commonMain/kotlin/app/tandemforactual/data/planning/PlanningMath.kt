@@ -13,6 +13,15 @@ data class DebtInput(
     val minimumMinor: Long,
 )
 
+/** One month of a loan's repayment: what was paid, how it split into interest and principal, and what was left. */
+data class AmortisationRow(
+    val month: Int,
+    val paymentMinor: Long,
+    val interestMinor: Long,
+    val principalMinor: Long,
+    val balanceMinor: Long,
+)
+
 enum class PayoffStrategy { AVALANCHE, SNOWBALL }
 
 /** A month-by-month payoff: when each debt is cleared, the total interest, and the remaining balance after each month. */
@@ -50,6 +59,27 @@ object PlanningMath {
             if (months > MAX_MONTHS) return null
         }
         return PayoffEstimate(months, interest)
+    }
+
+    /**
+     * The month-by-month repayment of [balanceMinor] at [aprBasisPoints] with a fixed [paymentMinor], the last month
+     * paying only what is left. Null for the same reasons [payoff] is.
+     */
+    fun amortisation(
+        balanceMinor: Long,
+        aprBasisPoints: Int,
+        paymentMinor: Long,
+    ): List<AmortisationRow>? {
+        if (payoff(balanceMinor, aprBasisPoints, paymentMinor) == null) return null
+        val rows = mutableListOf<AmortisationRow>()
+        var balance = balanceMinor
+        while (balance > 0) {
+            val charge = roundDiv(balance * aprBasisPoints, 120_000)
+            val payment = minOf(paymentMinor, balance + charge)
+            balance = balance + charge - payment
+            rows += AmortisationRow(rows.size + 1, payment, charge, payment - charge, balance)
+        }
+        return rows
     }
 
     /**
