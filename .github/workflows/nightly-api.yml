@@ -273,6 +273,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+    outputs:
+      version_name: ${{ steps.version.outputs.name }}
     env:
       TANDEM_PREGENERATED_ICON_PACK: "true"
     steps:
@@ -316,8 +318,9 @@ jobs:
       - name: Set the nightly Android version
         id: version
         run: |
-          printf 'date_code=%s\n' "$(date -u +%y%m%d)" >> "$GITHUB_OUTPUT"
-          printf 'sequence=%03d\n' "$((GITHUB_RUN_NUMBER % 1000))" >> "$GITHUB_OUTPUT"
+          # Above every earlier date-based code, and one higher with each run, so updates always install.
+          printf 'code=%s\n' "$((300000000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
+          printf 'name=%s-nightly.%s\n' "$(date -u +%Y.%m.%d)" "$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Assemble and verify signed nightly Android APK
         working-directory: mobile
@@ -326,8 +329,8 @@ jobs:
           TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
           TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
           TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
-          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
-          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
+          NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           ./gradlew \
             :androidApp:assembleRelease \
@@ -336,8 +339,8 @@ jobs:
 
       - name: Verify APK signature and write checksum
         env:
-          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
-          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
+          NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
         run: |
           set -euo pipefail
@@ -375,7 +378,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
-          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+          NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           set -euo pipefail
           release_notes=$(printf 'Nightly %s\n\nSource commit: %s\n\nThis is a prerelease build. The iOS .ipa is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID.' "$NIGHTLY_VERSION_NAME" "$SOURCE_SHA")
@@ -410,6 +413,40 @@ jobs:
           path: ${{ runner.temp }}/nightly-release/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Build the App Bundle for Google Play
+        working-directory: mobile
+        env:
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE: ${{ runner.temp }}/tandem-nightly.p12
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
+          TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
+          TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
+          NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          ./gradlew \
+            :androidApp:bundleRelease \
+            -PtandemVersionCode="$NIGHTLY_VERSION_CODE" \
+            -PtandemVersionName="$NIGHTLY_VERSION_NAME"
+
+      - name: Keep the App Bundle for a manual Play upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tandem-android-bundle-${{ needs.publish_api_image.outputs.source_sha }}
+          path: mobile/androidApp/build/outputs/bundle/release/androidApp-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload to the Google Play internal testing track
+        if: vars.PLAY_INTERNAL_TESTING == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.tandemforactual.android
+          releaseFiles: mobile/androidApp/build/outputs/bundle/release/androidApp-release.aab
+          releaseName: ${{ steps.version.outputs.name }}
+          track: internal
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
 
   nightly_ios:
     name: Unsigned nightly iOS app
@@ -457,12 +494,14 @@ jobs:
       - name: Build the unsigned iOS app
         env:
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
-          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+          NIGHTLY_VERSION_NAME: ${{ needs.nightly_android_and_compose.outputs.version_name }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/nightly-ios"
           ipa="$RUNNER_TEMP/nightly-ios/Tandem-$NIGHTLY_VERSION_NAME-$SOURCE_SHA.ipa"
-          bash scripts/build-ios-ipa.sh "$ipa" "$GITHUB_RUN_NUMBER"
+          # iOS versions are up to three plain numbers, so the date without its suffix or leading zeros.
+          ios_version="$(awk -F'[.-]' '{ print $1 "." $2 + 0 "." $3 + 0 }' <<<"$NIGHTLY_VERSION_NAME")"
+          bash scripts/build-ios-ipa.sh "$ipa" "$GITHUB_RUN_NUMBER" "$ios_version"
           (cd "$RUNNER_TEMP/nightly-ios" && shasum -a 256 "$(basename "$ipa")" > "$(basename "$ipa").sha256")
 
       - name: Add the iOS app to the nightly prerelease

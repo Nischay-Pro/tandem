@@ -17,13 +17,13 @@ prereleases. An iOS build is available from source only.
    On Linux or WSL, run `sha256sum`.
 
    ```sh
-   sha256sum -c Tandem-0.1.0-nightly.VERSION-COMMIT.apk.sha256
+   sha256sum -c Tandem-VERSION-COMMIT.apk.sha256
    ```
 
    On macOS, run `shasum`.
 
    ```sh
-   shasum -a 256 -c Tandem-0.1.0-nightly.VERSION-COMMIT.apk.sha256
+   shasum -a 256 -c Tandem-VERSION-COMMIT.apk.sha256
    ```
 
    Replace `VERSION-COMMIT` with the version and commit shown in the release.
