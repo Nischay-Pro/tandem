@@ -175,7 +175,12 @@ internal class BudgetActions(
                 } ?: state.transactionAmount
             val after = state.formCategoryEntries(mobileSession)
             coroutineScope.launch {
-                val notice = CategorySaveNotice.prepare(state.selectedBudgetId, mobileSession, emptyList(), after)
+                val accountChange =
+                    enteredAmount?.let { amount ->
+                        val unsigned = kotlin.math.abs(amount)
+                        state.newTransactionAccountId to if (state.transactionType == "Income") unsigned else -unsigned
+                    }
+                val notice = CategorySaveNotice.prepare(state.selectedBudgetId, mobileSession, emptyList(), after, accountChange)
                 val created =
                     mobileSession.transactions.createTransaction(
                         budgetId = state.selectedBudgetId,

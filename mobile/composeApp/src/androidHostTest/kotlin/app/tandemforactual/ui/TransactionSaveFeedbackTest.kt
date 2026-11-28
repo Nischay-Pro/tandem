@@ -6,6 +6,7 @@ import app.tandemforactual.ui.core.session.transactions.categoryChange
 import app.tandemforactual.ui.core.session.transactions.categoryMonthBalance
 import app.tandemforactual.ui.core.session.transactions.categorySaveFeedback
 import app.tandemforactual.ui.core.session.transactions.mainCategory
+import app.tandemforactual.ui.core.state.AppState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -76,6 +77,14 @@ class TransactionSaveFeedbackTest {
         assertEquals("Groceries · over by ₹300 in October 2026", over.text)
         assertTrue(over.over)
         assertEquals("Includes changes waiting to sync", over.detail)
+    }
+
+    @Test
+    fun theAccountsBalanceFollowsUnlessAmountsAreHidden() {
+        val shown = categorySaveFeedback("Groceries", 0, 124_000, true, false, "this month", ::format, "Checking" to 98_765)
+        assertEquals("Checking · ₹987 · Includes changes waiting to sync", shown.detail)
+        assertNull(categorySaveFeedback("Groceries", 0, 124_000, false, true, "this month", ::format, "Checking" to 98_765).detail)
+        assertTrue(AppState().balanceAfterSaveEnabled)
     }
 
     @Test

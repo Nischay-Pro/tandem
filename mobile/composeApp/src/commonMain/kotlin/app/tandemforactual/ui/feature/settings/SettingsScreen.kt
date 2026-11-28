@@ -43,6 +43,8 @@ import app.tandemforactual.ui.generated.resources.mode_advanced_short
 import app.tandemforactual.ui.generated.resources.settings_about
 import app.tandemforactual.ui.generated.resources.settings_about_detail
 import app.tandemforactual.ui.generated.resources.settings_appearance
+import app.tandemforactual.ui.generated.resources.settings_balance_after_save
+import app.tandemforactual.ui.generated.resources.settings_balance_after_save_detail
 import app.tandemforactual.ui.generated.resources.settings_budget_preferences
 import app.tandemforactual.ui.generated.resources.settings_budget_preferences_detail
 import app.tandemforactual.ui.generated.resources.settings_budget_rules
@@ -192,6 +194,13 @@ private fun GeneralSection(
             (state.modeSwitchTarget ?: state.interfaceMode) == InterfaceMode.ADVANCED,
             leadingIcon = Lucide.SlidersHorizontal,
         ) { state.switchInterfaceMode(if (it) InterfaceMode.ADVANCED else InterfaceMode.MINIMAL) }
+        DividerLine()
+        ToggleRow(
+            stringResource(Res.string.settings_balance_after_save),
+            stringResource(Res.string.settings_balance_after_save_detail),
+            state.balanceAfterSaveEnabled,
+            leadingIcon = Lucide.WalletCards,
+        ) { state.balanceAfterSaveEnabled = it }
         if (state.experience != null) {
             DividerLine()
             ListRow(

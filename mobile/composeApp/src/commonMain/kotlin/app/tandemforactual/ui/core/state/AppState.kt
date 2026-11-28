@@ -133,6 +133,9 @@ internal class AppState {
 
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
+
+    /** Whether saving a transaction shows what's left in its category and the account's balance. */
+    var balanceAfterSaveEnabled by mutableStateOf(true)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
     var watchSettings by mutableStateOf(WatchSettings())
 
@@ -277,6 +280,7 @@ internal class AppState {
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
+            "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
             AutomationAccess.WRITES to automationWritesEnabled.toString(),
             AutomationAccess.READS to automationReadsEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
@@ -345,6 +349,7 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled
         automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
         automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
         exchangeRateFetching = ExchangeRateFetching.from(saved)
