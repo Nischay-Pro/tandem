@@ -62,23 +62,7 @@ internal fun SwitchBudgetScreen(
     LaunchedEffect(Unit) { if (mobileSession.isAuthenticated) onRefreshBudgets() }
     PageColumn {
         if (budgets.isEmpty()) {
-            if (mobileSession.isLoadingBudgets) {
-                BodyText(stringResource(Res.string.setup_loading_budgets))
-            } else {
-                EmptyStateCard(
-                    stringResource(Res.string.setup_no_budgets_available),
-                    mobileSession.budgetError ?: stringResource(Res.string.setup_sign_in_to_this_server),
-                    actionLabel =
-                        if (mobileSession.isAuthenticated) {
-                            stringResource(
-                                Res.string.setup_try_again,
-                            )
-                        } else {
-                            stringResource(Res.string.setup_sign_in)
-                        },
-                    onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
-                )
-            }
+            NoBudgets(mobileSession, navigation, onRefreshBudgets)
             return@PageColumn
         }
         SectionCard(stringResource(Res.string.setup_budgets)) {
@@ -129,4 +113,23 @@ internal fun SwitchBudgetScreen(
             )
         }
     }
+}
+
+/** Loading, or why there are no budgets to choose, with a way to try again or sign in. */
+@Composable
+private fun NoBudgets(
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    onRefreshBudgets: () -> Unit,
+) {
+    if (mobileSession.isLoadingBudgets) {
+        BodyText(stringResource(Res.string.setup_loading_budgets))
+        return
+    }
+    EmptyStateCard(
+        stringResource(Res.string.setup_no_budgets_available),
+        mobileSession.budgetError ?: stringResource(Res.string.setup_sign_in_to_this_server),
+        actionLabel = stringResource(if (mobileSession.isAuthenticated) Res.string.setup_try_again else Res.string.setup_sign_in),
+        onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
+    )
 }

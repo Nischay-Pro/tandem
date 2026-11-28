@@ -239,20 +239,7 @@ private fun HomeEntryCard(
         }
 
         HomeModule.BUDGET_SUMMARY -> {
-            SectionCard(
-                stringResource(module.title()),
-                stringResource(module.detail()),
-                "Open",
-                onClick = { navigation.selectTab(AppRoute.BUDGET) },
-            ) {
-                val (label, amount) = homeBudgetFigure(state.isTrackingBudget, month)
-                ListRow(
-                    label,
-                    trailingContent = { money(amount) },
-                    leading = RowLeading.None,
-                    options = ListRowOptions(showChevron = false),
-                )
-            }
+            BudgetSummaryCard(module, state, navigation, month, money)
         }
 
         HomeModule.DEBT_OVERVIEW -> {
@@ -295,6 +282,31 @@ private fun HomeEntryCard(
                 editors::editGoal,
             )
         }
+    }
+}
+
+/** What's left to budget, or for tracking budgets the month's result, with a link to the budget. */
+@Composable
+private fun BudgetSummaryCard(
+    module: HomeModule,
+    state: AppState,
+    navigation: AppNavigation,
+    month: LiveBudgetMonthSummary?,
+    money: @Composable (Long) -> Unit,
+) {
+    SectionCard(
+        stringResource(module.title()),
+        stringResource(module.detail()),
+        "Open",
+        onClick = { navigation.selectTab(AppRoute.BUDGET) },
+    ) {
+        val (label, amount) = homeBudgetFigure(state.isTrackingBudget, month)
+        ListRow(
+            label,
+            trailingContent = { money(amount) },
+            leading = RowLeading.None,
+            options = ListRowOptions(showChevron = false),
+        )
     }
 }
 

@@ -291,137 +291,41 @@ internal fun budgetMutationFailureMessage(
     val detail = message?.trim()?.trimEnd('.', '!', '?')?.takeIf(String::isNotEmpty)
     val fallback =
         when (kind) {
-            BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY -> {
-                "Couldn’t update this category’s visibility."
-            }
-
-            BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
-                "Couldn’t create this category group."
-            }
-
-            BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME -> {
-                "Couldn’t rename this category group."
-            }
-
-            BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> {
-                "Couldn’t create this category."
-            }
-
-            BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME -> {
-                "Couldn’t rename this category."
-            }
-
-            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> {
-                "Couldn’t move this category."
-            }
-
-            BudgetReorderKind.DELETE_CATEGORY -> {
-                "Couldn’t delete this category."
-            }
-
-            BudgetReorderKind.DELETE_CATEGORY_GROUP -> {
-                "Couldn’t delete this category group."
-            }
-
-            BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP -> {
-                "Couldn’t update this category group’s visibility."
-            }
-
-            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> {
-                "Couldn’t refresh the new category group."
-            }
-
-            BudgetReorderKind.CREATE_PAYEE -> {
-                "Couldn’t add this payee."
-            }
-
-            BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
-                "Couldn’t update the assigned amount."
-            }
-
-            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
-                "Couldn’t update overspending rollover."
-            }
-
-            BudgetReorderKind.COPY_BUDGET_MONTH -> {
-                "Couldn’t copy last month’s assignments."
-            }
-
-            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
-                "Couldn’t apply this template."
-            }
-
-            BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
-                "Couldn’t apply the budget’s templates."
-            }
-
-            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
-                "Couldn’t hold this money for next month."
-            }
-
-            BudgetReorderKind.RESET_BUDGET_HOLD -> {
-                "Couldn’t reset the next-month hold."
-            }
-
-            BudgetReorderKind.MOVE_BUDGET_MONEY -> {
-                "Couldn’t move money between categories."
-            }
-
-            BudgetReorderKind.CREATE_ACCOUNT -> {
-                "Couldn’t add this account."
-            }
-
-            BudgetReorderKind.CLOSE_ACCOUNT -> {
-                "Couldn’t close this account."
-            }
-
-            BudgetReorderKind.RENAME_ACCOUNT -> {
-                "Couldn’t rename this account."
-            }
-
-            BudgetReorderKind.REOPEN_ACCOUNT -> {
-                "Couldn’t reopen this account."
-            }
-
-            BudgetReorderKind.MOVE_ACCOUNT -> {
-                "Couldn’t reorder this account."
-            }
-
-            BudgetReorderKind.RENAME_PAYEE -> {
-                "Couldn’t rename this payee."
-            }
-
-            BudgetReorderKind.MERGE_PAYEE -> {
-                "Couldn’t merge this payee."
-            }
-
-            BudgetReorderKind.DELETE_PAYEE -> {
-                "Couldn’t delete this payee."
-            }
-
-            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> {
-                "Couldn’t update this payee’s category."
-            }
-
-            BudgetReorderKind.SET_CATEGORY_NOTE,
-            BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
-            BudgetReorderKind.SET_ACCOUNT_NOTE,
-            BudgetReorderKind.SET_MONTH_NOTE,
-            -> {
-                "Couldn’t save this note."
-            }
-
-            BudgetReorderKind.IMPORT_STATEMENT -> {
-                "Couldn’t import this statement."
-            }
-
-            BudgetReorderKind.SET_BUDGET_TYPE -> {
-                "Couldn’t switch the budget type."
-            }
-
-            BudgetReorderKind.SET_ORDER -> {
-                "Couldn’t save the new order."
-            }
+            BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY -> "Couldn’t update this category’s visibility."
+            BudgetReorderKind.CREATE_CATEGORY_GROUP -> "Couldn’t create this category group."
+            BudgetReorderKind.RENAME_CATEGORY_GROUP -> "Couldn’t rename this category group."
+            BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME -> "Couldn’t rename this category group."
+            BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> "Couldn’t create this category."
+            BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME -> "Couldn’t rename this category."
+            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Couldn’t move this category."
+            BudgetReorderKind.DELETE_CATEGORY -> "Couldn’t delete this category."
+            BudgetReorderKind.DELETE_CATEGORY_GROUP -> "Couldn’t delete this category group."
+            BudgetReorderKind.HIDE_CATEGORY_GROUP -> "Couldn’t update this category group’s visibility."
+            BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Couldn’t update this category group’s visibility."
+            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Couldn’t refresh the new category group."
+            BudgetReorderKind.CREATE_PAYEE -> "Couldn’t add this payee."
+            BudgetReorderKind.SET_CATEGORY_AMOUNT -> "Couldn’t update the assigned amount."
+            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update overspending rollover."
+            BudgetReorderKind.COPY_BUDGET_MONTH -> "Couldn’t copy last month’s assignments."
+            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Couldn’t apply this template."
+            BudgetReorderKind.APPLY_GOAL_TEMPLATES -> "Couldn’t apply the budget’s templates."
+            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Couldn’t hold this money for next month."
+            BudgetReorderKind.RESET_BUDGET_HOLD -> "Couldn’t reset the next-month hold."
+            BudgetReorderKind.MOVE_BUDGET_MONEY -> "Couldn’t move money between categories."
+            BudgetReorderKind.CREATE_ACCOUNT -> "Couldn’t add this account."
+            BudgetReorderKind.CLOSE_ACCOUNT -> "Couldn’t close this account."
+            BudgetReorderKind.RENAME_ACCOUNT -> "Couldn’t rename this account."
+            BudgetReorderKind.REOPEN_ACCOUNT -> "Couldn’t reopen this account."
+            BudgetReorderKind.MOVE_ACCOUNT -> "Couldn’t reorder this account."
+            BudgetReorderKind.RENAME_PAYEE -> "Couldn’t rename this payee."
+            BudgetReorderKind.MERGE_PAYEE -> "Couldn’t merge this payee."
+            BudgetReorderKind.DELETE_PAYEE -> "Couldn’t delete this payee."
+            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
+            BudgetReorderKind.SET_CATEGORY_NOTE, BudgetReorderKind.SET_CATEGORY_GROUP_NOTE -> "Couldn’t save this note."
+            BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE -> "Couldn’t save this note."
+            BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
+            BudgetReorderKind.SET_BUDGET_TYPE -> "Couldn’t switch the budget type."
+            BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
         }
     return if (detail == null) fallback else "$detail."
 }

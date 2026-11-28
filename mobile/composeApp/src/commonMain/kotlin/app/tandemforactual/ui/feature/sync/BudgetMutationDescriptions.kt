@@ -18,6 +18,7 @@ import app.tandemforactual.ui.core.state.longValue
 import app.tandemforactual.ui.core.state.recordName
 import app.tandemforactual.ui.core.state.stringValue
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 
 internal fun budgetMutationItemName(
     mutation: QueuedBudgetReorder?,
@@ -49,9 +50,6 @@ internal fun budgetMutationChangeTitle(
     val month = budgetMutationMonthLabel(payload?.stringValue("month"))
     val categoryName: (String?) -> String = { id ->
         id?.let { key -> mobileSession.categoryRecords.firstOrNull { it.recordId == key }?.recordName() } ?: "category"
-    }
-    val groupName: (String?) -> String = { id ->
-        id?.let { key -> mobileSession.categoryGroupRecords.firstOrNull { it.recordId == key }?.recordName() } ?: "group"
     }
     val target = payload?.longValue("amountMinor")?.let(state::formatCurrency)
     return when (mutation.kind) {
@@ -103,90 +101,10 @@ internal fun budgetMutationChangeTitle(
             "Rename $itemName to ${payload?.stringValue("name") ?: mutation.name ?: "a new name"}"
         }
 
-        BudgetReorderKind.CREATE_CATEGORY -> {
-            "Add category $itemName${mutation.parentGroupId?.let { " to ${groupName(it)}" }.orEmpty()}"
-        }
-
-        BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
-            "Add category group $itemName"
-        }
-
-        BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.HIDE_CATEGORY_GROUP -> {
-            "Hide $itemName from the budget"
-        }
-
-        BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> {
-            "Show $itemName in the budget"
-        }
-
-        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> {
-            "Move $itemName to ${groupName(mutation.targetId ?: mutation.parentGroupId)}"
-        }
-
-        BudgetReorderKind.DELETE_CATEGORY -> {
-            "Delete category $itemName"
-        }
-
-        BudgetReorderKind.DELETE_CATEGORY_GROUP -> {
-            "Delete category group $itemName"
-        }
-
-        BudgetReorderKind.CREATE_PAYEE -> {
-            "Add payee $itemName"
-        }
-
-        BudgetReorderKind.CREATE_ACCOUNT -> {
-            "Add account $itemName"
-        }
-
-        BudgetReorderKind.CLOSE_ACCOUNT -> {
-            "Close account $itemName"
-        }
-
-        BudgetReorderKind.REOPEN_ACCOUNT -> {
-            "Reopen account $itemName"
-        }
-
-        BudgetReorderKind.RENAME_ACCOUNT -> {
-            "Rename account to ${payload?.stringValue("name") ?: mutation.name ?: itemName}"
-        }
-
-        BudgetReorderKind.MOVE_ACCOUNT -> {
-            "Change the order of $itemName"
-        }
-
-        BudgetReorderKind.RENAME_PAYEE -> {
-            "Rename payee to ${payload?.stringValue("name") ?: mutation.name ?: itemName}"
-        }
-
-        BudgetReorderKind.MERGE_PAYEE -> {
-            "Merge $itemName into ${payload?.stringValue("targetPayeeId") ?: "another payee"}"
-        }
-
-        BudgetReorderKind.DELETE_PAYEE -> {
-            "Delete payee $itemName"
-        }
-
-        BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> {
-            "Set $itemName’s default category"
-        }
-
         BudgetReorderKind.SET_CATEGORY_NOTE, BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
         BudgetReorderKind.SET_ACCOUNT_NOTE, BudgetReorderKind.SET_MONTH_NOTE,
         -> {
             "Update the note for $itemName"
-        }
-
-        BudgetReorderKind.IMPORT_STATEMENT -> {
-            "Import ${itemName.ifBlank { "transactions" }}"
-        }
-
-        BudgetReorderKind.SET_BUDGET_TYPE -> {
-            "Switch to ${budgetTypeName(payload?.stringValue("type"))} budgeting"
-        }
-
-        BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> {
-            "Change the order of $itemName"
         }
 
         BudgetReorderKind.SET_ORDER -> {
@@ -194,9 +112,44 @@ internal fun budgetMutationChangeTitle(
             "Save the new order of ${if (lists == 1) "1 list" else "$lists lists"}"
         }
 
-        BudgetReorderKind.REFRESH_CATEGORY_CREATE, BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> {
-            "Finish adding $itemName"
+        else -> {
+            budgetStructureChangeTitle(mutation, itemName, payload, mobileSession)
         }
+    }
+}
+
+private fun budgetStructureChangeTitle(
+    mutation: QueuedBudgetReorder,
+    itemName: String,
+    payload: JsonObject?,
+    mobileSession: TandemMobileSession,
+): String {
+    val groupName: (String?) -> String = { id ->
+        id?.let { key -> mobileSession.categoryGroupRecords.firstOrNull { it.recordId == key }?.recordName() } ?: "group"
+    }
+    return when (mutation.kind) {
+        BudgetReorderKind.CREATE_CATEGORY -> "Add category $itemName${mutation.parentGroupId?.let { " to ${groupName(it)}" }.orEmpty()}"
+        BudgetReorderKind.CREATE_CATEGORY_GROUP -> "Add category group $itemName"
+        BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.HIDE_CATEGORY_GROUP -> "Hide $itemName from the budget"
+        BudgetReorderKind.SHOW_CATEGORY, BudgetReorderKind.SHOW_CATEGORY_GROUP -> "Show $itemName in the budget"
+        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Move $itemName to ${groupName(mutation.targetId ?: mutation.parentGroupId)}"
+        BudgetReorderKind.DELETE_CATEGORY -> "Delete category $itemName"
+        BudgetReorderKind.DELETE_CATEGORY_GROUP -> "Delete category group $itemName"
+        BudgetReorderKind.CREATE_PAYEE -> "Add payee $itemName"
+        BudgetReorderKind.CREATE_ACCOUNT -> "Add account $itemName"
+        BudgetReorderKind.CLOSE_ACCOUNT -> "Close account $itemName"
+        BudgetReorderKind.REOPEN_ACCOUNT -> "Reopen account $itemName"
+        BudgetReorderKind.RENAME_ACCOUNT -> "Rename account to ${payload?.stringValue("name") ?: mutation.name ?: itemName}"
+        BudgetReorderKind.MOVE_ACCOUNT -> "Change the order of $itemName"
+        BudgetReorderKind.RENAME_PAYEE -> "Rename payee to ${payload?.stringValue("name") ?: mutation.name ?: itemName}"
+        BudgetReorderKind.MERGE_PAYEE -> "Merge $itemName into ${payload?.stringValue("targetPayeeId") ?: "another payee"}"
+        BudgetReorderKind.DELETE_PAYEE -> "Delete payee $itemName"
+        BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Set $itemName’s default category"
+        BudgetReorderKind.IMPORT_STATEMENT -> "Import ${itemName.ifBlank { "transactions" }}"
+        BudgetReorderKind.SET_BUDGET_TYPE -> "Switch to ${budgetTypeName(payload?.stringValue("type"))} budgeting"
+        BudgetReorderKind.CATEGORY, BudgetReorderKind.CATEGORY_GROUP -> "Change the order of $itemName"
+        BudgetReorderKind.REFRESH_CATEGORY_CREATE, BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Finish adding $itemName"
+        else -> "Budget change"
     }
 }
 
@@ -266,6 +219,18 @@ internal fun budgetMutationPendingSummary(
             "Rename → ${payload?.stringValue("name") ?: mutation.name ?: "new name"}"
         }
 
+        else -> {
+            budgetMutationOtherSummary(mutation, payload, state)
+        }
+    }
+}
+
+private fun budgetMutationOtherSummary(
+    mutation: QueuedBudgetReorder,
+    payload: JsonObject?,
+    state: AppState,
+): String =
+    when (mutation.kind) {
         BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> {
             "Add category"
         }
@@ -345,7 +310,10 @@ internal fun budgetMutationPendingSummary(
         BudgetReorderKind.SET_BUDGET_TYPE -> {
             "Switch to ${budgetTypeName(payload?.stringValue("type"))}"
         }
+
+        else -> {
+            "Change"
+        }
     }
-}
 
 private fun budgetTypeName(type: String?): String = if (type == "tracking") "tracking" else "envelope"
