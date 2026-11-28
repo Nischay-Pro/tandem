@@ -359,7 +359,27 @@ jobs:
           printf '%s\n' "$NIGHTLY_VERSION_CODE" > "$RUNNER_TEMP/nightly-release/version-code.txt"
           printf '%s\n' "$SOURCE_SHA" > "$RUNNER_TEMP/nightly-release/source-commit.txt"
 
+      # GitHub refuses to point a ref with this token at a commit whose workflow files differ from main's, which
+      # happens when an older green commit is published while newer workflow changes are still in CI.
+      - name: Check the nightly tag can move to this tested commit
+        id: tag_check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$DEFAULT_BRANCH" \
+            --jq '[.files[].filename | select(startswith(".github/workflows/"))] | length')
+          if [ "$changed" -eq 0 ]; then
+            echo "movable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "movable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Workflows changed after $SOURCE_SHA, so the nightly tag and prerelease stay as they are. The signed builds are in this run's artifacts, and the next nightly moves the tag."
+          fi
+
       - name: Move the rolling nightly tag to this tested commit
+        if: steps.tag_check.outputs.movable == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
@@ -375,6 +395,7 @@ jobs:
           fi
 
       - name: Create or update the rolling nightly prerelease
+        if: steps.tag_check.outputs.movable == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
