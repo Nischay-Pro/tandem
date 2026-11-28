@@ -442,6 +442,25 @@ data class RrspInputs(
     }
 }
 
+/** A payment message format the user wrote: a regular expression with named groups, and a message it must read. */
+data class CustomPaymentFormat(
+    val id: String,
+    val name: String,
+    val pattern: String,
+    val sample: String,
+) {
+    fun toJson(): JsonObject = jsonOf("name" to JsonPrimitive(name), "pattern" to JsonPrimitive(pattern), "sample" to JsonPrimitive(sample))
+
+    companion object {
+        const val TYPE = "planning.payment_format"
+
+        fun fromJson(
+            id: String,
+            body: JsonObject,
+        ) = CustomPaymentFormat(id, body.text("name").orEmpty(), body.text("pattern").orEmpty(), body.text("sample").orEmpty())
+    }
+}
+
 /** One saved filter on the Activity search, kept as the field's name so new fields never break older records. */
 data class SavedSearchFilter(
     val field: String,

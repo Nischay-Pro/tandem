@@ -66,7 +66,7 @@ internal val settingsScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
             },
         AppRoute.AUTOMATION to
             @Composable { ctx ->
-                AutomationScreen(ctx.state)
+                AutomationScreen(ctx.state, ctx.mobileSession)
             },
         AppRoute.CONNECTED_SERVICES to
             @Composable { ctx ->

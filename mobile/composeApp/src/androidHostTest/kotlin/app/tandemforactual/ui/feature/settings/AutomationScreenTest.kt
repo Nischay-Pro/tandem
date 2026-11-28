@@ -8,6 +8,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.theme.AccentChoice
 import app.tandemforactual.ui.design.theme.TandemTheme
@@ -32,7 +34,9 @@ class AutomationScreenTest {
 
     private fun show(state: AppState) {
         composeTestRule.setContent {
-            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) { AutomationScreen(state) }
+            TandemTheme(ThemeMode.DARK, AccentChoice.ACTUAL_PURPLE, reduceMotion = true) {
+                AutomationScreen(state, TandemMobileSession(TandemApiClient(), null, { 0L }))
+            }
         }
     }
 

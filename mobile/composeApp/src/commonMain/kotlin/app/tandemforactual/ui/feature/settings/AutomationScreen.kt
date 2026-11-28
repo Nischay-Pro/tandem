@@ -11,6 +11,7 @@ import app.tandemforactual.ui.core.automation.automationViaAssistants
 import app.tandemforactual.ui.core.automation.automationViaShortcuts
 import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.ui.settingsSwitchStatus
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -65,7 +66,10 @@ import org.jetbrains.compose.resources.stringResource
 
 /** The two separate opt-ins for automation apps, with what they expose and how to set them up one tap away. */
 @Composable
-internal fun AutomationScreen(state: AppState) {
+internal fun AutomationScreen(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+) {
     var exposedOpen by rememberSaveable { mutableStateOf(false) }
     var setupOpen by rememberSaveable { mutableStateOf(false) }
     val blocked = automationBlockedFor(state)?.let { stringResource(it) }
@@ -94,6 +98,7 @@ internal fun AutomationScreen(state: AppState) {
             DividerLine()
             ListRow(setupTitle, leading = RowLeading.Icon(Lucide.Workflow), onClick = { setupOpen = true })
         }
+        PaymentFormatsSection(state, mobileSession)
     }
     SettingsInfoSheet(exposedOpen, stringResource(Res.string.automation_exposed), automationExposure()) { exposedOpen = false }
     SettingsInfoSheet(setupOpen, setupTitle, automationSetup()) { setupOpen = false }

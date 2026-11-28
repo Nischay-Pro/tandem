@@ -1,5 +1,7 @@
 package app.tandemforactual.ui.core.format
 
+import app.tandemforactual.data.planning.CustomPaymentFormat
+
 /**
  * One way a bank or payment app words a payment. [pattern] names what it reads: `amount` (required), and any of `type`,
  * `payee`, `account` (last digits), `date` and `ref`. [income] fixes the direction when the wording has no `type`.
@@ -78,3 +80,47 @@ internal fun readPaymentText(
             reference = group("ref"),
         )
     }
+
+private const val MAX_CUSTOM_PATTERN = 500
+private val NESTED_REPEAT = Regex("""\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*[+*{]""")
+
+/**
+ * Why a pattern the user wrote can't be used, or null when it can: it must compile, name the amount, read its own
+ * sample, and avoid a repeat inside a repeat, which can make matching take very long on some messages.
+ */
+internal fun paymentFormatProblem(
+    pattern: String,
+    sample: String,
+): String? {
+    val regex = runCatching { Regex(pattern, RegexOption.IGNORE_CASE) }.getOrNull()
+    return when {
+        pattern.isBlank() -> "Enter a pattern."
+        pattern.length > MAX_CUSTOM_PATTERN -> "Keep the pattern under $MAX_CUSTOM_PATTERN characters."
+        "(?<amount>" !in pattern -> "Name the amount with (?<amount>…)."
+        NESTED_REPEAT.containsMatchIn(pattern) -> "Avoid a repeat inside a repeat, such as (a+)+. It can make matching very slow."
+        regex == null -> "This isn’t a valid regular expression."
+        readPaymentText(sample.take(MAX_SHARED_TEXT), listOf(PaymentTextFormat("", regex, emptyList()))) == null ->
+            "The pattern doesn’t read the sample message."
+        else -> null
+    }
+}
+
+/** The user's own formats that pass every check, to try before the built-in ones. */
+internal fun customPaymentFormats(saved: List<CustomPaymentFormat>): List<PaymentTextFormat> =
+    saved
+        .filter { paymentFormatProblem(it.pattern, it.sample) == null }
+        .map { PaymentTextFormat(it.name, Regex(it.pattern, RegexOption.IGNORE_CASE), listOf(it.sample)) }
+
+/** The fields a format read, written out for the editor's preview. */
+internal fun describeReadPayment(
+    read: ReadPayment,
+    format: (Long) -> String,
+): String =
+    listOfNotNull(
+        format(read.amountMinor) + if (read.isIncome) " in" else " out",
+        read.payee?.let { "payee $it" },
+        read.accountDigits?.let { "account …$it" },
+        read.dateText?.let { "date $it" },
+        read.reference?.let { "ref $it" },
+    ).joinToString(" · ")
+
