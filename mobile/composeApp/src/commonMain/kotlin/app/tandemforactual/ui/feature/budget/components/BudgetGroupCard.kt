@@ -33,6 +33,7 @@ import app.tandemforactual.ui.core.state.categoryCountLabel
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.toggleBudgetSection
+import app.tandemforactual.ui.core.ui.maskedName
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.money.PrivacyAmountText
@@ -130,7 +131,7 @@ private fun RowScope.BudgetGroupHeading(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
     ) {
         Text(
-            group.name,
+            maskedName(group.name),
             color = palette.text,
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.SemiBold,

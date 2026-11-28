@@ -27,6 +27,7 @@ import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
+import app.tandemforactual.ui.core.ui.LocalMaskNames
 import app.tandemforactual.ui.core.ui.twoFingerDoubleTap
 import app.tandemforactual.ui.design.feedback.LocalNoticeClearance
 import app.tandemforactual.ui.design.feedback.NoticeClearance
@@ -85,7 +86,11 @@ internal fun ShellFrame(
     val tabletopFold by ctx.env.tabletopFold.collectAsState()
     val noticeClearance = remember { NoticeClearance() }
     val typing = remember { TypingState() }
-    CompositionLocalProvider(LocalTabletopFold provides tabletopFold, LocalNoticeClearance provides noticeClearance) {
+    CompositionLocalProvider(
+        LocalTabletopFold provides tabletopFold,
+        LocalNoticeClearance provides noticeClearance,
+        LocalMaskNames provides (state.privacyModeEnabled && state.privacyMaskNames),
+    ) {
         typing.TrackTyping {
             val toggleAmounts = { state.privacyModeEnabled = !state.privacyModeEnabled }
             Box(Modifier.fillMaxSize().twoFingerDoubleTap(state.hideAmountsGesture, toggleAmounts)) {

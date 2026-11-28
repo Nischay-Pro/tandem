@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.state.LiveCategorySummary
 import app.tandemforactual.ui.core.state.categoryIconFor
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
 import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.ui.maskedName
 import app.tandemforactual.ui.design.cards.SurfaceCard
 import app.tandemforactual.ui.design.feedback.ProgressBar
 import app.tandemforactual.ui.design.money.AvailableAmountPill
@@ -128,7 +129,7 @@ private fun BudgetCategoryListCard(
 ) {
     SurfaceCard(modifier = modifier, animateSizeChanges = false) {
         ListRow(
-            category.name,
+            maskedName(category.name),
             leading = RowLeading.Icon(state.categoryIconFor(category.id, category.name)),
             options = ListRowOptions(dense = compact),
             subtitleContent = { CategoryAssignedAndSpent(state, category, words) },
@@ -283,7 +284,7 @@ private fun RowScope.CategoryProgressDetails(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                category.name,
+                maskedName(category.name),
                 modifier = Modifier.weight(1f),
                 color = palette.text,
                 fontSize = TandemTypography.body,
@@ -351,7 +352,7 @@ private fun IncomeCategoryProgressCard(
         }
     SurfaceCard(modifier = modifier, onClick = onClick, animateSizeChanges = false) {
         ListRow(
-            category.name,
+            maskedName(category.name),
             if (state.privacyModeEnabled) {
                 null
             } else if (words.plan == null) {

@@ -169,6 +169,9 @@ internal class AppState {
             TrustedCertificates.restore(value)
         }
 
+    /** Whether Hide budget amounts also masks account, category and payee names, for sharing the screen. */
+    var privacyMaskNames by mutableStateOf(false)
+
     /** The tab the app opens on, by route name; Home when blank or not shown. */
     var startPageName by mutableStateOf("")
 
@@ -329,6 +332,7 @@ internal class AppState {
             "bankIconsEnabled" to bankIconsEnabled.toString(),
             "hideAmountsGesture" to hideAmountsGesture.toString(),
             TrustedCertificates.PREFERENCE_KEY to trustedCertificates,
+            "privacyMaskNames" to privacyMaskNames.toString(),
             "startPage" to startPageName,
             "defaultTransactionAccountId" to defaultTransactionAccountId,
             "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
@@ -408,6 +412,7 @@ internal class AppState {
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
         hideAmountsGesture = saved["hideAmountsGesture"]?.toBooleanStrictOrNull() ?: hideAmountsGesture
         trustedCertificates = saved[TrustedCertificates.PREFERENCE_KEY] ?: trustedCertificates
+        privacyMaskNames = saved["privacyMaskNames"]?.toBooleanStrictOrNull() ?: privacyMaskNames
         startPageName = saved["startPage"] ?: startPageName
         defaultTransactionAccountId = saved["defaultTransactionAccountId"] ?: defaultTransactionAccountId
         balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled
