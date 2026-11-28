@@ -2,8 +2,6 @@
 
 package app.tandemforactual.ui.feature.rules
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.tandemforactual.data.store.PayeeDuplicateGroup
 import app.tandemforactual.data.store.PayeeUsage
@@ -26,18 +23,12 @@ import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.buttons.TandemModalHeader
 import app.tandemforactual.ui.design.feedback.BodyText
-import app.tandemforactual.ui.design.rows.DividerLine
-import app.tandemforactual.ui.design.rows.ListRow
-import app.tandemforactual.ui.design.rows.ListRowOptions
-import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.sheets.SheetCard
 import app.tandemforactual.ui.design.sheets.TandemTaskSheet
-import app.tandemforactual.ui.design.theme.TandemSpacing
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Merge
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.X
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -97,17 +88,18 @@ internal fun PayeeCleanupSheet(
     LaunchedEffect(visible, budgetId) {
         if (visible) dismissed = decodePayeeGroupKeys(mobileSession.preferencesStore?.read()?.get(notDuplicatesKey(budgetId)))
     }
+    val usages =
+        remember(payees, counts) {
+            counts?.let { used -> payees.map { (id, name) -> PayeeUsage(id, name, (used[id] ?: 0L).toInt()) } }
+        }
     val groups =
-        remember(payees, counts, dismissed) {
+        remember(usages, dismissed) {
             val hidden = dismissed ?: return@remember null
-            counts
-                ?.let { used -> payeeDuplicateGroups(payees.map { (id, name) -> PayeeUsage(id, name, (used[id] ?: 0L).toInt()) }) }
-                ?.filter { payeeGroupKey(it) !in hidden }
+            usages?.let(::payeeDuplicateGroups)?.filter { payeeGroupKey(it) !in hidden }
         }
     val busy = mobileSession.isPerformingBudgetAction
     val enabled = !state.readOnlyMode && !busy
-    val notDuplicates: (PayeeDuplicateGroup) -> Unit = { group ->
-        val kept = (dismissed ?: emptySet()) + payeeGroupKey(group)
+    val saveHidden: (Set<String>) -> Unit = { kept ->
         dismissed = kept
         scope.launch { mobileSession.preferencesStore?.putValue(notDuplicatesKey(budgetId), encodePayeeGroupKeys(kept)) }
     }
@@ -132,8 +124,15 @@ internal fun PayeeCleanupSheet(
                         )
                     }
                     groups.forEach { group ->
-                        PayeeGroupCard(group, enabled, { merge(listOf(group), state, mobileSession, scope) }) { notDuplicates(group) }
+                        PayeeGroupCard(group, usages.orEmpty(), enabled, { merge(listOf(it), state, mobileSession, scope) }) {
+                            saveHidden((dismissed ?: emptySet()) + payeeGroupKey(group))
+                        }
                     }
+                }
+            }
+            dismissed?.takeIf { it.isNotEmpty() }?.let { hidden ->
+                TandemActionButton("Show ${hidden.size} hidden again", TandemActionButtonTone.NEUTRAL, enabled = enabled) {
+                    saveHidden(emptySet())
                 }
             }
             counts?.let { used -> UnusedPayeesCard(unusedPayees(payees, used, inRules), enabled, state, mobileSession, scope) }
@@ -180,46 +179,6 @@ private fun UnusedPayeesCard(
 
 private fun payeeCount(count: Int): String = if (count == 1) "1 payee" else "$count payees"
 
-@Composable
-private fun PayeeGroupCard(
-    group: PayeeDuplicateGroup,
-    enabled: Boolean,
-    onMerge: () -> Unit,
-    onNotDuplicates: () -> Unit,
-) {
-    val detail = group.stripped.takeIf { it.isNotEmpty() }?.let { "Set aside: ${it.take(MAX_STRIPPED_SHOWN).joinToString(", ")}" }
-    SectionCard(group.name, detail = detail) {
-        group.members.forEachIndexed { index, member ->
-            if (index > 0) DividerLine()
-            ListRow(
-                member.name,
-                subtitle = if (member.id == group.keepId) "Kept" else "Merged in",
-                trailing = transactionCount(member.transactions),
-                leading = RowLeading.Payee(member.name),
-                options = ListRowOptions(showChevron = false),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
-            TandemActionButton(
-                "Merge into ${group.name}",
-                TandemActionButtonTone.PRIMARY,
-                modifier = Modifier.weight(1f),
-                icon = Lucide.Merge,
-                enabled = enabled,
-                onClick = onMerge,
-            )
-            TandemActionButton(
-                "Not the same",
-                TandemActionButtonTone.NEUTRAL,
-                modifier = Modifier.weight(1f),
-                icon = Lucide.X,
-                enabled = enabled,
-                onClick = onNotDuplicates,
-            )
-        }
-    }
-}
-
 private fun merge(
     groups: List<PayeeDuplicateGroup>,
     state: AppState,
@@ -253,9 +212,5 @@ private suspend fun BudgetEdits.apply(
         is PayeeCleanupStep.Rename -> manageBudgetPayee(budgetId, step.payeeId, "rename", step.name, null, password)
         is PayeeCleanupStep.Delete -> manageBudgetPayee(budgetId, step.payeeId, "delete", null, null, password)
     }
-
-private fun transactionCount(count: Int): String = if (count == 1) "1 transaction" else "$count transactions"
-
-private const val MAX_STRIPPED_SHOWN = 4
 
 private const val MAX_UNUSED_SHOWN = 5
