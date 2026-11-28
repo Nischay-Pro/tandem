@@ -48,6 +48,8 @@ kotlin {
     getByName("androidHostTest") {
       dependencies {
         implementation(kotlin("test"))
+        implementation(libs.okhttpTls)
+        implementation(libs.okhttpMockWebServer)
       }
     }
   }
