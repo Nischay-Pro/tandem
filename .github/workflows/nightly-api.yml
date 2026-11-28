@@ -411,6 +411,33 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Build the App Bundle for Google Play internal testing
+        if: vars.PLAY_INTERNAL_TESTING == 'true'
+        working-directory: mobile
+        env:
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE: ${{ runner.temp }}/tandem-nightly.p12
+          TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
+          TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
+          TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
+          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_NAME: 0.1.0-nightly.${{ github.run_number }}
+        run: |
+          ./gradlew \
+            :androidApp:bundleRelease \
+            -PtandemVersionCode="$NIGHTLY_VERSION_CODE" \
+            -PtandemVersionName="$NIGHTLY_VERSION_NAME"
+
+      - name: Upload to the Google Play internal testing track
+        if: vars.PLAY_INTERNAL_TESTING == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.tandemforactual.android
+          releaseFiles: mobile/androidApp/build/outputs/bundle/release/androidApp-release.aab
+          releaseName: 0.1.0-nightly.${{ github.run_number }}
+          track: internal
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
+
   nightly_ios:
     name: Unsigned nightly iOS app
     needs:
