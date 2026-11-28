@@ -56,6 +56,46 @@ internal val BUILT_IN_PAYMENT_FORMATS: List<PaymentTextFormat> =
             "You’ve received \$40.00 from Sam Lee.",
             income = true,
         ),
+        format(
+            "Bank UPI sent",
+            """sent\s+$MONEY\s+from\s+.*?a/?c\s*[*x]*(?<account>\d{3,4})\s+to\s+(?<payee>.+?)\s+on\s+""" +
+                """(?<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+ref\s*(?:no\.?)?\s*(?<ref>\d+)""",
+            "Sent Rs.250.00 From HDFC Bank A/C *1234 To SWIGGY On 28/11/26 Ref 433212345678 Not You? Call 18002586161",
+            income = false,
+        ),
+        format(
+            "Bank UPI transfer",
+            """a/c\s*[x*]*(?<account>\d{3,4})\s+(?<type>debited|credited)\s+by\s+$MONEY\s+on\s+date\s+""" +
+                """(?<date>\d{1,2}\s?[a-z]{3}\s?\d{2,4})\s+trf\s+(?:to|from)\s+(?<payee>.+?)\s+ref\s*no\s*(?<ref>\d+)""",
+            "Dear UPI user A/C X1234 debited by 120.0 on date 28Nov26 trf to ZOMATO Refno 433298765432. If not u? call 1800111109. -SBI",
+            "Dear UPI user A/C X5678 credited by 2,500.00 on date 27Nov26 trf from RAVI KUMAR Refno 433200009999. -SBI",
+        ),
+        format(
+            "Bank account debit",
+            """acct\s*[x*]*(?<account>\d{3,4})\s+(?<type>debited|credited)\s+(?:for|with)\s+$MONEY\s+on\s+""" +
+                """(?<date>\d{1,2}-[a-z]{3}-\d{2,4});\s*(?<payee>.+?)\s+(?:credited|debited)\.\s*upi[:\s]*(?<ref>\d+)""",
+            "ICICI Bank Acct XX234 debited for Rs 499.00 on 28-Nov-26; AMAZON PAY credited. UPI:433211112222. Call 18002662.",
+        ),
+        format(
+            "Bank account UPI credit",
+            """$MONEY\s+(?<type>credited|debited)\s+(?:to|from)\s+a/c\s*(?:no\.?)?\s*[x*]*(?<account>\d{3,4})\s+on\s+""" +
+                """(?<date>\d{1,2}-\d{1,2}-\d{2,4}).*?upi/[a-z0-9]+/(?<ref>\d+)/(?<payee>[^/.\n]+)""",
+            "INR 5,000.00 credited to A/c no. XX1234 on 28-11-2026 at 10:15:22 IST. " +
+                "Info- UPI/P2A/433200001111/RAVI KUMAR. Avl Bal- INR 12,345.67",
+        ),
+        format(
+            "UPI app payment",
+            """paid\s+$MONEY\s+to\s+(?<payee>.+?)(?:\s+(?:using|via|from|on)\b|[.!]|$)""",
+            "Paid ₹149 to Swiggy using UPI",
+            "Paid ₹1,250.50 to Ravi Kumar.",
+            income = false,
+        ),
+        format(
+            "UPI app received",
+            """$MONEY\s+received\s+from\s+(?<payee>.+?)(?:\s+(?:on|via|in)\b|[.!]|$)""",
+            "₹2,000 received from Ravi Kumar",
+            income = true,
+        ),
     )
 
 /** The first format in [formats] that reads [text], or null when none does. */
