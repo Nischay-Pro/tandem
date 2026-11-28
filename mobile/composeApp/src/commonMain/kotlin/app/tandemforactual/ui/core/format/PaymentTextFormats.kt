@@ -123,4 +123,3 @@ internal fun describeReadPayment(
         read.dateText?.let { "date $it" },
         read.reference?.let { "ref $it" },
     ).joinToString(" · ")
-
