@@ -52,6 +52,7 @@ internal fun AccountOptionsHeader(
             )
         }
     }
+    liveAccount?.let { AccountIconPicker(it, state, mobileSession) }
 }
 
 /** The account's name, type, balance, budget status and currency; type and currency can be changed here. */

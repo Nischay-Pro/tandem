@@ -41,6 +41,7 @@ import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.PrivacyAmountText
+import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowBadgeMark
 import app.tandemforactual.ui.design.rows.RowContextMenu
@@ -164,10 +165,12 @@ private fun accountBalanceColor(account: AccountListItemUi): Color {
 @Composable
 private fun AccountSummaryIcon(
     account: AccountListItemUi,
-    artwork: LogoPainter?,
+    logo: LogoPainter?,
     bankBadge: RowBadge?,
 ) {
     val palette = tandemPalette
+    val chosen = LocalRowLogos.current?.chosenIcon?.invoke(account.name)
+    val artwork = logo.takeIf { chosen == null }
     Box {
         Box(
             Modifier
@@ -189,7 +192,7 @@ private fun AccountSummaryIcon(
                 )
             } else {
                 Icon(
-                    accountTypeIcon(account.name, account.kind),
+                    chosen ?: accountTypeIcon(account.name, account.kind),
                     contentDescription = null,
                     modifier = Modifier.size(TandemLayout.listRowIconSize),
                     tint = if (account.closed) palette.muted else palette.accent,

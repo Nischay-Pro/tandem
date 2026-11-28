@@ -200,6 +200,13 @@ class PlanningStore(
 
     suspend fun deleteSavedSearch(id: String) = delete(id, SavedSearch.TYPE)
 
+    fun accountIcons(): Flow<List<AccountIconChoice>> =
+        observe(AccountIconChoice.TYPE).map { list -> list.mapNotNull { (_, body) -> AccountIconChoice.fromJson(body) } }
+
+    suspend fun save(choice: AccountIconChoice) = put(choice.id, AccountIconChoice.TYPE, choice.toJson())
+
+    suspend fun deleteAccountIcon(accountId: String) = delete(AccountIconChoice.id(accountId), AccountIconChoice.TYPE)
+
     fun depositTerms(): Flow<List<DepositTerms>> =
         observe(DepositTerms.TYPE).map { list -> list.map { (id, body) -> DepositTerms.fromJson(id, body) } }
 

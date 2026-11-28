@@ -7,6 +7,7 @@ import app.tandemforactual.api.client.ExtensionSyncException
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.planning.AccountCurrency
+import app.tandemforactual.data.planning.AccountIconChoice
 import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.AccountKindChoice
 import app.tandemforactual.data.planning.CardNetwork
@@ -63,6 +64,10 @@ internal class PlanningController(
         private set
     var accountCardNetworks by mutableStateOf<Map<String, CardNetwork>>(emptyMap())
         private set
+
+    /** The symbol picked for each account, by account id. */
+    var accountIcons by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
     var exchangeRates by mutableStateOf<List<ExchangeRate>>(emptyList())
         private set
     var deviceNames by mutableStateOf<Map<String, String>>(emptyMap())
@@ -92,6 +97,16 @@ internal class PlanningController(
         network: CardNetwork?,
     ) {
         planningStore(budgetId)?.save(AccountKindChoice(accountId, AccountKind.CREDIT_CARD, network))
+    }
+
+    /** Shows [icon] for the account, or its usual icon again when null. */
+    suspend fun saveAccountIcon(
+        budgetId: String,
+        accountId: String,
+        icon: String?,
+    ) {
+        val store = planningStore(budgetId) ?: return
+        if (icon == null) store.deleteAccountIcon(accountId) else store.save(AccountIconChoice(accountId, icon))
     }
 
     /** Keeps a kind chosen for an account added offline once Actual gives it a real id. */
@@ -450,6 +465,7 @@ internal class PlanningController(
         launch { store.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
         launch { store.customReports().collect { customReports = it } }
         launch { store.savedSearches().collect { savedSearches = it } }
+        launch { store.accountIcons().collect { list -> accountIcons = list.associate { it.accountId to it.icon } } }
         launch { store.paymentFormats().collect { paymentFormats = it } }
     }
 }
