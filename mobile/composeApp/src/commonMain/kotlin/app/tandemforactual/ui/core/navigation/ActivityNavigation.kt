@@ -21,10 +21,12 @@ internal fun openAccountActivity(
     navigation: AppNavigation,
     accountId: String,
     accountName: String,
+    dates: Pair<String, String>? = null,
 ) {
     state.activitySearchQuery = ""
     state.activitySearchResultCache = null
-    state.activitySearchFilters =
-        listOf(ActivitySearchFilter(ActivitySearchField.ACCOUNT, accountId.ifBlank { accountName }, "Account: $accountName"))
+    val account = ActivitySearchFilter(ActivitySearchField.ACCOUNT, accountId.ifBlank { accountName }, "Account: $accountName")
+    val range = dates?.let { (from, to) -> ActivitySearchFilter(ActivitySearchField.DATE_RANGE, "$from..$to", "$from to $to") }
+    state.activitySearchFilters = listOfNotNull(account, range)
     navigation.open(AppRoute.ACTIVITY_SEARCH)
 }

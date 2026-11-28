@@ -119,7 +119,7 @@ private fun AccountDetailFooter(
     navigation: AppNavigation,
     liveAccount: LiveAccountSummary,
 ) {
-    CardStatementsCard(state, mobileSession, liveAccount)
+    CardStatementsCard(state, mobileSession, navigation, liveAccount)
     LoanCard(state, mobileSession, liveAccount)
     AccountNoteSection(state, mobileSession, liveAccount)
     DepositCard(state, mobileSession, liveAccount)
