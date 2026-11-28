@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 # Runs the pinned ktlint on Kotlin files without Gradle. With no file arguments it checks all mobile Kotlin, as the
-# Gradle ktlintCheck tasks do. The version must match the ktlint version set in the mobile build files.
+# Gradle ktlintCheck tasks do. The version must match ktlint in mobile/gradle/libs.versions.toml.
 set -eu
 
-version=1.5.0
-sha256=a27854622198800f50971a049dcdba38f2105d47e7e7258786c7d28045c5735d
+version=1.8.0
+sha256=369ad2b789f95a011f807e1fcb690ccef80bd7cd014fd139e73ae82dcc0baeab
 url="https://repo1.maven.org/maven2/com/pinterest/ktlint/ktlint-cli/$version/ktlint-cli-$version-all.jar"
 
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/tandem
@@ -27,12 +27,10 @@ if [ ! -f "$jar" ] || ! verify "$jar"; then
 fi
 
 cd "$(git rev-parse --show-toplevel)"
-for build_file in mobile/api-client/build.gradle.kts mobile/data/build.gradle.kts mobile/composeApp/build.gradle.kts; do
-  if ! grep -q "version.set(\"$version\")" "$build_file"; then
-    printf '%s\n' "$build_file doesn't use ktlint $version; update both together." >&2
-    exit 1
-  fi
-done
+if ! grep -qx "ktlint = \"$version\"" mobile/gradle/libs.versions.toml; then
+  printf '%s\n' "mobile/gradle/libs.versions.toml doesn't use ktlint $version; update it and this script together." >&2
+  exit 1
+fi
 if [ "$#" -eq 0 ]; then
   set -- 'mobile/**/src/**/*.kt' 'mobile/**/*.kts' '!**/build/**' '!mobile/settings.gradle.kts'
 fi

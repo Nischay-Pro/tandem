@@ -60,7 +60,6 @@ tasks.configureEach {
 }
 
 ktlint {
-  version.set("1.5.0")
   filter {
     include("**/src/**/*.kt", "**/*.kts")
     exclude(

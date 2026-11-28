@@ -14,3 +14,11 @@ plugins {
   alias(libs.plugins.ksp) apply false
   alias(libs.plugins.room3) apply false
 }
+
+subprojects {
+  plugins.withId("org.jlleitschuh.gradle.ktlint") {
+    extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+      version.set(libs.versions.ktlint.get())
+    }
+  }
+}
