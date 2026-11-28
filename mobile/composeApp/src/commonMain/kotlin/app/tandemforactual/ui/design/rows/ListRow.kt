@@ -135,6 +135,7 @@ private fun ListRowLeadingTile(
             else -> null
         }
     val bankIcon = (leading as? RowLeading.Account)?.name?.takeIf(String::isNotBlank)?.let { logos?.bankIcon?.invoke(it) }
+    val photo = (leading as? RowLeading.Account)?.name?.takeIf(String::isNotBlank)?.let { logos?.photo?.invoke(it) }
     val artwork = rememberMerchantArtwork(merchantResource)
     val resolvedPainter = bankIcon ?: artwork
     val resolvedVector =
@@ -157,6 +158,10 @@ private fun ListRowLeadingTile(
             contentAlignment = Alignment.Center,
         ) {
             when {
+                photo != null -> {
+                    AccountPhotoFill(photo)
+                }
+
                 resolvedPainter != null -> {
                     Image(
                         painter = resolvedPainter,

@@ -41,6 +41,7 @@ import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
 import app.tandemforactual.ui.design.inputs.pointerHighlight
 import app.tandemforactual.ui.design.money.PrivacyAmountText
+import app.tandemforactual.ui.design.rows.AccountPhotoFill
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.rows.RowBadge
 import app.tandemforactual.ui.design.rows.RowBadgeMark
@@ -170,6 +171,7 @@ private fun AccountSummaryIcon(
 ) {
     val palette = tandemPalette
     val chosen = LocalRowLogos.current?.chosenIcon?.invoke(account.name)
+    val photo = LocalRowLogos.current?.photo?.invoke(account.name)
     val artwork = logo.takeIf { chosen == null }
     Box {
         Box(
@@ -179,7 +181,9 @@ private fun AccountSummaryIcon(
                 .background(logoTileColor(artwork, if (account.closed) palette.surface else palette.raised, account.closed)),
             contentAlignment = Alignment.Center,
         ) {
-            if (artwork != null) {
+            if (photo != null) {
+                AccountPhotoFill(photo)
+            } else if (artwork != null) {
                 Image(
                     artwork,
                     contentDescription = null,
