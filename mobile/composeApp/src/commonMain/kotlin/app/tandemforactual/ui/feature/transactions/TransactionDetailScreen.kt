@@ -107,6 +107,7 @@ internal fun TransactionDetailScreen(
             syncOperation?.let { TransactionSyncNotice(it, state, navigation) }
         }
         TransactionDetailFields(state)
+        OriginalPayeeText(state, mobileSession)
         val split = rememberTransactionSplit(state, mobileSession)
         split?.let { TransactionSplitParts(state, it) }
         ReimbursementCard(state, mobileSession, navigation)

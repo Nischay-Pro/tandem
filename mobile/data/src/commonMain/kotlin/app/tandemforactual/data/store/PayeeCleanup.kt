@@ -86,6 +86,20 @@ fun cleanPayeeName(
     return CleanedPayee(words.joinToString(" ").replace(EDGES, ""), stripped)
 }
 
+private val PROCESSOR_PREFIX = Regex("""^(?:[a-z]{2,8}\s?\*\s*)+""", RegexOption.IGNORE_CASE)
+
+/**
+ * A merchant name for text a bank, card processor or automation sent: a processor's short tag such as "SQ *" or
+ * "PAYPAL *" comes off the front, then the shape cleanup above. The text is kept as it came when nothing is left.
+ */
+fun cleanMerchantText(
+    raw: String,
+    boilerplate: Set<String>,
+): String {
+    val unwrapped = raw.trim().replace(PROCESSOR_PREFIX, "")
+    return cleanPayeeName(unwrapped, boilerplate).name.ifBlank { raw.trim() }
+}
+
 /** The form two names must share to count as the same merchant: letters and digits only, in lower case. */
 fun payeeMatchKey(name: String): String = name.lowercase().filter(Char::isLetterOrDigit)
 

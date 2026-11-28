@@ -138,6 +138,7 @@ class ActualTransactionOperations(
                 "payee" to input["payee"],
             )
         if (input["payee"] == null) input["payee_name"]?.let { transaction["payee_name"] = it }
+        input["imported_payee"]?.let { transaction["imported_payee"] = it }
         val offBudget = truthy(db.first("SELECT offbudget FROM accounts WHERE id = ?", input["account"])?.get("offbudget"))
         if (input["category"] != null && !offBudget) transaction["category"] = input["category"]
         transaction["notes"] = input["notes"]
@@ -481,7 +482,7 @@ class ActualTransactionOperations(
 
     private fun parseCreate(patch: JsonObject): Map<String, Any?> {
         val allowed = listOf("account", "amount", "date", "payee", "category", "notes", "cleared")
-        val unsupported = patch.keys - allowed.toSet() - "subtransactions" - "payee_name"
+        val unsupported = patch.keys - allowed.toSet() - "subtransactions" - "payee_name" - "imported_payee"
         if (unsupported.isNotEmpty()) {
             throw InvalidTransactionRequestException(
                 "transaction create input contains unsupported fields: ${unsupported.joinToString()}",
