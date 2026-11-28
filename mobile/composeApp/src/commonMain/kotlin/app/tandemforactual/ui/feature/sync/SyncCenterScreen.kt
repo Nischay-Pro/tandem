@@ -108,7 +108,7 @@ internal fun SyncCenterScreen(
                 )
             }
         }
-        syncCenterDetailItems(budgetOverview, mobileSession, navigation, state)
+        syncCenterDetailItems(budgetOverview, mobileSession, navigation, state) { confirmingDownload = true }
     }
     if (confirmingDownload) {
         val password = state.encryptedPassword
@@ -123,12 +123,13 @@ internal fun SyncCenterScreen(
     }
 }
 
-/** Budgets, bank links, services, device history and the bottom spacer below the sync actions. */
+/** Budgets, bank links, services, device history, starting over and the bottom spacer below the sync actions. */
 private fun LazyListScope.syncCenterDetailItems(
     budgetOverview: List<BudgetSyncOverview>,
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     state: AppState,
+    onReset: () -> Unit,
 ) {
     if (budgetOverview.size > 1) {
         item(key = "sync-center-budgets") {
@@ -144,6 +145,9 @@ private fun LazyListScope.syncCenterDetailItems(
         SyncCenterServices(mobileSession) { navigation.open(AppRoute.SETTINGS) }
     }
     item(key = "sync-center-history") { DeviceWriteHistory(state, mobileSession) }
+    if (mobileSession.isAuthenticated && !state.readOnlyMode) {
+        item(key = "sync-center-start-over") { SyncCenterStartOver(enabled = !mobileSession.isSyncing, onReset = onReset) }
+    }
     item(key = "sync-center-bottom-spacer") { Spacer(Modifier.height(72.dp)) }
 }
 
