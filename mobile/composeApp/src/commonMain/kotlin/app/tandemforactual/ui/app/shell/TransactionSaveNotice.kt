@@ -13,6 +13,7 @@ import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.booleanValue
 import app.tandemforactual.ui.core.state.formatCurrency
 import app.tandemforactual.ui.core.state.isOffBudgetAccount
+import app.tandemforactual.ui.core.state.longValue
 import app.tandemforactual.ui.core.state.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
@@ -54,12 +55,14 @@ internal class CategorySaveNotice(
     private val otherCategories: Int,
     private val changeMinor: Long,
     private val beforeJson: String?,
+    private val account: Pair<String, Long>?,
 ) {
     /** Shows the category's balance for the month the transaction is in, once the save went through. */
     suspend fun show(
         state: AppState,
         mobileSession: TandemMobileSession,
     ) {
+        if (!state.balanceAfterSaveEnabled) return
         val afterJson = mobileSession.budgetMonthJson(budgetId, main.month)
         val (balance, estimated) = balanceAfterSave(main.categoryId, beforeJson, afterJson, changeMinor) ?: return
         val name = mobileSession.categoryRecords.firstOrNull { it.recordId == main.categoryId }?.recordName() ?: return
@@ -72,6 +75,7 @@ internal class CategorySaveNotice(
                 hideAmounts = state.privacyModeEnabled,
                 monthPhrase = monthPhrase(main.month),
                 format = { state.formatCurrency(it) },
+                account = account,
             )
         mobileSession.transactions.showSaveNotice(
             budgetId,
@@ -89,12 +93,19 @@ internal class CategorySaveNotice(
             mobileSession: TandemMobileSession,
             before: List<CategoryEntry>,
             after: List<CategoryEntry>,
+            accountChange: Pair<String, Long>? = null,
         ): CategorySaveNotice? {
             val (main, others) = mainCategory(after) ?: return null
             val record = mobileSession.categoryRecords.firstOrNull { it.recordId == main.categoryId } ?: return null
             if (record.recordBody()?.booleanValue("is_income") == true) return null
             val change = categoryChange(main.categoryId, main.month, before, after)
-            return CategorySaveNotice(budgetId, main, others, change, mobileSession.budgetMonthJson(budgetId, main.month))
+            val account =
+                accountChange?.let { (accountId, amount) ->
+                    val record = mobileSession.accountRecords.firstOrNull { it.recordId == accountId }
+                    val balance = record?.recordBody()?.longValue("balance_current") ?: return@let null
+                    (record.recordName() ?: return@let null) to balance + amount
+                }
+            return CategorySaveNotice(budgetId, main, others, change, mobileSession.budgetMonthJson(budgetId, main.month), account)
         }
     }
 }

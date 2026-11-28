@@ -35,4 +35,7 @@
     <string name="language_change">భాషను మార్చండి</string>
     <string name="language_close">మూసివేయి</string>
     <string name="language_device_detail">ఈ పరికరంలో సెట్ చేసిన భాషను అనుసరిస్తుంది</string>
+    <!-- Needs native review -->
+    <string name="settings_balance_after_save">సేవ్ చేసిన తర్వాత బ్యాలెన్స్</string>
+    <string name="settings_balance_after_save_detail">లావాదేవీ జోడించినప్పుడు వర్గంలో మిగిలిన మొత్తం మరియు ఖాతా బ్యాలెన్స్ చూపించు</string>
 </resources>

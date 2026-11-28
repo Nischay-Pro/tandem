@@ -217,6 +217,8 @@
     <string name="decide_connect_detail">Start with a simple Home. Personalize any time in Settings.</string>
     <string name="mode_minimal_short">Focused and calm</string>
     <string name="mode_advanced_short">Dense and detailed</string>
+    <string name="settings_balance_after_save">Balance after saving</string>
+    <string name="settings_balance_after_save_detail">Show what’s left in the category and the account’s balance when you add a transaction</string>
     <string name="tools_add_short">Add</string>
     <string name="tools_added_short">Added</string>
     <string name="personalize_progress">Step %1$d of %2$d</string>

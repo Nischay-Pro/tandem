@@ -80,6 +80,7 @@ internal fun categorySaveFeedback(
     hideAmounts: Boolean,
     monthPhrase: String,
     format: (Long) -> String,
+    account: Pair<String, Long>? = null,
 ): CategorySaveFeedback {
     val over = balanceMinor < 0
     val text =
@@ -93,6 +94,10 @@ internal fun categorySaveFeedback(
         title = if (otherCategories > 0) "Saved across ${otherCategories + 1} categories" else "Saved",
         text = text,
         over = over,
-        detail = "Includes changes waiting to sync".takeIf { estimated },
+        detail =
+            listOfNotNull(
+                account?.takeUnless { hideAmounts }?.let { (name, balance) -> "$name · ${format(balance)}" },
+                "Includes changes waiting to sync".takeIf { estimated },
+            ).joinToString(" · ").ifEmpty { null },
     )
 }
