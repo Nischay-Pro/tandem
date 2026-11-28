@@ -74,6 +74,62 @@ struct LogTransactionIntent: AppIntent {
     }
 }
 
+/// Moves money between two accounts in the open budget; Actual adds the matching transaction in the other account.
+struct TransferMoneyIntent: AppIntent {
+    static let title: LocalizedStringResource = "Transfer money"
+    static let description: IntentDescription? = IntentDescription(
+        "Moves money from one account to another in the open budget without opening Tandem. Turn on Allow automation apps to add transactions in Tandem’s settings first."
+    )
+
+    @Parameter(title: "Amount")
+    var amount: Double
+
+    @Parameter(title: "From account")
+    var fromAccount: AccountEntity
+
+    @Parameter(title: "To account")
+    var toAccount: AccountEntity
+
+    @Parameter(title: "Date")
+    var date: Date?
+
+    @Parameter(title: "Notes")
+    var notes: String?
+
+    @Parameter(title: "External ID", description: "Repeats with the same ID within 30 days add nothing.")
+    var externalId: String?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Transfer \(\.$amount) from \(\.$fromAccount) to \(\.$toAccount)") {
+            \.$date
+            \.$notes
+            \.$externalId
+        }
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        guard let text = AutomationAmountText.make(amount, moneyIn: false) else {
+            throw TandemIntentError(message: "Enter an amount other than zero.")
+        }
+        let added = try await TandemAutomation.transfer(
+            amount: text,
+            fromAccount: fromAccount.id,
+            toAccount: toAccount.id,
+            date: date.map(AutomationDateText.make),
+            notes: notes,
+            externalId: externalId
+        )
+        if added.repeated {
+            return .result(value: added.transactionId, dialog: "Already added, so nothing new was added.")
+        }
+        TandemAutomationNotifications.shared.added(added)
+        if !added.sealed {
+            IosBackgroundSyncScheduler.shared.requestAfterAutomation()
+        }
+        return .result(value: added.transactionId, dialog: "\(added.summary)")
+    }
+}
+
 /// Reads a category's left to spend from this device's copy of the budget.
 struct LeftToSpendIntent: AppIntent {
     static let title: LocalizedStringResource = "Left to spend"
@@ -277,6 +333,28 @@ enum TandemAutomation {
                 date: date,
                 notes: notes,
                 cleared: cleared,
+                externalId: externalId
+            ) { added, failure in
+                TandemAutomation.resume(continuation, with: added, failure)
+            }
+        }
+    }
+
+    static func transfer(
+        amount: String,
+        fromAccount: String,
+        toAccount: String,
+        date: String?,
+        notes: String?,
+        externalId: String?
+    ) async throws -> IosAutomationAdded {
+        try await withCheckedThrowingContinuation { continuation in
+            IosAutomation.shared.transfer(
+                amount: amount,
+                fromAccount: fromAccount,
+                toAccount: toAccount,
+                date: date,
+                notes: notes,
                 externalId: externalId
             ) { added, failure in
                 TandemAutomation.resume(continuation, with: added, failure)

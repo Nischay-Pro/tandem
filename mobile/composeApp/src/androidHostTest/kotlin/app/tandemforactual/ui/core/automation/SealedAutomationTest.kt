@@ -71,6 +71,17 @@ class SealedAutomationTest {
         }
 
     @Test
+    fun aLockedTransferIsSealedWithItsOtherAccount() =
+        withBudgets { vault, main ->
+            unlock(vault, main)
+            seal(main, AutomationTransactionInput("40", account = "Checking", transferTo = "Savings"))
+            assertEquals(SealedInboxResult(1, emptyList(), 0), unlock(vault, main))
+            val patch = Json.parseToJsonElement(pending(vault).single().patchJson).jsonObject
+            assertEquals(JsonPrimitive(-4000), patch["amount"])
+            assertEquals(JsonPrimitive("to-savings"), patch["payee"])
+        }
+
+    @Test
     fun anEntryAddedJustBeforeTheAppWasKilledIsNotAddedTwice() =
         withBudgets { vault, main ->
             unlock(vault, main)
@@ -194,6 +205,8 @@ class SealedAutomationTest {
         listOf(
             record("account", "checking", """{"id":"checking","name":"Checking","offbudget":false,"closed":false}"""),
             record("payee", "cafe", """{"id":"cafe","name":"Corner Café"}"""),
+            record("account", "savings", """{"id":"savings","name":"Savings","offbudget":false,"closed":false}"""),
+            record("payee", "to-savings", """{"id":"to-savings","name":"","transfer_acct":"savings"}"""),
         )
 
     private fun record(

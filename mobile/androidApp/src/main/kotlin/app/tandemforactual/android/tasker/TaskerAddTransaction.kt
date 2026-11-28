@@ -25,8 +25,10 @@ class TaskerAddTransactionInput
         @field:TaskerInputField("notes", labelResIdName = "tasker_notes", order = 5) var notes: String? = null,
         @field:TaskerInputField("cleared", labelResIdName = "tasker_cleared", order = 6) var cleared: String? = null,
         @field:TaskerInputField("external_id", labelResIdName = "tasker_external_id", order = 7) var externalId: String? = null,
+        @field:TaskerInputField("transfer_to", labelResIdName = "tasker_transfer_to", order = 8) var transferTo: String? = null,
     ) {
-        fun toAutomation() = AutomationTransactionInput(amount, payee, category, account, date, notes, cleared, externalId)
+        fun toAutomation() =
+            AutomationTransactionInput(amount, payee, category, account, date, notes, cleared, externalId, transferTo = transferTo)
 
         fun values(): Map<String, String?> =
             mapOf(
@@ -38,6 +40,7 @@ class TaskerAddTransactionInput
                 "notes" to notes,
                 "cleared" to cleared,
                 "external_id" to externalId,
+                "transfer_to" to transferTo,
             )
 
         companion object {
@@ -52,6 +55,7 @@ class TaskerAddTransactionInput
                     value("notes"),
                     value("cleared"),
                     value("external_id"),
+                    value("transfer_to"),
                 )
             }
         }

@@ -43,6 +43,8 @@ data class AutomationTransactionInput(
     val cleared: String? = null,
     val externalId: String? = null,
     val amountFormat: AutomationAmountFormat = AutomationAmountFormat.BUDGET,
+    /** The account money moves to from [account]; set, it makes a transfer and payee and category are ignored. */
+    val transferTo: String? = null,
 )
 
 enum class AutomationAmountFormat {
@@ -87,6 +89,7 @@ private class ResolvedTransaction(
     val category: BudgetRecordEntity?,
     val notes: String,
     val cleared: Boolean,
+    val transferLabel: String? = null,
 )
 
 /**
@@ -111,7 +114,7 @@ suspend fun addAutomatedTransaction(
     externalId?.let { log.repeatOf(it, nowEpochMs) }?.let { earlier ->
         return AutomatedTransaction(earlier.transactionId, earlier.operationId, 0, null, null, repeated = true, settings)
     }
-    val resolved = resolveTransaction(repository, budgetId, input, settings, todayIso)
+    val resolved = resolveTransaction(repository, budgetId, input.signedForTransfer(), settings, todayIso)
     val operationId = Uuid.random().toString()
     try {
         repository.enqueueWrite(writeRequest(operationId, budgetId, transactionId, resolved, nowEpochMs))
@@ -128,7 +131,7 @@ suspend fun addAutomatedTransaction(
         transactionId,
         operationId,
         resolved.amountMinor,
-        resolved.payee?.recordName() ?: resolved.newPayeeName,
+        resolved.transferLabel ?: resolved.payee?.recordName() ?: resolved.newPayeeName,
         resolved.category?.recordName(),
         repeated = false,
         displaySettings = settings,
@@ -147,7 +150,23 @@ private suspend fun resolveTransaction(
             AutomationAmountFormat.BUDGET -> automationAmount(input.amount, settings)
             AutomationAmountFormat.PLAIN -> automationPlainAmount(input.amount, settings)
         }
-    val account = automationAccount(repository.findRecords(budgetId, "account"), automationInput(input.account))
+    val accounts = repository.findRecords(budgetId, "account")
+    val account = automationAccount(accounts, automationInput(input.account))
+    automationInput(input.transferTo)?.let { name ->
+        val destination = automationAccount(accounts, name)
+        return ResolvedTransaction(
+            account = account,
+            amountMinor = amount,
+            date = automationDate(input.date, todayIso),
+            payee = transferPayee(repository.findRecords(budgetId, "payee"), account, destination),
+            newPayeeName = null,
+            importedPayee = null,
+            category = null,
+            notes = automationInput(input.notes).orEmpty(),
+            cleared = automationCleared(input.cleared),
+            transferLabel = "Transfer to ${destination.recordName() ?: name}",
+        )
+    }
     val payeeChoice = automationInput(input.payee)?.let { automationPayeeChoice(repository.findRecords(budgetId, "payee"), it) }
     val category =
         automationInput(input.category)
@@ -259,6 +278,29 @@ internal fun automationPayeeChoice(
     return AutomationPayeeChoice(matched, cleaned.takeIf { matched == null }, text)
 }
 
+/** A transfer's amount without a sign moves money out of the account, to the account it's transferred to. */
+internal fun AutomationTransactionInput.signedForTransfer(): AutomationTransactionInput {
+    val text = automationInput(amount)
+    if (automationInput(transferTo) == null || text == null || text.first() in "+-−") return this
+    return copy(amount = "-$text")
+}
+
+/** The payee that moves money into [destination]; Actual adds the matching transaction there. */
+internal fun transferPayee(
+    payees: List<BudgetRecordEntity>,
+    account: BudgetRecordEntity,
+    destination: BudgetRecordEntity,
+): BudgetRecordEntity {
+    if (destination.recordId == account.recordId) {
+        throw AutomationException(AutomationErrorCode.ACCOUNT, "Choose two different accounts for a transfer.")
+    }
+    return payees.firstOrNull { !it.localDeleted && it.recordBody()?.stringValue("transfer_acct") == destination.recordId }
+        ?: throw AutomationException(
+            AutomationErrorCode.ACCOUNT,
+            "Tandem can’t transfer to “${destination.recordName()}” yet. Sync the budget, then try again.",
+        )
+}
+
 /** An existing payee by id or name, or null to create one with that name; transfer payees are refused. */
 internal fun automationPayee(
     payees: List<BudgetRecordEntity>,
@@ -266,7 +308,10 @@ internal fun automationPayee(
 ): BudgetRecordEntity? {
     val payee = payees.matching(text) ?: return null
     if (!payee.recordBody()?.stringValue("transfer_acct").isNullOrBlank()) {
-        throw AutomationException(AutomationErrorCode.PAYEE, "Automation apps can’t add transfers. Use a payee that isn’t an account.")
+        throw AutomationException(
+            AutomationErrorCode.PAYEE,
+            "Use Transfer to for money moved between accounts, and a payee that isn’t an account here.",
+        )
     }
     return payee
 }

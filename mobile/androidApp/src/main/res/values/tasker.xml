@@ -10,6 +10,7 @@
   <string name="tasker_notes">Notes</string>
   <string name="tasker_cleared">Cleared</string>
   <string name="tasker_external_id">Repeat check ID</string>
+  <string name="tasker_transfer_to">Transfer to account</string>
   <string name="tasker_month">Month</string>
   <string name="tasker_output_transaction_id">Transaction ID</string>
   <string name="tasker_output_transaction_id_detail">Tandem’s ID for the added transaction, or for the first one when the repeat check ID was used before.</string>
