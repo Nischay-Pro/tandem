@@ -9,7 +9,9 @@ import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.formatAmount
+import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.state.recordName
+import app.tandemforactual.ui.core.state.stringValue
 
 /** What Tandem read from a receipt photo. */
 internal data class ScannedReceipt(
@@ -181,7 +183,52 @@ internal suspend fun fillFromSharedText(
     }
     val date = shared.dateText?.let { receiptDate(listOf(it), platformTodayIsoDate()) }
     fillNewTransaction(state, mobileSession, shared.amountMinor, shared.payeeHint, date, shared.isIncome, shared.original)
+    val reference = shared.reference ?: return
+    state.transactionNotes = notesWithReference(state.transactionNotes, reference)
+    val known =
+        mobileSession.transactionRecords
+            .filterNot { it.localDeleted || it.remoteDeleted }
+            .map { record ->
+                val body = record.recordBody()
+                KnownPayment(record.recordDate, body?.stringValue("notes"), body?.stringValue("importedId"))
+            }
+    findByReference(reference, known)?.let { match ->
+        val on = match.date?.let { " on $it" }.orEmpty()
+        mobileSession.reportTransactionWriteMessage(
+            "A payment with reference $reference was already added$on. Check this isn’t a duplicate.",
+        )
+    }
 }
+
+/** A saved transaction's date and the fields a payment reference can be kept in. */
+internal data class KnownPayment(
+    val date: String?,
+    val notes: String?,
+    val importedId: String?,
+)
+
+/** The saved transaction that already carries [reference], so the same payment isn't added twice. */
+internal fun findByReference(
+    reference: String?,
+    known: List<KnownPayment>,
+): KnownPayment? {
+    val ref = reference?.trim()?.takeIf { it.length >= MIN_REFERENCE } ?: return null
+    return known.firstOrNull { it.importedId == ref || it.notes?.contains(ref) == true }
+}
+
+/** Notes that keep the payment's reference, so a later share of the same message can be recognised. */
+internal fun notesWithReference(
+    notes: String,
+    reference: String,
+): String =
+    when {
+        reference in notes -> notes
+        notes.isBlank() -> "Ref $reference"
+        else -> "Ref $reference · $notes"
+    }.take(MAX_NOTES)
+
+private const val MIN_REFERENCE = 6
+private const val MAX_NOTES = 200
 
 /** Fills the new transaction from what was read, matching the payee to an existing one and suggesting its usual category. */
 internal suspend fun fillNewTransaction(
