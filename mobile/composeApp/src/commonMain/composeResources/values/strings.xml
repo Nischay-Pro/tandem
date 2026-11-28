@@ -112,6 +112,9 @@
     <string name="setup_open_saved_copy">Open saved copy</string>
     <string name="setup_open_budget">Open budget</string>
     <string name="setup_cancel">Cancel</string>
+    <string name="setup_certificate_check">%1$s uses a certificate this device doesn’t trust, such as a self-signed one. If it’s your own server, check that this fingerprint matches the one your server shows.</string>
+    <string name="setup_certificate_fingerprint">SHA-256 fingerprint</string>
+    <string name="setup_certificate_trust">Trust this certificate for this server</string>
     <string name="setup_new_budget">New budget</string>
     <string name="setup_new_budget_detail">Start an empty budget on this server</string>
     <string name="setup_new_budget_name">Budget name</string>
