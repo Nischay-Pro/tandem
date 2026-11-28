@@ -57,6 +57,13 @@ internal fun SecurityScreen(
                 onChange = { state.hideAmountsGesture = it },
             )
             DividerLine()
+            ToggleRow(
+                title = "Hide names too",
+                subtitle = "Hide budget amounts also masks account, category and payee names, for sharing your screen",
+                checked = state.privacyMaskNames,
+                onChange = { state.privacyMaskNames = it },
+            )
+            DividerLine()
             ListRow(
                 "Encrypted budget",
                 when {

@@ -22,6 +22,7 @@ import app.tandemforactual.ui.core.state.AppRoute
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.currencyFractionDigitsForDisplay
+import app.tandemforactual.ui.core.ui.maskedName
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -100,7 +101,7 @@ internal fun AccountGroupHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            group.name,
+            maskedName(group.name),
             color = tandemPalette.text,
             fontSize = TandemTypography.label,
             fontWeight = FontWeight.SemiBold,

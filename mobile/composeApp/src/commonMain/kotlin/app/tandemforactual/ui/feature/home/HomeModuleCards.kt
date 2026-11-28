@@ -13,6 +13,7 @@ import app.tandemforactual.ui.core.state.HomeModule
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.core.state.LiveBudgetMonthSummary
 import app.tandemforactual.ui.core.ui.accountTypeIcon
+import app.tandemforactual.ui.core.ui.maskedName
 import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.ListRowOptions
@@ -46,7 +47,7 @@ internal fun CategoryProgressCard(
         categories.forEachIndexed { index, category ->
             if (index > 0) DividerLine()
             ListRow(
-                category.name,
+                maskedName(category.name),
                 if (category.balanceMinor <
                     0
                 ) {
@@ -125,8 +126,8 @@ internal fun AccountsSummaryCard(
     }) {
         shown.forEach { account ->
             ListRow(
-                account.name,
-                leading = RowLeading.Account(account.name, fallback = accountTypeIcon(account.name, account.kind)),
+                maskedName(account.name),
+                leading = RowLeading.Account(maskedName(account.name), fallback = accountTypeIcon(account.name, account.kind)),
                 trailingContent = { money(account.balanceMinor ?: 0) },
                 onClick = {
                     state.selectedAccountId = account.id

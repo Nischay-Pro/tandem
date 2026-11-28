@@ -30,8 +30,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.runner.RunWith
@@ -54,7 +55,7 @@ class ExchangeRateFetchingTest {
 
     @AfterTest
     fun close() {
-        scope.cancel()
+        runBlocking { scope.coroutineContext.job.cancelAndJoin() }
         database.close()
     }
 
