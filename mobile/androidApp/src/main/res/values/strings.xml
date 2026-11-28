@@ -7,6 +7,8 @@
   <string name="widget_category_cover_label">Left to spend for the cover screen</string>
   <string name="widget_category_title">Left to spend</string>
   <string name="widget_category_description">See what’s left in the categories you pick this month.</string>
+  <string name="widget_net_worth_label">Net worth</string>
+  <string name="widget_net_worth_description">See what your open accounts hold, less what they owe.</string>
   <string name="widget_quick_add_label">Quick add</string>
   <string name="widget_quick_add_short">Add</string>
   <string name="widget_quick_add_description">Start a new transaction in one tap, in an account you pick.</string>

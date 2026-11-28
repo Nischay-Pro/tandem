@@ -207,6 +207,17 @@
         android:resource="@xml/budget_widget_info" />
     </receiver>
     <receiver
+      android:name=".NetWorthWidget"
+      android:exported="false"
+      android:label="@string/widget_net_worth_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/net_worth_widget_info" />
+    </receiver>
+    <receiver
       android:name=".BudgetCoverWidget"
       android:exported="false"
       android:label="@string/widget_cover_label">
