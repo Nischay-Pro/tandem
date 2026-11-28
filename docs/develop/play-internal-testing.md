@@ -16,8 +16,9 @@ until the repository variable below is set.
 4. Turn on **Play App Signing**. The nightly keystore
    (`ANDROID_NIGHTLY_KEYSTORE_BASE64`) acts as the upload key; Play signs what
    it delivers with its own key.
-5. Build an App Bundle once from a nightly commit and upload it to **Testing
-   → Internal testing** by hand. Play requires the first upload to be manual.
+5. Download the `tandem-android-bundle-…` artifact from the latest nightly run
+   and upload its `.aab` to **Testing → Internal testing** by hand. Play
+   requires the first upload to be manual.
 6. Add your Google account to the internal testers list and open the opt-in
    link on your phone.
 
