@@ -1,6 +1,7 @@
 import { latestGreenCommit, nightlyCiDecision } from "./nightly-ci-status.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import process from "node:process";
 import test from "node:test";
 
 test("waits until a push CI run exists", () => {
