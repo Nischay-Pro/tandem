@@ -132,6 +132,7 @@ kotlin {
 }
 
 ktlint {
+  version.set("1.5.0")
   filter {
     exclude { element -> element.file.path.contains("/build/generated/") }
     include("**/src/**/*.kt", "**/*.kts")

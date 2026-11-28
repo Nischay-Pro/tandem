@@ -102,6 +102,7 @@ room3 {
 }
 
 ktlint {
+  version.set("1.5.0")
   filter {
     include("**/src/**/*.kt", "**/*.kts")
     // Source-root-relative filters cannot see KSP's generated directory prefix.

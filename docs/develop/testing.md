@@ -73,10 +73,10 @@ Markdown run the full suite.
    git config tandem.lightHooks true
    ```
 
-   Staged Kotlin is then checked with the ktlint command-line tool instead of a
-   Gradle build, and workflow checks are skipped when Go is missing. Install
-   ktlint 1.5.0, the version CI uses, on your `PATH` or point `KTLINT` at it.
-   CI still builds and tests every change.
+   The hooks then skip the Gradle build, and workflow checks when Go is
+   missing. Kotlin style is still checked: both hooks run
+   `scripts/ktlint.sh`, which downloads the pinned ktlint once, checks its
+   SHA-256 and needs only Java. CI still builds and tests every change.
 
 ## Demo budget
 

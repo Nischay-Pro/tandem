@@ -151,6 +151,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check Kotlin style with ktlint
+        run: ./scripts/ktlint.sh
+
       - name: Check mobile UI apostrophes
         run: python3 scripts/check-mobile-ui-apostrophes.py
 

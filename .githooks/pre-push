@@ -36,18 +36,10 @@ else
   exit 1
 fi
 
+"$repo_root/scripts/ktlint.sh"
+
 if [ "$light_hooks" = true ]; then
-  # Light mode can't run Gradle: ktlint checks the Kotlin this branch changes, and CI builds and tests it.
-  changed_kotlin=$(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- 'mobile/*.kt' 'mobile/*.kts' | grep -v '/build/' || true)
-  if [ -n "$changed_kotlin" ]; then
-    ktlint=${KTLINT:-$(command -v ktlint || true)}
-    if [ -z "$ktlint" ]; then
-      printf '%s\n' 'Light hooks need ktlint 1.5.0, the version CI uses, on PATH or in KTLINT.' >&2
-      exit 1
-    fi
-    # shellcheck disable=SC2086
-    "$ktlint" --relative $changed_kotlin
-  fi
+  # Light mode skips the Gradle build; CI builds and tests every change.
   "$repo_root/node_modules/.bin/eslint" .
   exit 0
 fi
@@ -93,7 +85,6 @@ fi
     :api-client:jvmTest \
     :api-client:testAndroidHostTest \
     :api-client:koverVerify \
-    :api-client:ktlintCheck \
     :data:compileAndroidMain \
     :data:compileAndroidDeviceTest \
     :data:compileCommonMainKotlinMetadata \
@@ -101,10 +92,8 @@ fi
     :data:jvmTest \
     :data:testAndroidHostTest \
     :data:koverVerify \
-    :data:ktlintCheck \
     :composeApp:compileAndroidMain \
     :composeApp:testAndroidHostTest \
-    :composeApp:ktlintCheck \
     :androidApp:testDebugUnitTest \
     :androidApp:lintRelease \
     :androidApp:assembleRelease \
