@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import app.tandemforactual.data.planning.CustomReports
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
@@ -43,9 +42,10 @@ internal fun CustomReportsScreen(
     val transactions = rememberBudgetTransactions(state, mobileSession)
     val income = remember(mobileSession.categoryRecords, mobileSession.categoryGroupRecords) { mobileSession.incomeCategoryIds() }
     val today = platformTodayIsoDate()
+    val monthStart = state.monthStart
     val totals =
-        remember(reports, transactions, income, today) {
-            transactions?.let { list -> reports.associate { it.id to CustomReports.run(it, list, income, today).totalMinor } }
+        remember(reports, transactions, income, today, monthStart) {
+            transactions?.let { list -> reports.associate { it.id to runInPeriods(it, list, income, today, monthStart).totalMinor } }
         }
 
     fun open(id: String) {

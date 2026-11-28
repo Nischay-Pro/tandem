@@ -120,6 +120,7 @@ internal fun SettingsScreen(
             },
             DashboardCard("settings-general") { GeneralSection(state, navigation) },
             DashboardCard("settings-start") { StartPreferencesSection(state, mobileSession) },
+            DashboardCard("settings-month-start") { MonthStartSection(state) },
             DashboardCard("settings-budget") { BudgetSyncSection(state, navigation) },
             DashboardCard("settings-privacy") { PrivacySection(state, navigation, mobileSession) },
             DashboardCard("settings-data") { YourDataSection(navigation) },
