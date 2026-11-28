@@ -237,7 +237,6 @@ internal fun automationAccount(
     return account
 }
 
-/** An existing payee by id or name, or null to create one with that name; transfer payees are refused. */
 /** Which payee automation text means, the name for a new one, and the text as it came when that was cleaned up. */
 internal data class AutomationPayeeChoice(
     val payee: BudgetRecordEntity?,
@@ -260,6 +259,7 @@ internal fun automationPayeeChoice(
     return AutomationPayeeChoice(matched, cleaned.takeIf { matched == null }, text)
 }
 
+/** An existing payee by id or name, or null to create one with that name; transfer payees are refused. */
 internal fun automationPayee(
     payees: List<BudgetRecordEntity>,
     text: String,
