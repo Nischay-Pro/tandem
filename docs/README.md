@@ -21,6 +21,7 @@ Choose a page by what you need to do.
 | [Install the app](using/install-app.md)                           | Android users installing the nightly prerelease.              |
 | [Offline sync and conflicts](using/offline-sync-and-conflicts.md) | People using Tandem offline or reviewing pending edits.       |
 | [Sync status names](using/sync-status.md)                         | People interpreting Pending Changes and transaction statuses. |
+| [Privacy policy](using/privacy.md)                                | Anyone checking what the app does with their data.            |
 
 ## Understand Tandem
 
