@@ -137,6 +137,12 @@ internal class AppState {
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
 
+    /** The tab the app opens on, by route name; Home when blank or not shown. */
+    var startPageName by mutableStateOf("")
+
+    /** The account new transactions start in, ahead of the last one used; none when blank. */
+    var defaultTransactionAccountId by mutableStateOf("")
+
     /** Whether saving a transaction shows what's left in its category and the account's balance. */
     var balanceAfterSaveEnabled by mutableStateOf(true)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
@@ -284,6 +290,8 @@ internal class AppState {
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
+            "startPage" to startPageName,
+            "defaultTransactionAccountId" to defaultTransactionAccountId,
             "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
             AutomationAccess.WRITES to automationWritesEnabled.toString(),
             AutomationAccess.READS to automationReadsEnabled.toString(),
@@ -354,6 +362,8 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        startPageName = saved["startPage"] ?: startPageName
+        defaultTransactionAccountId = saved["defaultTransactionAccountId"] ?: defaultTransactionAccountId
         balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled
         automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
         automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
