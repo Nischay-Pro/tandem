@@ -13,8 +13,10 @@ import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.data.store.BudgetWidgetSummary
 import app.tandemforactual.data.store.CategoryWidgetSummary
 import app.tandemforactual.data.store.LocalBudgetRepository
+import app.tandemforactual.data.store.NetWorthWidgetSummary
 import app.tandemforactual.data.store.budgetWidgetSummary
 import app.tandemforactual.data.store.categoryWidgetSummary
+import app.tandemforactual.data.store.netWorthWidgetSummary
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +30,7 @@ internal object TandemWidgets {
     private val dateActions = setOf(ACTION_MONTH_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)
     private val budgetProviders = listOf(BudgetWidget::class.java, BudgetCoverWidget::class.java)
     private val categoryProviders = listOf(CategoryWidget::class.java, CategoryCoverWidget::class.java)
+    private val netWorthProviders = listOf(NetWorthWidget::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun refreshesOnAction(action: String?): Boolean = action in dateActions
@@ -77,23 +80,27 @@ internal object TandemWidgets {
         val manager = AppWidgetManager.getInstance(context)
         val budgetIds = ids(context, manager, budgetProviders, only)
         val categoryIds = ids(context, manager, categoryProviders, only)
-        if (budgetIds.isEmpty() && categoryIds.isEmpty()) return
+        val netWorthIds = ids(context, manager, netWorthProviders, only)
+        if (budgetIds.isEmpty() && categoryIds.isEmpty() && netWorthIds.isEmpty()) return
         val choices = categoryIds.associateWith { WidgetSettings.categories(context, it) }
-        val data = runCatching { readWidgetData(context, budgetIds.isNotEmpty(), choices) }.getOrNull()
+        val data = runCatching { readWidgetData(context, budgetIds.isNotEmpty(), choices, netWorthIds.isNotEmpty()) }.getOrNull()
         budgetIds.forEach { manager.updateAppWidget(it, budgetWidgetViews(context, manager, it, data?.budget)) }
         categoryIds.forEach { manager.updateAppWidget(it, categoryWidgetViews(context, manager, it, data?.categories?.get(it))) }
+        netWorthIds.forEach { manager.updateAppWidget(it, netWorthWidgetViews(context, data?.netWorth)) }
         scheduleMonthChange(context)
     }
 
     private class WidgetData(
         val budget: BudgetWidgetSummary?,
         val categories: Map<Int, CategoryWidgetSummary?>,
+        val netWorth: NetWorthWidgetSummary?,
     )
 
     private suspend fun readWidgetData(
         context: Context,
         includeBudget: Boolean,
         categoryChoices: Map<Int, List<String>>,
+        includeNetWorth: Boolean,
     ): WidgetData {
         val database = openTandemDatabase(tandemDatabaseBuilder(context))
         try {
@@ -102,7 +109,8 @@ internal object TandemWidgets {
             val today = LocalDate.now().toString()
             val budget = if (includeBudget) budgetWidgetSummary(repository, preferences, today) else null
             val categories = categoryChoices.mapValues { (_, ids) -> categoryWidgetSummary(repository, preferences, today, ids) }
-            return WidgetData(budget, categories)
+            val netWorth = if (includeNetWorth) netWorthWidgetSummary(repository, preferences) else null
+            return WidgetData(budget, categories, netWorth)
         } finally {
             database.close()
         }

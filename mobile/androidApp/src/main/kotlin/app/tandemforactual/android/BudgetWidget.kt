@@ -56,3 +56,6 @@ open class CategoryWidget : BudgetAmountWidget()
 
 /** The categories widget sized for a flip phone's cover screen. */
 class CategoryCoverWidget : CategoryWidget()
+
+/** What every open account adds up to: what they hold, less what they owe. */
+class NetWorthWidget : BudgetAmountWidget()
