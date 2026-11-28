@@ -111,7 +111,7 @@ internal fun AccountDetailScreen(
     }
 }
 
-/** Card statements, the account's note and the way to its options. */
+/** Card statements, a loan's payoff, the account's note and the way to its options. */
 @Composable
 private fun AccountDetailFooter(
     state: AppState,
@@ -120,6 +120,7 @@ private fun AccountDetailFooter(
     liveAccount: LiveAccountSummary,
 ) {
     CardStatementsCard(state, mobileSession, liveAccount)
+    LoanCard(state, mobileSession, liveAccount)
     AccountNoteSection(state, mobileSession, liveAccount)
     SettingRow("Account options", "Close account", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
 }

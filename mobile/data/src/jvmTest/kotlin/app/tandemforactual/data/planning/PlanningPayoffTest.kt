@@ -46,4 +46,17 @@ class PlanningPayoffTest {
         assertEquals(0, done.months)
         assertEquals(mapOf("paid" to 0), done.payoffMonth)
     }
+
+    @Test
+    fun anAmortisationScheduleSplitsEachPaymentAndEndsAtZero() {
+        val rows = PlanningMath.amortisation(100_000, 1_200, 10_000)!!
+        assertEquals(PlanningMath.payoff(100_000, 1_200, 10_000)!!.months, rows.size)
+        assertEquals(AmortisationRow(1, 10_000, 1_000, 9_000, 91_000), rows.first())
+        assertEquals(0L, rows.last().balanceMinor)
+        assertTrue(rows.last().paymentMinor < 10_000)
+        assertEquals(100_000L, rows.sumOf { it.principalMinor })
+        assertEquals(PlanningMath.payoff(100_000, 1_200, 10_000)!!.totalInterestMinor, rows.sumOf { it.interestMinor })
+        assertEquals(emptyList(), PlanningMath.amortisation(0, 1_200, 10_000))
+        assertNull(PlanningMath.amortisation(100_000, 2_400, 2_000))
+    }
 }
