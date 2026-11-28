@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import app.tandemforactual.api.client.TandemApiClient
+import app.tandemforactual.ui.app.navigationRoutes
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
 import app.tandemforactual.ui.core.session.DeviceCredentialStore
@@ -23,6 +24,7 @@ import app.tandemforactual.ui.core.state.cachedBudgetName
 import app.tandemforactual.ui.core.state.cachedBudgetsWithLocalSnapshots
 import app.tandemforactual.ui.core.state.decodeCachedBudgetCatalog
 import app.tandemforactual.ui.core.state.resolveAppStartupDestination
+import app.tandemforactual.ui.core.state.startPage
 import app.tandemforactual.ui.feature.onboarding.cleanServerAddress
 
 /** Creates the API client and the mobile session the whole app shares. */
@@ -135,13 +137,13 @@ private fun leaveStartupRoute(
             if (hasEncryptedStore) {
                 state.selectedBudgetEncrypted = true
                 backStack.clear()
-                backStack.add(navigator.newRouteEntry(AppRoute.HOME))
+                backStack.add(navigator.newRouteEntry(startPage(state.startPageName, navigationRoutes(state.interfaceMode))))
             } else if (firstCachedBudget != null) {
                 state.selectedBudget = cachedBudgetName(state.selectedBudgetId, state.selectedBudget, firstCachedBudget)
                 state.selectedBudgetId = firstCachedBudget.budgetId
                 state.selectedBudgetEncrypted = firstCachedBudget.isEncrypted
                 backStack.clear()
-                backStack.add(navigator.newRouteEntry(AppRoute.HOME))
+                backStack.add(navigator.newRouteEntry(startPage(state.startPageName, navigationRoutes(state.interfaceMode))))
             }
         }
         AppStartupDestination.BUDGET_CHOOSER -> {

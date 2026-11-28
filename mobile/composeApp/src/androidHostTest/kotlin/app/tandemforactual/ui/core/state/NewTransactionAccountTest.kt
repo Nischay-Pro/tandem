@@ -35,4 +35,11 @@ class NewTransactionAccountTest {
         assertEquals("investments", defaultNewTransactionAccount(accounts.filter { it.offBudget }, null, null)?.id)
         assertNull(defaultNewTransactionAccount(listOf(account("old", closed = true)), "old", "old"))
     }
+
+    @Test
+    fun aChosenDefaultComesBeforeTheLastUsedButAfterTheOneAskedFor() {
+        assertEquals("investments", defaultNewTransactionAccount(accounts, null, "checking", "investments")?.id)
+        assertEquals("savings", defaultNewTransactionAccount(accounts, "savings", "checking", "investments")?.id)
+        assertEquals("checking", defaultNewTransactionAccount(accounts, null, "checking", "old")?.id)
+    }
 }

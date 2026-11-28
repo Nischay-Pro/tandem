@@ -17,15 +17,20 @@ internal data class LiveAccountSummary(
     val cardNetwork: CardNetwork? = null,
 )
 
-/** A new transaction's account: the one asked for, else the last or first on-budget one; never a closed one. */
+/**
+ * A new transaction's account: the one asked for, else the person's default, else the last or first on-budget one;
+ * never a closed one.
+ */
 internal fun defaultNewTransactionAccount(
     accounts: List<LiveAccountSummary>,
     requestedId: String?,
     lastUsedId: String?,
+    preferredId: String? = null,
 ): LiveAccountSummary? {
     val open = accounts.filterNot { it.closed }
     val onBudget = open.filterNot { it.offBudget }
     return open.firstOrNull { it.id == requestedId }
+        ?: open.firstOrNull { it.id == preferredId }
         ?: onBudget.firstOrNull { it.id == lastUsedId }
         ?: onBudget.firstOrNull()
         ?: open.firstOrNull()
