@@ -112,6 +112,12 @@
     <string name="setup_open_saved_copy">Open saved copy</string>
     <string name="setup_open_budget">Open budget</string>
     <string name="setup_cancel">Cancel</string>
+    <string name="setup_new_budget">New budget</string>
+    <string name="setup_new_budget_detail">Start an empty budget on this server</string>
+    <string name="setup_new_budget_name">Budget name</string>
+    <string name="setup_new_budget_starts">It starts with Actual’s usual categories. Add accounts and rename categories once it’s open.</string>
+    <string name="setup_create_budget">Create</string>
+    <string name="setup_new_budget_failed">Couldn’t create the budget. Check your connection and try again.</string>
     <string name="setup_keep_tandem_open_for_the">Keep Tandem open for the first download.</string>
     <string name="setup_done">Done</string>
     <string name="setup_keep_it_up_to_date">Keep it up to date.</string>
