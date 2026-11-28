@@ -85,7 +85,18 @@ jobs:
             sleep 30
           done
 
-          echo "Timed out waiting for CI to finish for $source_sha." >&2
+          # Merges can keep the newest commit queued past the wait; publish the newest main commit that already passed.
+          runs="$(gh run list --workflow ci.yml --branch main --event push --limit 30 \
+            --json headSha,status,conclusion,event)"
+          green_sha="$(node scripts/nightly-ci-status.mjs latest-green "$last_nightly_sha" <<<"$runs")"
+          if [[ -n "$green_sha" ]]; then
+            echo "source_sha=$green_sha" >> "$GITHUB_OUTPUT"
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            echo "CI for $source_sha is still running; publishing $green_sha, the newest main commit that passed."
+            exit 0
+          fi
+
+          echo "Timed out waiting for CI to finish for $source_sha, and no newer main commit has passed." >&2
           exit 1
 
   build_and_smoke_candidate:
