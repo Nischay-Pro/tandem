@@ -115,7 +115,7 @@ internal fun PayeeRuleSuggestionsCard(
             }
     }
     if (suggestions.isEmpty()) return
-    SectionCard("Payees that need a rule", detail = "The bank's text doesn’t match these names, so imports won’t find them.") {
+    SectionCard("Payees that need a rule", detail = "The bank’s text doesn’t match these names, so imports won’t find them.") {
         suggestions.take(MAX_SUGGESTIONS).forEachIndexed { index, suggestion ->
             if (index > 0) DividerLine()
             TandemActionButton(
