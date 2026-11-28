@@ -18,6 +18,7 @@ enum class AlertKind(
     OVERSPENDING("overspendingAlerts"),
     BANK_SYNC_FAILURE("bankSyncAlerts"),
     UPCOMING_BILLS("upcomingBillAlerts"),
+    CARD_DUE("cardDueAlerts"),
     LARGE_TRANSACTION("largeTransactionAlerts"),
     UNCATEGORIZED("uncategorizedAlerts"),
 }
@@ -108,6 +109,7 @@ private fun privateAlertMessage(kind: AlertKind): String =
     when (kind) {
         AlertKind.OVERSPENDING -> "A category is over budget this month."
         AlertKind.UPCOMING_BILLS -> "A bill is due soon."
+        AlertKind.CARD_DUE -> "A card payment is due soon."
         AlertKind.LARGE_TRANSACTION, AlertKind.UNCATEGORIZED -> "New transaction to review."
         AlertKind.BANK_SYNC_FAILURE -> "A bank connection needs attention."
         else -> "Open Tandem to see what changed."

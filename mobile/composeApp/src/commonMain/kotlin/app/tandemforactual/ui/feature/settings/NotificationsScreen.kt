@@ -146,6 +146,15 @@ private fun MoneyAlertsSection(
             FilterPills(listOf(1, 3, 7).map { it to billLeadLabel(it) }, state.billLeadDays, { state.billLeadDays = it })
         }
         DividerLine()
+        ToggleRow(
+            "Card payments due",
+            "Credit cards with a due day and a balance owed, ${billLeadLabel(state.billLeadDays)}",
+            state.cardDueAlerts,
+        ) {
+            state.cardDueAlerts = it
+            askOnEnable(it)
+        }
+        DividerLine()
         ToggleRow("Overspending alerts", "When a category goes over budget this month", state.overspendingAlerts) {
             state.overspendingAlerts = it
             askOnEnable(it)

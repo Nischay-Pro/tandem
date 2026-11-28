@@ -44,6 +44,7 @@ import app.tandemforactual.ui.core.automation.announceSyncFailure
 import app.tandemforactual.ui.core.automation.budgetEventsAllowed
 import app.tandemforactual.ui.core.automation.openSealedInbox
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.CardDueReminders
 import app.tandemforactual.ui.core.session.SyncNetwork
 import java.time.LocalDate
 import java.time.LocalTime
@@ -52,6 +53,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 
 internal const val BACKGROUND_KEY_STORE = "background_budget_key"
+internal const val PLANNING_KEY_STORE = "planning_keys"
 
 internal object BackgroundBudgetSyncScheduler {
     const val UNIQUE_WORK_NAME = "tandem-selected-budget-sync"
@@ -258,6 +260,10 @@ class BackgroundBudgetSyncWorker(
         val format = currencyFormatter(repository, budgetId)
         if (policy.allows(AlertKind.UPCOMING_BILLS, minute)) {
             upcomingBillsAlert(repository, store, budgetId, today, policy, format)?.let(post)
+        }
+        if (policy.allows(AlertKind.CARD_DUE, minute)) {
+            val keys = AndroidDeviceCredentialStore(applicationContext, PLANNING_KEY_STORE)
+            CardDueReminders.alert(database, keys, repository, budgetId, today, policy, format)?.let(post)
         }
         if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
             largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(post)

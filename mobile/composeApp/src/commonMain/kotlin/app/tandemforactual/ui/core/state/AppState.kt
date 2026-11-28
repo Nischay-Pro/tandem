@@ -198,6 +198,7 @@ internal class AppState {
     var uncategorizedAlerts by mutableStateOf(false)
     var bankSyncAlerts by mutableStateOf(false)
     var upcomingBillAlerts by mutableStateOf(false)
+    var cardDueAlerts by mutableStateOf(false)
     var largeTransactionAlerts by mutableStateOf(false)
     var quietHours by mutableStateOf("")
     var largeTransactionMinor by mutableStateOf(NotificationPolicy.DEFAULT_LARGE_TRANSACTION_MINOR)
@@ -328,6 +329,7 @@ internal class AppState {
                 "uncategorizedAlerts" to uncategorizedAlerts.toString(),
                 "bankSyncAlerts" to bankSyncAlerts.toString(),
                 "upcomingBillAlerts" to upcomingBillAlerts.toString(),
+                "cardDueAlerts" to cardDueAlerts.toString(),
                 "largeTransactionAlerts" to largeTransactionAlerts.toString(),
                 NotificationPolicy.QUIET_HOURS to quietHours,
                 NotificationPolicy.LARGE_TRANSACTION_MINOR to largeTransactionMinor.toString(),
@@ -401,6 +403,10 @@ internal class AppState {
         lastTransactionAccountId = saved["lastTransactionAccountId"] ?: lastTransactionAccountId
         recentServerUrls = saved["recentServerUrls"] ?: recentServerUrls
         unlockRetryAtEpochMillis = saved["unlockRetryAtEpochMillis"]?.toLongOrNull()?.coerceAtLeast(0L) ?: unlockRetryAtEpochMillis
+        restoreNotificationSettings(saved)
+    }
+
+    private fun restoreNotificationSettings(saved: Map<String, String>) {
         val legacyNotifications = saved["notifications"]?.toBooleanStrictOrNull()
         syncReminders = saved["syncReminders"]?.toBooleanStrictOrNull() ?: legacyNotifications ?: syncReminders
         conflictReviewAlerts =
@@ -411,6 +417,7 @@ internal class AppState {
         uncategorizedAlerts = saved["uncategorizedAlerts"]?.toBooleanStrictOrNull() ?: uncategorizedAlerts
         bankSyncAlerts = saved["bankSyncAlerts"]?.toBooleanStrictOrNull() ?: bankSyncAlerts
         upcomingBillAlerts = saved["upcomingBillAlerts"]?.toBooleanStrictOrNull() ?: upcomingBillAlerts
+        cardDueAlerts = saved["cardDueAlerts"]?.toBooleanStrictOrNull() ?: cardDueAlerts
         largeTransactionAlerts = saved["largeTransactionAlerts"]?.toBooleanStrictOrNull() ?: largeTransactionAlerts
         quietHours = saved[NotificationPolicy.QUIET_HOURS]?.takeIf { QuietHours.parse(it) != null } ?: quietHours
         largeTransactionMinor =
