@@ -13,11 +13,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import app.tandemforactual.ui.core.format.formatInteger
+import app.tandemforactual.ui.core.security.DeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalBackgroundBudgetKeyStore
 import app.tandemforactual.ui.core.security.LocalDeviceAuthenticator
 import app.tandemforactual.ui.core.security.LocalEncryptedBudgetVault
 import app.tandemforactual.ui.core.security.budgetPasswordSecretId
 import app.tandemforactual.ui.core.session.BackgroundBudgetKey
+import app.tandemforactual.ui.core.session.DeviceCredentialStore
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.removeBudgetBlocker
 import app.tandemforactual.ui.core.session.removeBudgetFromDevice
@@ -101,6 +103,7 @@ internal fun LocalDataScreen(
                     },
                 )
             }
+            if (mobileSession.isAuthenticated && !state.readOnlyMode) DeleteFromServerCard(state, mobileSession, navigation)
             removeError?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }
         AnimatedPreviewNote(mobileSession.syncError)
@@ -200,22 +203,27 @@ private fun RemoveBudgetFromDeviceDialog(
                     onError(error)
                     return@launch
                 }
-                authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
-                authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
-                if (BackgroundBudgetKey.budgetIn(keyStore) == budgetId) runCatching { keyStore?.clear() }
-                state.cachedBudgetCatalogJson =
-                    encodeCachedBudgetCatalog(
-                        decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot {
-                            it.budgetId ==
-                                budgetId
-                        },
-                    )
-                state.encryptedPassword = ""
-                state.selectedBudget = ""
-                state.selectedBudgetId = ""
-                state.selectedBudgetEncrypted = false
+                forgetBudgetHere(state, budgetId, authenticator, keyStore)
                 navigation.reset(AppRoute.BUDGET_CHOOSER)
             }
         },
     )
+}
+
+/** Drops what this device keeps for [budgetId] outside its copy: saved password, background key and catalog entry. */
+internal suspend fun forgetBudgetHere(
+    state: AppState,
+    budgetId: String,
+    authenticator: DeviceAuthenticator?,
+    keyStore: DeviceCredentialStore?,
+) {
+    authenticator?.deleteSecret(budgetPasswordSecretId(budgetId))
+    authenticator?.forgetPasswordCheck(budgetPasswordSecretId(budgetId))
+    if (BackgroundBudgetKey.budgetIn(keyStore) == budgetId) runCatching { keyStore?.clear() }
+    state.cachedBudgetCatalogJson =
+        encodeCachedBudgetCatalog(decodeCachedBudgetCatalog(state.cachedBudgetCatalogJson).filterNot { it.budgetId == budgetId })
+    state.encryptedPassword = ""
+    state.selectedBudget = ""
+    state.selectedBudgetId = ""
+    state.selectedBudgetEncrypted = false
 }

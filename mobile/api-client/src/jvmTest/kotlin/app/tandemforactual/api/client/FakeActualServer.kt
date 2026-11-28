@@ -50,6 +50,7 @@ internal class FakeActualServer {
     val uploaded = linkedMapOf<String, UploadedFile>()
     val createdKeys = mutableListOf<String>()
     val resets = mutableListOf<String>()
+    val deletes = mutableListOf<String>()
     val bankRoutes = mutableMapOf<String, String>()
     var lastOrigin: String? = null
 
@@ -152,6 +153,11 @@ internal class FakeActualServer {
 
                     "/sync/user-create-key" -> {
                         createdKeys += (request.body as TextContent).text
+                        respond("""{"status":"ok"}""")
+                    }
+
+                    "/sync/delete-user-file" -> {
+                        deletes += (request.body as TextContent).text
                         respond("""{"status":"ok"}""")
                     }
 
