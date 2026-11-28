@@ -151,14 +151,14 @@ private fun TransactionRowContent(
             .background(if (highlighted) palette.accentSurface else Color.Transparent),
     ) {
         ListRow(
-            transaction.payee,
-            secondaryLabel,
+            maskedName(transaction.payee),
+            secondaryLabel?.let { maskedName(it) },
             amountText.takeUnless { customTrailing },
             leading =
                 when {
                     selectionMode -> RowLeading.Icon(if (selected) Lucide.Check else Lucide.Square)
                     activityStyle -> activityTransactionLeading(transaction)
-                    transaction.isTransfer -> RowLeading.Account(transaction.payee, fallback = Lucide.ArrowLeftRight)
+                    transaction.isTransfer -> RowLeading.Account(maskedName(transaction.payee), fallback = Lucide.ArrowLeftRight)
                     else -> RowLeading.Merchant(transaction.merchantIcon, fallback = transaction.categoryIcon ?: Lucide.Receipt)
                 },
             options =

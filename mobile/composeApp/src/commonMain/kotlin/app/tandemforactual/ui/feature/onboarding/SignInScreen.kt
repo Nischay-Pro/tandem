@@ -228,6 +228,7 @@ private fun SignInOptions(
 
         mobileSession.signInError != null -> {
             InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
+            UntrustedCertificateCard(state, mobileSession)
         }
 
         else -> {

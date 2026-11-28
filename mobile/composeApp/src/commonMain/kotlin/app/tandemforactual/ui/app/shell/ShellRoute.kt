@@ -46,6 +46,8 @@ import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
 import app.tandemforactual.ui.core.ui.accountIconFor
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.rows.RowLogos
+import app.tandemforactual.ui.design.rows.accountPhotoKey
+import app.tandemforactual.ui.design.rows.decodeAccountPhoto
 import app.tandemforactual.ui.design.templates.LocalFloatingActionClearance
 import app.tandemforactual.ui.design.theme.TandemSpacing
 import app.tandemforactual.ui.design.theme.tandemPalette
@@ -157,14 +159,27 @@ private fun ShellRouteContent(
         remember(pickedIcons, liveAccounts) {
             liveAccounts.mapNotNull { account -> accountIconFor(pickedIcons[account.id])?.let { account.name to it } }.toMap()
         }
+    val photos = ctx.state.accountPhotos
+    val budgetId = ctx.state.selectedBudgetId
+    val photosByName =
+        remember(photos, liveAccounts, budgetId) {
+            liveAccounts
+                .mapNotNull { account ->
+                    photos[accountPhotoKey(budgetId, account.id)]?.let(::decodeAccountPhoto)?.let {
+                        account.name to
+                            it
+                    }
+                }.toMap()
+        }
     val logos =
-        remember(matcher, bankIds, downloadBankIcons, iconsByName) {
+        remember(matcher, bankIds, downloadBankIcons, iconsByName, photosByName) {
             RowLogos(
                 payee = { matcher?.iconFor(it) },
                 account = { matcher?.accountIconFor(it) },
                 bankIcon = { name -> rememberBankIcon(bankIds[name], downloadBankIcons) },
                 bySlug = { matcher?.iconForSlug(it) },
                 chosenIcon = { iconsByName[it] },
+                photo = { photosByName[it] },
             )
         }
     CompositionLocalProvider(
