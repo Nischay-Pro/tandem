@@ -200,6 +200,15 @@ class PlanningStore(
 
     suspend fun deleteSavedSearch(id: String) = delete(id, SavedSearch.TYPE)
 
+    fun transactionTemplates(): Flow<List<TransactionTemplate>> =
+        observe(TransactionTemplate.TYPE).map { list ->
+            list.mapNotNull { (id, body) -> TransactionTemplate.fromJson(id, body) }.sortedBy { it.payeeName.lowercase() }
+        }
+
+    suspend fun save(template: TransactionTemplate) = put(template.id, TransactionTemplate.TYPE, template.toJson())
+
+    suspend fun deleteTransactionTemplate(id: String) = delete(id, TransactionTemplate.TYPE)
+
     fun accountIcons(): Flow<List<AccountIconChoice>> =
         observe(AccountIconChoice.TYPE).map { list -> list.mapNotNull { (_, body) -> AccountIconChoice.fromJson(body) } }
 
