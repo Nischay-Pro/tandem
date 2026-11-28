@@ -14,7 +14,6 @@ import app.tandemforactual.data.planning.DebtKind
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.ui.core.format.formatAmount
-import app.tandemforactual.ui.core.format.parseAmountMinorUnits
 import app.tandemforactual.ui.core.state.LiveAccountSummary
 import app.tandemforactual.ui.design.buttons.TandemActionButton
 import app.tandemforactual.ui.design.buttons.TandemActionButtonTone
@@ -45,6 +44,8 @@ internal fun DebtTermsSheet(
     var apr by remember(account) { mutableStateOf(terms?.aprBasisPoints?.let { formatRateBasisPoints(it).removeSuffix("%") }.orEmpty()) }
     var minimum by remember(account) { mutableStateOf(terms?.minimumPaymentMinor?.let { formatAmount(it, settings) }.orEmpty()) }
     var dueDay by remember(account) { mutableStateOf(terms?.dueDay?.toString().orEmpty()) }
+    var closeDay by remember(account) { mutableStateOf(terms?.statementCloseDay?.toString().orEmpty()) }
+    var limit by remember(account) { mutableStateOf(terms?.creditLimitMinor?.let { formatAmount(it, settings) }.orEmpty()) }
     var kind by remember(account) { mutableStateOf(terms?.kind ?: DebtKind.UNSPECIFIED) }
     var paysInFull by remember(account) { mutableStateOf(terms?.paysInFull == true) }
     var keepPrivate by remember(account) { mutableStateOf(terms?.shared == false) }
@@ -56,30 +57,11 @@ internal fun DebtTermsSheet(
             },
             actions = {
                 TandemActionButton("Save", TandemActionButtonTone.PRIMARY, Modifier.fillMaxWidth()) {
-                    val rate = apr.takeIf { it.isNotBlank() }?.let(::parseRateBasisPoints)
-                    val payment = minimum.takeIf { it.isNotBlank() }?.let { parseAmountMinorUnits(it, settings) }
-                    val day = dueDay.toIntOrNull()
-                    error =
-                        when {
-                            apr.isNotBlank() && rate == null -> "Enter the APR as a percentage, like 19.99."
-                            minimum.isNotBlank() && (payment == null || payment < 0) -> "Enter the minimum payment."
-                            dueDay.isNotBlank() && (day == null || day !in 1..31) -> "Enter a day between 1 and 31."
-                            else -> null
-                        }
-                    if (error == null && account != null) {
-                        onSave(
-                            DebtTerms(
-                                terms?.id ?: Uuid.random().toString(),
-                                account.id,
-                                rate,
-                                payment,
-                                day,
-                                kind = kind,
-                                paysInFull = kind == DebtKind.CARD && paysInFull,
-                                shared = !keepPrivate,
-                            ),
-                        )
-                    }
+                    if (account == null) return@TandemActionButton
+                    val form = DebtTermsForm(apr, minimum, dueDay, closeDay, limit, kind, paysInFull, keepPrivate)
+                    val result = form.toTerms(terms?.id ?: Uuid.random().toString(), account.id, settings)
+                    error = result.exceptionOrNull()?.message
+                    result.getOrNull()?.let(onSave)
                 }
             },
         ) {
@@ -97,6 +79,15 @@ internal fun DebtTermsSheet(
                 { dueDay = it.filter(Char::isDigit).take(2) },
                 TextFieldOptions(placeholder = "12"),
             )
+            if (kind == DebtKind.CARD) {
+                TextFieldCard(
+                    "Statement closes on day",
+                    closeDay,
+                    { closeDay = it.filter(Char::isDigit).take(2) },
+                    TextFieldOptions(placeholder = "24"),
+                )
+                TextFieldCard("Credit limit", limit, { limit = it }, settings.amountOptions())
+            }
             ToggleRow("Keep private", "Stays on this device. Others on this budget won’t see it.", keepPrivate) { keepPrivate = it }
             error?.let { InlineMessage(it, InlineMessageKind.ERROR) }
         }

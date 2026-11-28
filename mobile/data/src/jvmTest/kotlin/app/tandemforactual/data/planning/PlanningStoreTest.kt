@@ -315,6 +315,8 @@ class PlanningStoreTest {
         assertEquals(bare, DebtTerms.fromJson("d", bare.toJson()))
         val full = DebtTerms("d", "acct", 1_999, 2_500, 3, 0, "2027-01-31")
         assertEquals(full, DebtTerms.fromJson("d", full.toJson()))
+        val card = full.copy(kind = DebtKind.CARD, statementCloseDay = 24, creditLimitMinor = 500_000)
+        assertEquals(card, DebtTerms.fromJson("d", card.toJson()))
         assertEquals(SavingsGoal("g", "", 0, ""), SavingsGoal.fromJson("g", JsonObject(emptyMap())))
         assertEquals(DebtTerms("d", ""), DebtTerms.fromJson("d", JsonObject(emptyMap())))
     }

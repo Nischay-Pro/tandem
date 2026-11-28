@@ -87,9 +87,18 @@ internal fun DebtOverviewCard(
                             "Estimate: ${it.months} months at the minimum, ${formatCurrency(it.totalInterestMinor, settings)} interest"
                         } ?: "The minimum doesn’t cover the interest at ${formatRateBasisPoints(apr)} APR"
                 }
-            ListRow(account.name, detail, leading = RowLeading.Icon(Lucide.CreditCard), trailingContent = {
-                money(owed)
-            }, onClick = { onEdit(account) })
+            val credit =
+                term?.creditLimitMinor?.takeUnless { privacy }?.let { limit ->
+                    val (available, used) = creditUse(owed, limit)
+                    "${formatCurrency(available, settings)} available · $used% used"
+                }
+            ListRow(
+                account.name,
+                listOfNotNull(credit, detail).joinToString(" · "),
+                leading = RowLeading.Icon(Lucide.CreditCard),
+                trailingContent = { money(owed) },
+                onClick = { onEdit(account) },
+            )
         }
     }
 }
