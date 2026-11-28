@@ -87,6 +87,15 @@ class TandemApiClientTest {
             val restored = client(openIdServer, files = null)
             assertEquals(device, restored.restoreStoredSession(stored))
             assertTrue(restored.isAuthenticated)
+            assertEquals(emptyMap(), restored.customHeaders)
+            restored.customHeaders = mapOf("CF-Access-Client-Id" to "proxy-id")
+            val withHeaders = checkNotNull(restored.exportStoredSession())
+            restored.customHeaders = emptyMap()
+            restored.restoreStoredSession(withHeaders)
+            assertEquals(mapOf("CF-Access-Client-Id" to "proxy-id"), restored.customHeaders)
+            val odd = withHeaders.replace("\"proxy-id\"", "{}").replace("\"headers\":{", "\"headers\":{\"X-Null\":null,")
+            restored.restoreStoredSession(odd)
+            assertEquals(mapOf("X-Null" to "", "CF-Access-Client-Id" to ""), restored.customHeaders)
             assertFailsWith<TandemApiProtocolException> { restored.restoreStoredSession("nope") }
             assertFailsWith<TandemApiProtocolException> { restored.restoreStoredSession("{}") }
             assertFailsWith<TandemApiProtocolException> {

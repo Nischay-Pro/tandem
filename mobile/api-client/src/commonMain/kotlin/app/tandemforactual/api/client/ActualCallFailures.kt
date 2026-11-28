@@ -8,6 +8,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -22,6 +24,14 @@ fun actualHttpClient(): HttpClient =
             socketTimeoutMillis = 60_000
             requestTimeoutMillis = 10 * 60_000
         }
+    }
+
+/** A client that adds [headers] to every request, sharing this client's engine; this one itself when there are none. */
+internal fun HttpClient.withHeaders(headers: Map<String, String>): HttpClient =
+    if (headers.isEmpty()) {
+        this
+    } else {
+        config { defaultRequest { headers.forEach { (name, value) -> header(name, value) } } }
     }
 
 /** Runs a call to Actual and reports its failures with Tandem's error codes. */

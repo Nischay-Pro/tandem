@@ -71,7 +71,7 @@ internal fun ServerAddressScreen(
     navigation: AppNavigation,
 ) {
     val completedAddress = completeServerAddress(state.serverUrl)
-    val canContinue = serverAddressIsValid(completedAddress)
+    val canContinue = serverAddressIsValid(completedAddress) && parseServerHeaders(state.serverHeaders).isSuccess
     val secureAddress = completedAddress.startsWith("https://", ignoreCase = true)
     val scope = rememberCoroutineScope()
     val lanAccess = LocalLanAccess.current
@@ -125,6 +125,7 @@ internal fun ServerAddressScreen(
                 ),
             )
             ServerAddressSuggestions(suggestions) { state.serverUrl = it }
+            ServerHeadersField(state)
             InfoBubble(stringResource(Res.string.setup_tandem_checks_for_the_actual))
             if (serverAddressMayBeInsecure(completedAddress)) InsecureAddressWarning()
         },

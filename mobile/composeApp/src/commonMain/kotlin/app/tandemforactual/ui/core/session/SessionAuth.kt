@@ -58,7 +58,12 @@ internal suspend fun TandemMobileSession.restoreStoredSession(): String? {
     }
 }
 
-internal suspend fun TandemMobileSession.loadActualLoginMethods(serverUrl: String) {
+/** Reads the server's sign-in options, first switching to [headers] when given, as typed on the server address step. */
+internal suspend fun TandemMobileSession.loadActualLoginMethods(
+    serverUrl: String,
+    headers: Map<String, String>? = null,
+) {
+    headers?.let { apiClient.customHeaders = it }
     actualLoginMethods = null
     isLoadingLoginMethods = true
     signInError = null
