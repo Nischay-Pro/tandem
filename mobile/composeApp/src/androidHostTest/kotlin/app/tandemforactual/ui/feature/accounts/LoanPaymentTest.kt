@@ -26,6 +26,7 @@ class LoanPaymentTest {
         payeeId = null,
         amountMinor = null,
         budgetMonth = null,
+        displayName = Regex("\"name\":\"([^\"]+)\"").find(json)?.groupValues?.get(1),
     )
 
     @Test
