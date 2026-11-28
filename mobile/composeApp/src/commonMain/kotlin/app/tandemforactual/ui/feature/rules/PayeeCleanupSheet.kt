@@ -137,6 +137,7 @@ internal fun PayeeCleanupSheet(
                 }
             }
             counts?.let { used -> UnusedPayeesCard(unusedPayees(payees, used, inRules), enabled, state, mobileSession, scope) }
+            PayeeRuleSuggestionsCard(payees, inRules, enabled, state, mobileSession, scope)
             budgetActionFeedbackMessage(mobileSession)
         }
     }
