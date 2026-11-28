@@ -29,6 +29,7 @@ import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.planning.SharedBill
+import app.tandemforactual.data.planning.TransactionTemplate
 import app.tandemforactual.ui.core.session.PlanningKeyring
 import app.tandemforactual.ui.core.state.PlanningSyncStatus
 import kotlinx.coroutines.CancellationException
@@ -162,6 +163,11 @@ internal class PlanningController(
     var customReports by mutableStateOf<List<CustomReport>>(emptyList())
         private set
     var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
+        private set
+
+    /** One-tap entries for new transactions, by payee. */
+    var transactionTemplates by mutableStateOf<List<TransactionTemplate>>(emptyList())
+        private set
 
     /** Payment message formats the user wrote, tried before the built-in ones. */
     var paymentFormats by mutableStateOf<List<CustomPaymentFormat>>(emptyList())
@@ -412,6 +418,18 @@ internal class PlanningController(
         planningStore(budgetId)?.deleteSavedSearch(id)
     }
 
+    suspend fun saveTransactionTemplate(
+        budgetId: String,
+        template: TransactionTemplate,
+    ): Boolean = planningStore(budgetId)?.save(template) != null
+
+    suspend fun deleteTransactionTemplate(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteTransactionTemplate(id)
+    }
+
     suspend fun savePaymentFormat(
         budgetId: String,
         format: CustomPaymentFormat,
@@ -465,6 +483,7 @@ internal class PlanningController(
         launch { store.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
         launch { store.customReports().collect { customReports = it } }
         launch { store.savedSearches().collect { savedSearches = it } }
+        launch { store.transactionTemplates().collect { transactionTemplates = it } }
         launch { store.accountIcons().collect { list -> accountIcons = list.associate { it.accountId to it.icon } } }
         launch { store.paymentFormats().collect { paymentFormats = it } }
     }
