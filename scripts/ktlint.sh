@@ -34,6 +34,6 @@ for build_file in mobile/api-client/build.gradle.kts mobile/data/build.gradle.kt
   fi
 done
 if [ "$#" -eq 0 ]; then
-  set -- 'mobile/**/src/**/*.kt' 'mobile/**/*.kts' '!**/build/**'
+  set -- 'mobile/**/src/**/*.kt' 'mobile/**/*.kts' '!**/build/**' '!mobile/settings.gradle.kts'
 fi
 exec java -jar "$jar" --relative "$@"
