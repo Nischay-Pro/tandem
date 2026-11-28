@@ -7,8 +7,10 @@ import app.tandemforactual.data.store.LocalBudgetRepository
 import app.tandemforactual.data.store.LocalRecordProjection
 import app.tandemforactual.data.store.LocalWriteAction
 import app.tandemforactual.data.store.LocalWriteRequest
+import app.tandemforactual.data.store.cleanMerchantText
 import app.tandemforactual.data.store.enqueueWrite
 import app.tandemforactual.data.store.findRecords
+import app.tandemforactual.data.store.learnPayeeBoilerplate
 import app.tandemforactual.data.store.readBudgetDisplaySettings
 import app.tandemforactual.ui.core.format.TransactionDateValidationStatus
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -81,6 +83,7 @@ private class ResolvedTransaction(
     val date: String,
     val payee: BudgetRecordEntity?,
     val newPayeeName: String?,
+    val importedPayee: String?,
     val category: BudgetRecordEntity?,
     val notes: String,
     val cleared: Boolean,
@@ -145,8 +148,7 @@ private suspend fun resolveTransaction(
             AutomationAmountFormat.PLAIN -> automationPlainAmount(input.amount, settings)
         }
     val account = automationAccount(repository.findRecords(budgetId, "account"), automationInput(input.account))
-    val payeeText = automationInput(input.payee)
-    val payee = payeeText?.let { automationPayee(repository.findRecords(budgetId, "payee"), it) }
+    val payeeChoice = automationInput(input.payee)?.let { automationPayeeChoice(repository.findRecords(budgetId, "payee"), it) }
     val category =
         automationInput(input.category)
             ?.takeUnless { account.recordBody().isOffBudgetAccount() }
@@ -155,8 +157,9 @@ private suspend fun resolveTransaction(
         account = account,
         amountMinor = amount,
         date = automationDate(input.date, todayIso),
-        payee = payee,
-        newPayeeName = payeeText.takeIf { payee == null },
+        payee = payeeChoice?.payee,
+        newPayeeName = payeeChoice?.newName,
+        importedPayee = payeeChoice?.importedText,
         category = category,
         notes = automationInput(input.notes).orEmpty(),
         cleared = automationCleared(input.cleared),
@@ -234,6 +237,28 @@ internal fun automationAccount(
     return account
 }
 
+/** Which payee automation text means, the name for a new one, and the text as it came when that was cleaned up. */
+internal data class AutomationPayeeChoice(
+    val payee: BudgetRecordEntity?,
+    val newName: String?,
+    val importedText: String?,
+)
+
+/**
+ * An exact payee first; otherwise the text with a card processor's tag and bank detail taken off, matched again or
+ * used as the new payee's name. The original text stays as the imported payee so rules still see it.
+ */
+internal fun automationPayeeChoice(
+    payees: List<BudgetRecordEntity>,
+    text: String,
+): AutomationPayeeChoice {
+    automationPayee(payees, text)?.let { return AutomationPayeeChoice(it, null, null) }
+    val cleaned = cleanMerchantText(text, learnPayeeBoilerplate(payees.mapNotNull { it.recordName() }))
+    if (cleaned == text) return AutomationPayeeChoice(null, text, null)
+    val matched = automationPayee(payees, cleaned)
+    return AutomationPayeeChoice(matched, cleaned.takeIf { matched == null }, text)
+}
+
 /** An existing payee by id or name, or null to create one with that name; transfer payees are refused. */
 internal fun automationPayee(
     payees: List<BudgetRecordEntity>,
@@ -287,6 +312,7 @@ private fun writeRequest(
             put("date", resolved.date)
             put("payee", payeeId?.let(::JsonPrimitive) ?: JsonNull)
             resolved.newPayeeName?.let { put("payee_name", it) }
+            resolved.importedPayee?.let { put("imported_payee", it) }
             put("category", categoryId?.let(::JsonPrimitive) ?: JsonNull)
             put("notes", resolved.notes)
             put("cleared", resolved.cleared)
@@ -301,7 +327,7 @@ private fun writeRequest(
         baseRevision = null,
         baseSnapshotJson = null,
         patchJson = patch.toString(),
-        optimisticJson = optimisticTransaction(transactionId, patch, resolved.newPayeeName).toString(),
+        optimisticJson = optimisticTransaction(transactionId, patch, resolved.importedPayee ?: resolved.newPayeeName).toString(),
         createdAtEpochMs = nowEpochMs,
         optimisticProjection =
             LocalRecordProjection(
@@ -318,15 +344,15 @@ private fun writeRequest(
 private fun optimisticTransaction(
     transactionId: String,
     patch: JsonObject,
-    newPayeeName: String?,
+    importedPayee: String?,
 ): JsonObject =
     JsonObject(
-        patch - "payee_name" +
+        patch - "payee_name" - "imported_payee" +
             mapOf(
                 "id" to JsonPrimitive(transactionId),
                 "reconciled" to JsonNull,
                 "importedId" to JsonNull,
-                "importedPayee" to (newPayeeName?.let(::JsonPrimitive) ?: JsonNull),
+                "importedPayee" to (importedPayee?.let(::JsonPrimitive) ?: JsonNull),
                 "startingBalance" to JsonNull,
                 "schedule" to JsonNull,
                 "transferId" to JsonNull,

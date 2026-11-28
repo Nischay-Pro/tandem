@@ -545,6 +545,16 @@ class ActualTransactionOperationsTest {
         }
 
     @Test
+    fun keepsTheTextAPayeeCameFromOnACreate() =
+        withBudget {
+            val raw = "imported_payee" to JsonPrimitive("SQ *BLUE BOTTLE 1234")
+            val cleaned = JsonObject(create + ("payee_name" to JsonPrimitive("Blue Bottle")) + raw)
+            val id = id()
+            assertEquals(OperationStatus.COMMITTED, submit(id, "create", cleaned).status)
+            assertEquals(JsonPrimitive("SQ *BLUE BOTTLE 1234"), reader.transaction(id)?.get("importedPayee"))
+        }
+
+    @Test
     fun createsOrReusesAPayeeNamedOnACreate() =
         withBudget {
             val named = JsonObject(create + ("payee_name" to JsonPrimitive("Corner Bakery")))

@@ -124,12 +124,27 @@ class AutomationTest {
         }
 
     @Test
+    fun processorTextIsCleanedToAPayeeAndKeptAsTheImportedPayee() =
+        withBudget { database ->
+            add(database, AutomationTransactionInput("-4.50", "SQ *CORNER CAFÉ 0042", "", "Checking"))
+            add(database, AutomationTransactionInput("-9.99", "PAYPAL *Spotify", "", "Checking"))
+            val patches = repository(database).readPendingWrites(BUDGET).map { Json.parseToJsonElement(it.patchJson).jsonObject }
+            val known = patches.single { it["amount"] == JsonPrimitive(-450) }
+            val fresh = patches.single { it["amount"] == JsonPrimitive(-999) }
+            assertEquals(JsonPrimitive("cafe"), known["payee"])
+            assertEquals(JsonPrimitive("SQ *CORNER CAFÉ 0042"), known["imported_payee"])
+            assertEquals(JsonPrimitive("Spotify"), fresh["payee_name"])
+            assertEquals(JsonPrimitive("PAYPAL *Spotify"), fresh["imported_payee"])
+        }
+
+    @Test
     fun unknownCategoriesStayUncategorizedAndNewPayeesAreNamed() =
         withBudget { database ->
             add(database, AutomationTransactionInput("+30", "New Shop", "Nope", "savings", cleared = "true"))
             val patch = Json.parseToJsonElement(repository(database).readPendingWrites(BUDGET).single().patchJson).jsonObject
             assertEquals(JsonNull, patch["payee"])
             assertEquals(JsonPrimitive("New Shop"), patch["payee_name"])
+            assertNull(patch["imported_payee"])
             assertEquals(JsonNull, patch["category"])
             assertEquals(JsonPrimitive(true), patch["cleared"])
         }

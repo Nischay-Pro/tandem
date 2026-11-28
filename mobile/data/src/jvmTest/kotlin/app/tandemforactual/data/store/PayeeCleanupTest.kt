@@ -72,4 +72,13 @@ class PayeeCleanupTest {
         assertEquals(listOf("x", "y"), groups.single().members.map { it.id })
         assertEquals(false, groups.single().safe)
     }
+
+    @Test
+    fun processorTagsComeOffMerchantTextBeforeTheShapeCleanup() {
+        assertEquals("BLUE BOTTLE", cleanMerchantText("SQ *BLUE BOTTLE 1234", emptySet()))
+        assertEquals("Spotify", cleanMerchantText("PAYPAL *Spotify", emptySet()))
+        assertEquals("Cafe", cleanMerchantText("  TST* SQ *Cafe  ", emptySet()))
+        assertEquals("Corner Shop", cleanMerchantText("Corner Shop", emptySet()))
+        assertEquals("SQ *", cleanMerchantText(" SQ * ", emptySet()))
+    }
 }
