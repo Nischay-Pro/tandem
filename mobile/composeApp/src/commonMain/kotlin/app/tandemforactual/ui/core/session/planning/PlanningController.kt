@@ -99,7 +99,6 @@ internal class PlanningController(
         planningStore(budgetId)?.save(AccountKindChoice(accountId, AccountKind.CREDIT_CARD, network))
     }
 
-    /** Keeps a kind chosen for an account added offline once Actual gives it a real id. */
     /** Shows [icon] for the account, or its usual icon again when null. */
     suspend fun saveAccountIcon(
         budgetId: String,
@@ -110,6 +109,7 @@ internal class PlanningController(
         if (icon == null) store.deleteAccountIcon(accountId) else store.save(AccountIconChoice(accountId, icon))
     }
 
+    /** Keeps a kind chosen for an account added offline once Actual gives it a real id. */
     suspend fun moveAccountKind(
         budgetId: String,
         fromAccountId: String,
