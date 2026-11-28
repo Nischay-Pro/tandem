@@ -117,8 +117,11 @@ internal fun PersonalizeScreen(
     ) { current ->
         val finish = { finishPersonalizing(navigation) }
         when (current) {
-            PersonalizeStep.DECIDE -> DecideStep(state, back, finish) { go(PersonalizeStep.GOALS) }
-            PersonalizeStep.GOALS ->
+            PersonalizeStep.DECIDE -> {
+                DecideStep(state, back, finish) { go(PersonalizeStep.GOALS) }
+            }
+
+            PersonalizeStep.GOALS -> {
                 GoalsStep(state, back) { count ->
                     go(
                         if (count >=
@@ -130,12 +133,21 @@ internal fun PersonalizeScreen(
                         },
                     )
                 }
-            PersonalizeStep.EMPHASIS -> EmphasisStep(state, back) { go(PersonalizeStep.MODE) }
-            PersonalizeStep.MODE ->
+            }
+
+            PersonalizeStep.EMPHASIS -> {
+                EmphasisStep(state, back) { go(PersonalizeStep.MODE) }
+            }
+
+            PersonalizeStep.MODE -> {
                 ModeStep(state, back) {
                     if (suggestedTools(state.experience?.selectedGoals.orEmpty()).isEmpty()) finish() else go(PersonalizeStep.TOOLS)
                 }
-            PersonalizeStep.TOOLS -> ToolsStep(state, back, finish)
+            }
+
+            PersonalizeStep.TOOLS -> {
+                ToolsStep(state, back, finish)
+            }
         }
     }
 }
@@ -208,12 +220,18 @@ private fun DecideStep(
         stringResource(Res.string.personalize_continue),
         onPrimary = {
             when (personalize) {
-                true -> onPersonalize()
+                true -> {
+                    onPersonalize()
+                }
+
                 false -> {
                     state.updateExperience { it.copy(personalizationDeferred = true) }
                     onConnect()
                 }
-                null -> Unit
+
+                null -> {
+                    Unit
+                }
             }
         },
         primaryEnabled = personalize != null,

@@ -137,6 +137,7 @@ internal class SignInActions(
                     navigation.reset(AppRoute.HOME)
                 }
             }
+
             !selected.isEncrypted || state.encryptedPassword.isNotBlank() -> {
                 state.pendingBudgetSelectionOrigin = previousSelection
                 navigation.open(AppRoute.FIRST_SYNC)

@@ -87,13 +87,23 @@ private fun decimalSeparatorOf(
             if (!fitsFraction(fraction, currencyFractionDigits)) throw invalidAmount(original, "Check its decimal places.")
             mark
         }
+
         separators > 1 -> {
             if (!isGroupedInteger(numeric)) throw invalidAmount(original, "Check its separators.")
             null
         }
-        fraction.length == 3 -> threeDigitGroupOrDecimal(numeric, mark, currencyFractionDigits, numberFormat, original)
-        fitsFraction(fraction, currencyFractionDigits) -> mark
-        else -> throw invalidAmount(original, "Check its decimal places.")
+
+        fraction.length == 3 -> {
+            threeDigitGroupOrDecimal(numeric, mark, currencyFractionDigits, numberFormat, original)
+        }
+
+        fitsFraction(fraction, currencyFractionDigits) -> {
+            mark
+        }
+
+        else -> {
+            throw invalidAmount(original, "Check its decimal places.")
+        }
     }
 }
 
@@ -119,10 +129,17 @@ private fun threeDigitGroupOrDecimal(
     val budgetDecimal = decimalSeparatorFor(numberFormat)
     if (currencyFractionDigits >= 3) {
         return when {
-            mark == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) ->
+            mark == groupingSeparatorFor(numberFormat) && isGroupedInteger(numeric) -> {
                 throw invalidAmount(original, "This amount is ambiguous. Remove the grouping mark or include the decimal mark.")
-            mark == budgetDecimal -> mark
-            else -> throw invalidAmount(original, "Check its separators.")
+            }
+
+            mark == budgetDecimal -> {
+                mark
+            }
+
+            else -> {
+                throw invalidAmount(original, "Check its separators.")
+            }
         }
     }
     return when {
@@ -225,12 +242,25 @@ internal fun statementDateOrderFor(
     val dayFirst = numericDates.any { it.first in 13..31 && it.second in 1..12 }
     val monthFirst = numericDates.any { it.second in 13..31 && it.first in 1..12 }
     return when {
-        dayFirst && monthFirst ->
+        dayFirst && monthFirst -> {
             throw StatementImportParseException("This statement mixes day-first and month-first dates. Check the dates in the file.")
-        dayFirst -> StatementDateOrder.DAY_MONTH_YEAR
-        monthFirst -> StatementDateOrder.MONTH_DAY_YEAR
-        dates.any { dottedDate.matches(it.trim()) } -> StatementDateOrder.DAY_MONTH_YEAR
-        else -> selected
+        }
+
+        dayFirst -> {
+            StatementDateOrder.DAY_MONTH_YEAR
+        }
+
+        monthFirst -> {
+            StatementDateOrder.MONTH_DAY_YEAR
+        }
+
+        dates.any { dottedDate.matches(it.trim()) } -> {
+            StatementDateOrder.DAY_MONTH_YEAR
+        }
+
+        else -> {
+            selected
+        }
     }
 }
 

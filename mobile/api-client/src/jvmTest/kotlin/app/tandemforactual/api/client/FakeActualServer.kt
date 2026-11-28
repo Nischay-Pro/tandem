@@ -84,7 +84,7 @@ internal class FakeActualServer {
                     return@MockEngine respond(body)
                 }
                 when (request.url.encodedPath) {
-                    "/extension/v1/capabilities" ->
+                    "/extension/v1/capabilities" -> {
                         if (extension) {
                             respond(
                                 """{"apiVersion":1,"features":["planning-records"]}""",
@@ -92,17 +92,26 @@ internal class FakeActualServer {
                         } else {
                             respond("", HttpStatusCode.NotFound)
                         }
-                    "/account/validate" ->
+                    }
+
+                    "/account/validate" -> {
                         if (request.headers["x-actual-token"] == "session") {
                             respond("""{"status":"ok","data":{"validated":true,"permission":"${if (admin) "ADMIN" else "BASIC"}"}}""")
                         } else {
                             respond("""{"status":"error","reason":"unauthorized"}""", HttpStatusCode.Unauthorized)
                         }
-                    "/account/needs-bootstrap" -> respond("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""")
-                    "/account/login-methods" ->
+                    }
+
+                    "/account/needs-bootstrap" -> {
+                        respond("""{"status":"ok","data":{"bootstrapped":true,"loginMethod":"password"}}""")
+                    }
+
+                    "/account/login-methods" -> {
                         respond(
                             """{"status":"ok","methods":[{"method":"password","active":1,"displayName":"Password"}]}""",
                         )
+                    }
+
                     "/account/login" -> {
                         val body = (request.body as TextContent).text
                         if ("\"loginMethod\":\"openid\"" in body) {
@@ -114,7 +123,8 @@ internal class FakeActualServer {
                             respond("""{"status":"error","reason":"invalid-password"}""", HttpStatusCode.BadRequest)
                         }
                     }
-                    "/sync/list-user-files" ->
+
+                    "/sync/list-user-files" -> {
                         respond(
                             files.trimEnd().removeSuffix("]}") +
                                 uploaded.values.joinToString("") {
@@ -123,6 +133,8 @@ internal class FakeActualServer {
                                     }}"""
                                 } + "]}",
                         )
+                    }
+
                     "/sync/upload-user-file" -> {
                         if (failFileUploads) return@MockEngine respond("", HttpStatusCode.InternalServerError)
                         val fileId = checkNotNull(request.headers["x-actual-file-id"])
@@ -137,15 +149,18 @@ internal class FakeActualServer {
                         uploaded[fileId] = file
                         respond("""{"status":"ok","groupId":"${file.groupId}"}""")
                     }
+
                     "/sync/user-create-key" -> {
                         createdKeys += (request.body as TextContent).text
                         respond("""{"status":"ok"}""")
                     }
+
                     "/sync/reset-user-file" -> {
                         resets += (request.body as TextContent).text
                         respond("""{"status":"ok"}""")
                     }
-                    "/sync/get-user-file-info" ->
+
+                    "/sync/get-user-file-info" -> {
                         uploaded[request.headers["x-actual-file-id"]]?.let { file ->
                             respond(
                                 """{"status":"ok","data":{"fileId":"${file.fileId}","groupId":"${file.groupId}",""" +
@@ -161,6 +176,8 @@ internal class FakeActualServer {
                         } else {
                             respond("""{"status":"ok","data":{"fileId":"file","groupId":"group","name":"Direct"}}""")
                         }
+                    }
+
                     "/sync/download-user-file" -> {
                         downloads.incrementAndGet()
                         uploaded[request.headers["x-actual-file-id"]]?.let { return@MockEngine respond(it.body) }
@@ -174,7 +191,8 @@ internal class FakeActualServer {
                             },
                         )
                     }
-                    "/sync/user-get-key" ->
+
+                    "/sync/user-get-key" -> {
                         respond(
                             buildJsonObject {
                                 put("status", "ok")
@@ -188,6 +206,8 @@ internal class FakeActualServer {
                                 )
                             }.toString(),
                         )
+                    }
+
                     "/sync/sync" -> {
                         syncCalls++
                         syncGate?.await()
@@ -217,14 +237,24 @@ internal class FakeActualServer {
                             }
                         respond(SyncProtocol.encode(reply))
                     }
-                    "/simplefin/transactions" -> respond(bankDownload).also { simpleFinFileIds += request.headers["x-actual-file-id"] }
-                    "/simplefin/status" -> respond(simpleFinStatus(request.headers["x-actual-file-id"]))
+
+                    "/simplefin/transactions" -> {
+                        respond(bankDownload).also { simpleFinFileIds += request.headers["x-actual-file-id"] }
+                    }
+
+                    "/simplefin/status" -> {
+                        respond(simpleFinStatus(request.headers["x-actual-file-id"]))
+                    }
+
                     "/simplefin/accounts" -> {
                         val fileId = request.headers["x-actual-file-id"]
                         simpleFinFileIds += fileId
                         respond(if (budgetCredentials(fileId) == null) simpleFinAccounts else BUDGET_SIMPLEFIN_ACCOUNTS)
                     }
-                    else -> error("Unexpected path ${request.url.encodedPath}")
+
+                    else -> {
+                        error("Unexpected path ${request.url.encodedPath}")
+                    }
                 }
             },
         )

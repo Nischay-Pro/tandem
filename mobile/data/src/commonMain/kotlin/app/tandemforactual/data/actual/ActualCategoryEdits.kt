@@ -87,7 +87,11 @@ fun ActualBudgetEdits.manageCategoryGroup(
             }
             writer.update("category_groups", groupId, mapOf("name" to clean))
         }
-        "hide", "show" -> writer.update("category_groups", groupId, mapOf("hidden" to (if (action == "hide") 1L else 0L)))
+
+        "hide", "show" -> {
+            writer.update("category_groups", groupId, mapOf("hidden" to (if (action == "hide") 1L else 0L)))
+        }
+
         "delete" -> {
             if (truthy(group["is_income"]) && all.none { it["id"] != groupId && truthy(it["is_income"]) }) {
                 fail("A budget needs at least one income category group")
@@ -112,6 +116,7 @@ fun ActualBudgetEdits.manageCategoryGroup(
                 ).forEach { deleteCategoryRow(it["id"] as String, targetId) }
             writer.delete("category_groups", groupId)
         }
+
         else -> {
             if (targetId == groupId) fail("Choose a different category group position")
             if (targetId != null && all.none { it["id"] == targetId }) fail("Choose a category group in this budget")

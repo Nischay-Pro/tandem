@@ -39,13 +39,26 @@ internal fun StatementReview.explanation(
             val candidate = review.candidates.single()
             "Same amount in Actual, ${statementDayDistance(candidate.days)}."
         }
-        StatementRowStatus.CHOOSE ->
+
+        StatementRowStatus.CHOOSE -> {
             "${review.candidates.size} transactions in Actual have this amount. Choose the right one."
-        StatementRowStatus.GROUP ->
+        }
+
+        StatementRowStatus.GROUP -> {
             "Several rows from this merchant on this day have the same amount. Pair each one with its transaction."
-        StatementRowStatus.IMPORTED -> "Imported before, so it’s skipped."
-        StatementRowStatus.DUPLICATE -> duplicateExplanation(review)
-        StatementRowStatus.NEW -> review.reason?.let { noMatchExplanation(it, settings) } ?: "Not in Actual yet."
+        }
+
+        StatementRowStatus.IMPORTED -> {
+            "Imported before, so it’s skipped."
+        }
+
+        StatementRowStatus.DUPLICATE -> {
+            duplicateExplanation(review)
+        }
+
+        StatementRowStatus.NEW -> {
+            review.reason?.let { noMatchExplanation(it, settings) } ?: "Not in Actual yet."
+        }
     }
 
 private fun StatementReview.duplicateExplanation(review: StatementRowReview): String {
@@ -62,17 +75,28 @@ internal fun noMatchExplanation(
     settings: BudgetDisplaySettings?,
 ): String =
     when (reason) {
-        is StatementNoMatchReason.OppositeSign ->
+        is StatementNoMatchReason.OppositeSign -> {
             "Actual has ${formatCurrency(reason.transaction.amountMinor, settings)} on " +
                 "${displayTransactionDate(reason.transaction.date)}. This statement may show spending as positive amounts."
-        is StatementNoMatchReason.TooFarApart ->
+        }
+
+        is StatementNoMatchReason.TooFarApart -> {
             "The closest ${formatCurrency(reason.transaction.amountMinor, settings)} in Actual is " +
                 "${statementDayDistance(reason.days)}, more than $MATCH_WINDOW_DAYS days away."
-        is StatementNoMatchReason.AlreadyImported ->
+        }
+
+        is StatementNoMatchReason.AlreadyImported -> {
             "The ${formatCurrency(reason.transaction.amountMinor, settings)} on " +
                 "${displayTransactionDate(reason.transaction.date)} already came from another statement row."
-        StatementNoMatchReason.NothingNearby -> "This account has no transactions within $MATCH_WINDOW_DAYS days of this date."
-        StatementNoMatchReason.NoSameAmount -> "Nothing in Actual has this exact amount within $MATCH_WINDOW_DAYS days."
+        }
+
+        StatementNoMatchReason.NothingNearby -> {
+            "This account has no transactions within $MATCH_WINDOW_DAYS days of this date."
+        }
+
+        StatementNoMatchReason.NoSameAmount -> {
+            "Nothing in Actual has this exact amount within $MATCH_WINDOW_DAYS days."
+        }
     }
 
 internal fun StatementApplySummary.description(): String =

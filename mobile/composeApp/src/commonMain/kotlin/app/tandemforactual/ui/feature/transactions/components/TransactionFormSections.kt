@@ -174,13 +174,17 @@ private fun TransactionFormFeedback(
     actionError: String?,
 ) {
     when {
-        fieldError != null -> FieldErrorMessage(fieldError, owner = FeedbackMessageOwner.Field("amount"))
-        actionError != null ->
+        fieldError != null -> {
+            FieldErrorMessage(fieldError, owner = FeedbackMessageOwner.Field("amount"))
+        }
+
+        actionError != null -> {
             InlineMessage(
                 actionError,
                 InlineMessageKind.ERROR,
                 owner = FeedbackMessageOwner.Action("transaction.save"),
             )
+        }
     }
 }
 

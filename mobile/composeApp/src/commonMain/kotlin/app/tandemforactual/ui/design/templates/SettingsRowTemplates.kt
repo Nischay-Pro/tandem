@@ -85,24 +85,43 @@ internal fun financeIcon(label: String): ImageVector? {
 
     return when {
         matches("biometric", "fingerprint") -> Lucide.FingerprintPattern
+
         matches("read-only", "read only", "view only") -> Lucide.Eye
+
         matches("password") -> Lucide.LockKeyhole
+
         matches("credential", "security key") -> Lucide.KeyRound
+
         matches("conflict", "attention needed", "needs attention", "review", "reason", "rejected") -> Lucide.CircleAlert
+
         matches("queued", "pending", "outbox", "changes", "local edits") -> Lucide.CloudSync
+
         matches("transaction", "transactions", "purchase", "receipt", "payee", "merchant") -> Lucide.Receipt
+
         matches("local data", "storage", "cached", "records", "snapshot") -> Lucide.Database
+
         matches("essentials") -> Lucide.House
+
         matches("upcoming", "due") -> Lucide.CalendarDays
+
         matches("pet", "pets", "veterinary", "vet clinic", "animal care") -> Lucide.PawPrint
+
         matches("flight", "flights", "airfare", "airport", "plane", "travel") -> Lucide.Plane
+
         matches("rent", "mortgage", "housing", "home maintenance", "home repair", "landlord") -> Lucide.House
+
         matches("electric", "utility", "utilities", "power bill", "water bill", "energy", "internet bill") -> Lucide.Zap
+
         matches("grocery", "groceries", "supermarket", "produce", "market", "household supplies") -> Lucide.Carrot
+
         matches("clothing", "clothes", "apparel", "garments", "shirts") -> Lucide.Shirt
+
         matches("shopping", "retail", "department store") -> Lucide.ShoppingCart
+
         matches("cafe", "coffee") -> Lucide.Coffee
+
         matches("dining", "restaurant", "takeout", "food and drink") -> Lucide.Utensils
+
         matches(
             "transport",
             "transit",
@@ -114,9 +133,13 @@ internal fun financeIcon(label: String): ImageVector? {
             "parking",
             "train fare",
         ) -> Lucide.CarFront
+
         matches("insurance", "coverage", "policy premium", "security", "privacy") -> Lucide.ShieldCheck
+
         matches("medical", "healthcare", "doctor", "pharmacy", "dental", "hospital") -> Lucide.HeartPulse
+
         matches("paycheck", "payroll", "salary", "income") -> Lucide.BriefcaseBusiness
+
         matches(
             "balance",
             "currency",
@@ -127,18 +150,31 @@ internal fun financeIcon(label: String): ImageVector? {
             "available",
             "ready to assign",
         ) -> Lucide.WalletCards
+
         matches("date", "calendar", "start of week", "planning period", "month", "due", "posted") -> Lucide.CalendarDays
+
         matches("sync", "synchronization", "cloud") -> Lucide.CloudSync
+
         matches("server", "connection", "api") -> Lucide.Server
+
         matches("device", "phone") -> Lucide.Smartphone
+
         matches("theme", "appearance", "accent", "color", "background", "motion") -> Lucide.Palette
+
         matches("layout", "home screen") -> Lucide.LayoutDashboard
+
         matches("storage", "database", "local data", "cache") -> Lucide.Database
+
         matches("notification", "reminder", "alert") -> Lucide.Bell
+
         matches("category", "categories", "group", "budget") -> Lucide.Tags
+
         matches("about", "help", "information", "project", "library", "license") -> Lucide.Info
+
         matches("notes", "memo") -> Lucide.NotepadText
+
         matches("payee", "merchant", "transaction", "purchase", "activity", "history") -> Lucide.Receipt
+
         else -> null
     }
 }

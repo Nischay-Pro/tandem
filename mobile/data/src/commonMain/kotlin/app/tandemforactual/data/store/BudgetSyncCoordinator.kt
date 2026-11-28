@@ -259,15 +259,10 @@ class BudgetSyncCoordinator(
         var pagePreviousType = previousType
         var pagePreviousId = previousId
         for (record in records) {
-            if (record.generation != generation ||
+            val outOfOrder =
                 pagePreviousType != null &&
-                compareSnapshotRecordKeys(
-                    record.recordType,
-                    record.recordId,
-                    pagePreviousType,
-                    pagePreviousId.orEmpty(),
-                ) <= 0
-            ) {
+                    compareSnapshotRecordKeys(record.recordType, record.recordId, pagePreviousType, pagePreviousId.orEmpty()) <= 0
+            if (record.generation != generation || outOfOrder) {
                 throw BudgetSyncProtocolException("Snapshot page records are out of order")
             }
             pagePreviousType = record.recordType
@@ -497,7 +492,10 @@ class BudgetSyncCoordinator(
             RemoteOperationStatus.QUEUED,
             RemoteOperationStatus.APPLYING,
             RemoteOperationStatus.UNCERTAIN,
-            -> WriteOutcome.PENDING
+            -> {
+                WriteOutcome.PENDING
+            }
+
             RemoteOperationStatus.COMMITTED -> {
                 if (local.action == "DELETE") {
                     repository.markWriteCommitted(local.operationId, null)
@@ -512,6 +510,7 @@ class BudgetSyncCoordinator(
                 }
                 WriteOutcome.COMMITTED
             }
+
             RemoteOperationStatus.CONFLICT -> {
                 val transaction = remote.readTransaction(local.budgetId, local.recordId, encryptionPassword)
                 repository.markWriteConflict(
@@ -526,6 +525,7 @@ class BudgetSyncCoordinator(
                 )
                 WriteOutcome.CONFLICTED
             }
+
             RemoteOperationStatus.REJECTED -> {
                 if (remoteResult.errorCode == "discarded-by-user") {
                     repository.discardWrite(local.operationId)

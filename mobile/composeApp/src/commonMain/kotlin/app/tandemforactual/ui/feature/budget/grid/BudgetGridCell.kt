@@ -129,14 +129,21 @@ private fun BoxScope.BudgetGridCellContent(
         val columns = if (editing && value != GridValue.ALL) listOf(GridValue.BUDGETED) else value.columns
         columns.forEach { column ->
             when (column) {
-                GridValue.SPENT -> GridAmountText(context.state, amounts?.spent, tandemPalette.muted)
-                GridValue.BALANCE -> GridAmountText(context.state, amounts?.balance, balanceTint, bold = true)
-                else ->
+                GridValue.SPENT -> {
+                    GridAmountText(context.state, amounts?.spent, tandemPalette.muted)
+                }
+
+                GridValue.BALANCE -> {
+                    GridAmountText(context.state, amounts?.balance, balanceTint, bold = true)
+                }
+
+                else -> {
                     if (editing) {
                         BudgetGridEditor(context, Modifier.weight(1f))
                     } else {
                         GridAmountText(context.state, amounts?.budgeted, tandemPalette.text, pending = amounts?.pending == true)
                     }
+                }
             }
         }
     }

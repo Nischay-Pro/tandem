@@ -27,8 +27,14 @@ internal class ChangeDescriber(
         val row = rows.single()
         val subject = subject(row)
         return when {
-            row.created -> "Added ${noun(row.dataset)}${subject?.let { " $it" }.orEmpty()}"
-            row.deleted -> "Deleted ${noun(row.dataset)}${subject?.let { " $it" }.orEmpty()}"
+            row.created -> {
+                "Added ${noun(row.dataset)}${subject?.let { " $it" }.orEmpty()}"
+            }
+
+            row.deleted -> {
+                "Deleted ${noun(row.dataset)}${subject?.let { " $it" }.orEmpty()}"
+            }
+
             else -> {
                 val fields = row.fields.map { label(it.column).lowercase() }.distinct()
                 "Changed ${fields.take(2).joinToString(" and ")}${if (fields.size > 2) " and more" else ""}" +
@@ -118,9 +124,15 @@ internal class ChangeDescriber(
         value: CrdtValue,
     ): String =
         when {
-            value == CrdtValue.Null -> "None"
-            column in MONEY_COLUMNS -> (value as? CrdtValue.Number)?.let { state.formatCurrency(it.value.toLong()) } ?: value.display()
-            column == "date" ->
+            value == CrdtValue.Null -> {
+                "None"
+            }
+
+            column in MONEY_COLUMNS -> {
+                (value as? CrdtValue.Number)?.let { state.formatCurrency(it.value.toLong()) } ?: value.display()
+            }
+
+            column == "date" -> {
                 (value as? CrdtValue.Number)?.value?.toLong()?.toString()?.let {
                     if (it.length ==
                         8
@@ -131,8 +143,15 @@ internal class ChangeDescriber(
                     }
                 }
                     ?: value.display()
-            column in FLAG_COLUMNS -> if ((value as? CrdtValue.Number)?.value == 1.0) "Yes" else "No"
-            else -> value.text()?.let { names[it] ?: it } ?: value.display()
+            }
+
+            column in FLAG_COLUMNS -> {
+                if ((value as? CrdtValue.Number)?.value == 1.0) "Yes" else "No"
+            }
+
+            else -> {
+                value.text()?.let { names[it] ?: it } ?: value.display()
+            }
         }
 
     private fun CrdtValue.text() = (this as? CrdtValue.Text)?.value

@@ -18,24 +18,29 @@ internal fun openReportCategoryActivity(
     state.activitySearchFocusRequest += 1
     val dateFilter =
         when {
-            window.allDates ->
+            window.allDates -> {
                 ActivitySearchFilter(
                     ActivitySearchField.DATE_RANGE,
                     "${window.startDate}..${window.throughDate}",
                     "Date: All dates",
                 )
-            window.monthCount == 1 ->
+            }
+
+            window.monthCount == 1 -> {
                 ActivitySearchFilter(
                     ActivitySearchField.DATE_MONTH,
                     window.endMonthId,
                     "Date: ${reportMonthLabel(window.endMonthId)}",
                 )
-            else ->
+            }
+
+            else -> {
                 ActivitySearchFilter(
                     ActivitySearchField.DATE_RANGE,
                     "${window.startDate}..${window.throughDate}",
                     "Date: ${reportMonthLabel(window.startMonthId)} – ${reportMonthLabel(window.endMonthId)}",
                 )
+            }
         }
     state.activitySearchFilters =
         listOf(

@@ -114,18 +114,24 @@ private fun GoalTemplateFields(
             TextFieldCard("Each month", draft.amount, { onChange(draft.copy(amount = it)) }, decimal)
             TextFieldCard("Up to (optional)", draft.cap, { onChange(draft.copy(cap = it)) }, decimal)
         }
+
         GoalTemplateKind.BY_DATE -> {
             TextFieldCard("Target", draft.amount, { onChange(draft.copy(amount = it)) }, decimal)
             TextFieldCard("By month", draft.month, { onChange(draft.copy(month = it)) }, TextFieldOptions(placeholder = "2027-06"))
             ToggleRow("Repeat every year", checked = draft.repeatYearly) { onChange(draft.copy(repeatYearly = it)) }
         }
-        GoalTemplateKind.PERCENT -> PercentFields(draft, mobileSession, onChange)
+
+        GoalTemplateKind.PERCENT -> {
+            PercentFields(draft, mobileSession, onChange)
+        }
+
         GoalTemplateKind.AVERAGE -> {
             PillGrid(listOf(3, 6, 12).map { it to "$it months" }, draft.months, { onChange(draft.copy(months = it)) }, columns = 3)
             TextFieldCard("Adjust by % (optional)", draft.adjustPercent, {
                 onChange(draft.copy(adjustPercent = it))
             }, TextFieldOptions(placeholder = "10 or -5"))
         }
+
         GoalTemplateKind.SCHEDULE -> {
             val names =
                 mobileSession.scheduleRecords
@@ -142,12 +148,20 @@ private fun GoalTemplateFields(
             if (names.isNotEmpty()) PillGrid(names.map { it to it }, draft.schedule, { onChange(draft.copy(schedule = it)) }, columns = 2)
             ToggleRow("Budget the full amount when it’s due", checked = draft.full) { onChange(draft.copy(full = it)) }
         }
-        GoalTemplateKind.CAP -> CapFields(draft, onChange)
-        GoalTemplateKind.REMAINDER ->
+
+        GoalTemplateKind.CAP -> {
+            CapFields(draft, onChange)
+        }
+
+        GoalTemplateKind.REMAINDER -> {
             TextFieldCard("Weight", draft.weight, {
                 onChange(draft.copy(weight = it))
             }, TextFieldOptions(placeholder = "1"))
-        GoalTemplateKind.GOAL -> TextFieldCard("Balance to reach", draft.amount, { onChange(draft.copy(amount = it)) }, decimal)
+        }
+
+        GoalTemplateKind.GOAL -> {
+            TextFieldCard("Balance to reach", draft.amount, { onChange(draft.copy(amount = it)) }, decimal)
+        }
     }
     if (draft.kind != GoalTemplateKind.REMAINDER && draft.kind != GoalTemplateKind.GOAL) {
         TextFieldCard("Priority (optional)", draft.priority, {

@@ -67,26 +67,39 @@ internal fun activityBulkOptions(
     items: List<ActivityBulkItem>,
 ): List<ActivityBulkOption> =
     when (picker) {
-        ActivityBulkPicker.CATEGORY ->
+        ActivityBulkPicker.CATEGORY -> {
             listOf(ActivityBulkOption(null, "No category")) +
                 sources.categories
                     .filterNot { it.recordBody()?.booleanValue("hidden") == true }
                     .mapNotNull { record -> record.recordName()?.let { ActivityBulkOption(record.recordId, it) } }
-        ActivityBulkPicker.PAYEE ->
+        }
+
+        ActivityBulkPicker.PAYEE -> {
             listOf(ActivityBulkOption(null, "No payee")) +
                 sources.payees
                     .filter { it.recordBody()?.stringValue("transfer_acct") == null }
                     .mapNotNull { record -> record.recordName()?.let { ActivityBulkOption(record.recordId, it) } }
                     .sortedBy { it.title.lowercase() }
-        ActivityBulkPicker.ACCOUNT ->
+        }
+
+        ActivityBulkPicker.ACCOUNT -> {
             sources.accounts
                 .filterNot { it.recordBody()?.booleanValue("closed") == true }
                 .mapNotNull { record -> record.recordName()?.let { ActivityBulkOption(record.recordId, it) } }
-        ActivityBulkPicker.SCHEDULE ->
+        }
+
+        ActivityBulkPicker.SCHEDULE -> {
             listOf(ActivityBulkOption(null, "No schedule", "Unlink them from any schedule")) +
                 sources.schedules.map { ActivityBulkOption(it.id, it.name, it.accountName) }
-        ActivityBulkPicker.ADD_TAG -> (items.flatMap { noteTags(it.notes) } + sources.knownTags).tagOptions()
-        ActivityBulkPicker.REMOVE_TAG -> items.flatMap { noteTags(it.notes) }.tagOptions()
+        }
+
+        ActivityBulkPicker.ADD_TAG -> {
+            (items.flatMap { noteTags(it.notes) } + sources.knownTags).tagOptions()
+        }
+
+        ActivityBulkPicker.REMOVE_TAG -> {
+            items.flatMap { noteTags(it.notes) }.tagOptions()
+        }
     }
 
 private fun List<String>.tagOptions() = distinctBy { it.lowercase() }.sortedBy { it.lowercase() }.map { ActivityBulkOption(it, "#$it") }

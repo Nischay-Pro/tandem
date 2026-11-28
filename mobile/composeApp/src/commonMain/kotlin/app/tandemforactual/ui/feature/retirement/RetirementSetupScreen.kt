@@ -103,14 +103,7 @@ internal fun RetirementSetupScreen(
             }
         }
     val thisYear = platformTodayIsoDate().take(4).toInt()
-    var birthYear by remember {
-        mutableStateOf(
-            existing.values
-                .firstNotNullOfOrNull { it.estimatedBirthYear(thisYear) }
-                ?.toString()
-                .orEmpty(),
-        )
-    }
+    var birthYear by remember { mutableStateOf(savedBirthYear(existing.values, thisYear)) }
     var family by remember { mutableStateOf(existing.values.any { it.family }) }
     var stepIndex by remember { mutableStateOf(0) }
     val steps = listOf(SetupStep.Countries) + regions.map { SetupStep.Country(it) } + SetupStep.AboutYou
@@ -130,9 +123,15 @@ internal fun RetirementSetupScreen(
             }, label = "retirement-step") { current ->
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     when (current) {
-                        SetupStep.Countries -> CountriesStep(regions, lived, state.budgetCurrencyCode)
-                        is SetupStep.Country -> CountryStep(current.region, accounts, chosen, navigation)
-                        SetupStep.AboutYou ->
+                        SetupStep.Countries -> {
+                            CountriesStep(regions, lived, state.budgetCurrencyCode)
+                        }
+
+                        is SetupStep.Country -> {
+                            CountryStep(current.region, accounts, chosen, navigation)
+                        }
+
+                        SetupStep.AboutYou -> {
                             AboutYouStep(
                                 birthYear = birthYear,
                                 onBirthYearChange = { birthYear = it },
@@ -140,6 +139,7 @@ internal fun RetirementSetupScreen(
                                 onFamilyChange = { family = it },
                                 showFamily = needsFamilyCoverage(chosen.keys),
                             )
+                        }
                     }
                 }
             }
@@ -161,6 +161,16 @@ internal fun RetirementSetupScreen(
         },
     )
 }
+
+/** The birth year an earlier setup worked out, or blank. */
+private fun savedBirthYear(
+    profiles: Collection<RetirementProfile>,
+    thisYear: Int,
+): String =
+    profiles
+        .firstNotNullOfOrNull { it.estimatedBirthYear(thisYear) }
+        ?.toString()
+        .orEmpty()
 
 /** Continue or finish, plus back once past the first step. */
 @Composable

@@ -117,13 +117,19 @@ internal class BackupFlow(
                 error = null
                 askingPassphrase = true
             }
-            else -> opened(opened)
+
+            else -> {
+                opened(opened)
+            }
         }
     }
 
     fun submit(passphrase: String) {
         when (val opened = BackupArchive.open(picked ?: return, passphrase)) {
-            OpenedBackup.WrongPassphrase -> error = "That passphrase doesn’t open this backup."
+            OpenedBackup.WrongPassphrase -> {
+                error = "That passphrase doesn’t open this backup."
+            }
+
             else -> {
                 dismiss()
                 openedWithPassphrase = true
@@ -141,9 +147,14 @@ internal class BackupFlow(
         picked = null
         val contents = opened as? OpenedBackup.Contents
         when {
-            contents == null -> report(rejection(opened) to InlineMessageKind.ERROR)
-            contents.database == null && contents.extras.isEmpty() ->
+            contents == null -> {
+                report(rejection(opened) to InlineMessageKind.ERROR)
+            }
+
+            contents.database == null && contents.extras.isEmpty() -> {
                 report(describeBackup(contents, state.selectedBudgetId) to InlineMessageKind.INFO)
+            }
+
             else -> {
                 restoreTarget = if (contents.database != null) RestoreTarget.NEW_BUDGET else RestoreTarget.EXTRAS_ONLY
                 restoreError = null

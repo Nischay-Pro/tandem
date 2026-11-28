@@ -80,12 +80,19 @@ internal fun DebtOverviewCard(
             val minimum = term?.minimumPaymentMinor
             val detail =
                 when {
-                    apr == null || minimum == null -> "Add the APR and minimum payment to estimate payoff"
-                    privacy -> "${formatRateBasisPoints(apr)} APR"
-                    else ->
+                    apr == null || minimum == null -> {
+                        "Add the APR and minimum payment to estimate payoff"
+                    }
+
+                    privacy -> {
+                        "${formatRateBasisPoints(apr)} APR"
+                    }
+
+                    else -> {
                         PlanningMath.payoff(owed, apr, minimum)?.let {
                             "Estimate: ${it.months} months at the minimum, ${formatCurrency(it.totalInterestMinor, settings)} interest"
                         } ?: "The minimum doesn’t cover the interest at ${formatRateBasisPoints(apr)} APR"
+                    }
                 }
             val credit =
                 term?.creditLimitMinor?.takeUnless { privacy }?.let { limit ->
@@ -154,21 +161,36 @@ internal class PlanningEditors {
 
 internal fun planningSyncDetail(status: PlanningSyncStatus): Pair<String, String>? =
     when (status) {
-        PlanningSyncStatus.OFF -> null
-        PlanningSyncStatus.SYNCED -> "Planning details synced" to "Savings goals and debt details match your other devices."
-        PlanningSyncStatus.WAITING ->
+        PlanningSyncStatus.OFF -> {
+            null
+        }
+
+        PlanningSyncStatus.SYNCED -> {
+            "Planning details synced" to "Savings goals and debt details match your other devices."
+        }
+
+        PlanningSyncStatus.WAITING -> {
             "Planning details saved on this device" to
                 "They’ll sync when Tandem’s extension service is reachable. Your budget syncs as usual."
-        PlanningSyncStatus.SIGN_IN_EXPIRED ->
+        }
+
+        PlanningSyncStatus.SIGN_IN_EXPIRED -> {
             "Planning details saved on this device" to
                 "Your Actual sign-in has expired. Sign in again and they’ll sync."
-        PlanningSyncStatus.NO_ACCESS ->
+        }
+
+        PlanningSyncStatus.NO_ACCESS -> {
             "Planning details saved on this device" to
                 "The extension service says your Actual sign-in can’t open this budget. They’ll sync once it can."
-        PlanningSyncStatus.BUSY ->
+        }
+
+        PlanningSyncStatus.BUSY -> {
             "Planning details saved on this device" to
                 "Tandem’s extension service is busy. They’ll sync on the next try."
-        PlanningSyncStatus.NEEDS_RECOVERY_KEY ->
+        }
+
+        PlanningSyncStatus.NEEDS_RECOVERY_KEY -> {
             "Enter your planning recovery key" to
                 "Another device already shares planning details for this budget. Enter its recovery key in Settings."
+        }
     }

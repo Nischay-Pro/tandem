@@ -80,13 +80,25 @@ internal fun sortActivitySearchIndices(
         val second = records[secondIndex]
         val primary =
             when (order) {
-                ActivitySortOrder.NEWEST_FIRST -> second.dateIso.compareTo(first.dateIso)
-                ActivitySortOrder.OLDEST_FIRST -> first.dateIso.compareTo(second.dateIso)
-                ActivitySortOrder.AMOUNT_HIGH_TO_LOW ->
+                ActivitySortOrder.NEWEST_FIRST -> {
+                    second.dateIso.compareTo(first.dateIso)
+                }
+
+                ActivitySortOrder.OLDEST_FIRST -> {
+                    first.dateIso.compareTo(second.dateIso)
+                }
+
+                ActivitySortOrder.AMOUNT_HIGH_TO_LOW -> {
                     kotlin.math.abs(second.amountMinorUnits).compareTo(kotlin.math.abs(first.amountMinorUnits))
-                ActivitySortOrder.AMOUNT_LOW_TO_HIGH ->
+                }
+
+                ActivitySortOrder.AMOUNT_LOW_TO_HIGH -> {
                     kotlin.math.abs(first.amountMinorUnits).compareTo(kotlin.math.abs(second.amountMinorUnits))
-                ActivitySortOrder.PAYEE_A_TO_Z -> first.payee.compareTo(second.payee, ignoreCase = true)
+                }
+
+                ActivitySortOrder.PAYEE_A_TO_Z -> {
+                    first.payee.compareTo(second.payee, ignoreCase = true)
+                }
             }
         if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
     }
@@ -101,13 +113,25 @@ internal fun sortActivityTransactions(
         transactions.sortedWith { first, second ->
             val primary =
                 when (order) {
-                    ActivitySortOrder.NEWEST_FIRST -> second.dateIso.compareTo(first.dateIso)
-                    ActivitySortOrder.OLDEST_FIRST -> first.dateIso.compareTo(second.dateIso)
-                    ActivitySortOrder.AMOUNT_HIGH_TO_LOW ->
+                    ActivitySortOrder.NEWEST_FIRST -> {
+                        second.dateIso.compareTo(first.dateIso)
+                    }
+
+                    ActivitySortOrder.OLDEST_FIRST -> {
+                        first.dateIso.compareTo(second.dateIso)
+                    }
+
+                    ActivitySortOrder.AMOUNT_HIGH_TO_LOW -> {
                         kotlin.math.abs(second.amountMinorUnits).compareTo(kotlin.math.abs(first.amountMinorUnits))
-                    ActivitySortOrder.AMOUNT_LOW_TO_HIGH ->
+                    }
+
+                    ActivitySortOrder.AMOUNT_LOW_TO_HIGH -> {
                         kotlin.math.abs(first.amountMinorUnits).compareTo(kotlin.math.abs(second.amountMinorUnits))
-                    ActivitySortOrder.PAYEE_A_TO_Z -> first.payee.compareTo(second.payee, ignoreCase = true)
+                    }
+
+                    ActivitySortOrder.PAYEE_A_TO_Z -> {
+                        first.payee.compareTo(second.payee, ignoreCase = true)
+                    }
                 }
             if (primary != 0) primary else second.dateIso.compareTo(first.dateIso)
         }
@@ -160,11 +184,17 @@ private fun activityDateFilterCoversMonth(
     val first = "$monthId-01"
     val last = "$monthId-${daysInSearchMonth(year, month).toString().padStart(2, '0')}"
     return when (filter.field) {
-        ActivitySearchField.DATE_MONTH_OF_YEAR -> filter.value.toIntOrNull() == month
+        ActivitySearchField.DATE_MONTH_OF_YEAR -> {
+            filter.value.toIntOrNull() == month
+        }
+
         ActivitySearchField.DATE_RANGE -> {
             val range = filter.value.split("..", limit = 2)
             range.size == 2 && range[0] <= first && range[1] >= last
         }
-        else -> false
+
+        else -> {
+            false
+        }
     }
 }

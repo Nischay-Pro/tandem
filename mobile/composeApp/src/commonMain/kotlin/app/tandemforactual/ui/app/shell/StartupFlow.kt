@@ -124,7 +124,10 @@ private fun leaveStartupRoute(
             isAuthenticated = mobileSession.isAuthenticated,
         )
     when (destination) {
-        AppStartupDestination.WAIT -> Unit
+        AppStartupDestination.WAIT -> {
+            Unit
+        }
+
         AppStartupDestination.CACHED_BUDGET -> {
             val localCachedBudgets = mobileSession.cachedBudgets
             val availableCachedBudgets =
@@ -146,10 +149,12 @@ private fun leaveStartupRoute(
                 backStack.add(navigator.newRouteEntry(startPage(state.startPageName, navigationRoutes(state.interfaceMode))))
             }
         }
+
         AppStartupDestination.BUDGET_CHOOSER -> {
             backStack.clear()
             backStack.add(navigator.newRouteEntry(AppRoute.BUDGET_CHOOSER))
         }
+
         AppStartupDestination.WELCOME -> {
             backStack.clear()
             backStack.add(navigator.newRouteEntry(AppRoute.WELCOME))

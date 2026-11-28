@@ -28,16 +28,20 @@ internal fun AutomationException.toAppFunctionException(): AppFunctionException 
     val text = message.orEmpty()
     return when (code) {
         AutomationErrorCode.WRITES_OFF, AutomationErrorCode.READS_OFF -> AppFunctionDisabledException(text)
+
         AutomationErrorCode.READ_ONLY,
         AutomationErrorCode.BUDGET_LOCKED,
         AutomationErrorCode.APP_LOCKED,
         AutomationErrorCode.AMOUNTS_HIDDEN,
         -> AppFunctionDeniedException(text)
+
         AutomationErrorCode.NO_BUDGET,
         AutomationErrorCode.CATEGORY,
         AutomationErrorCode.NOT_ON_DEVICE,
         -> AppFunctionElementNotFoundException(text)
+
         AutomationErrorCode.SAVE_FAILED -> AppFunctionAppUnknownException(text)
+
         else -> AppFunctionInvalidArgumentException(text)
     }
 }

@@ -80,38 +80,65 @@ internal fun RuleFinding.title(): String =
 
 internal fun RuleFinding.explanation(): String =
     when (kind) {
-        RuleFindingKind.MISSING_REFERENCE ->
+        RuleFindingKind.MISSING_REFERENCE -> {
             if (severity == RuleSeverity.PROBLEM) {
                 "It uses a ${fieldList(fields)} that no longer exists, so it can’t make the change it promises."
             } else {
                 "It looks for a ${fieldList(fields)} that no longer exists, so that part never matches."
             }
-        RuleFindingKind.CONTRADICTORY -> "Its conditions can’t all be true at once, so it never matches a transaction."
-        RuleFindingKind.NO_CONDITIONS -> "It has no conditions, and Actual only runs rules that have at least one."
-        RuleFindingKind.NO_ACTIONS -> "It has no actions, so transactions it matches stay as they are."
-        RuleFindingKind.NO_OP_ACTIONS ->
+        }
+
+        RuleFindingKind.CONTRADICTORY -> {
+            "Its conditions can’t all be true at once, so it never matches a transaction."
+        }
+
+        RuleFindingKind.NO_CONDITIONS -> {
+            "It has no conditions, and Actual only runs rules that have at least one."
+        }
+
+        RuleFindingKind.NO_ACTIONS -> {
+            "It has no actions, so transactions it matches stay as they are."
+        }
+
+        RuleFindingKind.NO_OP_ACTIONS -> {
             "Setting the ${fieldList(fields)} has no effect: it’s empty, matches what the rule looks for, " +
                 "or a later step in the same rule replaces it."
-        RuleFindingKind.SHADOWED ->
+        }
+
+        RuleFindingKind.SHADOWED -> {
             "Whenever it runs, the rule below also runs afterwards in the same stage and sets the ${fieldList(fields)}, " +
                 "so its changes never stick."
-        RuleFindingKind.DUPLICATE -> "These rules match the same transactions and make the same changes. One is enough."
-        RuleFindingKind.NEAR_DUPLICATE ->
+        }
+
+        RuleFindingKind.DUPLICATE -> {
+            "These rules match the same transactions and make the same changes. One is enough."
+        }
+
+        RuleFindingKind.NEAR_DUPLICATE -> {
             "These rules make the same changes and differ only in the ${fieldList(fields)} they look for. " +
                 "One rule that matches any of them does the same job."
-        RuleFindingKind.BROAD ->
+        }
+
+        RuleFindingKind.BROAD -> {
             "It matches $matched of your last $checked transactions (${matched * 100 / checked.coerceAtLeast(1)}%). " +
                 "Check its conditions are as narrow as you meant."
+        }
     }
 
 /** What merging a duplicate group does, or null when the finding has nothing to merge. */
 internal fun RuleFinding.mergeLabel(): Pair<String, String>? =
     when (kind) {
-        RuleFindingKind.DUPLICATE ->
+        RuleFindingKind.DUPLICATE -> {
             "Keep one rule" to if (related.size == 1) "Deletes the copy" else "Deletes the other ${related.size}"
-        RuleFindingKind.NEAR_DUPLICATE ->
+        }
+
+        RuleFindingKind.NEAR_DUPLICATE -> {
             "Merge into one rule" to "Updates the first and deletes the other ${if (related.size == 1) "one" else "${related.size}"}"
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 
 /** The rule checks, worst first, each opening its explanation and the rules involved. */

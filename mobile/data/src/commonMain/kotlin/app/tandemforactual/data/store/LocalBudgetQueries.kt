@@ -18,10 +18,17 @@ suspend fun LocalBudgetRepository.findRecords(
 ): List<BudgetRecordEntity> {
     val dao = database.budgetRecordDao()
     return when {
-        accountId != null || categoryId != null || payeeId != null ->
+        accountId != null || categoryId != null || payeeId != null -> {
             dao.findVisible(budgetId, recordType, accountId, categoryId, payeeId, fromDate, throughDate)
-        fromDate != null || throughDate != null -> dao.findVisibleFrom(budgetId, recordType, fromDate.orEmpty(), throughDate)
-        else -> dao.findAllVisible(budgetId, recordType)
+        }
+
+        fromDate != null || throughDate != null -> {
+            dao.findVisibleFrom(budgetId, recordType, fromDate.orEmpty(), throughDate)
+        }
+
+        else -> {
+            dao.findAllVisible(budgetId, recordType)
+        }
     }
 }
 

@@ -134,14 +134,33 @@ internal fun paymentFormatProblem(
 ): String? {
     val regex = runCatching { Regex(pattern, RegexOption.IGNORE_CASE) }.getOrNull()
     return when {
-        pattern.isBlank() -> "Enter a pattern."
-        pattern.length > MAX_CUSTOM_PATTERN -> "Keep the pattern under $MAX_CUSTOM_PATTERN characters."
-        "(?<amount>" !in pattern -> "Name the amount with (?<amount>…)."
-        NESTED_REPEAT.containsMatchIn(pattern) -> "Avoid a repeat inside a repeat, such as (a+)+. It can make matching very slow."
-        regex == null -> "This isn’t a valid regular expression."
-        readPaymentText(sample.take(MAX_SHARED_TEXT), listOf(PaymentTextFormat("", regex, emptyList()))) == null ->
+        pattern.isBlank() -> {
+            "Enter a pattern."
+        }
+
+        pattern.length > MAX_CUSTOM_PATTERN -> {
+            "Keep the pattern under $MAX_CUSTOM_PATTERN characters."
+        }
+
+        "(?<amount>" !in pattern -> {
+            "Name the amount with (?<amount>…)."
+        }
+
+        NESTED_REPEAT.containsMatchIn(pattern) -> {
+            "Avoid a repeat inside a repeat, such as (a+)+. It can make matching very slow."
+        }
+
+        regex == null -> {
+            "This isn’t a valid regular expression."
+        }
+
+        readPaymentText(sample.take(MAX_SHARED_TEXT), listOf(PaymentTextFormat("", regex, emptyList()))) == null -> {
             "The pattern doesn’t read the sample message."
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 }
 

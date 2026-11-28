@@ -121,17 +121,31 @@ internal fun ManagePayeeSheet(
                 },
             ) {
                 when (payee.mode) {
-                    "default-category" -> defaultCategoryContent()
-                    "rename" -> RenamePayeeSection(payee, selectedPayee, state, mobileSession, scope)
-                    "merge" -> MergePayeeSection(payee, selectedPayee, payees, mobileSession)
+                    "default-category" -> {
+                        defaultCategoryContent()
+                    }
+
+                    "rename" -> {
+                        RenamePayeeSection(payee, selectedPayee, state, mobileSession, scope)
+                    }
+
+                    "merge" -> {
+                        MergePayeeSection(payee, selectedPayee, payees, mobileSession)
+                    }
+
                     "confirm-merge" -> {
                         Text("Confirm the merge in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                     }
+
                     "delete" -> {
                         Text("Confirm deletion in the alert.", color = tandemPalette.muted, fontSize = TandemTypography.body)
                     }
-                    "usage" -> PayeeUsageSection(payee, selectedPayee, state, navigation, mobileSession)
-                    else ->
+
+                    "usage" -> {
+                        PayeeUsageSection(payee, selectedPayee, state, navigation, mobileSession)
+                    }
+
+                    else -> {
                         ManagePayeeMenu(
                             payee,
                             selectedPayee,
@@ -141,6 +155,7 @@ internal fun ManagePayeeSheet(
                             state,
                             mobileSession,
                         )
+                    }
                 }
             }
         }

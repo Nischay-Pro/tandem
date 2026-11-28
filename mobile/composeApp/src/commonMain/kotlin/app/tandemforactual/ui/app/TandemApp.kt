@@ -111,6 +111,7 @@ internal fun AppRoute.showsBottomNavigation(): Boolean =
         AppRoute.CHOOSE_CATEGORY,
         AppRoute.RETIREMENT_SETUP,
         -> false
+
         else -> true
     }
 

@@ -49,7 +49,7 @@ internal data class GoalTemplateDraft(
                 .toIntOrNull()
                 ?.takeIf { it >= 0 } ?: return null
         return when (kind) {
-            GoalTemplateKind.FIXED ->
+            GoalTemplateKind.FIXED -> {
                 GoalTemplate(
                     "simple",
                     priority = priority,
@@ -60,7 +60,9 @@ internal data class GoalTemplateDraft(
                                 ?: return null
                         },
                 )
-            GoalTemplateKind.BY_DATE ->
+            }
+
+            GoalTemplateKind.BY_DATE -> {
                 GoalTemplate(
                     "by",
                     priority = priority,
@@ -68,7 +70,9 @@ internal data class GoalTemplateDraft(
                     month = month.trim(),
                     annual = if (repeatYearly) true else null,
                 )
-            GoalTemplateKind.PERCENT ->
+            }
+
+            GoalTemplateKind.PERCENT -> {
                 GoalTemplate(
                     "percentage",
                     priority = priority,
@@ -76,6 +80,8 @@ internal data class GoalTemplateDraft(
                     previous = previous,
                     category = source,
                 )
+            }
+
             GoalTemplateKind.AVERAGE -> {
                 val adjustment = adjustPercent.ifBlank { null }?.let { signed(it) ?: return null }
                 GoalTemplate(
@@ -86,16 +92,27 @@ internal data class GoalTemplateDraft(
                     adjustmentType = adjustment?.let { "percent" },
                 )
             }
-            GoalTemplateKind.SCHEDULE -> GoalTemplate("schedule", priority = priority, name = schedule.ifBlank { return null }, full = full)
-            GoalTemplateKind.CAP -> GoalTemplate("simple", priority = priority, limit = limit(cap) ?: return null)
-            GoalTemplateKind.REMAINDER ->
+
+            GoalTemplateKind.SCHEDULE -> {
+                GoalTemplate("schedule", priority = priority, name = schedule.ifBlank { return null }, full = full)
+            }
+
+            GoalTemplateKind.CAP -> {
+                GoalTemplate("simple", priority = priority, limit = limit(cap) ?: return null)
+            }
+
+            GoalTemplateKind.REMAINDER -> {
                 GoalTemplate(
                     "remainder",
                     priority = null,
                     weight =
                         weight.trim().toIntOrNull()?.takeIf { it > 0 } ?: return null,
                 )
-            GoalTemplateKind.GOAL -> GoalTemplate("goal", directive = "goal", priority = null, amount = number(amount) ?: return null)
+            }
+
+            GoalTemplateKind.GOAL -> {
+                GoalTemplate("goal", directive = "goal", priority = null, amount = number(amount) ?: return null)
+            }
         }
     }
 

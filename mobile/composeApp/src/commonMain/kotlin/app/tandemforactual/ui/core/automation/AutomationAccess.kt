@@ -52,20 +52,23 @@ fun automationTarget(
     kind: AutomationKind,
 ): AutomationTarget {
     when (kind) {
-        AutomationKind.WRITE ->
+        AutomationKind.WRITE -> {
             if (!AutomationAccess.writesAllowed(preferences)) {
                 throw AutomationException(
                     AutomationErrorCode.WRITES_OFF,
                     "Adding transactions is off. Turn it on in Tandem under Settings → Automation.",
                 )
             }
-        AutomationKind.READ ->
+        }
+
+        AutomationKind.READ -> {
             if (!AutomationAccess.readsAllowed(preferences)) {
                 throw AutomationException(
                     AutomationErrorCode.READS_OFF,
                     "Reading budget numbers is off. Turn it on in Tandem under Settings → Automation.",
                 )
             }
+        }
     }
     val budgetId =
         preferences["selectedBudgetId"]?.takeIf(String::isNotBlank)

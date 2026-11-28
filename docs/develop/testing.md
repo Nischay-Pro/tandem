@@ -67,6 +67,17 @@ Markdown run the full suite.
    a hook is missing, rerun the installer. Hooks do not replace CI; use CI to
    check Xcode and simulator behavior.
 
+2. **On a machine that can't run Gradle,** turn on light mode:
+
+   ```sh
+   git config tandem.lightHooks true
+   ```
+
+   The hooks then skip the Gradle build, and workflow checks when Go is
+   missing. Kotlin style is still checked: both hooks run
+   `scripts/ktlint.sh`, which downloads the pinned ktlint once, checks its
+   SHA-256 and needs only Java. CI still builds and tests every change.
+
 ## Demo budget
 
 `pnpm demo:up` starts a local Actual server on `http://localhost:5006`

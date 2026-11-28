@@ -94,18 +94,37 @@ internal fun budgetMutationReason(
     itemName: String,
 ): String =
     when {
-        operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) ->
+        operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) -> {
             budgetMutationFailureMessage(operation.lastErrorCode, mutation?.kind, itemName)
+        }
+
         operation.status == "rejected" &&
             operation.lastErrorCode == "invalid_request" &&
-            mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT ->
+            mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
             "Tandem searched hidden categories only, so it could not find $itemName. It stopped the request before sending it to Actual; your assignment did not change."
-        operation.status == "rejected" -> budgetMutationFailureMessage(operation.lastErrorCode, mutation?.kind, itemName)
-        operation.status == "uncertain" ->
+        }
+
+        operation.status == "rejected" -> {
+            budgetMutationFailureMessage(operation.lastErrorCode, mutation?.kind, itemName)
+        }
+
+        operation.status == "uncertain" -> {
             "Tandem sent this change but did not receive confirmation. It may already be saved in Actual, so check your budget before trying again."
-        operation.status == "conflict" ->
+        }
+
+        operation.status == "conflict" -> {
             "The budget changed while this request was being processed. Refresh the budget and review the latest values before choosing what to do."
-        operation.status == "queued" -> "This change is saved on this device and is waiting to be sent to Actual."
-        operation.status == "sending" -> "Tandem is sending this change to Actual."
-        else -> "Tandem could not confirm the result of this change. Check Actual before trying again."
+        }
+
+        operation.status == "queued" -> {
+            "This change is saved on this device and is waiting to be sent to Actual."
+        }
+
+        operation.status == "sending" -> {
+            "Tandem is sending this change to Actual."
+        }
+
+        else -> {
+            "Tandem could not confirm the result of this change. Check Actual before trying again."
+        }
     }

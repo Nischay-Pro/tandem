@@ -132,14 +132,12 @@ internal fun BudgetReorderQueueState.failHead(
 private fun BudgetReorderQueueState.failedMovesFor(move: QueuedBudgetReorder): List<QueuedBudgetReorder> =
     if (move.kind == BudgetReorderKind.CREATE_CATEGORY_GROUP) {
         moves.filter { queued ->
-            queued == move ||
-                queued.budgetId == move.budgetId &&
-                (
-                    queued.itemId == move.itemId ||
-                        queued.targetId == move.itemId ||
-                        queued.parentGroupId == move.itemId ||
-                        move.itemId in queued.desiredOrder
-                )
+            val related =
+                queued.itemId == move.itemId ||
+                    queued.targetId == move.itemId ||
+                    queued.parentGroupId == move.itemId ||
+                    move.itemId in queued.desiredOrder
+            queued == move || (queued.budgetId == move.budgetId && related)
         }
     } else {
         listOf(move)

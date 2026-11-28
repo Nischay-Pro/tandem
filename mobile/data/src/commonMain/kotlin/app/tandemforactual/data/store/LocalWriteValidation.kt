@@ -116,12 +116,14 @@ internal fun LocalBudgetRepository.validateWriteRequest(request: LocalWriteReque
             validateJsonObject(request.optimisticJson, "optimisticJson")
             requireOptimisticProjection(request)
         }
+
         LocalWriteAction.UPDATE -> {
             requireIdentifier(request.baseRevision, "baseRevision")
             validateJsonObject(request.baseSnapshotJson, "baseSnapshotJson")
             validateJsonObject(request.optimisticJson, "optimisticJson")
             requireOptimisticProjection(request)
         }
+
         LocalWriteAction.DELETE -> {
             requireIdentifier(request.baseRevision, "baseRevision")
             validateJsonObject(request.baseSnapshotJson, "baseSnapshotJson")

@@ -66,7 +66,7 @@ internal fun ReorderDragHandle(
                     latestMoveUp()
                     dragDistance += stepPixels
                 }
-                if (!latestCanMoveDown && dragDistance > 0f || !latestCanMoveUp && dragDistance < 0f) {
+                if ((!latestCanMoveDown && dragDistance > 0f) || (!latestCanMoveUp && dragDistance < 0f)) {
                     dragDistance = 0f
                 }
             }

@@ -93,21 +93,30 @@ internal fun ScheduleDiscoverySheet(
         SheetCard(maxWidth = 560.dp, header = { TandemModalHeader(title = "Recurring payments", onClose = { close() }) }) {
             val results = discovery.results
             when {
-                discovery.failed ->
+                discovery.failed -> {
                     InlineMessage(
                         "Couldn’t look through this budget’s transactions.",
                         InlineMessageKind.ERROR,
                         actionLabel = "Try again",
                         onAction = { discovery.open() },
                     )
-                results == null -> SkeletonRows(count = 4)
-                results.isEmpty() ->
+                }
+
+                results == null -> {
+                    SkeletonRows(count = 4)
+                }
+
+                results.isEmpty() -> {
                     EmptyState(
                         "No recurring payments found",
                         "Payments to the same payee, for a similar amount, at a regular interval show here.",
                         modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large),
                     )
-                else -> DiscoveredScheduleList(state, mobileSession, discovery, results, names)
+                }
+
+                else -> {
+                    DiscoveredScheduleList(state, mobileSession, discovery, results, names)
+                }
             }
         }
     }

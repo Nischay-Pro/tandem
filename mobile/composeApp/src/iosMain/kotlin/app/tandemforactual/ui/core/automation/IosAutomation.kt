@@ -144,11 +144,17 @@ object IosAutomation {
                 }.getOrNull()
             completion(
                 when (result) {
-                    AutomationUndo.REMOVED -> IosAutomationUndone("Transaction removed.", syncNeeded = false)
-                    AutomationUndo.DELETING ->
+                    AutomationUndo.REMOVED -> {
+                        IosAutomationUndone("Transaction removed.", syncNeeded = false)
+                    }
+
+                    AutomationUndo.DELETING -> {
                         IosAutomationUndone("Transaction removed. Tandem deletes it in Actual on the next sync.", syncNeeded = true)
-                    else ->
+                    }
+
+                    else -> {
                         IosAutomationUndone("Open Tandem to remove this transaction. It changed after it was added.", syncNeeded = false)
+                    }
                 },
             )
         }

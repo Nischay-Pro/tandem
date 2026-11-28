@@ -253,27 +253,16 @@ private fun matchesFilter(
     val expectedAmount = prepared.expectedAmount
     val absoluteAmount = kotlin.math.abs(record.amountMinorUnits)
     return when (filter.field) {
-        ActivitySearchField.ANY_CONTAINS ->
-            matchesAnyText(
-                record,
-                filter.value.trim().lowercase(),
-                prepared.textAmount,
-                prepared.textDatePrefixes,
-            )
-        ActivitySearchField.PAYEE_CONTAINS ->
-            record.payee.contains(filter.value, ignoreCase = true) || record.payeeId == filter.value
+        ActivitySearchField.ANY_CONTAINS -> matchesAnyText(record, prepared)
+        ActivitySearchField.PAYEE_CONTAINS -> record.payee.contains(filter.value, ignoreCase = true) || record.payeeId == filter.value
         ActivitySearchField.NOTES_CONTAIN -> record.notes.contains(filter.value, ignoreCase = true)
         ActivitySearchField.TAG -> record.tagNames.any { it.equals(filter.value, ignoreCase = true) }
         ActivitySearchField.ACCOUNT -> record.accountId == filter.value || record.account.equals(filter.value, ignoreCase = true)
         ActivitySearchField.CATEGORY -> record.categoryId == filter.value || record.category.equals(filter.value, ignoreCase = true)
         ActivitySearchField.DATE_MONTH -> record.dateIso.startsWith(filter.value)
         ActivitySearchField.DATE_ON -> record.dateIso.startsWith(filter.value)
-        ActivitySearchField.DATE_RANGE -> {
-            val range = filter.value.split("..", limit = 2)
-            range.size == 2 && record.dateIso >= range[0] && record.dateIso <= range[1]
-        }
-        ActivitySearchField.DATE_MONTH_OF_YEAR ->
-            monthOf(record.dateIso) == filter.value.toIntOrNull()
+        ActivitySearchField.DATE_RANGE -> inDateRange(record.dateIso, filter.value)
+        ActivitySearchField.DATE_MONTH_OF_YEAR -> monthOf(record.dateIso) == filter.value.toIntOrNull()
         ActivitySearchField.DATE_MONTH_DAY -> record.dateIso.substringOrNull(5, 10) == filter.value
         ActivitySearchField.CLEARED -> record.cleared == true
         ActivitySearchField.UNCLEARED -> record.cleared == false
@@ -291,6 +280,26 @@ private fun matchesFilter(
         ActivitySearchField.INFLOW_AT_LEAST -> record.amountMinorUnits > 0 && expectedAmount != null && absoluteAmount >= expectedAmount
         ActivitySearchField.INFLOW_AT_MOST -> record.amountMinorUnits > 0 && expectedAmount != null && absoluteAmount <= expectedAmount
     }
+}
+
+private fun matchesAnyText(
+    record: ActivitySearchRecord,
+    prepared: PreparedActivitySearchFilter,
+) = matchesAnyText(
+    record,
+    prepared.filter.value
+        .trim()
+        .lowercase(),
+    prepared.textAmount,
+    prepared.textDatePrefixes,
+)
+
+private fun inDateRange(
+    dateIso: String,
+    value: String,
+): Boolean {
+    val range = value.split("..", limit = 2)
+    return range.size == 2 && dateIso >= range[0] && dateIso <= range[1]
 }
 
 private fun parseExplicitActivitySearchTag(query: String): String? {

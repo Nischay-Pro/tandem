@@ -43,13 +43,34 @@ data class CustomReport(
 
         fun monthsBack(count: Int) = "${SpendingInsights.shiftMonth(month, 1 - count)}-01" to today
         return when (range) {
-            ReportRange.THIS_MONTH -> monthsBack(1)
-            ReportRange.LAST_MONTH -> SpendingInsights.shiftMonth(month, -1).let { "$it-01" to monthEnd(it) }
-            ReportRange.LAST_3_MONTHS -> monthsBack(3)
-            ReportRange.LAST_6_MONTHS -> monthsBack(6)
-            ReportRange.LAST_12_MONTHS -> monthsBack(12)
-            ReportRange.YEAR_TO_DATE -> "$year-01-01" to today
-            ReportRange.LAST_YEAR -> "${year - 1}-01-01" to "${year - 1}-12-31"
+            ReportRange.THIS_MONTH -> {
+                monthsBack(1)
+            }
+
+            ReportRange.LAST_MONTH -> {
+                SpendingInsights.shiftMonth(month, -1).let { "$it-01" to monthEnd(it) }
+            }
+
+            ReportRange.LAST_3_MONTHS -> {
+                monthsBack(3)
+            }
+
+            ReportRange.LAST_6_MONTHS -> {
+                monthsBack(6)
+            }
+
+            ReportRange.LAST_12_MONTHS -> {
+                monthsBack(12)
+            }
+
+            ReportRange.YEAR_TO_DATE -> {
+                "$year-01-01" to today
+            }
+
+            ReportRange.LAST_YEAR -> {
+                "${year - 1}-01-01" to "${year - 1}-12-31"
+            }
+
             ReportRange.CUSTOM -> {
                 val from = startDate ?: today
                 val to = endDate ?: today

@@ -158,8 +158,14 @@ class PlanningSync(
                 seen += remote.recordId
                 val local = dao.find(budgetId, remote.recordId)
                 when {
-                    local?.pendingUpload == true || local?.syncedRevision == remote.revision -> Unit
-                    local != null && local.syncedRevision > remote.revision -> dao.upsert(local.copy(pendingUpload = true))
+                    local?.pendingUpload == true || local?.syncedRevision == remote.revision -> {
+                        Unit
+                    }
+
+                    local != null && local.syncedRevision > remote.revision -> {
+                        dao.upsert(local.copy(pendingUpload = true))
+                    }
+
                     else -> {
                         dao.upsert(remote.toEntity())
                         downloaded++

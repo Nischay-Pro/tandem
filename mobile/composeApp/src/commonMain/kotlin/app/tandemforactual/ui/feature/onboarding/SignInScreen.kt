@@ -183,6 +183,7 @@ private fun SignInOptions(
         !serverAddressIsValid(state.serverUrl) -> {
             InlineMessage(stringResource(Res.string.setup_add_your_actual_budget_server), InlineMessageKind.INFO)
         }
+
         mobileSession.isLoadingLoginMethods || (mobileSession.actualLoginMethods == null && mobileSession.signInError == null) -> {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -196,9 +197,11 @@ private fun SignInOptions(
                 )
             }
         }
+
         mobileSession.actualLoginMethods?.bootstrapped == false -> {
             InlineMessage(stringResource(Res.string.setup_create_a_budget_in_actual), InlineMessageKind.INFO)
         }
+
         mobileSession.actualLoginMethods != null -> {
             if (passwordActive) {
                 TextFieldCard(
@@ -222,13 +225,17 @@ private fun SignInOptions(
                 )
             }
         }
-        mobileSession.signInError != null ->
+
+        mobileSession.signInError != null -> {
             InlineMessage(mobileSession.signInError.orEmpty(), InlineMessageKind.ERROR)
-        else ->
+        }
+
+        else -> {
             InlineMessage(
                 stringResource(Res.string.setup_tandem_can_t_use_this),
                 InlineMessageKind.INFO,
             )
+        }
     }
 }
 

@@ -214,8 +214,11 @@ private fun ReportFilterRows(
             ListRow(
                 kind.title,
                 when {
-                    chosen.isEmpty() -> "All ${kind.title.lowercase()}"
-                    chosen.size <= 2 ->
+                    chosen.isEmpty() -> {
+                        "All ${kind.title.lowercase()}"
+                    }
+
+                    chosen.size <= 2 -> {
                         chosen.joinToString {
                             when (kind) {
                                 ReportFilterKind.ACCOUNTS -> names.group(ReportGrouping.ACCOUNT, it)
@@ -223,7 +226,11 @@ private fun ReportFilterRows(
                                 ReportFilterKind.PAYEES -> names.group(ReportGrouping.PAYEE, it)
                             }
                         }
-                    else -> "${chosen.size} ${kind.title.lowercase()}"
+                    }
+
+                    else -> {
+                        "${chosen.size} ${kind.title.lowercase()}"
+                    }
                 },
                 leading = RowLeading.None,
                 options = ListRowOptions(dense = true, trailingColor = palette.muted),

@@ -78,11 +78,13 @@ internal fun NoteSection(
         editing = true
     }
     when {
-        note.isNotBlank() ->
+        note.isNotBlank() -> {
             SectionCard("Note", actionContent = { if (!editor.readOnly) NoteEditAction(open) }) {
                 NoteText(note, Modifier.fillMaxWidth().padding(horizontal = TandemSpacing.large, vertical = TandemSpacing.medium))
             }
-        !editor.readOnly ->
+        }
+
+        !editor.readOnly -> {
             SurfaceCard {
                 ListRow(
                     "Add a note",
@@ -91,6 +93,7 @@ internal fun NoteSection(
                     onClick = open,
                 )
             }
+        }
     }
     NoteEditSheet(
         visible = editing,

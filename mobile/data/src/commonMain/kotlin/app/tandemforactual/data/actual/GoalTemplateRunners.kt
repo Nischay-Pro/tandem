@@ -83,8 +83,14 @@ internal class GoalTemplateRunners(
         val name = template.category.lowercase()
         val income =
             when (name) {
-                "all income" -> budget.value(month, "total-income")
-                "available funds" -> availStart
+                "all income" -> {
+                    budget.value(month, "total-income")
+                }
+
+                "available funds" -> {
+                    availStart
+                }
+
                 else -> {
                     val source = incomeCategories(budget.db).first { it.id == template.category || it.name.lowercase() == name }
                     budget.value(month, "sum-amount-${source.id}")

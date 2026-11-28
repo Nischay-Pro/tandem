@@ -142,14 +142,21 @@ internal class GoalTemplateContext(
         for (template in atPriority) {
             val amount =
                 when (template.type) {
-                    "by" -> if (byDone) 0L else runner.by(templates.filter { it.type == "by" })
-                    "schedule" ->
+                    "by" -> {
+                        if (byDone) 0L else runner.by(templates.filter { it.type == "by" })
+                    }
+
+                    "schedule" -> {
                         if (scheduleDone) {
                             0L
                         } else {
                             GoalScheduleTemplates(budget, category).run(atPriority, fromLastMonth + toBudget, fromLastMonth)
                         }
-                    else -> runner.run(template, availStart)
+                    }
+
+                    else -> {
+                        runner.run(template, availStart)
+                    }
                 }
             if (template.type == "by") byDone = true
             if (template.type == "schedule") scheduleDone = true

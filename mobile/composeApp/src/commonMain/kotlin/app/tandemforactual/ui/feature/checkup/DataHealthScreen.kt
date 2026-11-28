@@ -124,12 +124,7 @@ internal fun DataHealthScreen(
     val ignored =
         mobileSession.planning.settings.ignoredChecks
             .toSet()
-    val issues =
-        cached?.mapNotNull { issue ->
-            val rows = issue.rows.filterNot { "${issue.kind.name}:${it.id}" in ignored }
-            val ordered = if (issue.kind == HealthIssueKind.POSSIBLE_DUPLICATES) rows.sortedWith(duplicateOrder) else rows
-            ordered.takeIf { it.isNotEmpty() }?.let { HealthIssue(issue.kind, it) }
-        }
+    val issues = cached?.let { visibleIssues(it, ignored) }
     val ruleFindings = visibleRuleFindings(mobileSession, state.selectedBudgetId, ignored)
     val ruleTexts = rememberRuleTexts(mobileSession)
     var acting by remember { mutableStateOf<Pair<HealthIssue, HealthRow>?>(null) }
@@ -141,12 +136,17 @@ internal fun DataHealthScreen(
         item(key = "summary") { DataHealthSummary(state.selectedBudget, found, ruleFindings.size, loading) }
         failure?.let { text -> item(key = "failure") { InlineMessage(text, InlineMessageKind.ERROR, onDismiss = { failure = null }) } }
         when {
-            found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
-            found == null ->
+            found == null && loading -> {
+                item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
+            }
+
+            found == null -> {
                 item(key = "error") {
                     EmptyStateCard("Couldn’t check this budget", "Open it while connected to Actual, then pull to try again.")
                 }
-            found.isEmpty() && ruleFindings.isEmpty() ->
+            }
+
+            found.isEmpty() && ruleFindings.isEmpty() -> {
                 item(key = "clear") {
                     SectionCard("Nothing needs attention", "Categories, payees, rules and reconciliation all look good") {
                         ListRow(
@@ -156,6 +156,7 @@ internal fun DataHealthScreen(
                         )
                     }
                 }
+            }
         }
         found?.forEach { issue ->
             item(key = issue.kind.name) {
@@ -180,6 +181,17 @@ internal fun DataHealthScreen(
     CheckupActions(state, navigation, mobileSession, liveTransactions, acting, { acting = null }) { failure = it }
     RuleFindingActions(state, navigation, mobileSession, openFinding, ruleTexts, { openFinding = null }, { reload++ }) { failure = it }
 }
+
+/** Issues with their ignored rows left out, likely duplicates in pairs, and issues with nothing left dropped. */
+private fun visibleIssues(
+    issues: List<HealthIssue>,
+    ignored: Set<String>,
+): List<HealthIssue> =
+    issues.mapNotNull { issue ->
+        val rows = issue.rows.filterNot { "${issue.kind.name}:${it.id}" in ignored }
+        val ordered = if (issue.kind == HealthIssueKind.POSSIBLE_DUPLICATES) rows.sortedWith(duplicateOrder) else rows
+        ordered.takeIf { it.isNotEmpty() }?.let { HealthIssue(issue.kind, it) }
+    }
 
 private suspend fun loadCheckup(
     mobileSession: TandemMobileSession,

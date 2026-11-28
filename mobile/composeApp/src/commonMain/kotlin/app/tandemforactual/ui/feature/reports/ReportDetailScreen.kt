@@ -109,8 +109,14 @@ internal fun ReportDetailScreen(
             }
         }
         when {
-            reportHasNoData(kind, data) -> item(key = "report-detail-empty") { ReportDetailEmpty(onEmptyAction) }
-            columns > 1 -> item(key = "report-detail-columns") { ReportDetailColumns(chart, table) }
+            reportHasNoData(kind, data) -> {
+                item(key = "report-detail-empty") { ReportDetailEmpty(onEmptyAction) }
+            }
+
+            columns > 1 -> {
+                item(key = "report-detail-columns") { ReportDetailColumns(chart, table) }
+            }
+
             else -> {
                 item(key = "report-detail-chart") { chart() }
                 item(key = "report-detail-table") { table() }
@@ -200,7 +206,7 @@ private fun ReportDataTable(
     val monthly = monthlyPoints(kind, data)
     SectionCard(if (kind == ReportKind.NET_WORTH) "Monthly history" else "Details") {
         when (kind) {
-            ReportKind.SPENDING_BY_CATEGORY ->
+            ReportKind.SPENDING_BY_CATEGORY -> {
                 data.categories.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
                     ListRow(
@@ -210,23 +216,31 @@ private fun ReportDataTable(
                         onClick = { onOpenCategoryActivity(point.categoryId, point.category, window) },
                     )
                 }
-            ReportKind.SPENDING_OVER_TIME ->
+            }
+
+            ReportKind.SPENDING_OVER_TIME -> {
                 monthly.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
                     ReportTableRow(point.month, formatReportCurrency(point.spendingMinor, displaySettings))
                 }
-            ReportKind.INCOME_AND_SPENDING ->
+            }
+
+            ReportKind.INCOME_AND_SPENDING -> {
                 monthly.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
                     IncomeAndSpendingTableRow(point, displaySettings)
                 }
-            ReportKind.BUDGETED_AND_SPENT ->
+            }
+
+            ReportKind.BUDGETED_AND_SPENT -> {
                 data.budgetedSpent.forEachIndexed { index, point ->
                     if (index > 0) DividerLine()
                     BudgetedSpentTableRow(point, displaySettings) {
                         onOpenCategoryActivity(point.categoryId, point.category, window)
                     }
                 }
+            }
+
             ReportKind.NET_WORTH -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),

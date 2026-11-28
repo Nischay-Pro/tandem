@@ -73,16 +73,24 @@ class ScenarioGenerator(
         val account = if (random.nextInt(6) == 0) accounts.random(random).name else listOf("Checking", "Card").random(random)
         val deleted = random.nextInt(12) == 0
         return when (random.nextInt(10)) {
-            0 -> Transaction(account, date, amount(400_000), income.random(random), null, emptyList(), deleted)
-            1 -> Transaction(account, date, -amount(50_000), null, null, emptyList(), deleted)
+            0 -> {
+                Transaction(account, date, amount(400_000), income.random(random), null, emptyList(), deleted)
+            }
+
+            1 -> {
+                Transaction(account, date, -amount(50_000), null, null, emptyList(), deleted)
+            }
+
             2, 3 -> {
                 val splits = List(random.nextInt(2, 4)) { split(income, expense) }
                 Transaction(account, date, splits.sumOf { it.amount }, null, null, splits, deleted)
             }
+
             4 -> {
                 val target = accounts.filter { it.name != account }.random(random).name
                 Transaction(account, date, -amount(80_000), expense.random(random), target, emptyList(), deleted)
             }
+
             else -> {
                 val refund = random.nextInt(8) == 0
                 Transaction(

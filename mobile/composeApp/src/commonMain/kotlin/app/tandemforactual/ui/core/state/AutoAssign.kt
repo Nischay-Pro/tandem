@@ -47,14 +47,24 @@ internal fun planAutoAssign(
         categories.mapNotNull { category ->
             val target =
                 when (rule) {
-                    AutoAssignRule.COVER_OVERSPENDING -> return@mapNotNull (-category.balanceMinor)
-                        .takeIf {
-                            it > 0
-                        }?.let { category to it }
-                    AutoAssignRule.SPENT_LAST_MONTH -> -(last[category.id]?.activityMinor ?: 0)
-                    AutoAssignRule.ASSIGNED_LAST_MONTH -> last[category.id]?.assignedMinor ?: 0
-                    AutoAssignRule.AVERAGE_SPENT ->
+                    AutoAssignRule.COVER_OVERSPENDING -> {
+                        return@mapNotNull (-category.balanceMinor)
+                            .takeIf {
+                                it > 0
+                            }?.let { category to it }
+                    }
+
+                    AutoAssignRule.SPENT_LAST_MONTH -> {
+                        -(last[category.id]?.activityMinor ?: 0)
+                    }
+
+                    AutoAssignRule.ASSIGNED_LAST_MONTH -> {
+                        last[category.id]?.assignedMinor ?: 0
+                    }
+
+                    AutoAssignRule.AVERAGE_SPENT -> {
                         if (recent.isEmpty()) 0 else recent.sumOf { -(it[category.id]?.activityMinor ?: 0) } / recent.size
+                    }
                 }
             (target - category.assignedMinor).takeIf { it > 0 }?.let { category to it }
         }

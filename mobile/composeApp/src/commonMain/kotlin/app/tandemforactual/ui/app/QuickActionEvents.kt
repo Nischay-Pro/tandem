@@ -93,14 +93,20 @@ object QuickActionEvents {
 
     fun open(action: QuickAction) {
         when (action) {
-            QuickAction.ADD_TRANSACTION -> requestAddTransaction()
+            QuickAction.ADD_TRANSACTION -> {
+                requestAddTransaction()
+            }
+
             QuickAction.SCAN_RECEIPT -> {
                 receiptScan = true
                 quickAddDraft = null
                 requestedAccountId = null
                 mutableAddTransaction.value = true
             }
-            QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> mutableDestination.value = action
+
+            QuickAction.BUDGET_CHECKUP, QuickAction.ACCOUNTS, QuickAction.REVIEW_TRANSACTIONS -> {
+                mutableDestination.value = action
+            }
         }
     }
 

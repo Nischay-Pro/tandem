@@ -18,11 +18,21 @@ internal fun reportHasNoData(
 ): Boolean {
     val monthly = monthlyPoints(kind, data)
     return when (kind) {
-        ReportKind.SPENDING_BY_CATEGORY -> data.categories.isEmpty()
-        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING ->
+        ReportKind.SPENDING_BY_CATEGORY -> {
+            data.categories.isEmpty()
+        }
+
+        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING -> {
             monthly.isEmpty() || monthly.all { it.incomeMinor == 0L && it.spendingMinor == 0L }
-        ReportKind.BUDGETED_AND_SPENT -> data.budgetedSpent.isEmpty()
-        ReportKind.NET_WORTH -> data.netWorth.isEmpty()
+        }
+
+        ReportKind.BUDGETED_AND_SPENT -> {
+            data.budgetedSpent.isEmpty()
+        }
+
+        ReportKind.NET_WORTH -> {
+            data.netWorth.isEmpty()
+        }
     }
 }
 
@@ -39,22 +49,31 @@ internal fun reportSummary(
     val format: (Long) -> String = { amount -> formatReportCurrency(amount, data.displaySettings) }
     val monthly = monthlyPoints(kind, data)
     return when (kind) {
-        ReportKind.SPENDING_BY_CATEGORY ->
+        ReportKind.SPENDING_BY_CATEGORY -> {
             categorySpendingSummary(
                 data.categories.sumOf(CategorySpendingPoint::spendingMinor),
                 data.categories.size,
                 format,
                 ::formatInteger,
             )
-        ReportKind.SPENDING_OVER_TIME ->
+        }
+
+        ReportKind.SPENDING_OVER_TIME -> {
             spendingOverTimeSummary(monthlySpendingAverage(monthly), format, ::formatInteger)
-        ReportKind.INCOME_AND_SPENDING -> incomeSpendingSummary(monthly.sumOf(MonthlyMoneyPoint::netMinor))
-        ReportKind.BUDGETED_AND_SPENT ->
+        }
+
+        ReportKind.INCOME_AND_SPENDING -> {
+            incomeSpendingSummary(monthly.sumOf(MonthlyMoneyPoint::netMinor))
+        }
+
+        ReportKind.BUDGETED_AND_SPENT -> {
             budgetedSpentSummary(
                 data.budgetedSpent.sumOf(BudgetedSpentPoint::budgetedMinor),
                 data.budgetedSpent.sumOf(BudgetedSpentPoint::spentMinor),
                 format,
             )
+        }
+
         ReportKind.NET_WORTH -> {
             val point = data.netWorth.lastOrNull()
             if (point == null) {
@@ -88,29 +107,37 @@ internal fun reportChartDescription(
 ): String =
     "${kind.title}. ${reportSummary(kind, data, netWorthScope)} " +
         when (kind) {
-            ReportKind.SPENDING_BY_CATEGORY ->
+            ReportKind.SPENDING_BY_CATEGORY -> {
                 data.categories.joinToString {
                     "${it.category}: ${formatReportCurrency(it.spendingMinor, data.displaySettings)}"
                 }
-            ReportKind.SPENDING_OVER_TIME ->
+            }
+
+            ReportKind.SPENDING_OVER_TIME -> {
                 monthlyPoints(kind, data).joinToString {
                     "${it.month}: ${formatReportCurrency(it.spendingMinor, data.displaySettings)}"
                 }
-            ReportKind.INCOME_AND_SPENDING ->
+            }
+
+            ReportKind.INCOME_AND_SPENDING -> {
                 monthlyPoints(kind, data).joinToString {
                     "${it.month}: income ${formatReportCurrency(
                         it.incomeMinor,
                         data.displaySettings,
                     )}, spending ${formatReportCurrency(it.spendingMinor, data.displaySettings)}"
                 }
-            ReportKind.BUDGETED_AND_SPENT ->
+            }
+
+            ReportKind.BUDGETED_AND_SPENT -> {
                 data.budgetedSpent.joinToString {
                     "${it.category}: budgeted ${formatReportCurrency(
                         it.budgetedMinor,
                         data.displaySettings,
                     )}, spent ${formatReportCurrency(it.spentMinor, data.displaySettings)}"
                 }
-            ReportKind.NET_WORTH ->
+            }
+
+            ReportKind.NET_WORTH -> {
                 data.netWorth.joinToString { point ->
                     val assets = if (netWorthScope == "On budget") point.onBudgetAssetsMinor else point.allAccountsAssetsMinor
                     val debts = if (netWorthScope == "On budget") point.onBudgetDebtsMinor else point.allAccountsDebtsMinor
@@ -123,6 +150,7 @@ internal fun reportChartDescription(
                         data.displaySettings,
                     )}, debts ${formatReportCurrency(debts, data.displaySettings)}"
                 }
+            }
         }
 
 @Composable

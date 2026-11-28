@@ -46,10 +46,13 @@ internal fun ExtraMoneyOptions(
             subtitle =
                 when {
                     debt == null -> "Add APRs and minimum payments to compare."
+
                     saved == null -> "Clears your debt in ${months(
                         debt.monthsWithExtra,
                     )}. Minimum payments alone never would."
+
                     debt.monthsSooner == 0 -> "Saves ${money(saved)} in interest."
+
                     else -> "Saves ${money(saved)} in interest and clears debt ${months(debt.monthsSooner ?: 0)} sooner."
                 },
             leading = RowLeading.Icon(Lucide.TrendingDown),

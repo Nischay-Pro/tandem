@@ -286,12 +286,14 @@ class BackgroundBudgetSyncWorker(
                 }
                 Result.success()
             }
+
             BackgroundSyncFailureAction.RETRY -> {
                 if (syncFailureAlertAllowed(notificationPreferences)) {
                     BudgetSystemNotifications.syncFailed(applicationContext)
                 }
                 Result.retry()
             }
+
             BackgroundSyncFailureAction.FINISH -> {
                 if (syncFailureAlertAllowed(notificationPreferences)) {
                     BudgetSystemNotifications.syncFailed(applicationContext)
@@ -332,10 +334,17 @@ internal fun TandemApiException.backgroundSyncFailureAction(): BackgroundSyncFai
             status == 401 ||
             status == 408 ||
             status == 429 ||
-            status >= 500 ->
+            status >= 500 -> {
             BackgroundSyncFailureAction.RETRY
-        status in 400..499 -> BackgroundSyncFailureAction.FINISH
-        else -> BackgroundSyncFailureAction.RETRY
+        }
+
+        status in 400..499 -> {
+            BackgroundSyncFailureAction.FINISH
+        }
+
+        else -> {
+            BackgroundSyncFailureAction.RETRY
+        }
     }
 }
 

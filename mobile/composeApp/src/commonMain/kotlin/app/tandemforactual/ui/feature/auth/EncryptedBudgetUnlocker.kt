@@ -103,7 +103,10 @@ internal class EncryptedBudgetUnlocker(
         fromBiometrics: Boolean,
     ) {
         when (result) {
-            EncryptedBudgetUnlockResult.UNLOCKED -> rememberChoice(candidate, fromBiometrics)
+            EncryptedBudgetUnlockResult.UNLOCKED -> {
+                rememberChoice(candidate, fromBiometrics)
+            }
+
             EncryptedBudgetUnlockResult.WRONG_PASSWORD -> {
                 rejectStoredPassword(fromBiometrics)
                 form.error =
@@ -113,10 +116,15 @@ internal class EncryptedBudgetUnlocker(
                         "That password didn’t unlock this budget. It may have changed in Actual."
                     }
             }
-            EncryptedBudgetUnlockResult.TOO_MANY_ATTEMPTS ->
+
+            EncryptedBudgetUnlockResult.TOO_MANY_ATTEMPTS -> {
                 form.error = "Too many incorrect passwords. Try again in a few minutes."
-            EncryptedBudgetUnlockResult.NEEDS_CONNECTION ->
+            }
+
+            EncryptedBudgetUnlockResult.NEEDS_CONNECTION -> {
                 form.error = "Connect to the internet to unlock this budget for the first time."
+            }
+
             EncryptedBudgetUnlockResult.FAILED -> {
                 rejectStoredPassword(fromBiometrics)
                 form.error = "Actual didn’t accept that password. Check it and try again."
@@ -168,7 +176,8 @@ internal class EncryptedBudgetUnlocker(
                 state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, fromBiometrics, kept = null)
                 unlockWith(candidate)
             }
-            form.rememberWithBiometrics && canUseBiometrics ->
+
+            form.rememberWithBiometrics && canUseBiometrics -> {
                 authenticator.storeSecret(
                     secretId,
                     unlockSecret(vault, budgetId, candidate),
@@ -177,6 +186,8 @@ internal class EncryptedBudgetUnlocker(
                     state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, false, kept = stored.takeIf { it })
                     unlockWith(candidate)
                 }
+            }
+
             else -> {
                 authenticator.deleteSecret(secretId)
                 state.biometricLockEnabled = biometricUnlockAfterUnlock(state.biometricLockEnabled, false, kept = false)

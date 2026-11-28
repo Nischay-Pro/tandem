@@ -42,14 +42,21 @@ internal fun SyncCenterBudgets(
             if (index > 0) DividerLine()
             val subtitle =
                 when {
-                    budget.locked -> "Encrypted · Open it to sync"
-                    budget.lastSyncedAtEpochMs == null -> "Not on this device yet"
-                    else ->
+                    budget.locked -> {
+                        "Encrypted · Open it to sync"
+                    }
+
+                    budget.lastSyncedAtEpochMs == null -> {
+                        "Not on this device yet"
+                    }
+
+                    else -> {
                         listOfNotNull(
                             "Synced ${formatMomentAtEpochMilliseconds(budget.lastSyncedAtEpochMs, now)}",
                             budget.waiting.takeIf { it > 0 }?.let { "$it waiting" },
                             budget.needsReview.takeIf { it > 0 }?.let { "$it to review" },
                         ).joinToString(" · ")
+                    }
                 }
             ListRow(
                 budget.name,
@@ -143,14 +150,21 @@ internal fun SyncCenterServices(
                     showChevron = status == PlanningSyncStatus.NEEDS_RECOVERY_KEY,
                     badge =
                         when (status) {
-                            PlanningSyncStatus.SYNCED -> RowBadge(null, palette.positive, "Synced")
-                            PlanningSyncStatus.OFF -> null
-                            else ->
+                            PlanningSyncStatus.SYNCED -> {
+                                RowBadge(null, palette.positive, "Synced")
+                            }
+
+                            PlanningSyncStatus.OFF -> {
+                                null
+                            }
+
+                            else -> {
                                 RowBadge(
                                     null,
                                     palette.warning,
                                     "Needs attention",
                                 )
+                            }
                         },
                 ),
             onClick = onRecoveryKey.takeIf { status == PlanningSyncStatus.NEEDS_RECOVERY_KEY },

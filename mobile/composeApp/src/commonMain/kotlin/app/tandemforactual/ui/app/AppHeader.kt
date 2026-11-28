@@ -218,27 +218,61 @@ private fun appHeaderTitle(
             .firstOrNull { it.id == state.selectedCategoryId }
             ?.name
     return when (route) {
-        AppRoute.NEW_TRANSACTION -> "Add transaction"
-        AppRoute.BUDGET -> state.selectedBudget.ifBlank { "Choose a budget" }
-        AppRoute.CATEGORY_GROUP ->
+        AppRoute.NEW_TRANSACTION -> {
+            "Add transaction"
+        }
+
+        AppRoute.BUDGET -> {
+            state.selectedBudget.ifBlank { "Choose a budget" }
+        }
+
+        AppRoute.CATEGORY_GROUP -> {
             headerGroupName ?: "Category group"
-        AppRoute.CATEGORY_DETAIL ->
+        }
+
+        AppRoute.CATEGORY_DETAIL -> {
             headerCategoryName ?: "Category"
-        AppRoute.ACCOUNT_DETAIL ->
+        }
+
+        AppRoute.ACCOUNT_DETAIL -> {
             liveAccounts.firstOrNull { it.id == state.selectedAccountId }?.name ?: "Account"
-        AppRoute.TRANSACTION_DETAIL -> state.transactionPayee.ifBlank { route.title }
+        }
+
+        AppRoute.TRANSACTION_DETAIL -> {
+            state.transactionPayee.ifBlank { route.title }
+        }
+
         AppRoute.ACTIVITY,
         AppRoute.ACTIVITY_SEARCH,
-        -> activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
-        AppRoute.CONFLICT_REVIEW -> route.title
-        AppRoute.REPORT_DETAIL ->
+        -> {
+            activitySelectionTotalMinor?.let(state::formatCurrency) ?: route.title
+        }
+
+        AppRoute.CONFLICT_REVIEW -> {
+            route.title
+        }
+
+        AppRoute.REPORT_DETAIL -> {
             ReportKind.entries
                 .firstOrNull { it.name == state.selectedReportKindName }
                 ?.title ?: route.title
-        AppRoute.CUSTOM_REPORT -> state.selectedCustomReportName.ifBlank { "New report" }
-        AppRoute.RESIDENCE_PERIOD -> if (state.selectedJurisdictionPeriodId.isBlank()) "Add a period" else "Edit period"
-        AppRoute.SHARED_BILL_EDIT -> if (state.selectedSharedBillId.isBlank()) "Add shared bill" else route.title
-        else -> route.title
+        }
+
+        AppRoute.CUSTOM_REPORT -> {
+            state.selectedCustomReportName.ifBlank { "New report" }
+        }
+
+        AppRoute.RESIDENCE_PERIOD -> {
+            if (state.selectedJurisdictionPeriodId.isBlank()) "Add a period" else "Edit period"
+        }
+
+        AppRoute.SHARED_BILL_EDIT -> {
+            if (state.selectedSharedBillId.isBlank()) "Add shared bill" else route.title
+        }
+
+        else -> {
+            route.title
+        }
     }
 }
 
@@ -268,7 +302,11 @@ private fun AppHeaderActions(
                 )
             }
         }
-        AppRoute.ACCOUNTS -> AccountsHeaderActions(route, state, onBudget, onOpenRoute)
+
+        AppRoute.ACCOUNTS -> {
+            AccountsHeaderActions(route, state, onBudget, onOpenRoute)
+        }
+
         AppRoute.SWITCH_BUDGET -> {
             if (onRefreshBudgets != null) {
                 if (refreshingBudgets) {
@@ -280,6 +318,7 @@ private fun AppHeaderActions(
                 }
             }
         }
+
         AppRoute.SYNC_CENTER -> {
             TandemIconButton(
                 Lucide.Settings,
@@ -287,6 +326,7 @@ private fun AppHeaderActions(
                 onClick = { onOpenRoute(AppRoute.SYNC_PREFERENCES) },
             )
         }
+
         AppRoute.BUDGET_CHOOSER -> {
             Text(
                 when {
@@ -299,6 +339,7 @@ private fun AppHeaderActions(
                 fontWeight = FontWeight.Bold,
             )
         }
+
         else -> {
             if (route == AppRoute.HOME) {
                 AdvancedModeSwitch(state)

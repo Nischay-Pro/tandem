@@ -349,11 +349,18 @@ private fun GroupDeleteDestinationPicker(
         title = "Reassign to",
         selectedLabel =
             when {
-                deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION -> "Choose destination"
-                deleteGroupDestinationId.isBlank() -> "Leave unassigned"
-                else ->
+                deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION -> {
+                    "Choose destination"
+                }
+
+                deleteGroupDestinationId.isBlank() -> {
+                    "Leave unassigned"
+                }
+
+                else -> {
                     groupDeleteDestinations.firstOrNull { it.id == deleteGroupDestinationId }?.label
                         ?: "Leave unassigned"
+                }
             },
         options =
             listOf("Leave unassigned" to null) +
@@ -362,12 +369,17 @@ private fun GroupDeleteDestinationPicker(
     )
     InlineMessage(
         when {
-            deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION ->
+            deleteGroupDestinationId == UNSELECTED_GROUP_DELETE_DESTINATION -> {
                 "Choose a destination or leave transactions unassigned."
-            deleteGroupDestinationId.isBlank() ->
+            }
+
+            deleteGroupDestinationId.isBlank() -> {
                 "Transactions become unassigned; deleted-category budget amounts are removed."
-            else ->
+            }
+
+            else -> {
                 "Budget amounts and transaction history will move to the selected category."
+            }
         },
         InlineMessageKind.INFO,
     )

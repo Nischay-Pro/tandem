@@ -141,22 +141,33 @@ internal fun ReportLegend(
     val palette = tandemPalette
     val items =
         when (kind) {
-            ReportKind.SPENDING_BY_CATEGORY -> emptyList()
-            ReportKind.SPENDING_OVER_TIME ->
+            ReportKind.SPENDING_BY_CATEGORY -> {
+                emptyList()
+            }
+
+            ReportKind.SPENDING_OVER_TIME -> {
                 listOfNotNull(
                     ReportLegendItem("Spending", palette.negative),
                     monthlySpendingAverage(data.monthly)?.let { average ->
                         ReportLegendItem("Average ${formatReportCurrency(average.averageMinor, data.displaySettings)}", palette.syncing)
                     },
                 )
-            ReportKind.INCOME_AND_SPENDING ->
+            }
+
+            ReportKind.INCOME_AND_SPENDING -> {
                 listOf(ReportLegendItem("Income", palette.positive), ReportLegendItem("Spending", palette.negative, hatched = true))
-            ReportKind.BUDGETED_AND_SPENT ->
+            }
+
+            ReportKind.BUDGETED_AND_SPENT -> {
                 listOf(
                     ReportLegendItem("Budgeted", palette.positive),
                     ReportLegendItem("Spent", palette.negative),
                 )
-            ReportKind.NET_WORTH -> listOf(ReportLegendItem("Net worth", palette.accent))
+            }
+
+            ReportKind.NET_WORTH -> {
+                listOf(ReportLegendItem("Net worth", palette.accent))
+            }
         }
     if (items.isNotEmpty()) {
         Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.large)) {

@@ -90,16 +90,26 @@ class BankIconFetcher private constructor(
             val status = response.status
             val location = response.headers[HttpHeaders.Location]
             when {
-                status.value in 300..399 && location != null -> Fetched.Redirect(location)
-                !status.isSuccess() || status == HttpStatusCode.NoContent -> null
-                (response.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0) > limit -> null
-                else ->
+                status.value in 300..399 && location != null -> {
+                    Fetched.Redirect(location)
+                }
+
+                !status.isSuccess() || status == HttpStatusCode.NoContent -> {
+                    null
+                }
+
+                (response.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0) > limit -> {
+                    null
+                }
+
+                else -> {
                     response
                         .bodyAsChannel()
                         .readRemaining(limit + 1L)
                         .readByteArray()
                         .takeIf { it.isNotEmpty() && it.size <= limit }
                         ?.let { Fetched.Body(it) }
+                }
             }
         }
 
@@ -229,6 +239,6 @@ internal fun bankIconFormat(bytes: ByteArray): BankIconFormat? {
 private fun isSafeSvg(bytes: ByteArray): Boolean {
     val text = runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }.getOrNull()?.lowercase() ?: return false
     val head = text.take(1024).trimStart('\uFEFF', ' ', '\n', '\r', '\t')
-    val opens = head.startsWith("<svg") || (head.startsWith("<?xml") || head.startsWith("<!--")) && "<svg" in head
+    val opens = head.startsWith("<svg") || ((head.startsWith("<?xml") || head.startsWith("<!--")) && "<svg" in head)
     return opens && "<script" !in text && "<foreignobject" !in text && "javascript:" !in text
 }

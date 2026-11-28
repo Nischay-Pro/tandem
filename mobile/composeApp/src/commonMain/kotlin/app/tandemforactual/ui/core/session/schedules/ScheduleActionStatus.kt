@@ -14,17 +14,33 @@ internal fun scheduleActionStatusText(operation: OutboxOperationEntity): String 
             else -> "Schedule change"
         }
     return when (operation.status) {
-        "queued" ->
+        "queued" -> {
             if (operation.lastErrorCode in setOf("invalid_device_credential", "sign_in_required", "sign_in_expired")) {
                 "Sign in again to send this scheduled action to Actual."
             } else {
                 "$actionLabel saved on this device. Waiting for a connection to Tandem."
             }
-        "sending" -> "$actionLabel is being sent to Actual."
-        "uncertain" -> "Tandem couldn’t confirm this $actionLabel. Check Actual, then check the status here."
-        "conflict" -> "The schedule changed in Actual. Refresh it before choosing an action."
-        "rejected" -> "Actual rejected this $actionLabel. Check the schedule in Actual."
-        else -> ""
+        }
+
+        "sending" -> {
+            "$actionLabel is being sent to Actual."
+        }
+
+        "uncertain" -> {
+            "Tandem couldn’t confirm this $actionLabel. Check Actual, then check the status here."
+        }
+
+        "conflict" -> {
+            "The schedule changed in Actual. Refresh it before choosing an action."
+        }
+
+        "rejected" -> {
+            "Actual rejected this $actionLabel. Check the schedule in Actual."
+        }
+
+        else -> {
+            ""
+        }
     }
 }
 

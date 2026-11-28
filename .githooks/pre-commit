@@ -4,6 +4,10 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+# Light mode, for machines that can't run Gradle: skips the Gradle compile, and workflow checks when Go is missing.
+# Turn it on with: git config tandem.lightHooks true
+light_hooks=$(git config --bool tandem.lightHooks || printf 'false')
+
 if [ -x "$repo_root/node_modules/.bin/prettier" ]; then
   node scripts/check-prettier-files.mjs "$repo_root/node_modules/.bin/prettier"
 elif command -v pnpm >/dev/null 2>&1; then
@@ -41,15 +45,22 @@ fi
 
 staged_workflows=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^\.github/workflows/.*\.ya?ml$' || true)
 if [ -n "$staged_workflows" ]; then
-  if ! command -v go >/dev/null 2>&1; then
+  if command -v go >/dev/null 2>&1; then
+    "$repo_root/scripts/check-github-workflows.sh"
+  elif [ "$light_hooks" = true ]; then
+    printf '%s\n' 'Skipping workflow checks: Go is not installed. CI still runs them.' >&2
+  else
     printf '%s\n' 'Workflow checks need Go to run the pinned actionlint version.' >&2
     exit 1
   fi
-  "$repo_root/scripts/check-github-workflows.sh"
 fi
 
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
 if [ -n "$staged_mobile_kotlin" ]; then
+  # shellcheck disable=SC2086
+  "$repo_root/scripts/ktlint.sh" $staged_mobile_kotlin
+fi
+if [ -n "$staged_mobile_kotlin" ] && [ "$light_hooks" != true ]; then
   unstaged_mobile=$(git diff --name-only -- mobile)
   untracked_mobile=$(git ls-files --others --exclude-standard -- mobile)
   if [ -n "$unstaged_mobile$untracked_mobile" ]; then
@@ -80,9 +91,6 @@ if [ -n "$staged_mobile_kotlin" ]; then
   (
     cd "$repo_root/mobile"
     ./gradlew --no-daemon \
-      :api-client:ktlintCheck \
-      :data:ktlintCheck \
-      :composeApp:ktlintCheck \
       :composeApp:compileAndroidMain \
       :composeApp:compileAndroidHostTest
   )

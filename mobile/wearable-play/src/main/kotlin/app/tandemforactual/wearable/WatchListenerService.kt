@@ -32,7 +32,10 @@ abstract class WatchListenerService : WearableListenerService() {
                     }
                 }
             }
-            WatchPaths.SUMMARY_REQUEST -> runBlocking { withTimeoutOrNull(HANDLE_MS) { summaryRequested() } }
+
+            WatchPaths.SUMMARY_REQUEST -> {
+                runBlocking { withTimeoutOrNull(HANDLE_MS) { summaryRequested() } }
+            }
         }
     }
 

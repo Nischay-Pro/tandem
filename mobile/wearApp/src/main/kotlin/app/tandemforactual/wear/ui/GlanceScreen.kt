@@ -159,9 +159,18 @@ private fun LeftToSpend(
 ) {
     Column(modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         when {
-            missingOnPhone -> Hint(WatchText.NO_PHONE_APP)
-            summary == null -> Hint(WatchText.NO_BUDGET)
-            summary.state == WatchState.LOCKED -> Hint(WatchText.LOCKED)
+            missingOnPhone -> {
+                Hint(WatchText.NO_PHONE_APP)
+            }
+
+            summary == null -> {
+                Hint(WatchText.NO_BUDGET)
+            }
+
+            summary.state == WatchState.LOCKED -> {
+                Hint(WatchText.LOCKED)
+            }
+
             else -> {
                 val headline = WatchText.headline(summary)
                 Text(

@@ -133,24 +133,45 @@ fun automaticBackupSummary(
     val problem = result?.problem
     val waitingFor = if (settings.network == SyncNetwork.WIFI) "Wi-Fi" else "a connection"
     return when {
-        !settings.enabled -> "Off"
-        settings.folder == null && settings.webDavUrl == null -> "Choose a folder or WebDAV to start"
-        result?.outcome == AutomaticBackupResult.Outcome.SKIPPED && problem != null -> "Skipped: ${problem.text}"
-        result?.outcome == AutomaticBackupResult.Outcome.FAILED && problem != null -> "Last backup failed: ${problem.text}"
-        result != null && BackupDestination.WEBDAV in result.waiting ->
+        !settings.enabled -> {
+            "Off"
+        }
+
+        settings.folder == null && settings.webDavUrl == null -> {
+            "Choose a folder or WebDAV to start"
+        }
+
+        result?.outcome == AutomaticBackupResult.Outcome.SKIPPED && problem != null -> {
+            "Skipped: ${problem.text}"
+        }
+
+        result?.outcome == AutomaticBackupResult.Outcome.FAILED && problem != null -> {
+            "Last backup failed: ${problem.text}"
+        }
+
+        result != null && BackupDestination.WEBDAV in result.waiting -> {
             when {
                 BackupDestination.FOLDER in result.savedTo -> "Saved to the folder; WebDAV upload waiting for $waitingFor"
                 problem != null -> "WebDAV upload waiting for $waitingFor; saving to the folder failed"
                 else -> "WebDAV upload waiting for $waitingFor"
             }
-        result?.outcome == AutomaticBackupResult.Outcome.SAVED && problem != null ->
+        }
+
+        result?.outcome == AutomaticBackupResult.Outcome.SAVED && problem != null -> {
             if (BackupDestination.FOLDER in result.savedTo) {
                 "Saved to the folder; WebDAV upload failed"
             } else {
                 "Uploaded to WebDAV; saving to the folder failed"
             }
-        lastRun != null -> "Last backup $lastRun"
-        else -> "Waiting for the first backup"
+        }
+
+        lastRun != null -> {
+            "Last backup $lastRun"
+        }
+
+        else -> {
+            "Waiting for the first backup"
+        }
     }
 }
 

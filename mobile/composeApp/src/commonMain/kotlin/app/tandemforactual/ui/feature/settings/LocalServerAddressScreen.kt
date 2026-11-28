@@ -52,15 +52,22 @@ internal fun LocalServerAddressScreen(
         )
         FieldErrorMessage(mobileSession.localServerError)
         when (checked) {
-            true -> InlineMessage("Your server confirmed this address. Tandem uses it on this network.", InlineMessageKind.SUCCESS)
-            false ->
+            true -> {
+                InlineMessage("Your server confirmed this address. Tandem uses it on this network.", InlineMessageKind.SUCCESS)
+            }
+
+            false -> {
                 if (mobileSession.localServerError == null) {
                     InlineMessage(
                         "Tandem couldn’t confirm your server at this address on this network. It will keep using your main address and try again when the network changes.",
                         InlineMessageKind.INFO,
                     )
                 }
-            null -> Unit
+            }
+
+            null -> {
+                Unit
+            }
         }
         PrimaryButton(if (checking) "Checking…" else "Save and check", enabled = address.isNotBlank() && !checking, loading = checking) {
             checking = true

@@ -22,40 +22,11 @@ class ActualRuleEngine(
     private val db: ActualDatabase,
     private val insertPayee: (String) -> String,
 ) {
-    private sealed class Value {
-        data class Literal(
-            val value: Any?,
-        ) : Value()
-
-        data class Number(
-            val value: Double,
-        ) : Value()
-
-        data class Between(
-            val low: Double,
-            val high: Double,
-        ) : Value()
-
-        data class DateBetween(
-            val low: String,
-            val high: String,
-        ) : Value()
-
-        data class Date(
-            val kind: String,
-            val date: String,
-        ) : Value()
-
-        data class Recur(
-            val config: RecurConfig,
-        ) : Value()
-    }
-
     private class Condition(
         val op: String,
         val field: String,
         val type: String,
-        val value: Value,
+        val value: RuleValue,
         val options: JsonObject?,
     )
 
@@ -81,12 +52,12 @@ class ActualRuleEngine(
         type: String,
         op: String,
         raw: JsonElement?,
-    ): Value =
+    ): RuleValue =
         when (type) {
-            "string" ->
+            "string" -> {
                 when {
-                    op == "oneOf" || op == "notOneOf" ->
-                        Value.Literal(
+                    op == "oneOf" || op == "notOneOf" -> {
+                        RuleValue.Literal(
                             (raw as JsonArray).mapNotNull {
                                 (it as? JsonPrimitive)
                                     ?.contentOrNull
@@ -95,26 +66,41 @@ class ActualRuleEngine(
                                     )?.lowercase()
                             },
                         )
-                    op == "hasTags" || op == "hasAnyTag" -> Value.Literal((raw as JsonPrimitive).content)
-                    else -> Value.Literal((raw as? JsonPrimitive)?.contentOrNull?.lowercase())
+                    }
+
+                    op == "hasTags" || op == "hasAnyTag" -> {
+                        RuleValue.Literal((raw as JsonPrimitive).content)
+                    }
+
+                    else -> {
+                        RuleValue.Literal((raw as? JsonPrimitive)?.contentOrNull?.lowercase())
+                    }
                 }
-            "number" ->
+            }
+
+            "number" -> {
                 if (op == "isbetween") {
                     val range = raw as JsonObject
-                    Value.Between(range.value("num1").asDouble(), range.value("num2").asDouble())
+                    RuleValue.Between(range.value("num1").asDouble(), range.value("num2").asDouble())
                 } else {
-                    Value.Number((raw as JsonPrimitive).content.toDouble())
+                    RuleValue.Number((raw as JsonPrimitive).content.toDouble())
                 }
-            "date" ->
+            }
+
+            "date" -> {
                 when {
                     op == "isbetween" -> {
                         val range = raw as JsonObject
-                        Value.DateBetween(range.value("num1") as String, range.value("num2") as String)
+                        RuleValue.DateBetween(range.value("num1") as String, range.value("num2") as String)
                     }
-                    raw is JsonObject -> Value.Recur(RecurConfig.parse(raw))
+
+                    raw is JsonObject -> {
+                        RuleValue.Recur(RecurConfig.parse(raw))
+                    }
+
                     else -> {
                         val text = (raw as JsonPrimitive).content
-                        Value.Date(
+                        RuleValue.Date(
                             when (text.length) {
                                 10 -> "date"
                                 7 -> "month"
@@ -124,7 +110,11 @@ class ActualRuleEngine(
                         )
                     }
                 }
-            else -> Value.Literal(scalar(raw).let { if (it is JsonArray) it.map(::scalar) else it })
+            }
+
+            else -> {
+                RuleValue.Literal(scalar(raw).let { if (it is JsonArray) it.map(::scalar) else it })
+            }
         }
 
     private fun Any?.asDouble(): Double = (this as Number).toDouble()
@@ -292,101 +282,58 @@ class ActualRuleEngine(
         }
         val value = condition.value
         return when (condition.op) {
-            "is", "isapprox" -> isMatch(condition.op, value, field)
-            "isNot" -> field != (value as Value.Literal).value
-            "isbetween" -> isBetween(value, field)
-            "contains" -> field != null && (value as Value.Literal).value.toString() in jsString(field)
-            "doesNotContain" -> field != null && (value as Value.Literal).value.toString() !in jsString(field)
-            "oneOf" -> field != null && field in ((value as Value.Literal).value as List<*>)
-            "notOneOf" -> field != null && field !in ((value as Value.Literal).value as List<*>)
+            "is", "isapprox" -> {
+                value.isMatch(condition.op, field)
+            }
+
+            "isNot" -> {
+                field != (value as RuleValue.Literal).value
+            }
+
+            "isbetween" -> {
+                value.isBetween(field)
+            }
+
+            "contains" -> {
+                field != null && (value as RuleValue.Literal).value.toString() in jsString(field)
+            }
+
+            "doesNotContain" -> {
+                field != null && (value as RuleValue.Literal).value.toString() !in jsString(field)
+            }
+
+            "oneOf" -> {
+                field != null && field in ((value as RuleValue.Literal).value as List<*>)
+            }
+
+            "notOneOf" -> {
+                field != null && field !in ((value as RuleValue.Literal).value as List<*>)
+            }
+
             "hasTags", "hasAnyTag" -> {
                 if (field == null) return false
-                val tags = extractTags((value as Value.Literal).value as String)
+                val tags = extractTags((value as RuleValue.Literal).value as String)
                 val matches = tags.map { tag -> Regex("(?<!#)${Regex.escape(tag.lowercase())}([\\s#]|$)").containsMatchIn(jsString(field)) }
                 if (condition.op == "hasTags") matches.all { it } else matches.any { it }
             }
-            "gt", "gte", "lt", "lte" -> compare(condition.op, value, field)
-            "matches" ->
+
+            "gt", "gte", "lt", "lte" -> {
+                value.compareWith(condition.op, field)
+            }
+
+            "matches" -> {
                 field != null &&
-                    runCatching { Regex((value as Value.Literal).value as String).containsMatchIn(jsString(field)) }.getOrDefault(false)
+                    runCatching { Regex((value as RuleValue.Literal).value as String).containsMatchIn(jsString(field)) }.getOrDefault(false)
+            }
+
             "onBudget", "offBudget" -> {
                 val account = transaction["_account"] as? Map<*, *> ?: return false
                 (account["offbudget"] as Number?)?.toLong() == if (condition.op == "onBudget") 0L else 1L
             }
-            else -> false
-        }
-    }
 
-    private fun num(any: Any?) = (any as? Number)?.toDouble()
-
-    private fun isBetween(
-        value: Value,
-        field: Any?,
-    ): Boolean {
-        if (value is Value.DateBetween) {
-            val day = field as? String ?: return false
-            return day >= minOf(value.low, value.high) && day <= maxOf(value.low, value.high)
-        }
-        val between = value as Value.Between
-        val n = num(field) ?: return false
-        return n >= minOf(between.low, between.high) && n <= maxOf(between.low, between.high)
-    }
-
-    private fun isMatch(
-        op: String,
-        value: Value,
-        field: Any?,
-    ): Boolean =
-        when (value) {
-            is Value.Recur -> {
-                val day = (field as? String)?.let(Day::parse) ?: return false
-                if (op == "isapprox") {
-                    ActualRecurrence.occursBetween(value.config, day.plus(-2), day.plus(2))
-                } else {
-                    ActualRecurrence.occursBetween(value.config, day, day)
-                }
+            else -> {
+                false
             }
-            is Value.Date -> {
-                val day = field as? String ?: return false
-                if (op == "isapprox") {
-                    val center = Day.parse(value.date)
-                    day >= center.plus(-2).toString() && day <= center.plus(2).toString()
-                } else {
-                    when (value.kind) {
-                        "date" -> day == value.date
-                        "month" -> day.take(7) == value.date
-                        else -> day.take(4) == value.date
-                    }
-                }
-            }
-            is Value.Number -> {
-                val n = num(field) ?: return false
-                if (op == "isapprox") {
-                    val threshold = jsMathRound(kotlin.math.abs(value.value) * 0.075)
-                    n >= value.value - threshold && n <= value.value + threshold
-                } else {
-                    n == value.value
-                }
-            }
-            else -> field == (value as Value.Literal).value
-        }
-
-    private fun compare(
-        op: String,
-        value: Value,
-        field: Any?,
-    ): Boolean {
-        if (field == null) return false
-        val comparison =
-            when (value) {
-                is Value.Date -> (field as String).compareTo(value.date)
-                else -> num(field)?.compareTo((value as Value.Number).value) ?: return false
-            }
-        return when (op) {
-            "gt" -> comparison > 0
-            "gte" -> comparison >= 0
-            "lt" -> comparison < 0
-            else -> comparison <= 0
         }
     }
 
@@ -431,12 +378,18 @@ class ActualRuleEngine(
                 transaction[action.field!!] = action.value
                 if (action.field == "payee_name") transaction["payee"] = "new"
             }
-            "set-split-amount" ->
+
+            "set-split-amount" -> {
                 when (action.method) {
                     "fixed-amount" -> transaction["amount"] = (action.value as Number).toLong()
                     "formula" -> throw UnsupportedRuleException("A rule uses a formula or template. Make this change in Actual.")
                 }
-            "link-schedule" -> transaction["schedule"] = action.value
+            }
+
+            "link-schedule" -> {
+                transaction["schedule"] = action.value
+            }
+
             "prepend-notes", "append-notes" -> {
                 val current = transaction["notes"] as String?
                 transaction["notes"] =
@@ -446,7 +399,10 @@ class ActualRuleEngine(
                         else -> "$current${action.value}"
                     }
             }
-            "delete-transaction" -> transaction["tombstone"] = 1L
+
+            "delete-transaction" -> {
+                transaction["tombstone"] = 1L
+            }
         }
     }
 

@@ -242,13 +242,20 @@ internal fun BudgetReorderQueueState.settleOrderBatch(
         val remainingCount = remainingMoves.count { budgetReorderStatusKey(it.budgetId, it.scopeId) == key }
         val current = statuses[key] ?: BudgetReorderStatus()
         when {
-            remainingCount == 0 && !keepOptimisticOrder && message == null -> BudgetReorderStatus()
-            remainingCount == 0 && !keepOptimisticOrder -> BudgetReorderStatus(message = message, warning = true)
-            else ->
+            remainingCount == 0 && !keepOptimisticOrder && message == null -> {
+                BudgetReorderStatus()
+            }
+
+            remainingCount == 0 && !keepOptimisticOrder -> {
+                BudgetReorderStatus(message = message, warning = true)
+            }
+
+            else -> {
                 current.copy(
                     pendingCount = remainingCount,
                     message = message ?: current.message,
                     warning = message != null || current.warning,
                 )
+            }
         }
     }

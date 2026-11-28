@@ -119,13 +119,20 @@ internal fun listDetailChange(
 ): ListDetailChange? {
     val top = routes.lastOrNull() ?: return null
     return when {
-        panes ->
+        panes -> {
             ListDetailChange.SHOW_PANE.takeIf {
                 val list = routes.getOrNull(routes.lastIndex - 1)
                 list != null && list.listDetailPage() == top && detailOpen(list)
             }
-        panesJustChanged -> ListDetailChange.SHOW_PAGE.takeIf { top.listDetailPage() != null && detailOpen(top) }
-        else -> null
+        }
+
+        panesJustChanged -> {
+            ListDetailChange.SHOW_PAGE.takeIf { top.listDetailPage() != null && detailOpen(top) }
+        }
+
+        else -> {
+            null
+        }
     }
 }
 

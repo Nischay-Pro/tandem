@@ -89,17 +89,30 @@ private fun textFieldVisualTransformation(
     secretRevealed: Boolean,
 ): VisualTransformation =
     when {
-        options.isSecret && secretRevealed -> VisualTransformation.None
-        options.isSecret -> PasswordVisualTransformation()
-        !options.currencySymbol.isNullOrBlank() ->
+        options.isSecret && secretRevealed -> {
+            VisualTransformation.None
+        }
+
+        options.isSecret -> {
+            PasswordVisualTransformation()
+        }
+
+        !options.currencySymbol.isNullOrBlank() -> {
             currencySymbolTransformation(
                 options.currencySymbol,
                 options.currencySymbolAfter,
                 options.currencySymbolSpace,
                 options.amountFractionDigits ?: 0,
             )
-        options.amountFractionDigits != null -> amountFractionTransformation(options.amountFractionDigits)
-        else -> VisualTransformation.None
+        }
+
+        options.amountFractionDigits != null -> {
+            amountFractionTransformation(options.amountFractionDigits)
+        }
+
+        else -> {
+            VisualTransformation.None
+        }
     }
 
 /** Leading icon, placeholder, input and secret toggle around a text field. */

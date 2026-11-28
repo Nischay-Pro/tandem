@@ -122,17 +122,22 @@ internal fun ReportChart(
     onNetWorthSelectionChange: (Int?) -> Unit = {},
 ) {
     when (kind) {
-        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING, ReportKind.NET_WORTH ->
+        ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING, ReportKind.NET_WORTH -> {
             TimeSeriesReportChart(kind, data, height, onNetWorthSelectionChange)
-        ReportKind.BUDGETED_AND_SPENT ->
+        }
+
+        ReportKind.BUDGETED_AND_SPENT -> {
             BudgetedSpentChart(data, if (compact) 5 else null) { categoryId, category ->
                 onOpenCategoryActivity(categoryId, category, window)
             }
-        else ->
+        }
+
+        else -> {
             Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 ReportCanvas(kind, data, "All accounts", Modifier.fillMaxWidth().height(height))
                 if (!compact) CategoryRingLegend(data.categories)
             }
+        }
     }
 }
 

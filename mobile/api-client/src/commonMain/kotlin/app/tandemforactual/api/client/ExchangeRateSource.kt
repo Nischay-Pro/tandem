@@ -117,11 +117,21 @@ class FrankfurterRateSource private constructor(
                 throw ExchangeRateException.Unreachable(error)
             }
         when {
-            status == HttpStatusCode.TooManyRequests -> throw ExchangeRateException.RateLimited()
-            status == HttpStatusCode.NotFound || status == HttpStatusCode.UnprocessableEntity ->
+            status == HttpStatusCode.TooManyRequests -> {
+                throw ExchangeRateException.RateLimited()
+            }
+
+            status == HttpStatusCode.NotFound || status == HttpStatusCode.UnprocessableEntity -> {
                 throw ExchangeRateException.UnknownCurrency()
-            status.value >= 500 -> throw ExchangeRateException.Unreachable()
-            !status.isSuccess() -> throw ExchangeRateException.BadResponse()
+            }
+
+            status.value >= 500 -> {
+                throw ExchangeRateException.Unreachable()
+            }
+
+            !status.isSuccess() -> {
+                throw ExchangeRateException.BadResponse()
+            }
         }
         val rows = runCatching { Json.parseToJsonElement(text) }.getOrNull() as? JsonArray ?: throw ExchangeRateException.BadResponse()
         return rows.map { row(it, currency) }.filter { it.quote != currency }

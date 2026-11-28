@@ -44,11 +44,21 @@ internal fun ConflictVersionChoice(
         amount = if (operation.action == "DELETE") "Delete" else amountComparison?.editedValue ?: amountOf(deviceVersion),
         detail =
             when {
-                operation.action == "DELETE" -> "Remove this transaction from Actual"
-                !thisDeviceKeepable -> "Can’t be kept because Actual deleted this transaction"
-                editedFields.isNotEmpty() && "Category" !in editedFields ->
+                operation.action == "DELETE" -> {
+                    "Remove this transaction from Actual"
+                }
+
+                !thisDeviceKeepable -> {
+                    "Can’t be kept because Actual deleted this transaction"
+                }
+
+                editedFields.isNotEmpty() && "Category" !in editedFields -> {
                     "${editedFields.joinToString(", ")} edited"
-                else -> "Category · ${categoryComparison?.editedValue ?: categoryName}"
+                }
+
+                else -> {
+                    "Category · ${categoryComparison?.editedValue ?: categoryName}"
+                }
             },
         selected = review.keepThisDevice,
         enabled = keepThisDeviceEnabled,

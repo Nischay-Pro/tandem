@@ -4,7 +4,6 @@ import app.tandemforactual.data.actual.ActualBudgetEdits
 import app.tandemforactual.data.actual.ActualBudgetKey
 import app.tandemforactual.data.actual.ActualDatabase
 import app.tandemforactual.data.actual.ActualEditException
-import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.applyBudgetTemplate
 import app.tandemforactual.data.actual.closeAccount
 import app.tandemforactual.data.actual.copyBudgetMonth
@@ -667,15 +666,22 @@ class TandemApiClient(
     ) {
         edit(budgetId, encryptionPassword) { edits ->
             when (action) {
-                "edit" -> edits.updateRule(ruleId, rule ?: throw ActualEditException("A rule needs conditions"))
-                "delete" ->
+                "edit" -> {
+                    edits.updateRule(ruleId, rule ?: throw ActualEditException("A rule needs conditions"))
+                }
+
+                "delete" -> {
                     if (!edits.deleteRule(
                             ruleId,
                         )
                     ) {
                         throw ActualEditException("This rule belongs to a schedule. Delete the schedule instead.")
                     }
-                else -> throw ActualEditException("Choose a rule action")
+                }
+
+                else -> {
+                    throw ActualEditException("Choose a rule action")
+                }
             }
         }
     }
@@ -741,11 +747,3 @@ private val DIRECT_FEATURES = setOf("hold-total", "budget-order-merge", "rule-ed
 
 private const val EXTENSION_RETRY_MIN_MILLIS = 30_000L
 private const val EXTENSION_RETRY_MAX_MILLIS = 15 * 60_000L
-
-/** The budget's recent edits, and which device id is this one so the list can say "This device". */
-data class BudgetChangeHistory(
-    val deviceNode: String,
-    val changes: List<ChangeSet>,
-)
-
-const val OPEN_ID_RETURN = "app.tandemforactual://signin/complete"

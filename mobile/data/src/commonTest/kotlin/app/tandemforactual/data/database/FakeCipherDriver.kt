@@ -29,20 +29,29 @@ private class FakeCipherConnection(
 
     override fun prepare(sql: String): SQLiteStatement =
         when {
-            sql.startsWith("ATTACH DATABASE ? AS tandem_export KEY ?") ->
+            sql.startsWith("ATTACH DATABASE ? AS tandem_export KEY ?") -> {
                 ExportStatement { path, key ->
                     target =
                         path.also { keys[it] = key }
                 }
-            sql.startsWith("SELECT sqlcipher_export(") ->
+            }
+
+            sql.startsWith("SELECT sqlcipher_export(") -> {
                 ExportStatement { _, _ ->
                     delegate.prepare("VACUUM INTO ?").use {
                         it.bindText(1, checkNotNull(target))
                         it.step()
                     }
                 }
-            sql.startsWith("PRAGMA tandem_export.") || sql.startsWith("DETACH DATABASE tandem_export") -> ExportStatement { _, _ -> }
-            else -> delegate.prepare(sql)
+            }
+
+            sql.startsWith("PRAGMA tandem_export.") || sql.startsWith("DETACH DATABASE tandem_export") -> {
+                ExportStatement { _, _ -> }
+            }
+
+            else -> {
+                delegate.prepare(sql)
+            }
         }
 
     override fun close() = delegate.close()

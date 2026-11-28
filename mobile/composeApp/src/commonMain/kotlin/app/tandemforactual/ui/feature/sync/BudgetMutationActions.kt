@@ -61,6 +61,7 @@ internal fun BudgetMutationActions(
                 SecondaryButton("Discard change", enabled = !state.readOnlyMode, onClick = onDiscard)
             }
         }
+
         "rejected" -> {
             val isRejectedCategoryRename = operation.action == "RENAME_CATEGORY"
             if (isRejectedCategoryRename && mutation != null) {
@@ -79,7 +80,10 @@ internal fun BudgetMutationActions(
                 SecondaryButton("Discard change", enabled = !state.readOnlyMode, onClick = onDiscard)
             }
         }
-        else -> Spacer(Modifier.height(72.dp))
+
+        else -> {
+            Spacer(Modifier.height(72.dp))
+        }
     }
 }
 

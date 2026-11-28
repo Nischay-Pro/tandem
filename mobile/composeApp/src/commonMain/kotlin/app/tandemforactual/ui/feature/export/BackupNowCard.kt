@@ -72,11 +72,24 @@ internal fun automaticBackupProblem(
     val settings = state.automaticBackup
     val result = state.automaticBackupResult
     return when {
-        !settings.enabled -> null
-        AutomaticBackups.needsPassphrase(encryption.budgetEncrypted, encryption.hasPassphrase) ->
+        !settings.enabled -> {
+            null
+        }
+
+        AutomaticBackups.needsPassphrase(encryption.budgetEncrypted, encryption.hasPassphrase) -> {
             "Automatic backups paused until a passphrase is set"
-        settings.folder == null && settings.webDavUrl == null -> "Choose a folder for automatic backups"
-        result?.problem != null || result?.waiting?.isNotEmpty() == true -> automaticBackupSummary(settings, null, result)
-        else -> null
+        }
+
+        settings.folder == null && settings.webDavUrl == null -> {
+            "Choose a folder for automatic backups"
+        }
+
+        result?.problem != null || result?.waiting?.isNotEmpty() == true -> {
+            automaticBackupSummary(settings, null, result)
+        }
+
+        else -> {
+            null
+        }
     }
 }

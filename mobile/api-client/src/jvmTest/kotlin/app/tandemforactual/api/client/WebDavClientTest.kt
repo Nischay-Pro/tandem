@@ -24,7 +24,7 @@ class WebDavClientTest {
                     seen += "${request.method.value} $path ${request.headers["Authorization"]} ${request.headers["Depth"]}"
                     if (rejectSignIn) return@MockEngine respond("", HttpStatusCode.Unauthorized)
                     when (request.method.value) {
-                        "PROPFIND" ->
+                        "PROPFIND" -> {
                             if (!folderExists) {
                                 respond("", HttpStatusCode.NotFound)
                             } else {
@@ -34,19 +34,26 @@ class WebDavClientTest {
                                     HttpStatusCode.MultiStatus,
                                 )
                             }
-                        "MKCOL" -> respond("", HttpStatusCode.Created).also { folderExists = true }
+                        }
+
+                        "MKCOL" -> {
+                            respond("", HttpStatusCode.Created).also { folderExists = true }
+                        }
+
                         "PUT" -> {
                             files[path.substringAfterLast('/')] =
                                 (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes()
                             respond("", HttpStatusCode.Created)
                         }
+
                         "MOVE" -> {
                             val to = request.headers["Destination"].orEmpty().substringAfterLast('/')
                             val moved = files.remove(path.substringAfterLast('/'))
                             if (moved != null) files[to] = moved
                             respond("", if (moved != null) HttpStatusCode.Created else HttpStatusCode.NotFound)
                         }
-                        "DELETE" ->
+
+                        "DELETE" -> {
                             respond(
                                 "",
                                 if (files.remove(path.substringAfterLast('/')) !=
@@ -57,7 +64,11 @@ class WebDavClientTest {
                                     HttpStatusCode.NotFound
                                 },
                             )
-                        else -> respond("", HttpStatusCode.MethodNotAllowed)
+                        }
+
+                        else -> {
+                            respond("", HttpStatusCode.MethodNotAllowed)
+                        }
                     }
                 },
             )

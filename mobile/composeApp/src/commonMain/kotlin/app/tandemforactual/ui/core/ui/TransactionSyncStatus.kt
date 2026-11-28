@@ -140,14 +140,25 @@ internal fun TransactionSyncNotice(
     val status = operation.status
     val (icon, title, detail) =
         when (status) {
-            "queued" ->
+            "queued" -> {
                 Triple(Lucide.Clock, "Waiting to sync", "Your edit is saved on this device and will be sent on the next sync.")
-            "sending" -> Triple(Lucide.RefreshCw, "Syncing", "Sending your edit to Actual.")
-            "uncertain" ->
+            }
+
+            "sending" -> {
+                Triple(Lucide.RefreshCw, "Syncing", "Sending your edit to Actual.")
+            }
+
+            "uncertain" -> {
                 Triple(Lucide.CircleAlert, "Status unknown", "Tandem couldn’t confirm that Actual saved this edit. Check its status.")
-            "rejected" -> Triple(Lucide.TriangleAlert, "Change rejected", "Actual didn’t accept this edit. See what happened.")
-            else ->
+            }
+
+            "rejected" -> {
+                Triple(Lucide.TriangleAlert, "Change rejected", "Actual didn’t accept this edit. See what happened.")
+            }
+
+            else -> {
                 Triple(Lucide.TriangleAlert, "Needs review", "This transaction also changed in Actual. Choose which version to keep.")
+            }
         }
     SyncNoticeCard(icon, transactionSyncColor(status), title, detail, onClick = {
         if (transactionSyncNeedsReview(status)) {

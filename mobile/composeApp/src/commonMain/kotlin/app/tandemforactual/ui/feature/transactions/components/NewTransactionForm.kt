@@ -168,14 +168,24 @@ private fun newTransactionTargetIsValid(
         }
     val split = state.transactionSplit
     return when {
-        state.transactionType == "Transfer" -> isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
-        offBudget -> true
-        split != null ->
+        state.transactionType == "Transfer" -> {
+            isValidTransferDestination(state.newTransactionAccountId, transferDestinationAccountId)
+        }
+
+        offBudget -> {
+            true
+        }
+
+        split != null -> {
             split.isReady(
                 transactionAmountInputMagnitude(state.parseAmountMinorUnits(state.transactionAmount)),
                 state::parseAmountMinorUnits,
             )
-        else -> state.transactionCategory.isNotBlank()
+        }
+
+        else -> {
+            state.transactionCategory.isNotBlank()
+        }
     }
 }
 

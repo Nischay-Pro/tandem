@@ -58,13 +58,20 @@ internal fun scheduleRepeatLabel(dateJson: String): String {
     val weekdays = patterns.filter { it["type"]?.jsonPrimitive?.contentOrNull != "day" }
     val on =
         when {
-            weekdays.isNotEmpty() ->
+            weekdays.isNotEmpty() -> {
                 weekdays.joinToString(" and ") {
                     val name = WEEKDAY_NAMES[it["type"]?.jsonPrimitive?.contentOrNull].orEmpty()
                     "${nth(it["value"]?.jsonPrimitive?.intOrNull ?: 1)} $name"
                 }
-            days.isNotEmpty() -> days.joinToString(" and ") { if (it == -1) "last day" else ordinal(it) }
-            else -> startDay(config)?.let(::ordinal) ?: return every
+            }
+
+            days.isNotEmpty() -> {
+                days.joinToString(" and ") { if (it == -1) "last day" else ordinal(it) }
+            }
+
+            else -> {
+                startDay(config)?.let(::ordinal) ?: return every
+            }
         }
     return "$every on the $on"
 }

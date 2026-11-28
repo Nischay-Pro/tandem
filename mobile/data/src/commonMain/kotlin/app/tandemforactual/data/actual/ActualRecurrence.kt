@@ -140,24 +140,33 @@ internal object ActualRecurrence {
         val start = config.start
         val step = period * config.interval
         return when (config.frequency) {
-            "daily" -> listOf(start.plus(step))
-            "weekly" -> listOf(start.plus(step * 7))
+            "daily" -> {
+                listOf(start.plus(step))
+            }
+
+            "weekly" -> {
+                listOf(start.plus(step * 7))
+            }
+
             "yearly" -> {
                 val year = start.year + step
                 if (start.dayOfMonth <= lastDay(year, start.month)) listOf(Day.of(year, start.month, start.dayOfMonth)) else emptyList()
             }
+
             else -> {
                 val index = start.year * 12 + (start.month - 1) + step
                 val year = index.floorDiv(12L)
                 val month = index.mod(12L) + 1
                 val last = lastDay(year, month)
                 when {
-                    rule.days.isNotEmpty() ->
+                    rule.days.isNotEmpty() -> {
                         rule.days.mapNotNull { value ->
                             val day = if (value > 0) value.toLong() else last + value + 1
                             if (day in 1..last) Day.of(year, month, day) else null
                         }
-                    rule.weekdays.isNotEmpty() ->
+                    }
+
+                    rule.weekdays.isNotEmpty() -> {
                         rule.weekdays.mapNotNull { (weekday, nth) ->
                             val first = Day.of(year, month, 1)
                             val matching = (0 until last).map { first.plus(it) }.filter { it.weekday == weekday }
@@ -167,8 +176,15 @@ internal object ActualRecurrence {
                                 else -> null
                             }
                         }
-                    start.dayOfMonth <= last -> listOf(Day.of(year, month, start.dayOfMonth))
-                    else -> emptyList()
+                    }
+
+                    start.dayOfMonth <= last -> {
+                        listOf(Day.of(year, month, start.dayOfMonth))
+                    }
+
+                    else -> {
+                        emptyList()
+                    }
                 }.distinct().sorted()
             }
         }

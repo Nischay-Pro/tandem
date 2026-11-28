@@ -54,8 +54,15 @@ internal fun typicalMonthLabel(
     selectedMonth: String,
 ): String =
     when (typical.source) {
-        TypicalMonthSource.CHOSEN_MONTH -> "From $selectedMonth"
-        TypicalMonthSource.RECENT_FULL_MONTHS ->
+        TypicalMonthSource.CHOSEN_MONTH -> {
+            "From $selectedMonth"
+        }
+
+        TypicalMonthSource.RECENT_FULL_MONTHS -> {
             if (typical.fullMonths == 1) "From last month" else "Average of the last ${typical.fullMonths} full months"
-        TypicalMonthSource.MONTH_SO_FAR -> "$selectedMonth so far"
+        }
+
+        TypicalMonthSource.MONTH_SO_FAR -> {
+            "$selectedMonth so far"
+        }
     }

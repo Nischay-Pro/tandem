@@ -257,11 +257,17 @@ class MainActivity : FragmentActivity() {
 
     private fun handleQuickAction(intent: Intent?) {
         when {
-            intent?.action == Intent.ACTION_VIEW ->
+            intent?.action == Intent.ACTION_VIEW -> {
                 intent.dataString?.let { link -> if (!QuickActionEvents.openLink(link)) AuthReturnEvents.publish(link) }
-            intent?.action == ACTION_ADD_TRANSACTION ->
+            }
+
+            intent?.action == ACTION_ADD_TRANSACTION -> {
                 QuickActionEvents.requestAddTransaction(intent.getStringExtra(EXTRA_WIDGET_ACCOUNT))
-            intent?.action == Intent.ACTION_SEND -> receiveShare(intent)
+            }
+
+            intent?.action == Intent.ACTION_SEND -> {
+                receiveShare(intent)
+            }
         }
     }
 

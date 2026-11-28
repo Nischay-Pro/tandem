@@ -73,10 +73,17 @@ internal actual fun rememberFileDropTarget(
                     scope.launch {
                         val kind = withContext(Dispatchers.IO) { droppedFileKind(resolver.getType(uri), resolver.displayName(uri)) }
                         when (kind) {
-                            DroppedFileKind.IMAGE -> image?.invoke(uri.toString())
-                            DroppedFileKind.STATEMENT ->
+                            DroppedFileKind.IMAGE -> {
+                                image?.invoke(uri.toString())
+                            }
+
+                            DroppedFileKind.STATEMENT -> {
                                 statement?.let { onDropped -> onDropped(withContext(Dispatchers.IO) { readStatementFile(resolver, uri) }) }
-                            null -> Unit
+                            }
+
+                            null -> {
+                                Unit
+                            }
                         }
                     }
                     return true

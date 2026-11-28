@@ -164,14 +164,21 @@ class ExtensionSyncClient(
             try {
                 val response = http.get("${serverUrl.trimEnd('/')}/extension/v1/capabilities")
                 when {
-                    response.status.isSuccess() ->
+                    response.status.isSuccess() -> {
                         runCatching {
                             Json.parseToJsonElement(response.bodyAsText()).jsonObject["features"]?.jsonArray.orEmpty().any {
                                 it.jsonPrimitive.content == "planning-records"
                             }
                         }.getOrDefault(false)
-                    response.status.value == 408 || response.status.value == 429 || response.status.value >= 500 -> null
-                    else -> false
+                    }
+
+                    response.status.value == 408 || response.status.value == 429 || response.status.value >= 500 -> {
+                        null
+                    }
+
+                    else -> {
+                        false
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error

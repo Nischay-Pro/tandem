@@ -97,21 +97,27 @@ private fun ColumnScope.FirstSyncStatusBadge(mobileSession: TandemMobileSession)
         contentAlignment = Alignment.Center,
     ) {
         when {
-            mobileSession.syncComplete ->
+            mobileSession.syncComplete -> {
                 Icon(
                     Lucide.Check,
                     contentDescription = stringResource(Res.string.setup_first_sync_complete),
                     modifier = Modifier.size(42.dp),
                     tint = palette.positive,
                 )
-            mobileSession.syncError != null && !mobileSession.isSyncing ->
+            }
+
+            mobileSession.syncError != null && !mobileSession.isSyncing -> {
                 Icon(
                     Lucide.CircleAlert,
                     contentDescription = stringResource(Res.string.setup_first_sync_needs_attention),
                     modifier = Modifier.size(42.dp),
                     tint = palette.warning,
                 )
-            else -> TandemLoadingIndicator(Modifier.size(42.dp), palette.accent, 3.dp)
+            }
+
+            else -> {
+                TandemLoadingIndicator(Modifier.size(42.dp), palette.accent, 3.dp)
+            }
         }
     }
 }
@@ -179,7 +185,7 @@ private fun FirstSyncActions(
 ) {
     val palette = tandemPalette
     when {
-        mobileSession.syncComplete ->
+        mobileSession.syncComplete -> {
             FirstSyncCompletionAction(
                 state = state,
                 navigation = navigation,
@@ -189,7 +195,9 @@ private fun FirstSyncActions(
                     selectLatestCachedMonth(state, mobileSession.budgetMonthIds, mobileSession.transactionRecords)
                 },
             )
-        mobileSession.syncError != null && !mobileSession.isSyncing ->
+        }
+
+        mobileSession.syncError != null && !mobileSession.isSyncing -> {
             Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.small)) {
                 SecondaryButton(stringResource(Res.string.setup_cancel), modifier = Modifier.weight(1f), onClick = navigation.back)
                 SetupPrimaryButton(
@@ -198,7 +206,9 @@ private fun FirstSyncActions(
                     onClick = onRetrySync,
                 )
             }
-        else ->
+        }
+
+        else -> {
             Text(
                 stringResource(Res.string.setup_keep_tandem_open_for_the),
                 modifier = Modifier.fillMaxWidth(),
@@ -206,5 +216,6 @@ private fun FirstSyncActions(
                 fontSize = TandemTypography.caption,
                 textAlign = TextAlign.Center,
             )
+        }
     }
 }

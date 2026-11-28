@@ -133,8 +133,12 @@ private fun ScheduleActionsBody(
                 fontSize = TandemTypography.body,
             )
         }
-        dialog.dialogMode == "edit" -> editForm()
-        else ->
+
+        dialog.dialogMode == "edit" -> {
+            editForm()
+        }
+
+        else -> {
             ScheduleActionMenu(
                 state,
                 mobileSession,
@@ -145,6 +149,7 @@ private fun ScheduleActionsBody(
                 pendingActionBlocksChoice,
                 scope,
             )
+        }
     }
 }
 

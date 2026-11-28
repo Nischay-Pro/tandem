@@ -153,12 +153,16 @@ class BudgetEngineOracleTest {
                         row("$id/$j", t.account, t.date, split.amount, split.category, false, parent = id)
                     }
                 }
+
                 t.transferTo != null -> {
                     val keeps = offBudget.getValue(t.account) != offBudget.getValue(t.transferTo)
                     row(id, t.account, t.date, t.amount, t.category.takeIf { keeps }, t.deleted, transfer = "$id/to")
                     row("$id/to", t.transferTo!!, t.date, -t.amount, null, t.deleted, transfer = id)
                 }
-                else -> row(id, t.account, t.date, t.amount, t.category, t.deleted)
+
+                else -> {
+                    row(id, t.account, t.date, t.amount, t.category, t.deleted)
+                }
             }
         }
     }

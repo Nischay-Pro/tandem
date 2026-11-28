@@ -60,8 +60,14 @@ internal fun SavingsGoalsCard(
             )
             val detail =
                 when {
-                    saved == null -> "Link a category or account to track progress"
-                    privacy -> "${(fraction * 100).toInt()}% saved"
+                    saved == null -> {
+                        "Link a category or account to track progress"
+                    }
+
+                    privacy -> {
+                        "${(fraction * 100).toInt()}% saved"
+                    }
+
                     goal.targetDate != null && saved < goal.targetMinor -> {
                         val monthly =
                             PlanningMath.monthlyToTarget(
@@ -74,7 +80,10 @@ internal fun SavingsGoalsCard(
                             settings,
                         )} of ${formatCurrency(goal.targetMinor, settings)} · about ${formatCurrency(monthly, settings)} a month"
                     }
-                    else -> "${formatCurrency(saved, settings)} of ${formatCurrency(goal.targetMinor, settings)}"
+
+                    else -> {
+                        "${formatCurrency(saved, settings)} of ${formatCurrency(goal.targetMinor, settings)}"
+                    }
                 }
             Column(
                 Modifier.fillMaxWidth().padding(bottom = TandemSpacing.medium),

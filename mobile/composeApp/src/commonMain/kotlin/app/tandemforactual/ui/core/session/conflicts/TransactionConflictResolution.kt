@@ -211,28 +211,41 @@ internal class TransactionConflictResolution(
         summary: BudgetSyncSummary?,
     ): String =
         when (resolvedWrite?.status) {
-            "committed" ->
+            "committed" -> {
                 if (action == LocalWriteAction.DELETE) {
                     "Tandem confirmed the deletion in Actual."
                 } else {
                     "Tandem confirmed your edit in Actual."
                 }
-            "queued" -> "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
-            "conflict" -> "Tandem found another difference. Your edit remains on this device. Review the versions again."
-            "uncertain", "sending" ->
+            }
+
+            "queued" -> {
+                "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
+            }
+
+            "conflict" -> {
+                "Tandem found another difference. Your edit remains on this device. Review the versions again."
+            }
+
+            "uncertain", "sending" -> {
                 "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check its status before trying again."
-            "rejected" ->
+            }
+
+            "rejected" -> {
                 if (resolvedWrite.lastErrorCode == "split-child-field-not-editable") {
                     "Actual manages this part through the full transaction. Your edit remains on this device. Update the full transaction in Actual."
                 } else {
                     "Actual kept the previous value. Change the edit and try again."
                 }
-            else ->
+            }
+
+            else -> {
                 if (summary == null) {
                     "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
                 } else {
                     "Tandem hasn’t confirmed your choice. Your edit remains on this device. Check the connection and try again."
                 }
+            }
         }
 }
 

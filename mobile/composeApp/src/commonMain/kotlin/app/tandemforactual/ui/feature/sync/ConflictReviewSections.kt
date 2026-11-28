@@ -168,10 +168,18 @@ internal fun ConflictReviewStatus(
     onReviewLatest: () -> Unit,
 ) {
     when {
-        mobileSession.isSyncing -> BodyText("Checking the latest transaction with Tandem…")
-        serverConfirmed -> Unit
-        hasActualVersion ->
+        mobileSession.isSyncing -> {
+            BodyText("Checking the latest transaction with Tandem…")
+        }
+
+        serverConfirmed -> {
+            Unit
+        }
+
+        hasActualVersion -> {
             BodyText("Showing the last synced Actual version. Tandem checks it again before applying your choice.")
+        }
+
         else -> {
             BodyText("No Actual version is saved on this device yet. Connect to Tandem to load it before choosing.")
             SecondaryButton("Check again", enabled = !mobileSession.isSavingTransaction, onClick = onCheckAgain)

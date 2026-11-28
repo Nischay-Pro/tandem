@@ -53,3 +53,5 @@ internal fun encodeBase64Url(input: ByteArray): String {
     }
     return output.toString()
 }
+
+const val OPEN_ID_RETURN = "app.tandemforactual://signin/complete"

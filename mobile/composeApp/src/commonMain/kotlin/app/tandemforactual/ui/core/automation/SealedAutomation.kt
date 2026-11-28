@@ -30,10 +30,17 @@ data class SealedInboxResult(
     val message: String?
         get() =
             when {
-                failures.isNotEmpty() ->
+                failures.isNotEmpty() -> {
                     "Tandem couldn’t add ${count(failures.size)} saved while this budget was locked. ${failures.first()}"
-                unreadable > 0 -> "Tandem couldn’t read ${count(unreadable)} saved while this budget was locked. Add them again."
-                else -> null
+                }
+
+                unreadable > 0 -> {
+                    "Tandem couldn’t read ${count(unreadable)} saved while this budget was locked. Add them again."
+                }
+
+                else -> {
+                    null
+                }
             }
 
     private fun count(value: Int) = if (value == 1) "1 transaction" else "$value transactions"
@@ -147,14 +154,18 @@ internal fun checkedForSealing(
 ): AutomationTransactionInput {
     val amount = automationInput(input.amount) ?: throw AutomationException(AutomationErrorCode.AMOUNT, "Enter an amount, such as -12.40.")
     when (input.amountFormat) {
-        AutomationAmountFormat.PLAIN -> automationPlainAmount(amount, null)
-        AutomationAmountFormat.BUDGET ->
+        AutomationAmountFormat.PLAIN -> {
+            automationPlainAmount(amount, null)
+        }
+
+        AutomationAmountFormat.BUDGET -> {
             if (amount.first() !in "+-−") {
                 throw AutomationException(
                     AutomationErrorCode.AMOUNT,
                     "Start the amount with - for money out or + for money in, such as -12.40.",
                 )
             }
+        }
     }
     automationInput(input.account) ?: throw AutomationException(AutomationErrorCode.ACCOUNT, "Choose an account to add the transaction to.")
     automationCleared(input.cleared)

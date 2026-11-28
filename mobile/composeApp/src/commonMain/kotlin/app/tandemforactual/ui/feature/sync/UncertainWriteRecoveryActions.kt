@@ -48,14 +48,17 @@ internal fun UncertainWriteRecoveryActions(
                 }
             }
         }
-        showCheckAgain ->
+
+        showCheckAgain -> {
             PrimaryButton(
                 "Check again",
                 enabled = !isSyncing,
                 loading = isSyncing,
                 onClick = onCheckAgain,
             )
-        showRetryAndRemove ->
+        }
+
+        showRetryAndRemove -> {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                 PrimaryButton(
                     "Try again",
@@ -70,5 +73,6 @@ internal fun UncertainWriteRecoveryActions(
                     onClick = onRemove,
                 )
             }
+        }
     }
 }
