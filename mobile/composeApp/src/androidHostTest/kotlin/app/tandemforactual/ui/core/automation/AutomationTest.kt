@@ -128,7 +128,9 @@ class AutomationTest {
         withBudget { database ->
             add(database, AutomationTransactionInput("-4.50", "SQ *CORNER CAFÉ 0042", "", "Checking"))
             add(database, AutomationTransactionInput("-9.99", "PAYPAL *Spotify", "", "Checking"))
-            val (known, fresh) = repository(database).readPendingWrites(BUDGET).map { Json.parseToJsonElement(it.patchJson).jsonObject }
+            val patches = repository(database).readPendingWrites(BUDGET).map { Json.parseToJsonElement(it.patchJson).jsonObject }
+            val known = patches.single { it["amount"] == JsonPrimitive(-450) }
+            val fresh = patches.single { it["amount"] == JsonPrimitive(-999) }
             assertEquals(JsonPrimitive("cafe"), known["payee"])
             assertEquals(JsonPrimitive("SQ *CORNER CAFÉ 0042"), known["imported_payee"])
             assertEquals(JsonPrimitive("Spotify"), fresh["payee_name"])
