@@ -137,6 +137,9 @@ internal class AppState {
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
 
+    /** Whether a two-finger double tap anywhere turns Hide budget amounts on or off. */
+    var hideAmountsGesture by mutableStateOf(false)
+
     /** Whether saving a transaction shows what's left in its category and the account's balance. */
     var balanceAfterSaveEnabled by mutableStateOf(true)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
@@ -284,6 +287,7 @@ internal class AppState {
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
+            "hideAmountsGesture" to hideAmountsGesture.toString(),
             "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
             AutomationAccess.WRITES to automationWritesEnabled.toString(),
             AutomationAccess.READS to automationReadsEnabled.toString(),
@@ -354,6 +358,7 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        hideAmountsGesture = saved["hideAmountsGesture"]?.toBooleanStrictOrNull() ?: hideAmountsGesture
         balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled
         automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
         automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
