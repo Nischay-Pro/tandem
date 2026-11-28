@@ -83,8 +83,7 @@ internal fun SignInScreen(
         mobileSession.clearActualLoginMethodState()
         if (shouldCheckActualLoginMethods(state.serverUrl, serverUrlFocused = false)) {
             delay(300)
-            mobileSession.apiClient.customHeaders = parseServerHeaders(state.serverHeaders).getOrDefault(emptyMap())
-            mobileSession.loadActualLoginMethods(state.serverUrl)
+            mobileSession.loadActualLoginMethods(state.serverUrl, parseServerHeaders(state.serverHeaders).getOrDefault(emptyMap()))
         }
     }
     val loginMethods = mobileSession.actualLoginMethods
