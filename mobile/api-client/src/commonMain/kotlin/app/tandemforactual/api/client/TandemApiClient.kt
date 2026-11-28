@@ -65,6 +65,15 @@ class TandemApiClient(
     internal val newId: () -> String = { Uuid.random().toString() },
 ) : AutoCloseable {
     internal val sessionMutex = Mutex()
+
+    /** Headers sent with every request to the signed-in server, such as an access proxy's token. */
+    var customHeaders: Map<String, String> = emptyMap()
+        set(value) {
+            if (value == field) return
+            field = value
+            serverHttp = http.withHeaders(value)
+        }
+    private var serverHttp: HttpClient = http
     private val budgetMutex = processBudgetMutex
     private var server: ActualServerClient? = null
     private var serverUrl: String? = null
@@ -106,6 +115,7 @@ class TandemApiClient(
             put("deviceId", current.deviceId)
             put("principalId", current.principalId)
             put("budgetIds", JsonArray(current.budgetIds.map(::JsonPrimitive)))
+            if (customHeaders.isNotEmpty()) put("headers", JsonObject(customHeaders.mapValues { JsonPrimitive(it.value) }))
         }.toString()
     }
 
@@ -124,6 +134,7 @@ class TandemApiClient(
                     ?: throw TandemApiProtocolException("Stored session is invalid"),
             )
         return sessionMutex.withLock {
+            customHeaders = (root["headers"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.contentOrNull.orEmpty() }.orEmpty()
             connect(text("serverUrl")).token = text("token")
             device = restored
             restored
@@ -131,7 +142,7 @@ class TandemApiClient(
     }
 
     suspend fun readActualLoginMethods(serverUrl: String): ActualLoginMethods {
-        val status = call { ActualServerClient(http, parse(serverUrl).toString()).status() }
+        val status = call { ActualServerClient(serverHttp, parse(serverUrl).toString()).status() }
         return ActualLoginMethods(
             bootstrapped = status.bootstrapped,
             loginMethod = status.loginMethods.firstOrNull { it.active }?.method,
@@ -172,7 +183,7 @@ class TandemApiClient(
         callbackState: String,
     ): String =
         sessionMutex.withLock {
-            val client = ActualServerClient(http, parse(serverUrl).toString())
+            val client = ActualServerClient(serverHttp, parse(serverUrl).toString())
             call { client.startOpenId("$OPEN_ID_RETURN/$callbackState") }
         }
 
@@ -365,7 +376,7 @@ class TandemApiClient(
         val url = serverUrl ?: return null
         if (extensionAvailable == null) {
             if (now() < extensionRetryAt) throw ExtensionSyncException(null)
-            val answer = ExtensionSyncClient.available(http, url)
+            val answer = ExtensionSyncClient.available(serverHttp, url)
             if (url != serverUrl) return null
             if (answer == null) {
                 extensionBackoff = (extensionBackoff * 2).coerceIn(EXTENSION_RETRY_MIN_MILLIS, EXTENSION_RETRY_MAX_MILLIS)
@@ -375,7 +386,7 @@ class TandemApiClient(
             extensionAvailable = answer
             extensionBackoff = 0
         }
-        return if (extensionAvailable == true) ExtensionSyncClient(http, url, budgetId) { server?.token } else null
+        return if (extensionAvailable == true) ExtensionSyncClient(serverHttp, url, budgetId) { server?.token } else null
     }
 
     private fun forgetExtension() {
@@ -700,7 +711,7 @@ class TandemApiClient(
             closeBudgetsNow()
             forgetExtension()
         }
-        return ActualServerClient(http, url).also {
+        return ActualServerClient(serverHttp, url).also {
             server = it
             this.serverUrl = url
         }

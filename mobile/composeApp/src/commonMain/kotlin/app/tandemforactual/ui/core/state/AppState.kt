@@ -96,6 +96,9 @@ internal class AppState {
     var rulesReferenceFilter by mutableStateOf<RulesReferenceFilter?>(null)
     var pointerInputSequence by mutableStateOf(0)
     var serverUrl by mutableStateOf("")
+
+    /** Custom headers as typed while signing in. Kept with the saved sign-in once it works, never in settings. */
+    var serverHeaders by mutableStateOf("")
     var recentServerUrls by mutableStateOf("")
     var actualPassword by mutableStateOf("")
     var encryptedPassword by mutableStateOf("")
