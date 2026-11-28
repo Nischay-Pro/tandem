@@ -62,7 +62,7 @@ internal fun SwitchBudgetScreen(
     LaunchedEffect(Unit) { if (mobileSession.isAuthenticated) onRefreshBudgets() }
     PageColumn {
         if (budgets.isEmpty()) {
-            NoBudgets(mobileSession, navigation, onRefreshBudgets)
+            NoBudgets(mobileSession, navigation, onRefreshBudgets, onOpenSelectedBudget)
             return@PageColumn
         }
         SectionCard(stringResource(Res.string.setup_budgets)) {
@@ -99,6 +99,7 @@ internal fun SwitchBudgetScreen(
                 )
             }
         }
+        if (mobileSession.isAuthenticated && !state.readOnlyMode) NewBudgetCard(mobileSession, onOpenSelectedBudget)
         mobileSession.budgetError?.let {
             InlineMessage(
                 it,
@@ -115,12 +116,13 @@ internal fun SwitchBudgetScreen(
     }
 }
 
-/** Loading, or why there are no budgets to choose, with a way to try again or sign in. */
+/** Loading, or why there are no budgets to choose, with a way to try again or sign in, or to start one. */
 @Composable
 private fun NoBudgets(
     mobileSession: TandemMobileSession,
     navigation: AppNavigation,
     onRefreshBudgets: () -> Unit,
+    onCreated: (BudgetCatalogItem) -> Unit,
 ) {
     if (mobileSession.isLoadingBudgets) {
         BodyText(stringResource(Res.string.setup_loading_budgets))
@@ -132,4 +134,5 @@ private fun NoBudgets(
         actionLabel = stringResource(if (mobileSession.isAuthenticated) Res.string.setup_try_again else Res.string.setup_sign_in),
         onAction = { if (mobileSession.isAuthenticated) onRefreshBudgets() else navigation.open(AppRoute.SIGN_IN) },
     )
+    if (mobileSession.isAuthenticated) NewBudgetCard(mobileSession, onCreated)
 }

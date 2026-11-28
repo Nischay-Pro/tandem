@@ -97,3 +97,11 @@ Optional: `pnpm test:mutation` runs incremental API mutation tests;
 `pnpm test:mutation:full` forces the full configured set. GitHub Actions also
 runs the full suite weekly and on manual dispatch. See
 [Build Tandem from source](build-from-source.md) to build the apps and API.
+
+## Empty budget
+
+New budgets made in the app start from
+`mobile/composeApp/src/commonMain/composeResources/files/empty-budget.sqlite`,
+the file Actual itself creates for a new budget with every migration run.
+After updating `@actual-app/api`, run `node scripts/empty-budget/generate.mjs`
+and commit the new file so new budgets match the server's Actual version.
