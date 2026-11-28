@@ -318,8 +318,8 @@ jobs:
       - name: Set the nightly Android version
         id: version
         run: |
-          printf 'date_code=%s\n' "$(date -u +%y%m%d)" >> "$GITHUB_OUTPUT"
-          printf 'sequence=%03d\n' "$((GITHUB_RUN_NUMBER % 1000))" >> "$GITHUB_OUTPUT"
+          # Above every earlier date-based code, and one higher with each run, so updates always install.
+          printf 'code=%s\n' "$((300000000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_OUTPUT"
           printf 'name=%s-nightly.%s\n' "$(date -u +%Y.%m.%d)" "$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Assemble and verify signed nightly Android APK
@@ -329,7 +329,7 @@ jobs:
           TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
           TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
           TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
-          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
           NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           ./gradlew \
@@ -339,7 +339,7 @@ jobs:
 
       - name: Verify APK signature and write checksum
         env:
-          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
           NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
           SOURCE_SHA: ${{ needs.publish_api_image.outputs.source_sha }}
         run: |
@@ -422,7 +422,7 @@ jobs:
           TANDEM_ANDROID_NIGHTLY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEYSTORE_PASSWORD }}
           TANDEM_ANDROID_NIGHTLY_KEY_ALIAS: ${{ secrets.ANDROID_NIGHTLY_KEY_ALIAS }}
           TANDEM_ANDROID_NIGHTLY_KEY_PASSWORD: ${{ secrets.ANDROID_NIGHTLY_KEY_PASSWORD }}
-          NIGHTLY_VERSION_CODE: ${{ format('{0}{1}', steps.version.outputs.date_code, steps.version.outputs.sequence) }}
+          NIGHTLY_VERSION_CODE: ${{ steps.version.outputs.code }}
           NIGHTLY_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           ./gradlew \
