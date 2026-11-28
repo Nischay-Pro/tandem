@@ -149,6 +149,9 @@ internal class AppState {
     /** Whether a two-finger double tap anywhere turns Hide budget amounts on or off. */
     var hideAmountsGesture by mutableStateOf(false)
 
+    /** Whether Hide budget amounts also masks account, category and payee names, for sharing the screen. */
+    var privacyMaskNames by mutableStateOf(false)
+
     /** The tab the app opens on, by route name; Home when blank or not shown. */
     var startPageName by mutableStateOf("")
 
@@ -306,6 +309,7 @@ internal class AppState {
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
             "hideAmountsGesture" to hideAmountsGesture.toString(),
+            "privacyMaskNames" to privacyMaskNames.toString(),
             "startPage" to startPageName,
             "defaultTransactionAccountId" to defaultTransactionAccountId,
             "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
@@ -382,6 +386,7 @@ internal class AppState {
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
         hideAmountsGesture = saved["hideAmountsGesture"]?.toBooleanStrictOrNull() ?: hideAmountsGesture
+        privacyMaskNames = saved["privacyMaskNames"]?.toBooleanStrictOrNull() ?: privacyMaskNames
         startPageName = saved["startPage"] ?: startPageName
         defaultTransactionAccountId = saved["defaultTransactionAccountId"] ?: defaultTransactionAccountId
         balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled

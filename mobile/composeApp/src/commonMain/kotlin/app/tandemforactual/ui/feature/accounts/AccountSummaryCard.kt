@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import app.tandemforactual.ui.core.session.reorderAccessibilityAction
 import app.tandemforactual.ui.core.ui.accountTypeIcon
+import app.tandemforactual.ui.core.ui.maskedName
 import app.tandemforactual.ui.design.buttons.ReorderDragHandle
 import app.tandemforactual.ui.design.buttons.TandemIconButton
 import app.tandemforactual.ui.design.cards.SurfaceCard
@@ -219,7 +220,7 @@ private fun AccountSummaryText(
         verticalArrangement = Arrangement.spacedBy(TandemSpacing.extraSmall),
     ) {
         Text(
-            account.name,
+            maskedName(account.name),
             color = if (account.closed) palette.muted else palette.text,
             fontSize = TandemTypography.body,
             fontWeight = FontWeight.Medium,
