@@ -16,7 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.database.BudgetRecordEntity
 import app.tandemforactual.ui.core.format.displayTransactionDate
 import app.tandemforactual.ui.core.format.formatAmount
 import app.tandemforactual.ui.core.format.formatCurrency
@@ -53,6 +57,7 @@ import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.NoteText
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.sheets.ReconciledEditConfirmationDialog
 import app.tandemforactual.ui.design.templates.PageColumn
 import app.tandemforactual.ui.design.theme.TandemShapes
 import app.tandemforactual.ui.design.theme.TandemSpacing
@@ -111,13 +116,7 @@ internal fun TransactionDetailScreen(
         val split = rememberTransactionSplit(state, mobileSession)
         split?.let { TransactionSplitParts(state, it) }
         ReimbursementCard(state, mobileSession, navigation)
-        PrimaryButton(if (split != null) "Edit split" else "Edit transaction", enabled = !state.readOnlyMode) {
-            split?.let {
-                val payee = mobileSession.payeeRecords.firstOrNull { record -> record.recordId == it.parent.payeeId }?.recordName()
-                loadSplitForEdit(state, it, payee.orEmpty()) { minor -> formatAmount(minor, state.budgetDisplaySettings) }
-            }
-            navigation.open(AppRoute.EDIT_TRANSACTION)
-        }
+        EditTransactionButton(state, mobileSession, navigation, split)
         state.addAgainDraft()?.let { draft ->
             SecondaryButton("Add again", enabled = !state.readOnlyMode) {
                 navigation.newTransaction(draft.accountId)
@@ -233,6 +232,39 @@ private fun TransactionDetailFields(state: AppState) {
                     { NoteText(notes, collapsedLines = 4) }
                 },
         )
+    }
+}
+
+/** Whether the saved transaction [id] is reconciled. */
+internal fun transactionIsReconciled(
+    records: List<BudgetRecordEntity>,
+    id: String,
+): Boolean = records.firstOrNull { it.recordId == id }?.reconciled == true
+
+/** Opens the editor, asking first when the transaction is reconciled so a settled statement isn't changed by accident. */
+@Composable
+private fun EditTransactionButton(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    navigation: AppNavigation,
+    split: LoadedSplit?,
+) {
+    var confirming by remember(state.selectedTransactionRecordId) { mutableStateOf(false) }
+    val reconciled = transactionIsReconciled(mobileSession.transactionRecords, state.selectedTransactionRecordId)
+
+    fun edit() {
+        split?.let {
+            val payee = mobileSession.payeeRecords.firstOrNull { record -> record.recordId == it.parent.payeeId }?.recordName()
+            loadSplitForEdit(state, it, payee.orEmpty()) { minor -> formatAmount(minor, state.budgetDisplaySettings) }
+        }
+        navigation.open(AppRoute.EDIT_TRANSACTION)
+    }
+    PrimaryButton(if (split != null) "Edit split" else "Edit transaction", enabled = !state.readOnlyMode) {
+        if (reconciled) confirming = true else edit()
+    }
+    ReconciledEditConfirmationDialog(confirming, onDismissRequest = { confirming = false }) {
+        confirming = false
+        edit()
     }
 }
 
