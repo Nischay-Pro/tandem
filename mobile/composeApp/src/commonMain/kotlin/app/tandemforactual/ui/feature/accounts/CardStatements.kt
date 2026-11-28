@@ -81,7 +81,8 @@ internal fun CardStatementsCard(
     mobileSession: TandemMobileSession,
     account: LiveAccountSummary,
 ) {
-    val closeDay = mobileSession.planning.debtTerms.firstOrNull { it.accountId == account.id }?.statementCloseDay ?: return
+    val terms = mobileSession.planning.debtTerms.firstOrNull { it.accountId == account.id }
+    val closeDay = terms?.statementCloseDay ?: return
     val balance = account.balanceMinor ?: return
     val records = mobileSession.transactionRecords
     val statements =
