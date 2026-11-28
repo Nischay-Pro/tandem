@@ -4,6 +4,7 @@ package app.tandemforactual.ui.app.shell
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +27,7 @@ import app.tandemforactual.ui.core.state.MainCloudStatus
 import app.tandemforactual.ui.core.state.headerSyncCaption
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.resolveMainCloudStatus
+import app.tandemforactual.ui.core.ui.twoFingerDoubleTap
 import app.tandemforactual.ui.design.feedback.LocalNoticeClearance
 import app.tandemforactual.ui.design.feedback.NoticeClearance
 import app.tandemforactual.ui.design.feedback.NoticeEdge
@@ -85,7 +87,10 @@ internal fun ShellFrame(
     val typing = remember { TypingState() }
     CompositionLocalProvider(LocalTabletopFold provides tabletopFold, LocalNoticeClearance provides noticeClearance) {
         typing.TrackTyping {
-            ShellScaffold(chrome, typing)
+            val toggleAmounts = { state.privacyModeEnabled = !state.privacyModeEnabled }
+            Box(Modifier.fillMaxSize().twoFingerDoubleTap(state.hideAmountsGesture, toggleAmounts)) {
+                ShellScaffold(chrome, typing)
+            }
             ShellOverlays(chrome, isAppInForeground)
         }
     }

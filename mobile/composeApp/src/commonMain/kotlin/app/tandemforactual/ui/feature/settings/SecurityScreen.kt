@@ -50,6 +50,13 @@ internal fun SecurityScreen(
                 onChange = { state.privacyModeEnabled = it },
             )
             DividerLine()
+            ToggleRow(
+                title = "Two-finger double tap",
+                subtitle = "Turns Hide budget amounts on or off from any screen",
+                checked = state.hideAmountsGesture,
+                onChange = { state.hideAmountsGesture = it },
+            )
+            DividerLine()
             ListRow(
                 "Encrypted budget",
                 when {
