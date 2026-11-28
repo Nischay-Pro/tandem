@@ -68,6 +68,7 @@ internal fun AccountOptionsScreen(
                 onKindChange = { scope.launch { mobileSession.planning.saveAccountKind(state.selectedBudgetId, liveAccount.id, it) } },
                 onNetworkChange = { scope.launch { mobileSession.planning.saveCardNetwork(state.selectedBudgetId, liveAccount.id, it) } },
             ) { navigation.open(AppRoute.EXCHANGE_RATES) }
+            ImportReviewToggle(state, mobileSession, liveAccount.id)
             SurfaceCard { WhereUsedRow { showUsage = true } }
             AccountOpenCloseActions(liveAccount, state, mobileSession, navigation, scope) {
                 transferAccountId = ""
