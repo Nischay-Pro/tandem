@@ -51,6 +51,8 @@
     <key>UIApplicationSupportsMultipleScenes</key>
     <false/>
   </dict>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Suggest payees near where you are when you add a transaction. Only used while Tandem is open, and kept on this device.</string>
   <key>NSCameraUsageDescription</key>
   <string>Take a photo of a receipt to fill in a transaction. The photo stays on this device.</string>
   <key>NSFaceIDUsageDescription</key>

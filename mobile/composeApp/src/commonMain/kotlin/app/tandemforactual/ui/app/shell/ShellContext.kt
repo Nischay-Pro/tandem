@@ -4,6 +4,7 @@ import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.platform.UriHandler
 import app.tandemforactual.ui.app.isTransactionForm
+import app.tandemforactual.ui.core.platform.CoarseLocator
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 
@@ -18,12 +19,13 @@ internal class ShellContext(
     val saveableStateHolder: SaveableStateHolder,
     val uriHandler: UriHandler,
     haptics: HapticFeedback,
+    locator: CoarseLocator,
 ) {
     val coroutineScope = navigator.coroutineScope
     val reduceMotion = navigator.reduceMotion
     val navigation = navigator.appNavigation()
     val signInActions = SignInActions(env, state, shell, mobileSession, navigation, coroutineScope, uriHandler)
-    val budgetActions = BudgetActions(state, mobileSession, navigation, coroutineScope, haptics)
+    val budgetActions = BudgetActions(state, mobileSession, navigation, coroutineScope, haptics, locator)
 
     val backStack = shell.backStack
     val routeEntry = backStack.last()

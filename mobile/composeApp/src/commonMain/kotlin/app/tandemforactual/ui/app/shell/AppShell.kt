@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import app.tandemforactual.data.store.AppPreferencesStore
 import app.tandemforactual.ui.core.format.AppLanguageController
 import app.tandemforactual.ui.core.format.ProvideTodayIsoDate
+import app.tandemforactual.ui.core.platform.rememberCoarseLocator
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.design.theme.SystemReduceMotionEnabled
 import app.tandemforactual.ui.design.theme.TandemTheme
@@ -47,6 +48,7 @@ internal fun AppShell(env: ShellEnvironment) {
             saveableStateHolder,
             LocalUriHandler.current,
             LocalHapticFeedback.current,
+            rememberCoarseLocator(),
         )
     NavigationEffects(ctx)
     RouteEntryEffects(ctx)

@@ -133,6 +133,12 @@ internal class AppState {
 
     /** Whether linked banks' icons are downloaded from their own websites. */
     var bankIconsEnabled by mutableStateOf(false)
+
+    /** Whether each saved transaction keeps a rough location so the payee picker can put nearby payees first. */
+    var payeeLocationsEnabled by mutableStateOf(false)
+
+    /** Whether the payee picker has asked about nearby payees yet. */
+    var payeeLocationsAsked by mutableStateOf(false)
     var exchangeRateFetching by mutableStateOf(ExchangeRateFetching())
     var watchSettings by mutableStateOf(WatchSettings())
 
@@ -277,6 +283,8 @@ internal class AppState {
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
+            "payeeLocationsEnabled" to payeeLocationsEnabled.toString(),
+            "payeeLocationsAsked" to payeeLocationsAsked.toString(),
             AutomationAccess.WRITES to automationWritesEnabled.toString(),
             AutomationAccess.READS to automationReadsEnabled.toString(),
             "collapsedBudgetSections" to collapsedBudgetSections,
@@ -345,6 +353,8 @@ internal class AppState {
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
+        payeeLocationsEnabled = saved["payeeLocationsEnabled"]?.toBooleanStrictOrNull() ?: payeeLocationsEnabled
+        payeeLocationsAsked = saved["payeeLocationsAsked"]?.toBooleanStrictOrNull() ?: payeeLocationsAsked
         automationWritesEnabled = saved[AutomationAccess.WRITES]?.toBooleanStrictOrNull() ?: automationWritesEnabled
         automationReadsEnabled = saved[AutomationAccess.READS]?.toBooleanStrictOrNull() ?: automationReadsEnabled
         exchangeRateFetching = ExchangeRateFetching.from(saved)

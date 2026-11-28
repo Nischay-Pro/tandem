@@ -19,8 +19,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import app.tandemforactual.ui.app.NearbyPayeesPrompt
 import app.tandemforactual.ui.app.ScreenContext
+import app.tandemforactual.ui.app.nearbyPayeeGroup
 import app.tandemforactual.ui.app.recentPayeeGroup
+import app.tandemforactual.ui.app.rememberNearbyPayeeIds
 import app.tandemforactual.ui.core.session.budget.createBudgetPayee
 import app.tandemforactual.ui.core.session.budget.enqueueBudgetCategoryCreate
 import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
@@ -99,12 +102,13 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                     LaunchedEffect(state.selectedBudgetId, isLiveBudget) {
                         if (isLiveBudget) recentPayeeIds = mobileSession.recentPayeeIds(state.selectedBudgetId)
                     }
+                    val nearbyPayeeIds = rememberNearbyPayeeIds(state, mobileSession)
                     val payeeGroups =
-                        remember(selectingTransferDestination, values, recentPayeeIds) {
+                        remember(selectingTransferDestination, values, recentPayeeIds, nearbyPayeeIds) {
                             when {
                                 selectingTransferDestination && values.isNotEmpty() -> listOf(SelectorGroup("To account", values))
                                 selectingTransferDestination -> emptyList()
-                                else -> recentPayeeGroup(values, recentPayeeIds)
+                                else -> nearbyPayeeGroup(values, nearbyPayeeIds) + recentPayeeGroup(values, recentPayeeIds)
                             }
                         }
                     SelectorScreen(
@@ -112,6 +116,7 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                         if (isLiveBudget) state.newTransactionPayeeId else state.transactionPayee,
                         live = isLiveBudget,
                         groups = payeeGroups,
+                        topContent = { if (isLiveBudget && !selectingTransferDestination) NearbyPayeesPrompt(state) },
                         searchLabel = if (selectingTransferDestination) "Search accounts" else "Search payees",
                         searchPlaceholder = if (selectingTransferDestination) "Find an account" else "Find a payee",
                         noMatches =

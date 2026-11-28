@@ -2,6 +2,8 @@ package app.tandemforactual.ui.app.shell
 
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import app.tandemforactual.ui.app.recordPayeeLocation
+import app.tandemforactual.ui.core.platform.CoarseLocator
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.requestBudgetOrderFlush
 import app.tandemforactual.ui.core.session.transactions.SplitEdit
@@ -26,6 +28,7 @@ internal class BudgetActions(
     private val navigation: AppNavigation,
     private val coroutineScope: CoroutineScope,
     private val haptics: HapticFeedback,
+    private val locator: CoarseLocator,
 ) {
     private val encryptionPassword get() = state.encryptedPassword.takeIf { it.isNotBlank() }
 
@@ -196,6 +199,8 @@ internal class BudgetActions(
                     )
                 if (created) {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    val paidPayee = formPayeeId().orEmpty().takeIf { state.transactionType != "Transfer" }
+                    if (paidPayee != null) launch { recordPayeeLocation(state, mobileSession, locator, paidPayee) }
                     state.lastTransactionAccountId = state.newTransactionAccountId
                     restoreTransactionFormBaseline(state, AppRoute.NEW_TRANSACTION)
                     navigation.back()
