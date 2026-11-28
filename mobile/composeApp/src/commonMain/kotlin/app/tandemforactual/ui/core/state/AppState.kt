@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.setValue
+import app.tandemforactual.data.planning.MonthStart
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.NotificationPolicy
 import app.tandemforactual.data.store.QuietHours
@@ -129,6 +130,14 @@ internal class AppState {
     var workspace by mutableStateOf(Workspace())
     var homeLayout by mutableStateOf("Comfortable")
     var budgetShowProgressBars by mutableStateOf(false)
+
+    /** The day of the month reports and insights start each month on, such as payday; 1 is the calendar month. */
+    var monthStartDay by mutableStateOf(1)
+
+    /** Whether a month that would start on a weekend starts on the Friday before. */
+    var monthStartPreviousWorkingDay by mutableStateOf(false)
+
+    val monthStart: MonthStart get() = MonthStart(monthStartDay.coerceIn(1, MonthStart.MAX_DAY), monthStartPreviousWorkingDay)
 
     /** Whether the budget leaves out categories whose money has all been spent this month. */
     var budgetHideSpentCategories by mutableStateOf(false)
@@ -300,6 +309,8 @@ internal class AppState {
             "workspace" to workspace.encode(),
             "homeLayout" to homeLayout,
             "budgetShowProgressBars" to budgetShowProgressBars.toString(),
+            "monthStartDay" to monthStartDay.toString(),
+            "monthStartPreviousWorkingDay" to monthStartPreviousWorkingDay.toString(),
             "budgetHideSpentCategories" to budgetHideSpentCategories.toString(),
             "budgetStatusColors" to budgetStatusColors.toString(),
             "budgetGroupTotals" to budgetGroupTotals.toString(),
@@ -376,6 +387,8 @@ internal class AppState {
         workspace = saved["workspace"]?.let(Workspace::decode) ?: workspace
         homeLayout = normalizeHomeLayoutName(saved["homeLayout"] ?: homeLayout)
         budgetShowProgressBars = saved["budgetShowProgressBars"]?.toBooleanStrictOrNull() ?: budgetShowProgressBars
+        monthStartDay = saved["monthStartDay"]?.toIntOrNull()?.coerceIn(1, MonthStart.MAX_DAY) ?: monthStartDay
+        monthStartPreviousWorkingDay = saved["monthStartPreviousWorkingDay"]?.toBooleanStrictOrNull() ?: monthStartPreviousWorkingDay
         budgetHideSpentCategories = saved["budgetHideSpentCategories"]?.toBooleanStrictOrNull() ?: budgetHideSpentCategories
         budgetStatusColors = saved["budgetStatusColors"]?.toBooleanStrictOrNull() ?: budgetStatusColors
         budgetGroupTotals = saved["budgetGroupTotals"]?.toBooleanStrictOrNull() ?: budgetGroupTotals

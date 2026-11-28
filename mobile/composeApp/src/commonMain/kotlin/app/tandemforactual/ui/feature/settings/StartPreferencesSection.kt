@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.tandemforactual.data.database.BudgetRecordEntity
+import app.tandemforactual.data.planning.MonthStart
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.booleanValue
@@ -23,8 +24,10 @@ import app.tandemforactual.ui.design.rows.DividerLine
 import app.tandemforactual.ui.design.rows.ListRow
 import app.tandemforactual.ui.design.rows.RowLeading
 import app.tandemforactual.ui.design.rows.SectionCard
+import app.tandemforactual.ui.design.templates.ToggleRow
 import app.tandemforactual.ui.design.theme.TandemTypography
 import app.tandemforactual.ui.design.theme.tandemPalette
+import com.composables.icons.lucide.CalendarDays
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.WalletCards
@@ -58,6 +61,37 @@ internal fun StartPreferencesSection(
             state.defaultTransactionAccountId.takeIf { id -> accounts.any { it.first == id } }.orEmpty(),
         ) { state.defaultTransactionAccountId = it }
     }
+}
+
+/** When reports and insights start each month, for budgets that run from payday to payday. */
+@Composable
+internal fun MonthStartSection(state: AppState) {
+    SectionCard("Reports and insights", "Spending trends and custom reports use this month") {
+        ChoiceRow(
+            "Month starts on",
+            Lucide.CalendarDays,
+            (1..MonthStart.MAX_DAY).map { it.toString() to monthStartLabel(it) },
+            state.monthStartDay.toString(),
+        ) { state.monthStartDay = it.toInt() }
+        DividerLine()
+        ToggleRow(
+            "Start on a weekday",
+            "A month that would start on a weekend starts on the Friday before",
+            state.monthStartPreviousWorkingDay,
+        ) { state.monthStartPreviousWorkingDay = it }
+    }
+}
+
+internal fun monthStartLabel(day: Int): String {
+    val suffix =
+        when {
+            day in 11..13 -> "th"
+            day % 10 == 1 -> "st"
+            day % 10 == 2 -> "nd"
+            day % 10 == 3 -> "rd"
+            else -> "th"
+        }
+    return if (day == 1) "The 1st (calendar month)" else "The $day$suffix"
 }
 
 @Composable

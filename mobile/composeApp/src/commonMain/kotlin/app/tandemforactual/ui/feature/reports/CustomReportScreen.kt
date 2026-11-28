@@ -23,9 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.tandemforactual.data.database.SearchableBudgetTransaction
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.CustomReportResult
 import app.tandemforactual.data.planning.CustomReports
+import app.tandemforactual.data.planning.MonthStart
 import app.tandemforactual.data.planning.ReportFlow
 import app.tandemforactual.data.planning.ReportGrouping
 import app.tandemforactual.data.planning.ReportRange
@@ -87,9 +89,10 @@ internal fun CustomReportScreen(
     val income = remember(mobileSession.categoryRecords, mobileSession.categoryGroupRecords) { mobileSession.incomeCategoryIds() }
     val today = platformTodayIsoDate()
     val customValid = draft.range != ReportRange.CUSTOM || (draft.startDate.isIsoDate() && draft.endDate.isIsoDate())
+    val monthStart = state.monthStart
     val result =
-        remember(draft, transactions, income, today, customValid) {
-            if (customValid) transactions?.let { CustomReports.run(draft, it, income, today) } else null
+        remember(draft, transactions, income, today, customValid, monthStart) {
+            if (customValid) transactions?.let { runInPeriods(draft, it, income, today, monthStart) } else null
         }
     PageColumn(verticalSpacing = TandemSpacing.large) {
         ReportControls(draft, names, { draft = it }, { picking = it })
@@ -449,3 +452,16 @@ private fun groupNoun(
         ReportGrouping.PAYEE -> if (count == 1) "payee" else "payees"
         ReportGrouping.ACCOUNT -> if (count == 1) "account" else "accounts"
     }
+
+/** Runs [report] with months starting on the chosen day; a report between two fixed dates keeps the real dates. */
+internal fun runInPeriods(
+    report: CustomReport,
+    transactions: List<SearchableBudgetTransaction>,
+    incomeCategoryIds: Set<String>,
+    today: String,
+    monthStart: MonthStart,
+): CustomReportResult {
+    val start =
+        monthStart.takeIf { report.range != ReportRange.CUSTOM } ?: return CustomReports.run(report, transactions, incomeCategoryIds, today)
+    return CustomReports.run(report, start.inPeriods(transactions), incomeCategoryIds, start.periodDate(today))
+}

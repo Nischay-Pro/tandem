@@ -56,9 +56,11 @@ internal fun SpendingTrendsScreen(
     val transactions = rememberBudgetTransactions(state, mobileSession)
     val names = mobileSession.rememberRecordNames()
     val income = remember(mobileSession.categoryRecords, mobileSession.categoryGroupRecords) { mobileSession.incomeCategoryIds() }
-    val entries = remember(transactions, income) { transactions?.let { SpendingInsights.entries(it, income) } }
+    val monthStart = state.monthStart
+    val entries =
+        remember(transactions, income, monthStart) { transactions?.let { SpendingInsights.entries(monthStart.inPeriods(it), income) } }
     val monthId = state.selectedMonthId
-    val today = platformTodayIsoDate()
+    val today = monthStart.periodDate(platformTodayIsoDate())
     val report = remember(entries, monthId, baseline, today) { entries?.let { SpendingInsights.trends(it, monthId, baseline, today) } }
     val comparedWith =
         when (baseline) {
