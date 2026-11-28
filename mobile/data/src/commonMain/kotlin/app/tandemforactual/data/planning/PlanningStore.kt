@@ -200,6 +200,13 @@ class PlanningStore(
 
     suspend fun deleteSavedSearch(id: String) = delete(id, SavedSearch.TYPE)
 
+    fun depositTerms(): Flow<List<DepositTerms>> =
+        observe(DepositTerms.TYPE).map { list -> list.map { (id, body) -> DepositTerms.fromJson(id, body) } }
+
+    suspend fun save(terms: DepositTerms) = put(terms.id, DepositTerms.TYPE, terms.toJson())
+
+    suspend fun deleteDepositTerms(id: String) = delete(id, DepositTerms.TYPE)
+
     fun paymentFormats(): Flow<List<CustomPaymentFormat>> =
         observe(CustomPaymentFormat.TYPE).map { list ->
             list.map { (id, body) -> CustomPaymentFormat.fromJson(id, body) }.sortedBy { it.name.lowercase() }

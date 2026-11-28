@@ -121,6 +121,7 @@ private fun AccountDetailFooter(
 ) {
     CardStatementsCard(state, mobileSession, liveAccount)
     AccountNoteSection(state, mobileSession, liveAccount)
+    DepositCard(state, mobileSession, liveAccount)
     SettingRow("Account options", "Close account", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
 }
 

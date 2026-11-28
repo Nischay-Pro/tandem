@@ -13,6 +13,7 @@ import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.data.planning.CustomPaymentFormat
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
+import app.tandemforactual.data.planning.DepositTerms
 import app.tandemforactual.data.planning.DeviceName
 import app.tandemforactual.data.planning.ExchangeRate
 import app.tandemforactual.data.planning.JurisdictionPeriod
@@ -46,6 +47,8 @@ internal class PlanningController(
     var savingsGoals by mutableStateOf<List<SavingsGoal>>(emptyList())
         private set
     var debtTerms by mutableStateOf<List<DebtTerms>>(emptyList())
+        private set
+    var depositTerms by mutableStateOf<List<DepositTerms>>(emptyList())
         private set
     var retirementProfiles by mutableStateOf<List<RetirementProfile>>(emptyList())
     var reimbursements by mutableStateOf<List<Reimbursement>>(emptyList())
@@ -347,6 +350,20 @@ internal class PlanningController(
         planningStore(budgetId)?.delete(goalId, SavingsGoal.TYPE)
     }
 
+    suspend fun saveDepositTerms(
+        budgetId: String,
+        terms: DepositTerms,
+    ) {
+        planningStore(budgetId)?.save(terms)
+    }
+
+    suspend fun deleteDepositTerms(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deleteDepositTerms(id)
+    }
+
     suspend fun saveDebtTerms(
         budgetId: String,
         terms: DebtTerms,
@@ -411,6 +428,7 @@ internal class PlanningController(
         val store = planningStore(budgetId) ?: return
         launch { store.savingsGoals().collect { savingsGoals = it } }
         launch { store.debtTerms().collect { debtTerms = it } }
+        launch { store.depositTerms().collect { depositTerms = it } }
         launch { store.retirementProfiles().collect { retirementProfiles = it } }
         launch { store.reimbursements().collect { reimbursements = it } }
         launch { store.sharedBills().collect { sharedBills = it } }
