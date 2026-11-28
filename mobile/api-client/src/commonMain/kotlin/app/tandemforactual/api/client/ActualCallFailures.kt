@@ -18,7 +18,7 @@ import kotlinx.io.IOException
 
 /** The platform's HTTP engine with limits, so a stalled server fails the call instead of holding it forever. */
 fun actualHttpClient(): HttpClient =
-    HttpClient {
+    platformHttpClient {
         install(HttpTimeout) {
             connectTimeoutMillis = 15_000
             socketTimeoutMillis = 60_000
@@ -35,8 +35,9 @@ internal fun HttpClient.withHeaders(headers: Map<String, String>): HttpClient =
     }
 
 /** Runs a call to Actual and reports its failures with Tandem's error codes. */
-internal suspend fun <T> callActual(block: suspend () -> T): T =
-    try {
+internal suspend fun <T> callActual(block: suspend () -> T): T {
+    val refusalsBefore = TrustedCertificates.refusals
+    return try {
         withContext(Dispatchers.IO) { block() }
     } catch (error: CancellationException) {
         throw error
@@ -57,10 +58,13 @@ internal suspend fun <T> callActual(block: suspend () -> T): T =
     } catch (error: SocketTimeoutException) {
         throw TandemApiException("server_timeout", null, error)
     } catch (error: IOException) {
+        if (TrustedCertificates.refusals != refusalsBefore) throw TandemApiException("certificate_untrusted", null, error)
         throw TandemApiException("address_unreachable", null, error)
     } catch (error: Exception) {
+        if (TrustedCertificates.refusals != refusalsBefore) throw TandemApiException("certificate_untrusted", null, error)
         throw TandemApiException("unexpected_error", null, error)
     }
+}
 
 private fun serverErrorCode(reason: String): String =
     when (reason) {
