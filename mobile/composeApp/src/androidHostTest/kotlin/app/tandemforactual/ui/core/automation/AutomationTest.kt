@@ -167,6 +167,28 @@ class AutomationTest {
         }
 
     @Test
+    fun transfersMoveMoneyThroughTheOtherAccountsTransferPayee() =
+        withBudget { database ->
+            val moved = add(database, AutomationTransactionInput("25", "Ignored", "groceries", "Checking", transferTo = "savings"))
+            val patch = Json.parseToJsonElement(repository(database).readPendingWrites(BUDGET).single().patchJson).jsonObject
+            assertEquals(JsonPrimitive(-2500), patch["amount"])
+            assertEquals(JsonPrimitive("to-savings"), patch["payee"])
+            assertEquals(JsonNull, patch["category"])
+            assertNull(patch["payee_name"])
+            assertTrue(moved.summary.endsWith("25.00 · Transfer to Savings"), moved.summary)
+            assertEquals(-2500L, add(database, AutomationTransactionInput("-25", account = "Checking", transferTo = "Savings")).amountMinor)
+            assertEquals(2500L, add(database, AutomationTransactionInput("+25", account = "Checking", transferTo = "Savings")).amountMinor)
+            val refused = listOf("Checking" to "Checking", "Checking" to "Old card", "Savings" to "Checking", "Checking" to "Brokerage")
+            refused.forEach { (from, to) ->
+                assertEquals(
+                    AutomationErrorCode.ACCOUNT,
+                    suspendCode { add(database, AutomationTransactionInput("5", account = from, transferTo = to)) },
+                )
+            }
+            assertEquals(3, repository(database).readPendingWrites(BUDGET).size)
+        }
+
+    @Test
     fun repeatsOfAnExternalIdWithinThirtyDaysAddNothing() =
         withBudget { database ->
             val input = AutomationTransactionInput("-4.50", account = "Checking", externalId = "sms-42")

@@ -56,20 +56,48 @@ object IosAutomation {
         cleared: Boolean,
         externalId: String?,
         completion: (IosAutomationAdded?, IosAutomationFailure?) -> Unit,
+    ) = save(
+        AutomationTransactionInput(
+            amount = amount,
+            payee = payee,
+            category = category,
+            account = account,
+            date = date,
+            notes = notes,
+            cleared = cleared.toString(),
+            externalId = externalId,
+            amountFormat = AutomationAmountFormat.PLAIN,
+        ),
+        completion,
+    )
+
+    /** Moves money from [fromAccount] to [toAccount] through the outbox; [amount] is plain decimal text, such as "250". */
+    fun transfer(
+        amount: String,
+        fromAccount: String,
+        toAccount: String,
+        date: String?,
+        notes: String?,
+        externalId: String?,
+        completion: (IosAutomationAdded?, IosAutomationFailure?) -> Unit,
+    ) = save(
+        AutomationTransactionInput(
+            amount = amount,
+            account = fromAccount,
+            date = date,
+            notes = notes,
+            externalId = externalId,
+            amountFormat = AutomationAmountFormat.PLAIN,
+            transferTo = toAccount,
+        ),
+        completion,
+    )
+
+    private fun save(
+        input: AutomationTransactionInput,
+        completion: (IosAutomationAdded?, IosAutomationFailure?) -> Unit,
     ) = answer(completion) {
         val target = automationTarget(AppPreferencesStore(iosTandemDatabase).read(), AutomationKind.WRITE)
-        val input =
-            AutomationTransactionInput(
-                amount = amount,
-                payee = payee,
-                category = category,
-                account = account,
-                date = date,
-                notes = notes,
-                cleared = cleared.toString(),
-                externalId = externalId,
-                amountFormat = AutomationAmountFormat.PLAIN,
-            )
         val now = Clock.System.now().toEpochMilliseconds()
         val added =
             if (target.encrypted) {

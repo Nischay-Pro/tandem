@@ -26,6 +26,20 @@ abstract class AssistantFunctions : AppFunctionService() {
         }
 
     /**
+     * Moves money from one account to another in the budget open in Tandem. Actual adds the matching transaction in
+     * the other account. Works only after the user allows automation apps to add transactions in Tandem.
+     *
+     * @param transfer The amount and the two accounts, plus optional details.
+     * @return The new transfer, or the earlier one when its external ID was already used.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true)
+    suspend fun transferMoney(transfer: AssistantTransfer): AssistantLoggedTransaction =
+        assistantCall {
+            val added = AutomationCalls.add(this, transfer.toAutomation(), ASSISTANT_SOURCE)
+            AssistantLoggedTransaction(added.transactionId, added.summary.takeUnless { added.repeated }.orEmpty(), added.repeated)
+        }
+
+    /**
      * Reads how much is left to spend in a category this month, from this device's copy of the budget open in Tandem.
      * Works only after the user allows automation apps to read balances, and never while Tandem's app lock or Hide
      * budget amounts is on.

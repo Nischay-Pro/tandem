@@ -21,6 +21,7 @@ import app.tandemforactual.ui.design.rows.SectionCard
 import app.tandemforactual.ui.design.theme.tandemPalette
 import com.composables.icons.lucide.CloudCheck
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.GitMerge
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lock
@@ -168,6 +169,22 @@ internal fun SyncCenterServices(
                         },
                 ),
             onClick = onRecoveryKey.takeIf { status == PlanningSyncStatus.NEEDS_RECOVERY_KEY },
+        )
+    }
+}
+
+/** A fresh copy from Actual for when sync can't sort itself out; this device's copy is set aside as a backup first. */
+@Composable
+internal fun SyncCenterStartOver(
+    enabled: Boolean,
+    onReset: () -> Unit,
+) {
+    SectionCard("Start over", "If this device’s copy stays out of step with Actual") {
+        ListRow(
+            "Reset sync state",
+            "Downloads the budget again; this device’s copy is kept as a backup first",
+            leading = RowLeading.Icon(Lucide.Download),
+            onClick = onReset.takeIf { enabled },
         )
     }
 }
