@@ -506,13 +506,19 @@ internal fun isIsoDate(value: String): Boolean =
 /** `getScheduledAmount`: a fixed amount, or the rounded midpoint of a range. */
 internal fun scheduledAmount(value: JsonElement?): Long =
     when (value) {
-        is JsonPrimitive -> value.longOrNull ?: value.contentOrNull?.toDoubleOrNull()?.toLong() ?: 0L
+        is JsonPrimitive -> {
+            value.longOrNull ?: value.contentOrNull?.toDoubleOrNull()?.toLong() ?: 0L
+        }
+
         is JsonObject -> {
             val low = (value["num1"] as? JsonPrimitive)?.longOrNull ?: 0L
             val high = (value["num2"] as? JsonPrimitive)?.longOrNull ?: 0L
             jsMathRound((low + high) / 2.0).toLong()
         }
-        else -> 0L
+
+        else -> {
+            0L
+        }
     }
 
 internal fun setAction(

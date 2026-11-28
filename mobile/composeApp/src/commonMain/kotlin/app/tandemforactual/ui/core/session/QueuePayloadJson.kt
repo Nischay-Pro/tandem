@@ -61,7 +61,7 @@ internal fun rewriteAccountIds(
     actualId: String,
 ): JsonElement =
     when (element) {
-        is JsonObject ->
+        is JsonObject -> {
             JsonObject(
                 element.mapValues { (key, value) ->
                     if (key in ACCOUNT_REFERENCE_FIELDS && (value as? JsonPrimitive)?.contentOrNull == temporaryId) {
@@ -71,8 +71,15 @@ internal fun rewriteAccountIds(
                     }
                 },
             )
-        is JsonArray -> JsonArray(element.map { rewriteAccountIds(it, temporaryId, actualId) })
-        else -> element
+        }
+
+        is JsonArray -> {
+            JsonArray(element.map { rewriteAccountIds(it, temporaryId, actualId) })
+        }
+
+        else -> {
+            element
+        }
     }
 
 internal val ACCOUNT_REFERENCE_FIELDS = setOf("account", "accountId", "targetAccountId", "transferAccountId")

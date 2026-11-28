@@ -94,13 +94,20 @@ internal fun ruleConditionSummary(
             val operation = ruleOperatorLabel(condition.stringValue("op") ?: "is")
             val value =
                 when (val raw = condition["value"]) {
-                    is JsonArray ->
+                    is JsonArray -> {
                         raw.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(", ") {
                             namesByField[wireField]?.get(it)
                                 ?: it
                         }
-                    is JsonPrimitive -> raw.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
-                    else -> raw?.toString()
+                    }
+
+                    is JsonPrimitive -> {
+                        raw.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
+                    }
+
+                    else -> {
+                        raw?.toString()
+                    }
                 }
             listOfNotNull(field, operation, value).joinToString(" ")
         }.ifBlank { "Every transaction" }
@@ -115,15 +122,31 @@ internal fun ruleActionSummary(
             val value =
                 (action["value"] as? JsonPrimitive)?.contentOrNull?.let { namesByField[wireField]?.get(it) ?: it }
             when (action.stringValue("op")) {
-                "append-notes" -> "Add “$value” to end of notes"
-                "prepend-notes" -> "Add “$value” to start of notes"
-                "delete-transaction" -> "Delete transaction"
-                "link-schedule" -> "Link schedule"
-                "set-split-amount" -> "Split transaction"
-                else ->
+                "append-notes" -> {
+                    "Add “$value” to end of notes"
+                }
+
+                "prepend-notes" -> {
+                    "Add “$value” to start of notes"
+                }
+
+                "delete-transaction" -> {
+                    "Delete transaction"
+                }
+
+                "link-schedule" -> {
+                    "Link schedule"
+                }
+
+                "set-split-amount" -> {
+                    "Split transaction"
+                }
+
+                else -> {
                     when {
                         wireField == "cleared" -> if (value == "true") "Mark cleared" else "Mark not cleared"
                         else -> "Set ${ruleFieldLabel(wireField).lowercase()} to ${value.orEmpty()}"
                     }
+                }
             }
         }.ifBlank { "No actions" }

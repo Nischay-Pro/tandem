@@ -61,8 +61,11 @@ object RetirementRoom {
         val start = profile.roomStart
         val carried =
             when {
-                year in profile.limitOverrides -> null
-                plan == Tfsa && start != null ->
+                year in profile.limitOverrides -> {
+                    null
+                }
+
+                plan == Tfsa && start != null -> {
                     Tfsa.roomLeft(
                         year,
                         start.year,
@@ -70,11 +73,16 @@ object RetirementRoom {
                         own,
                         years.mapValues { it.value.withdrawnMinor },
                     )
+                }
+
                 plan == Fhsa && (start != null || years.isNotEmpty()) -> {
                     val opened = listOfNotNull(years.keys.minOrNull(), start?.year).min()
                     Fhsa.roomLeft(year, opened, own, start?.year, start?.amountMinor)
                 }
-                else -> null
+
+                else -> {
+                    null
+                }
             }
         if (carried != null) return PlanYearRoom(carried + yours, yours, employer, carried.coerceAtLeast(0), carriesForward = true)
         val ownRrspRoom = profile.rrspRoom(year).takeIf { plan == Rrsp && year == currentYear && year !in profile.limitOverrides }

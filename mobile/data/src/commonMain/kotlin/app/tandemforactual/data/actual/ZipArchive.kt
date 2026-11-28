@@ -285,12 +285,19 @@ internal object Inflater {
                     out.append(data, p + 4, len)
                     input.position = p + 4 + len
                 }
-                1 -> block(input, out, FIXED_LITERALS, FIXED_DISTANCES)
+
+                1 -> {
+                    block(input, out, FIXED_LITERALS, FIXED_DISTANCES)
+                }
+
                 2 -> {
                     val (literals, distances) = dynamicTables(input)
                     block(input, out, literals, distances)
                 }
-                else -> throw ZipFormatException("bad block type")
+
+                else -> {
+                    throw ZipFormatException("bad block type")
+                }
             }
         } while (last == 0)
         return out.toByteArray()
@@ -324,7 +331,10 @@ internal object Inflater {
         while (i < lengths.size) {
             val symbol = input.decode(codeTable)
             when {
-                symbol < 16 -> lengths[i++] = symbol
+                symbol < 16 -> {
+                    lengths[i++] = symbol
+                }
+
                 else -> {
                     val (value, repeat) =
                         when (symbol) {
@@ -332,8 +342,14 @@ internal object Inflater {
                                 if (i == 0) throw ZipFormatException("repeat without length")
                                 lengths[i - 1] to 3 + input.bits(2)
                             }
-                            17 -> 0 to 3 + input.bits(3)
-                            else -> 0 to 11 + input.bits(7)
+
+                            17 -> {
+                                0 to 3 + input.bits(3)
+                            }
+
+                            else -> {
+                                0 to 11 + input.bits(7)
+                            }
                         }
                     if (i + repeat > lengths.size) throw ZipFormatException("too many lengths")
                     repeat(repeat) { lengths[i++] = value }
@@ -352,8 +368,14 @@ internal object Inflater {
         while (true) {
             val symbol = input.decode(literals)
             when {
-                symbol < 256 -> out.append(symbol.toByte())
-                symbol == 256 -> return
+                symbol < 256 -> {
+                    out.append(symbol.toByte())
+                }
+
+                symbol == 256 -> {
+                    return
+                }
+
                 else -> {
                     val index = symbol - 257
                     if (index >= lengthBase.size) throw ZipFormatException("bad length symbol")

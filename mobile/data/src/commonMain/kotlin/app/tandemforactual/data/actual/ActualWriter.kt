@@ -198,13 +198,19 @@ internal object TransactionSchema {
             if (skipNull && value == null) continue
             out[internal[field] ?: field] =
                 when {
-                    field in booleans -> if (truthy(value)) 1L else 0L
+                    field in booleans -> {
+                        if (truthy(value)) 1L else 0L
+                    }
+
                     field == "date" && value != null -> {
                         val date = value as String
                         require(Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(date) && date >= "1995-01-01") { "Invalid date: $date" }
                         ActualMonths.dateInt(date)
                     }
-                    else -> value
+
+                    else -> {
+                        value
+                    }
                 }
         }
         return out

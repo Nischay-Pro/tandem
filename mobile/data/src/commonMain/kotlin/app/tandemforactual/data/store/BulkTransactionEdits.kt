@@ -90,15 +90,33 @@ private fun bulkFields(
     context: BulkEditContext,
 ): Map<String, JsonElement> =
     when (edit) {
-        is BulkTransactionEdit.SetCategory ->
+        is BulkTransactionEdit.SetCategory -> {
             if (body.isSplit() || !body.takesCategory(context)) emptyMap() else mapOf("category" to edit.categoryId.json())
-        is BulkTransactionEdit.AddTag -> mapOf("notes" to addNoteTag(body.text("notes"), edit.tag).json())
-        is BulkTransactionEdit.RemoveTag -> mapOf("notes" to removeNoteTag(body.text("notes"), edit.tag).json())
-        is BulkTransactionEdit.SetCleared ->
+        }
+
+        is BulkTransactionEdit.AddTag -> {
+            mapOf("notes" to addNoteTag(body.text("notes"), edit.tag).json())
+        }
+
+        is BulkTransactionEdit.RemoveTag -> {
+            mapOf("notes" to removeNoteTag(body.text("notes"), edit.tag).json())
+        }
+
+        is BulkTransactionEdit.SetCleared -> {
             if (body.flag("reconciled")) emptyMap() else mapOf("cleared" to JsonPrimitive(edit.cleared))
-        is BulkTransactionEdit.MoveToAccount -> moveFields(body, edit.accountId, context)
-        is BulkTransactionEdit.SetPayee -> mapOf("payee" to edit.payeeId.json())
-        is BulkTransactionEdit.LinkSchedule -> mapOf("schedule" to edit.scheduleId.json())
+        }
+
+        is BulkTransactionEdit.MoveToAccount -> {
+            moveFields(body, edit.accountId, context)
+        }
+
+        is BulkTransactionEdit.SetPayee -> {
+            mapOf("payee" to edit.payeeId.json())
+        }
+
+        is BulkTransactionEdit.LinkSchedule -> {
+            mapOf("schedule" to edit.scheduleId.json())
+        }
     }
 
 private fun moveFields(

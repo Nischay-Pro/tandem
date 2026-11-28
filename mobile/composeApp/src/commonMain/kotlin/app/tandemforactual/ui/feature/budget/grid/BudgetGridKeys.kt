@@ -105,11 +105,26 @@ internal fun BudgetGridState.onEditorKey(
                 cancel()
                 return true
             }
-            ShortcutAction.GRID_EDIT -> from.moved(1, 0, data.size)
-            ShortcutAction.GRID_NEXT -> from.stepped(forward = true, data.size)
-            ShortcutAction.GRID_PREVIOUS -> from.stepped(forward = false, data.size)
-            ShortcutAction.GRID_MOVE -> GRID_ARROWS[press?.key]?.takeIf { it.second == 0 }?.let { from.moved(it.first, 0, data.size) }
-            else -> null
+
+            ShortcutAction.GRID_EDIT -> {
+                from.moved(1, 0, data.size)
+            }
+
+            ShortcutAction.GRID_NEXT -> {
+                from.stepped(forward = true, data.size)
+            }
+
+            ShortcutAction.GRID_PREVIOUS -> {
+                from.stepped(forward = false, data.size)
+            }
+
+            ShortcutAction.GRID_MOVE -> {
+                GRID_ARROWS[press?.key]?.takeIf { it.second == 0 }?.let { from.moved(it.first, 0, data.size) }
+            }
+
+            else -> {
+                null
+            }
         } ?: return false
     if (commit(data, io)) data.key(target)?.let(::focusOn)
     return true

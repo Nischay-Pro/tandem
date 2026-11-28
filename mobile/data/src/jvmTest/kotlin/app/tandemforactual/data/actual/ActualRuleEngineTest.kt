@@ -44,16 +44,26 @@ class ActualRuleEngineTest {
 
     private fun toKotlin(element: JsonElement): Any? =
         when (element) {
-            JsonNull -> null
-            is JsonPrimitive ->
+            JsonNull -> {
+                null
+            }
+
+            is JsonPrimitive -> {
                 if (element.isString) {
                     element.content
                 } else {
                     element.booleanOrNull ?: element.longOrNull
                         ?: element.content.toDouble()
                 }
-            is JsonArray -> element.map(::toKotlin)
-            is JsonObject -> element.mapValues { toKotlin(it.value) }
+            }
+
+            is JsonArray -> {
+                element.map(::toKotlin)
+            }
+
+            is JsonObject -> {
+                element.mapValues { toKotlin(it.value) }
+            }
         }
 
     private fun toJson(value: Any?): JsonElement =
@@ -69,7 +79,7 @@ class ActualRuleEngineTest {
 
     private fun normalize(element: JsonElement): JsonElement =
         when (element) {
-            is JsonObject ->
+            is JsonObject -> {
                 JsonObject(
                     element.filterKeys { !it.startsWith("_") }.mapValues { (key, value) ->
                         if (key == "id" &&
@@ -81,8 +91,15 @@ class ActualRuleEngineTest {
                         }
                     },
                 )
-            is JsonArray -> JsonArray(element.map(::normalize))
-            else -> element
+            }
+
+            is JsonArray -> {
+                JsonArray(element.map(::normalize))
+            }
+
+            else -> {
+                element
+            }
         }
 
     @Test

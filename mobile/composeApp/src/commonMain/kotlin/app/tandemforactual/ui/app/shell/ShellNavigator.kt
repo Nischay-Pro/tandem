@@ -100,13 +100,17 @@ internal class ShellNavigator(
     fun showListDetail(change: ListDetailChange) {
         shell.routeTransitionDirection = 0f
         when (change) {
-            ListDetailChange.SHOW_PANE -> backStack.removeAt(backStack.lastIndex)
-            ListDetailChange.SHOW_PAGE ->
+            ListDetailChange.SHOW_PANE -> {
+                backStack.removeAt(backStack.lastIndex)
+            }
+
+            ListDetailChange.SHOW_PAGE -> {
                 backStack
                     .last()
                     .route
                     .listDetailPage()
                     ?.let { backStack.add(newRouteEntry(it)) }
+            }
         }
     }
 
@@ -144,9 +148,11 @@ internal class ShellNavigator(
             BackRequestDisposition.QUEUE_AFTER_BACK_TRANSITION -> {
                 shell.queuedBackPresses += 1
             }
+
             BackRequestDisposition.DEFER_UNTIL_ROUTE_TRANSITION_FINISHES -> {
                 shell.pendingBackAfterRouteTransition = true
             }
+
             BackRequestDisposition.START -> {
                 if (beginRouteTransition()) {
                     val backAnimationWasRunning = shell.backGestureCancelJob != null

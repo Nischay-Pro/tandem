@@ -243,6 +243,7 @@ private class LiveBudgetMonthBuilder(
                         pendingCategoryIds += move.itemId
                     }
                 }
+
                 BudgetReorderKind.APPLY_BUDGET_TEMPLATE, BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
                     payload.assignmentEntries().forEach { (categoryId, amountMinor) ->
                         replayedAssignments[categoryId] = amountMinor
@@ -250,6 +251,7 @@ private class LiveBudgetMonthBuilder(
                         pendingCategoryIds += categoryId
                     }
                 }
+
                 BudgetReorderKind.MOVE_BUDGET_MONEY -> {
                     val fromCategoryId = payload.stringValue("fromCategoryId") ?: return@forEach
                     val toCategoryId = payload.stringValue("toCategoryId") ?: return@forEach
@@ -261,21 +263,27 @@ private class LiveBudgetMonthBuilder(
                     pendingCategoryIds += fromCategoryId
                     pendingCategoryIds += toCategoryId
                 }
+
                 BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
                     payload.booleanValue("enabled")?.let { enabled ->
                         effectiveCarryoverOverrides[move.itemId] = enabled
                         pendingCategoryIds += move.itemId
                     }
                 }
+
                 BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
                     replayedHold = (replayedHold ?: 0L) + (payload.longValue("amountMinor") ?: 0L)
                     heldForNextMonthPending = true
                 }
+
                 BudgetReorderKind.RESET_BUDGET_HOLD -> {
                     replayedHold = 0L
                     heldForNextMonthPending = true
                 }
-                else -> Unit
+
+                else -> {
+                    Unit
+                }
             }
         }
         heldForNextMonthOverride = replayedHold

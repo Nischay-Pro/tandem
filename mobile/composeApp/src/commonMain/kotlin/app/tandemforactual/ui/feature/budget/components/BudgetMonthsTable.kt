@@ -345,12 +345,18 @@ private fun RowScope.BudgetMonthAmounts(
     val palette = tandemPalette
     value.columns.forEach { column ->
         when (column) {
-            GridValue.SPENT -> BudgetMonthAmount(state, activityMinor?.let { abs(it) }, palette.muted, FontWeight.Normal)
+            GridValue.SPENT -> {
+                BudgetMonthAmount(state, activityMinor?.let { abs(it) }, palette.muted, FontWeight.Normal)
+            }
+
             GridValue.BALANCE -> {
                 val tint = if (balanceMinor != null) balanceColor(balanceMinor) else palette.muted
                 BudgetMonthAmount(state, balanceMinor, tint, FontWeight.SemiBold)
             }
-            else -> BudgetMonthAmount(state, assignedMinor, palette.muted, FontWeight.Normal)
+
+            else -> {
+                BudgetMonthAmount(state, assignedMinor, palette.muted, FontWeight.Normal)
+            }
         }
     }
 }

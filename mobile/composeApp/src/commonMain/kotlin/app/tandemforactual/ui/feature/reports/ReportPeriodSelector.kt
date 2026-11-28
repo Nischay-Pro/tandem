@@ -93,6 +93,7 @@ internal fun ReportPeriodSelector(
                             )
                         }
                     }
+
                     ReportRangePreset.YEAR_TO_DATE,
                     ReportRangePreset.LAST_YEAR,
                     -> {
@@ -106,7 +107,10 @@ internal fun ReportPeriodSelector(
                             )
                         }
                     }
-                    ReportRangePreset.ALL_TIME -> Unit
+
+                    ReportRangePreset.ALL_TIME -> {
+                        Unit
+                    }
                 }
             } else {
                 PeriodStepper(

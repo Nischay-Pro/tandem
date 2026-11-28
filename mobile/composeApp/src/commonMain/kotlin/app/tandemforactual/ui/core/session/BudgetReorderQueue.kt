@@ -55,19 +55,38 @@ internal fun budgetMutationFailureDisposition(errorCode: String?): BudgetMutatio
 
 internal fun budgetMutationFailureMessage(errorCode: String?): String =
     when (errorCode) {
-        "idempotency_key_reused" -> "Tandem matched this change to a different request. Refresh the budget, then try again."
-        "operation_in_progress" -> "Tandem is still processing this change. Wait a moment, then try again."
-        SEND_INTERRUPTED_ERROR_CODE ->
+        "idempotency_key_reused" -> {
+            "Tandem matched this change to a different request. Refresh the budget, then try again."
+        }
+
+        "operation_in_progress" -> {
+            "Tandem is still processing this change. Wait a moment, then try again."
+        }
+
+        SEND_INTERRUPTED_ERROR_CODE -> {
             "Tandem closed before Actual confirmed this change. Try again to resend it. Actual won’t apply it twice."
-        "operation_uncertain" ->
+        }
+
+        "operation_uncertain" -> {
             "Tandem couldn’t confirm whether Actual saved this change. " +
                 "Refresh the budget and check Actual before deciding what to do with it."
-        "operation_rejected" -> "Actual rejected this change earlier. Refresh the budget, then try again."
-        "operation_result_unavailable" ->
+        }
+
+        "operation_rejected" -> {
+            "Actual rejected this change earlier. Refresh the budget, then try again."
+        }
+
+        "operation_result_unavailable" -> {
             "Actual saved this change, but Tandem hasn’t refreshed the budget. Sync the budget to update this device."
-        "invalid_request" ->
+        }
+
+        "invalid_request" -> {
             "Tandem rejected this budget change because one or more details did not pass validation. Refresh the budget and check Actual before trying again."
-        else -> "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
+        }
+
+        else -> {
+            "Tandem received an unexpected response. Refresh the budget and check Actual before deciding what to do with this change."
+        }
     }
 
 internal fun budgetMutationFailureMessage(
@@ -80,11 +99,15 @@ internal fun budgetMutationFailureMessage(
             val name = itemName?.takeIf(String::isNotBlank) ?: "this item"
             "Tandem rejected the reorder for $name before changing Actual. The saved order is unchanged, and this entry does not include the server’s detailed reason."
         }
+
         errorCode == "invalid_request" && kind == BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
             val categoryName = itemName?.takeIf(String::isNotBlank) ?: "this category"
             "Tandem searched only hidden categories, treated $categoryName as missing, and stopped before assigning the amount in Actual."
         }
-        else -> budgetMutationFailureMessage(errorCode)
+
+        else -> {
+            budgetMutationFailureMessage(errorCode)
+        }
     }
 
 internal fun isBudgetOrderMutation(kind: BudgetReorderKind?): Boolean =
@@ -146,10 +169,12 @@ internal fun budgetMutationRequestForRetry(
         BudgetMutationFailureDisposition.OPERATION_IN_PROGRESS,
         BudgetMutationFailureDisposition.SEND_INTERRUPTED,
         -> request
+
         BudgetMutationFailureDisposition.OPERATION_REJECTED,
         BudgetMutationFailureDisposition.IDEMPOTENCY_KEY_REUSED,
         BudgetMutationFailureDisposition.INPUT_REJECTED,
         -> request.copy(operationId = replacementOperationId)
+
         BudgetMutationFailureDisposition.OPERATION_UNCERTAIN,
         BudgetMutationFailureDisposition.RESULT_UNAVAILABLE,
         BudgetMutationFailureDisposition.REVIEW,
@@ -266,44 +291,137 @@ internal fun budgetMutationFailureMessage(
     val detail = message?.trim()?.trimEnd('.', '!', '?')?.takeIf(String::isNotEmpty)
     val fallback =
         when (kind) {
-            BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY -> "Couldn’t update this category’s visibility."
-            BudgetReorderKind.CREATE_CATEGORY_GROUP -> "Couldn’t create this category group."
-            BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME ->
+            BudgetReorderKind.HIDE_CATEGORY, BudgetReorderKind.SHOW_CATEGORY -> {
+                "Couldn’t update this category’s visibility."
+            }
+
+            BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
+                "Couldn’t create this category group."
+            }
+
+            BudgetReorderKind.RENAME_CATEGORY_GROUP, BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME -> {
                 "Couldn’t rename this category group."
-            BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> "Couldn’t create this category."
-            BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME -> "Couldn’t rename this category."
-            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> "Couldn’t move this category."
-            BudgetReorderKind.DELETE_CATEGORY -> "Couldn’t delete this category."
-            BudgetReorderKind.DELETE_CATEGORY_GROUP -> "Couldn’t delete this category group."
-            BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP ->
+            }
+
+            BudgetReorderKind.CREATE_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_CREATE -> {
+                "Couldn’t create this category."
+            }
+
+            BudgetReorderKind.RENAME_CATEGORY, BudgetReorderKind.REFRESH_CATEGORY_RENAME -> {
+                "Couldn’t rename this category."
+            }
+
+            BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> {
+                "Couldn’t move this category."
+            }
+
+            BudgetReorderKind.DELETE_CATEGORY -> {
+                "Couldn’t delete this category."
+            }
+
+            BudgetReorderKind.DELETE_CATEGORY_GROUP -> {
+                "Couldn’t delete this category group."
+            }
+
+            BudgetReorderKind.HIDE_CATEGORY_GROUP, BudgetReorderKind.SHOW_CATEGORY_GROUP -> {
                 "Couldn’t update this category group’s visibility."
-            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> "Couldn’t refresh the new category group."
-            BudgetReorderKind.CREATE_PAYEE -> "Couldn’t add this payee."
-            BudgetReorderKind.SET_CATEGORY_AMOUNT -> "Couldn’t update the assigned amount."
-            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> "Couldn’t update overspending rollover."
-            BudgetReorderKind.COPY_BUDGET_MONTH -> "Couldn’t copy last month’s assignments."
-            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> "Couldn’t apply this template."
-            BudgetReorderKind.APPLY_GOAL_TEMPLATES -> "Couldn’t apply the budget’s templates."
-            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> "Couldn’t hold this money for next month."
-            BudgetReorderKind.RESET_BUDGET_HOLD -> "Couldn’t reset the next-month hold."
-            BudgetReorderKind.MOVE_BUDGET_MONEY -> "Couldn’t move money between categories."
-            BudgetReorderKind.CREATE_ACCOUNT -> "Couldn’t add this account."
-            BudgetReorderKind.CLOSE_ACCOUNT -> "Couldn’t close this account."
-            BudgetReorderKind.RENAME_ACCOUNT -> "Couldn’t rename this account."
-            BudgetReorderKind.REOPEN_ACCOUNT -> "Couldn’t reopen this account."
-            BudgetReorderKind.MOVE_ACCOUNT -> "Couldn’t reorder this account."
-            BudgetReorderKind.RENAME_PAYEE -> "Couldn’t rename this payee."
-            BudgetReorderKind.MERGE_PAYEE -> "Couldn’t merge this payee."
-            BudgetReorderKind.DELETE_PAYEE -> "Couldn’t delete this payee."
-            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> "Couldn’t update this payee’s category."
+            }
+
+            BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE -> {
+                "Couldn’t refresh the new category group."
+            }
+
+            BudgetReorderKind.CREATE_PAYEE -> {
+                "Couldn’t add this payee."
+            }
+
+            BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+                "Couldn’t update the assigned amount."
+            }
+
+            BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
+                "Couldn’t update overspending rollover."
+            }
+
+            BudgetReorderKind.COPY_BUDGET_MONTH -> {
+                "Couldn’t copy last month’s assignments."
+            }
+
+            BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
+                "Couldn’t apply this template."
+            }
+
+            BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
+                "Couldn’t apply the budget’s templates."
+            }
+
+            BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH -> {
+                "Couldn’t hold this money for next month."
+            }
+
+            BudgetReorderKind.RESET_BUDGET_HOLD -> {
+                "Couldn’t reset the next-month hold."
+            }
+
+            BudgetReorderKind.MOVE_BUDGET_MONEY -> {
+                "Couldn’t move money between categories."
+            }
+
+            BudgetReorderKind.CREATE_ACCOUNT -> {
+                "Couldn’t add this account."
+            }
+
+            BudgetReorderKind.CLOSE_ACCOUNT -> {
+                "Couldn’t close this account."
+            }
+
+            BudgetReorderKind.RENAME_ACCOUNT -> {
+                "Couldn’t rename this account."
+            }
+
+            BudgetReorderKind.REOPEN_ACCOUNT -> {
+                "Couldn’t reopen this account."
+            }
+
+            BudgetReorderKind.MOVE_ACCOUNT -> {
+                "Couldn’t reorder this account."
+            }
+
+            BudgetReorderKind.RENAME_PAYEE -> {
+                "Couldn’t rename this payee."
+            }
+
+            BudgetReorderKind.MERGE_PAYEE -> {
+                "Couldn’t merge this payee."
+            }
+
+            BudgetReorderKind.DELETE_PAYEE -> {
+                "Couldn’t delete this payee."
+            }
+
+            BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY -> {
+                "Couldn’t update this payee’s category."
+            }
+
             BudgetReorderKind.SET_CATEGORY_NOTE,
             BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
             BudgetReorderKind.SET_ACCOUNT_NOTE,
             BudgetReorderKind.SET_MONTH_NOTE,
-            -> "Couldn’t save this note."
-            BudgetReorderKind.IMPORT_STATEMENT -> "Couldn’t import this statement."
-            BudgetReorderKind.SET_BUDGET_TYPE -> "Couldn’t switch the budget type."
-            BudgetReorderKind.SET_ORDER -> "Couldn’t save the new order."
+            -> {
+                "Couldn’t save this note."
+            }
+
+            BudgetReorderKind.IMPORT_STATEMENT -> {
+                "Couldn’t import this statement."
+            }
+
+            BudgetReorderKind.SET_BUDGET_TYPE -> {
+                "Couldn’t switch the budget type."
+            }
+
+            BudgetReorderKind.SET_ORDER -> {
+                "Couldn’t save the new order."
+            }
         }
     return if (detail == null) fallback else "$detail."
 }

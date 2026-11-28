@@ -117,15 +117,25 @@ class GoalTemplateParityTest {
             val label = "$name step $index: $step".take(200)
             val result = step["result"]?.takeIf { it !is JsonNull }?.jsonObject
             when {
-                step["check"] != null -> assertEquals(expectedErrors(result), f.engine().check(), label)
-                step["note"] != null -> f.edits.setCategoryNote(f.id(step.text("note")), step.text("text"))
-                step["set"] != null ->
+                step["check"] != null -> {
+                    assertEquals(expectedErrors(result), f.engine().check(), label)
+                }
+
+                step["note"] != null -> {
+                    f.edits.setCategoryNote(f.id(step.text("note")), step.text("text"))
+                }
+
+                step["set"] != null -> {
                     f.edits.setBudgetAmount(
                         f.id(step.text("set")),
                         step.text("month"),
                         step.getValue("amount").jsonPrimitive.longOrNull!!,
                     )
-                else -> apply(f, step, result!!, label)
+                }
+
+                else -> {
+                    apply(f, step, result!!, label)
+                }
             }
         }
     }

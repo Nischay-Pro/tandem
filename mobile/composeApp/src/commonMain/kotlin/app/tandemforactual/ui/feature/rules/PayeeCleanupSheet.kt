@@ -110,8 +110,14 @@ internal fun PayeeCleanupSheet(
         ) {
             BodyText("Payees that look like the same merchant once dates, card numbers and store numbers are set aside.")
             when {
-                groups == null -> BodyText("Checking payees…")
-                groups.isEmpty() -> BodyText("No payees look alike.")
+                groups == null -> {
+                    BodyText("Checking payees…")
+                }
+
+                groups.isEmpty() -> {
+                    BodyText("No payees look alike.")
+                }
+
                 else -> {
                     val safe = groups.filter { it.safe }
                     if (safe.size > 1) {

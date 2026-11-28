@@ -138,13 +138,16 @@ private fun StatementReviewNotices(
     onFlipSigns: () -> Unit,
 ) {
     when {
-        review.repeatedStatement ->
+        review.repeatedStatement -> {
             InlineMessage("You’ve imported this statement before. Rows already in Actual are skipped.", InlineMessageKind.INFO)
-        review.alreadyImported > 0 ->
+        }
+
+        review.alreadyImported > 0 -> {
             InlineMessage(
                 "${statementCount(review.alreadyImported, "row")} already in Actual will be skipped.",
                 InlineMessageKind.INFO,
             )
+        }
     }
     if (flipSigns) {
         InlineMessage(

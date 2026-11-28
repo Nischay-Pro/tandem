@@ -130,9 +130,15 @@ internal fun RetirementSetupScreen(
             }, label = "retirement-step") { current ->
                 Column(verticalArrangement = Arrangement.spacedBy(TandemSpacing.medium)) {
                     when (current) {
-                        SetupStep.Countries -> CountriesStep(regions, lived, state.budgetCurrencyCode)
-                        is SetupStep.Country -> CountryStep(current.region, accounts, chosen, navigation)
-                        SetupStep.AboutYou ->
+                        SetupStep.Countries -> {
+                            CountriesStep(regions, lived, state.budgetCurrencyCode)
+                        }
+
+                        is SetupStep.Country -> {
+                            CountryStep(current.region, accounts, chosen, navigation)
+                        }
+
+                        SetupStep.AboutYou -> {
                             AboutYouStep(
                                 birthYear = birthYear,
                                 onBirthYearChange = { birthYear = it },
@@ -140,6 +146,7 @@ internal fun RetirementSetupScreen(
                                 onFamilyChange = { family = it },
                                 showFamily = needsFamilyCoverage(chosen.keys),
                             )
+                        }
                     }
                 }
             }

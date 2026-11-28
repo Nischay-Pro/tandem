@@ -274,17 +274,33 @@ private fun newTransactionSaveMessage(
     summary: BudgetSyncSummary?,
 ): String =
     when (status) {
-        "committed" -> "Transaction added to Actual."
-        "queued" -> "Saved on this device and waiting to sync."
-        "conflict" -> "This transaction is already in Actual. Sync the budget to check it."
-        "uncertain", "sending" -> "Tandem couldn’t confirm the save. Check Activity before adding it again."
-        "rejected" -> "Actual didn’t add this transaction. Review the details and try again."
-        else ->
+        "committed" -> {
+            "Transaction added to Actual."
+        }
+
+        "queued" -> {
+            "Saved on this device and waiting to sync."
+        }
+
+        "conflict" -> {
+            "This transaction is already in Actual. Sync the budget to check it."
+        }
+
+        "uncertain", "sending" -> {
+            "Tandem couldn’t confirm the save. Check Activity before adding it again."
+        }
+
+        "rejected" -> {
+            "Actual didn’t add this transaction. Review the details and try again."
+        }
+
+        else -> {
             if (summary == null) {
                 "Tandem couldn’t confirm the save. Check Activity before adding it again."
             } else {
                 "The transaction is saved on this device and is waiting to sync."
             }
+        }
     }
 
 private fun TransactionController.newTransactionWriteRequest(

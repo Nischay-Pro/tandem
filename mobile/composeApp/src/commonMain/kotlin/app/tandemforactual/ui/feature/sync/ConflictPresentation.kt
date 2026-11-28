@@ -76,17 +76,31 @@ internal fun conflictReasonMessage(
         return "Actual deleted this transaction while your edit was waiting."
     }
     return when (conflictType) {
-        "delete-versus-edit" -> "Actual changed this transaction while you were deleting it."
-        "same-field-edit", "changed-during-write", "stale-conflict" ->
+        "delete-versus-edit" -> {
+            "Actual changed this transaction while you were deleting it."
+        }
+
+        "same-field-edit", "changed-during-write", "stale-conflict" -> {
             changedFieldReason(conflictingFields)
-        "transaction-structure-changed-during-write" ->
+        }
+
+        "transaction-structure-changed-during-write" -> {
             "The transaction’s structure changed in Actual while your edit was waiting."
-        "transfer-pair-changed", "transfer-pair-changed-after-write" ->
+        }
+
+        "transfer-pair-changed", "transfer-pair-changed-after-write" -> {
             "The linked transfer changed in Actual while your edit was waiting."
-        "transfer-pair-incomplete", "transfer-pair-incomplete-after-write" ->
+        }
+
+        "transfer-pair-incomplete", "transfer-pair-incomplete-after-write" -> {
             "The other side of this transfer is missing in Actual."
-        "transaction-id-already-exists" -> "This transaction already exists in Actual."
-        else ->
+        }
+
+        "transaction-id-already-exists" -> {
+            "This transaction already exists in Actual."
+        }
+
+        else -> {
             if (action == "DELETE" && conflictingFields.isNotEmpty()) {
                 "Actual changed this transaction while you were deleting it."
             } else if (conflictingFields.isNotEmpty()) {
@@ -94,19 +108,39 @@ internal fun conflictReasonMessage(
             } else {
                 null
             }
+        }
     }
 }
 
 internal fun rejectedTransactionReferenceMessage(errorCode: String?): String =
     when (errorCode) {
-        "account-not-found" -> "This account no longer exists in Actual. Choose another account and try again."
-        "account-closed" -> "This account is closed in Actual. Choose another account and try again."
-        "payee-not-found" -> "This payee no longer exists in Actual. Choose another payee and try again."
-        "category-not-found" -> "This category no longer exists in Actual. Choose another category and try again."
-        "category-hidden" -> "This category is hidden in Actual. Choose another category and try again."
-        "split-child-field-not-editable" ->
+        "account-not-found" -> {
+            "This account no longer exists in Actual. Choose another account and try again."
+        }
+
+        "account-closed" -> {
+            "This account is closed in Actual. Choose another account and try again."
+        }
+
+        "payee-not-found" -> {
+            "This payee no longer exists in Actual. Choose another payee and try again."
+        }
+
+        "category-not-found" -> {
+            "This category no longer exists in Actual. Choose another category and try again."
+        }
+
+        "category-hidden" -> {
+            "This category is hidden in Actual. Choose another category and try again."
+        }
+
+        "split-child-field-not-editable" -> {
             "Actual manages this part through the full transaction. Update the full transaction in Actual."
-        else -> "Actual kept the previous value. Review the edit and try again."
+        }
+
+        else -> {
+            "Actual kept the previous value. Review the edit and try again."
+        }
     }
 
 private fun changedFieldReason(conflictingFields: List<String>): String {

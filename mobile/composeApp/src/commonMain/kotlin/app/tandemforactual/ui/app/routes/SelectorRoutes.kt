@@ -211,11 +211,15 @@ internal val selectorScreens: Map<AppRoute, @Composable (ScreenContext) -> Unit>
                     SelectorScreen(
                         values,
                         when {
-                            state.selectedBudgetId.isBlank() -> state.transactionCategory
-                            else ->
+                            state.selectedBudgetId.isBlank() -> {
+                                state.transactionCategory
+                            }
+
+                            else -> {
                                 state.transactionSplit
                                     ?.let { split -> split.lines.firstOrNull { it.key == split.pickingLineKey }?.categoryId }
                                     ?: state.newTransactionCategoryId
+                            }
                         },
                         live = isLiveBudget,
                         groups = categorySelectorGroups,

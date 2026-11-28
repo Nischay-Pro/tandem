@@ -152,14 +152,35 @@ private fun budgetMutationOutcomeExplanation(
     when {
         operation.status == "rejected" &&
             operation.lastErrorCode == "invalid_request" &&
-            mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT ->
+            mutation?.kind == BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
             "Actual did not receive this assignment. The saved value is unchanged."
-        operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) ->
+        }
+
+        operation.status == "rejected" && isRejectedBudgetOrderRequest(operation.lastErrorCode, mutation?.kind) -> {
             "Tandem rejected this reorder. Actual’s saved order did not change."
-        operation.status == "rejected" -> "Actual rejected this change. The previous value is unchanged."
-        operation.status == "uncertain" -> "Actual has not confirmed whether this change was saved."
-        operation.status == "conflict" -> "The budget changed since this edit. Review the latest value first."
-        operation.status == "queued" -> "Saved on this device. Waiting to sync."
-        operation.status == "sending" -> "Sending this change to Actual."
-        else -> "Review the change and its current status."
+        }
+
+        operation.status == "rejected" -> {
+            "Actual rejected this change. The previous value is unchanged."
+        }
+
+        operation.status == "uncertain" -> {
+            "Actual has not confirmed whether this change was saved."
+        }
+
+        operation.status == "conflict" -> {
+            "The budget changed since this edit. Review the latest value first."
+        }
+
+        operation.status == "queued" -> {
+            "Saved on this device. Waiting to sync."
+        }
+
+        operation.status == "sending" -> {
+            "Sending this change to Actual."
+        }
+
+        else -> {
+            "Review the change and its current status."
+        }
     }

@@ -156,12 +156,19 @@ private fun reportCallout(
     val selectedValue =
         selection?.let { selected ->
             when (kind) {
-                ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING ->
+                ReportKind.SPENDING_OVER_TIME, ReportKind.INCOME_AND_SPENDING -> {
                     monthly.getOrNull(selected.index)?.let { point ->
                         if (kind == ReportKind.SPENDING_OVER_TIME || !selected.income) point.spendingMinor else point.incomeMinor
                     }
-                ReportKind.NET_WORTH -> data.netWorth.getOrNull(selected.index)?.allAccountsMinor
-                else -> null
+                }
+
+                ReportKind.NET_WORTH -> {
+                    data.netWorth.getOrNull(selected.index)?.allAccountsMinor
+                }
+
+                else -> {
+                    null
+                }
             }
         }
     val categoryTotal = chartCategories.sumOf { it.spendingMinor.coerceAtLeast(0L) }

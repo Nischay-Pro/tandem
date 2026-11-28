@@ -69,9 +69,16 @@ internal fun StatementReview.applyItems(actions: Map<Int, StatementRowAction>): 
     rows.mapNotNull { review ->
         val row = review.row
         when (val action = actions[review.index] ?: review.defaultAction()) {
-            is StatementRowAction.Match ->
+            is StatementRowAction.Match -> {
                 StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId, action.transactionId)
-            StatementRowAction.Create -> StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId)
-            StatementRowAction.Duplicate, StatementRowAction.Later -> null
+            }
+
+            StatementRowAction.Create -> {
+                StatementImportItem(row.date, row.amountMinor, row.payeeName, row.notes, row.importedId)
+            }
+
+            StatementRowAction.Duplicate, StatementRowAction.Later -> {
+                null
+            }
         }
     }

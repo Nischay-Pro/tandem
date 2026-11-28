@@ -90,16 +90,26 @@ class BankIconFetcher private constructor(
             val status = response.status
             val location = response.headers[HttpHeaders.Location]
             when {
-                status.value in 300..399 && location != null -> Fetched.Redirect(location)
-                !status.isSuccess() || status == HttpStatusCode.NoContent -> null
-                (response.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0) > limit -> null
-                else ->
+                status.value in 300..399 && location != null -> {
+                    Fetched.Redirect(location)
+                }
+
+                !status.isSuccess() || status == HttpStatusCode.NoContent -> {
+                    null
+                }
+
+                (response.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0) > limit -> {
+                    null
+                }
+
+                else -> {
                     response
                         .bodyAsChannel()
                         .readRemaining(limit + 1L)
                         .readByteArray()
                         .takeIf { it.isNotEmpty() && it.size <= limit }
                         ?.let { Fetched.Body(it) }
+                }
             }
         }
 

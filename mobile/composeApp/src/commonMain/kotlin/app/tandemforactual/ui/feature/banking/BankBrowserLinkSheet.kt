@@ -77,13 +77,18 @@ internal fun BankBrowserLinkSheet(
                 label = "bank-link-step",
             ) { current ->
                 when (current) {
-                    LinkStep.Country -> CountryStep(active) { step = LinkStep.Banks(it) }
-                    is LinkStep.Banks ->
+                    LinkStep.Country -> {
+                        CountryStep(active) { step = LinkStep.Banks(it) }
+                    }
+
+                    is LinkStep.Banks -> {
                         BanksStep(active, current.country, mobileSession, onBack = { step = LinkStep.Country }) {
                             error = null
                             step = LinkStep.Waiting(it, null)
                         }
-                    is LinkStep.Waiting ->
+                    }
+
+                    is LinkStep.Waiting -> {
                         WaitingStep(
                             active,
                             current,
@@ -95,7 +100,11 @@ internal fun BankBrowserLinkSheet(
                                 step = LinkStep.Banks(current.institution.country)
                             },
                         )
-                    is LinkStep.Accounts -> AccountsStep(current) { onPickAccount(active, it) }
+                    }
+
+                    is LinkStep.Accounts -> {
+                        AccountsStep(current) { onPickAccount(active, it) }
+                    }
                 }
             }
         }

@@ -196,18 +196,29 @@ private suspend fun TandemMobileSession.reportLocalPurgeFailure(
     val restored = restoreSavedCredential(store, storedCredential)
     signOutError =
         when {
-            cacheTablesCleared && storedCredential != null && !restored ->
+            cacheTablesCleared && storedCredential != null && !restored -> {
                 "Cached budgets were cleared, but this device’s saved sign-in couldn’t be restored. Sign in again to continue."
-            cacheTablesCleared ->
+            }
+
+            cacheTablesCleared -> {
                 "Cached budgets were cleared, but sign-out couldn’t finish. Try again."
-            storedCredential != null && !restored ->
+            }
+
+            storedCredential != null && !restored -> {
                 "Couldn’t clear this device’s cached budgets or restore its saved sign-in. Your cached budgets are still here; sign in again to continue."
-            deviceRevoked ->
+            }
+
+            deviceRevoked -> {
                 "Couldn’t clear this device’s cached budgets. They’re still here; the server sign-in was revoked, so sign in again to sync."
-            storedCredential != null ->
+            }
+
+            storedCredential != null -> {
                 "Couldn’t clear this device’s cached budgets. They’re still here and saved sign-in was restored; try again."
-            else ->
+            }
+
+            else -> {
                 "Couldn’t clear this device’s cached budgets. They’re still here; try again."
+            }
         }
 }
 

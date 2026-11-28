@@ -15,7 +15,10 @@ internal fun parseQif(
                 if (current.isNotEmpty()) records += current
                 current = mutableMapOf()
             }
-            line.length > 1 && line[0].isLetter() -> current[line[0]] = line.drop(1).trim()
+
+            line.length > 1 && line[0].isLetter() -> {
+                current[line[0]] = line.drop(1).trim()
+            }
         }
     }
     if (current.isNotEmpty()) records += current
@@ -125,8 +128,14 @@ private val namedOfxEntities = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "qu
 
 private fun codePointText(codePoint: Int): String? =
     when {
-        codePoint !in 1..0x10FFFF || codePoint in 0xD800..0xDFFF -> null
-        codePoint < 0x10000 -> codePoint.toChar().toString()
+        codePoint !in 1..0x10FFFF || codePoint in 0xD800..0xDFFF -> {
+            null
+        }
+
+        codePoint < 0x10000 -> {
+            codePoint.toChar().toString()
+        }
+
         else -> {
             val offset = codePoint - 0x10000
             charArrayOf((0xD800 + (offset shr 10)).toChar(), (0xDC00 + (offset and 0x3FF)).toChar()).concatToString()

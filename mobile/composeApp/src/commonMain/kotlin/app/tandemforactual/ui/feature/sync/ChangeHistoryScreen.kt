@@ -213,20 +213,25 @@ private fun LazyListScope.changeHistoryStatusItems(
     isEmpty: Boolean,
 ) {
     when {
-        history == null && loading ->
+        history == null && loading -> {
             item(key = "loading") {
                 Box(Modifier.fillMaxWidth().padding(TandemSpacing.extraLarge), contentAlignment = Alignment.Center) {
                     TandemLoadingIndicator(Modifier.size(24.dp), tandemPalette.accent, 2.dp)
                 }
             }
-        history == null ->
+        }
+
+        history == null -> {
             item(key = "error") {
                 EmptyStateCard("Couldn’t read the change history", "Open the budget while connected to Actual, then try again.")
             }
-        isEmpty ->
+        }
+
+        isEmpty -> {
             item(key = "empty") {
                 EmptyStateCard("No changes yet", "Edits made on any device after this one opened the budget appear here.")
             }
+        }
     }
 }
 
@@ -235,15 +240,23 @@ private fun undoNotice(
     budgetActionMessage: String?,
 ): Pair<String, InlineMessageKind> =
     when {
-        result == null ->
+        result == null -> {
             (budgetActionMessage ?: "Couldn’t undo this change.") to
                 InlineMessageKind.ERROR
-        result.skipped > 0 && result.reverted == 0 ->
+        }
+
+        result.skipped > 0 && result.reverted == 0 -> {
             "Nothing to undo. These fields were changed again later." to InlineMessageKind.WARNING
-        result.skipped > 0 ->
+        }
+
+        result.skipped > 0 -> {
             "Undone, except fields that were changed again later." to
                 InlineMessageKind.SUCCESS
-        else -> "Change undone." to InlineMessageKind.SUCCESS
+        }
+
+        else -> {
+            "Change undone." to InlineMessageKind.SUCCESS
+        }
     }
 
 private enum class ChangeFilter(

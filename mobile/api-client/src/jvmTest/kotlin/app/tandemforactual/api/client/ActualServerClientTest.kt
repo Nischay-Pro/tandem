@@ -30,12 +30,17 @@ class ActualServerClientTest {
                         assertEquals("session", request.headers["x-actual-token"])
                     }
                     when (path) {
-                        "/actual/account/needs-bootstrap" -> respond("""{"data":{"bootstrapped":true}}""")
-                        "/actual/account/login-methods" ->
+                        "/actual/account/needs-bootstrap" -> {
+                            respond("""{"data":{"bootstrapped":true}}""")
+                        }
+
+                        "/actual/account/login-methods" -> {
                             respond(
                                 """{"methods":[{"method":"password","active":1},
                                    {"method":"openid","active":true,"displayName":"SSO"},{}]}""",
                             )
+                        }
+
                         "/actual/account/login" -> {
                             val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
                             if ("openid" in body) {
@@ -46,30 +51,42 @@ class ActualServerClientTest {
                                 respond("""{"data":{"token":"session"}}""")
                             }
                         }
-                        "/actual/account/validate" -> respond("""{"status":"ok"}""")
-                        "/actual/sync/list-user-files" ->
+
+                        "/actual/account/validate" -> {
+                            respond("""{"status":"ok"}""")
+                        }
+
+                        "/actual/sync/list-user-files" -> {
                             respond(
                                 """{"data":[{"fileId":"file","groupId":"group","name":"Budget","deleted":0},
                                    {"fileId":"old","deleted":true}]}""",
                             )
+                        }
+
                         "/actual/sync/get-user-file-info" -> {
                             assertEquals("file", request.headers["x-actual-file-id"])
                             respond("""{"data":{"groupId":"group","name":"Budget","encryptMeta":{"iv":"value"}}}""")
                         }
+
                         "/actual/sync/download-user-file" -> {
                             assertEquals("file", request.headers["x-actual-file-id"])
                             respond(byteArrayOf(1, 2))
                         }
+
                         "/actual/sync/user-get-key" -> {
                             assertTrue("file" in (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
                             respond("""{"data":{"id":"key","salt":"salt","test":"test"}}""")
                         }
+
                         "/actual/sync/sync" -> {
                             val sync = SyncProtocol.decodeRequest((request.body as OutgoingContent.ByteArrayContent).bytes())
                             assertEquals("file", sync.fileId)
                             respond(SyncProtocol.encode(SyncResponse(emptyList(), "{}")))
                         }
-                        else -> error("Unexpected request to $path")
+
+                        else -> {
+                            error("Unexpected request to $path")
+                        }
                     }
                 }
             HttpClient(engine).use { http ->

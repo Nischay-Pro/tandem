@@ -37,8 +37,11 @@ internal fun accountListSubtitle(
     lastSyncedAtEpochMs: Long?,
 ): String =
     when {
-        account.closed -> "Closed"
-        else ->
+        account.closed -> {
+            "Closed"
+        }
+
+        else -> {
             buildList {
                 if (account.offBudget) add("Off budget")
                 val syncState =
@@ -46,6 +49,7 @@ internal fun accountListSubtitle(
                         ?: "Not synced yet"
                 add(syncState)
             }.joinToString(" · ")
+        }
     }
 
 internal fun accountBalanceAccessibilityDescription(

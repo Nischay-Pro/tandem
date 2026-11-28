@@ -26,20 +26,37 @@ internal fun validateTransactionDate(
     val confirmationBoundary = addCalendarYears(currentDate, TRANSACTION_DATE_CONFIRMATION_YEARS)
 
     return when {
-        date < MIN_TRANSACTION_DATE -> TransactionDateValidation(TransactionDateValidationStatus.BEFORE_MINIMUM, date)
-        date > confirmationBoundary && confirmedFutureDate != date ->
+        date < MIN_TRANSACTION_DATE -> {
+            TransactionDateValidation(TransactionDateValidationStatus.BEFORE_MINIMUM, date)
+        }
+
+        date > confirmationBoundary && confirmedFutureDate != date -> {
             TransactionDateValidation(TransactionDateValidationStatus.CONFIRMATION_REQUIRED, date)
-        else -> TransactionDateValidation(TransactionDateValidationStatus.VALID, date)
+        }
+
+        else -> {
+            TransactionDateValidation(TransactionDateValidationStatus.VALID, date)
+        }
     }
 }
 
 internal fun transactionDateValidationMessage(validation: TransactionDateValidation): String? =
     when (validation.status) {
-        TransactionDateValidationStatus.VALID -> null
-        TransactionDateValidationStatus.INVALID -> "Choose a valid transaction date."
-        TransactionDateValidationStatus.BEFORE_MINIMUM ->
+        TransactionDateValidationStatus.VALID -> {
+            null
+        }
+
+        TransactionDateValidationStatus.INVALID -> {
+            "Choose a valid transaction date."
+        }
+
+        TransactionDateValidationStatus.BEFORE_MINIMUM -> {
             "Choose a date on or after ${displayTransactionDate(MIN_TRANSACTION_DATE)}."
-        TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> "Confirm this future date before saving."
+        }
+
+        TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> {
+            "Confirm this future date before saving."
+        }
     }
 
 internal fun normalizeTransactionDate(value: String): String? {

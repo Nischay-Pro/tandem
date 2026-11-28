@@ -66,6 +66,7 @@ internal fun budgetMutationAmountChanges(
                 ),
             )
         }
+
         BudgetReorderKind.MOVE_BUDGET_MONEY -> {
             val fromId = payload.stringValue("fromCategoryId") ?: return emptyList()
             val toId = payload.stringValue("toCategoryId") ?: return emptyList()
@@ -81,7 +82,10 @@ internal fun budgetMutationAmountChanges(
                 formatAmount,
             )
         }
-        else -> emptyList()
+
+        else -> {
+            emptyList()
+        }
     }
 }
 

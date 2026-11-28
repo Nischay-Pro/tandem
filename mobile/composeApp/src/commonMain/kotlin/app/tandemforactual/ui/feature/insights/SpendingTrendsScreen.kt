@@ -90,16 +90,20 @@ internal fun SpendingTrendsScreen(
         },
         secondary = {
             when {
-                report.baselineMonths == 0 ->
+                report.baselineMonths == 0 -> {
                     EmptyStateCard(
                         "Not enough history yet",
                         "Trends appear once there’s a month of spending before ${state.selectedMonth}.",
                     )
-                report.categories.isEmpty() ->
+                }
+
+                report.categories.isEmpty() -> {
                     EmptyStateCard(
                         "No spending to compare",
                         "Nothing was spent in ${state.selectedMonth} or before it.",
                     )
+                }
+
                 else -> {
                     CategoryTrendsSection(state, report, names, baseline, comparedWith)
                 }

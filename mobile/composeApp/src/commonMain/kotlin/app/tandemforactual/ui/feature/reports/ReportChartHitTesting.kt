@@ -140,11 +140,17 @@ private fun incomeAndSpendingSelectionAt(
     val incomeLeft = left
     val spendingLeft = left + barWidth + slot * 0.08f
     return when {
-        tap.x in incomeLeft..(incomeLeft + barWidth) && tap.y in (chartBottom - incomeHeight)..chartBottom ->
+        tap.x in incomeLeft..(incomeLeft + barWidth) && tap.y in (chartBottom - incomeHeight)..chartBottom -> {
             ReportChartSelection(index, income = true)
-        tap.x in spendingLeft..(spendingLeft + barWidth) && tap.y in (chartBottom - spendingHeight)..chartBottom ->
+        }
+
+        tap.x in spendingLeft..(spendingLeft + barWidth) && tap.y in (chartBottom - spendingHeight)..chartBottom -> {
             ReportChartSelection(index, income = false)
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 }
 
@@ -171,6 +177,7 @@ internal fun reportSelectionAnchor(
             val barHeight = chartHeight * (value.toDouble() / maxValue).toFloat()
             return Offset(selection.index * slot + slot / 2f, chartBottom - barHeight)
         }
+
         ReportKind.INCOME_AND_SPENDING -> {
             val point = monthly.getOrNull(selection.index) ?: return null
             val maxValue =
@@ -185,9 +192,14 @@ internal fun reportSelectionAnchor(
             val barHeight = chartHeight * (value.coerceAtLeast(0L).toDouble() / maxValue).toFloat()
             return Offset(barLeft + barWidth / 2f, chartBottom - barHeight)
         }
-        ReportKind.NET_WORTH ->
+
+        ReportKind.NET_WORTH -> {
             return netWorthPointOffsets(netWorth.map(NetWorthPoint::allAccountsMinor), axisValues, width, inset, chartBottom)
                 .getOrNull(selection.index)
-        else -> return null
+        }
+
+        else -> {
+            return null
+        }
     }
 }

@@ -113,14 +113,16 @@ private fun syncStatusPresentation(
 ): SyncStatusPresentation {
     val palette = tandemPalette
     return when {
-        isSyncing ->
+        isSyncing -> {
             SyncStatusPresentation(
                 title = "Syncing now",
                 detail = "Getting the latest from Actual and sending your changes.",
                 icon = Lucide.CloudSync,
                 color = palette.syncing,
             )
-        !isServerReachable ->
+        }
+
+        !isServerReachable -> {
             SyncStatusPresentation(
                 title = "You’re offline",
                 detail =
@@ -132,7 +134,9 @@ private fun syncStatusPresentation(
                 icon = Lucide.CloudOff,
                 color = palette.warning,
             )
-        syncError != null ->
+        }
+
+        syncError != null -> {
             SyncStatusPresentation(
                 title = "Couldn’t finish syncing",
                 detail =
@@ -144,34 +148,43 @@ private fun syncStatusPresentation(
                 icon = Lucide.CloudAlert,
                 color = palette.negative,
             )
-        attentionCount > 0 ->
+        }
+
+        attentionCount > 0 -> {
             SyncStatusPresentation(
                 title = "Needs review",
                 detail = "$attentionCount ${if (attentionCount == 1) "change needs" else "changes need"} a decision.",
                 icon = Lucide.CircleAlert,
                 color = palette.warning,
             )
-        waitingCount > 0 ->
+        }
+
+        waitingCount > 0 -> {
             SyncStatusPresentation(
                 title = "Ready to sync",
                 detail = "$waitingCount ${if (waitingCount == 1) "change is" else "changes are"} waiting.",
                 icon = Lucide.CloudSync,
                 color = palette.syncing,
             )
-        lastSyncedAtEpochMs != null ->
+        }
+
+        lastSyncedAtEpochMs != null -> {
             SyncStatusPresentation(
                 title = "Up to date",
                 detail = "Your budget is in sync.",
                 icon = Lucide.CloudCheck,
                 color = palette.positive,
             )
-        else ->
+        }
+
+        else -> {
             SyncStatusPresentation(
                 title = "Ready to sync",
                 detail = "Your budget is saved on this device.",
                 icon = Lucide.Cloud,
                 color = palette.accent,
             )
+        }
     }
 }
 

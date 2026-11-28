@@ -278,10 +278,17 @@ internal fun automationDate(
     val value = automationInput(text) ?: return todayIso
     val validation = validateTransactionDate(value, todayIso, confirmedFutureDate = null)
     return when (validation.status) {
-        TransactionDateValidationStatus.VALID -> checkNotNull(validation.date)
-        TransactionDateValidationStatus.CONFIRMATION_REQUIRED ->
+        TransactionDateValidationStatus.VALID -> {
+            checkNotNull(validation.date)
+        }
+
+        TransactionDateValidationStatus.CONFIRMATION_REQUIRED -> {
             throw AutomationException(AutomationErrorCode.DATE, "That date is too far ahead. Use a date in the next few years.")
-        else -> throw AutomationException(AutomationErrorCode.DATE, "Use a date written as year-month-day, such as $todayIso.")
+        }
+
+        else -> {
+            throw AutomationException(AutomationErrorCode.DATE, "Use a date written as year-month-day, such as $todayIso.")
+        }
     }
 }
 

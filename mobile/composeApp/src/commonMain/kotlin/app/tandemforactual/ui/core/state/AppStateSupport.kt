@@ -56,7 +56,7 @@ internal fun transactionFormHasUnsavedChanges(
 ): Boolean {
     val amount = state.parseAmountMinorUnits(state.transactionAmount)
     return when (route) {
-        AppRoute.NEW_TRANSACTION ->
+        AppRoute.NEW_TRANSACTION -> {
             amount == null ||
                 amount != 0L ||
                 state.newTransactionAccountId != state.newTransactionInitialAccountId ||
@@ -69,7 +69,9 @@ internal fun transactionFormHasUnsavedChanges(
                 state.transactionType != "Spending" ||
                 state.transactionNotes.isNotBlank() ||
                 state.transactionSplit != null
-        AppRoute.EDIT_TRANSACTION ->
+        }
+
+        AppRoute.EDIT_TRANSACTION -> {
             amount == null ||
                 state.selectedTransactionAmountMinor?.let { amount != kotlin.math.abs(it) } != false ||
                 state.transactionType !=
@@ -85,7 +87,11 @@ internal fun transactionFormHasUnsavedChanges(
                 state.transactionAccount != state.selectedTransactionAccountName ||
                 state.transactionPayee != state.selectedTransactionPayeeName ||
                 state.transactionCategory != state.selectedTransactionCategoryName
-        else -> false
+        }
+
+        else -> {
+            false
+        }
     }
 }
 
@@ -107,6 +113,7 @@ internal fun restoreTransactionFormBaseline(
             state.transactionNotes = ""
             state.transactionSplit = null
         }
+
         AppRoute.EDIT_TRANSACTION -> {
             state.selectedTransactionAmountMinor?.let { state.transactionAmount = state.formatAmount(kotlin.math.abs(it)) }
             state.transactionType = transactionTypeForSelection(state.selectedTransactionIsTransfer, state.selectedTransactionAmountMinor)
@@ -119,7 +126,10 @@ internal fun restoreTransactionFormBaseline(
             state.transactionDate = state.selectedTransactionDate
             state.transactionNotes = state.selectedTransactionNotes
         }
-        else -> Unit
+
+        else -> {
+            Unit
+        }
     }
 }
 

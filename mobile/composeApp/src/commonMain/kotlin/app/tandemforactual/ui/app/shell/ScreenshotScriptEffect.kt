@@ -56,7 +56,10 @@ private suspend fun showScriptedScreen(
     val navigation = ctx.navigation
     val select = screenshotScript.select
     when (screenshotScript.screen) {
-        "budget" -> state.budgetScrollToSummaryRequested = true
+        "budget" -> {
+            state.budgetScrollToSummaryRequested = true
+        }
+
         "activity" -> {
             navigation.selectTab(AppRoute.ACTIVITY)
             delay(SCREENSHOT_SETTLE_MILLIS)
@@ -64,20 +67,28 @@ private suspend fun showScriptedScreen(
                 openTransaction(state, navigation, it, isLive = true, navigate = false)
             }
         }
+
         "accounts" -> {
             ctx.shell.liveAccounts
                 .firstOrNull { it.name == select }
                 ?.let { state.selectedAccountId = it.id }
             navigation.selectTab(AppRoute.ACCOUNTS)
         }
-        "reports" -> navigation.selectTab(AppRoute.REPORTS)
+
+        "reports" -> {
+            navigation.selectTab(AppRoute.REPORTS)
+        }
+
         "category" -> {
             ctx.mobileSession.categoryRecords.firstOrNull { it.recordName() == select }?.let {
                 state.selectedCategoryId = it.recordId
                 navigation.open(AppRoute.CATEGORY_DETAIL)
             }
         }
-        "add" -> navigation.newTransaction(null)
+
+        "add" -> {
+            navigation.newTransaction(null)
+        }
     }
 }
 

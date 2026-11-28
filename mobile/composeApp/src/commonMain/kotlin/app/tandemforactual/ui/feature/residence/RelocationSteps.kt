@@ -54,31 +54,40 @@ private fun stepText(
     to: Region,
 ): StepText =
     when (step) {
-        is RelocationStep.EmployerPlanEnds ->
+        is RelocationStep.EmployerPlanEnds -> {
             StepText(
                 Lucide.BriefcaseBusiness,
                 planName(step.planId),
                 "Run through your employer. Contributions usually stop when that job ends; the balance and its history stay.",
             )
-        is RelocationStep.ReviewContributions ->
+        }
+
+        is RelocationStep.ReviewContributions -> {
             StepText(
                 Lucide.Landmark,
                 planName(step.planId),
                 "Still yours. Check whether you can keep paying in while you live in ${to.displayName}.",
             )
-        is RelocationStep.ConsiderPlan ->
+        }
+
+        is RelocationStep.ConsiderPlan -> {
             StepText(Lucide.Plus, planName(step.planId), "Offered in ${to.displayName}. Add it if you’re eligible.")
-        is RelocationStep.SplitTaxYear ->
+        }
+
+        is RelocationStep.SplitTaxYear -> {
             StepText(
                 Lucide.CalendarCheck,
                 "The tax year you move",
                 "It usually counts in both ${step.from.displayName} and ${step.to.displayName}, whose tax years may start on " +
                     "different dates. Worth checking with a professional.",
             )
-        is RelocationStep.NewCurrency ->
+        }
+
+        is RelocationStep.NewCurrency -> {
             StepText(
                 Lucide.Coins,
                 "Accounts in ${step.currency}",
                 "Set the currency of accounts you open there, so net worth converts them with dated rates.",
             )
+        }
     }

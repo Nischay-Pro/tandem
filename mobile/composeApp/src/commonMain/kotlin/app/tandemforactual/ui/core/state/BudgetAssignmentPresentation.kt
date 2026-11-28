@@ -14,22 +14,27 @@ internal data class BudgetAssignmentPresentation(
 
 internal fun presentBudgetAssignment(amountMinor: Long): BudgetAssignmentPresentation =
     when {
-        amountMinor < 0 ->
+        amountMinor < 0 -> {
             BudgetAssignmentPresentation(
                 label = "Overbudgeted",
                 amountMinor = if (amountMinor == Long.MIN_VALUE) Long.MAX_VALUE else -amountMinor,
                 kind = BudgetAssignmentKind.OVERBUDGETED,
             )
-        amountMinor > 0 ->
+        }
+
+        amountMinor > 0 -> {
             BudgetAssignmentPresentation(
                 label = "To Budget",
                 amountMinor = amountMinor,
                 kind = BudgetAssignmentKind.TO_BUDGET,
             )
-        else ->
+        }
+
+        else -> {
             BudgetAssignmentPresentation(
                 label = "All money assigned",
                 amountMinor = 0,
                 kind = BudgetAssignmentKind.ALL_ASSIGNED,
             )
+        }
     }

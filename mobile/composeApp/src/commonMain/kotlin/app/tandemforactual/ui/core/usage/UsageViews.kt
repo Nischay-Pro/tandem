@@ -121,10 +121,17 @@ internal fun UsageContent(
         contentKey = { it::class },
     ) { shown ->
         when (shown) {
-            UsageState.Checking -> UsageChecking()
-            UsageState.Unavailable ->
+            UsageState.Checking -> {
+                UsageChecking()
+            }
+
+            UsageState.Unavailable -> {
                 InlineMessage("Couldn’t count where this is used on this device.", InlineMessageKind.WARNING)
-            is UsageState.Ready -> UsageRows(usageLines(shown.usage, subject, formatBalance), linkFor)
+            }
+
+            is UsageState.Ready -> {
+                UsageRows(usageLines(shown.usage, subject, formatBalance), linkFor)
+            }
         }
     }
 }

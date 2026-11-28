@@ -1,5 +1,6 @@
 package app.tandemforactual.api.client
 
+import app.tandemforactual.data.actual.ChangeSet
 import app.tandemforactual.data.actual.DiscoveredSchedule
 import app.tandemforactual.data.actual.HealthIssue
 import app.tandemforactual.data.actual.HealthRow
@@ -8,6 +9,12 @@ import app.tandemforactual.data.actual.UndoResult
 import app.tandemforactual.data.planning.AccountMovement
 import app.tandemforactual.data.planning.TaggedPayment
 import kotlinx.serialization.json.JsonObject
+
+/** The budget's recent edits, and which device id is this one so the list can say "This device". */
+data class BudgetChangeHistory(
+    val deviceNode: String,
+    val changes: List<ChangeSet>,
+)
 
 suspend fun TandemApiClient.budgetChangeHistory(
     budgetId: String,

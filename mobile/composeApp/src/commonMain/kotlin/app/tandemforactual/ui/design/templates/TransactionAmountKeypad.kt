@@ -151,8 +151,14 @@ internal fun handleAmountKeypadKey(
 ): Boolean {
     if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
     when (event.key) {
-        Key.Backspace, Key.Delete -> actions.onDelete()
-        Key.Enter, Key.NumPadEnter -> actions.onDone()
+        Key.Backspace, Key.Delete -> {
+            actions.onDelete()
+        }
+
+        Key.Enter, Key.NumPadEnter -> {
+            actions.onDone()
+        }
+
         else -> {
             val character = event.utf16CodePoint.takeIf { it > 0 }?.toChar() ?: amountKeypadKeyCharacters[event.key]
             return character != null && handleAmountKeypadCharacter(character, actions)

@@ -128,9 +128,13 @@ class ListDetailContinuityTest {
             CompositionLocalProvider(LocalWindowHinge provides hinge) {
                 ListDetailContinuityEffect(bounds, routes.map { it.route }, { selected != null }) { change ->
                     when (change) {
-                        ListDetailChange.SHOW_PANE -> routes.removeAt(routes.lastIndex)
-                        ListDetailChange.SHOW_PAGE ->
+                        ListDetailChange.SHOW_PANE -> {
+                            routes.removeAt(routes.lastIndex)
+                        }
+
+                        ListDetailChange.SHOW_PAGE -> {
                             routes.add(AppRouteEntry(routes.last().route.listDetailPage()!!, routes.size + 1L))
+                        }
                     }
                 }
                 Box(
@@ -140,8 +144,11 @@ class ListDetailContinuityTest {
                         .onGloballyPositioned { bounds = Rect(it.positionInWindow(), it.size.toSize()) },
                 ) {
                     when (routes.last().route) {
-                        AppRoute.ACCOUNT_DETAIL -> Text("page $selected")
-                        else ->
+                        AppRoute.ACCOUNT_DETAIL -> {
+                            Text("page $selected")
+                        }
+
+                        else -> {
                             ListDetailPanes(
                                 selected,
                                 "Choose an account",
@@ -149,6 +156,7 @@ class ListDetailContinuityTest {
                                 list = { inPane -> Text(if (inPane) "list beside detail" else "list alone") },
                                 detail = { Box(Modifier.fillMaxSize()) { Text("detail $selected") } },
                             )
+                        }
                     }
                 }
             }

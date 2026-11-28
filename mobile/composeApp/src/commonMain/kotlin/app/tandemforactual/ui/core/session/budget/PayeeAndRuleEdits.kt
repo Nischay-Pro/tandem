@@ -100,10 +100,22 @@ internal suspend fun BudgetEdits.manageBudgetPayee(
     }
     val kind =
         when (action) {
-            "rename" -> BudgetReorderKind.RENAME_PAYEE
-            "merge" -> BudgetReorderKind.MERGE_PAYEE
-            "delete" -> BudgetReorderKind.DELETE_PAYEE
-            "default-category" -> BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY
+            "rename" -> {
+                BudgetReorderKind.RENAME_PAYEE
+            }
+
+            "merge" -> {
+                BudgetReorderKind.MERGE_PAYEE
+            }
+
+            "delete" -> {
+                BudgetReorderKind.DELETE_PAYEE
+            }
+
+            "default-category" -> {
+                BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY
+            }
+
             else -> {
                 host.feedback.budgetActionMessage = "This payee change isn’t supported."
                 return false

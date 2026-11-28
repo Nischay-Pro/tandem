@@ -115,8 +115,14 @@ private fun ProviderCard(
             settingUp -> {
                 { onSetUp?.invoke((providerState as? BankProviderState.NotSetUp)?.source) }
             }
-            !browser && (providerState is BankProviderState.Ready || providerState is BankProviderState.Loading) -> null
-            else -> onLoad
+
+            !browser && (providerState is BankProviderState.Ready || providerState is BankProviderState.Loading) -> {
+                null
+            }
+
+            else -> {
+                onLoad
+            }
         }
     SectionCard(
         provider.displayName,
@@ -149,15 +155,33 @@ internal fun providerDetail(
     setsUpHere: Boolean,
 ): String =
     when {
-        provider.linkMethod == BankLinkMethod.BROWSER -> "Sign in at your bank in the browser, then choose which accounts to link."
-        providerState is BankProviderState.NotSetUp && providerState.source == BankCredentialSource.BUDGET ->
+        provider.linkMethod == BankLinkMethod.BROWSER -> {
+            "Sign in at your bank in the browser, then choose which accounts to link."
+        }
+
+        providerState is BankProviderState.NotSetUp && providerState.source == BankCredentialSource.BUDGET -> {
             "This budget’s own ${provider.displayName} credentials aren’t working. Set them up again."
-        providerState is BankProviderState.NotSetUp && setsUpHere -> "Not set up for this budget yet. Paste a setup token to start."
-        providerState is BankProviderState.NotSetUp -> "Not set up on your Actual server yet. Add it in Actual’s settings."
-        providerState is BankProviderState.Failed -> providerState.message
-        providerState is BankProviderState.Ready && providerState.source == BankCredentialSource.BUDGET ->
+        }
+
+        providerState is BankProviderState.NotSetUp && setsUpHere -> {
+            "Not set up for this budget yet. Paste a setup token to start."
+        }
+
+        providerState is BankProviderState.NotSetUp -> {
+            "Not set up on your Actual server yet. Add it in Actual’s settings."
+        }
+
+        providerState is BankProviderState.Failed -> {
+            providerState.message
+        }
+
+        providerState is BankProviderState.Ready && providerState.source == BankCredentialSource.BUDGET -> {
             "Accounts from this budget’s own credentials"
-        else -> "Accounts your Actual server can see"
+        }
+
+        else -> {
+            "Accounts your Actual server can see"
+        }
     }
 
 /** Whose SimpleFIN token the budget uses, with a way to change it. */

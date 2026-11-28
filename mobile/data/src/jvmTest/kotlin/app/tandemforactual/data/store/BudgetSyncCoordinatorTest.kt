@@ -42,7 +42,7 @@ class BudgetSyncCoordinatorTest {
 
                 remote.changeHandler = { _, generation, cursor, through, _ ->
                     when {
-                        cursor == "1" && through == null ->
+                        cursor == "1" && through == null -> {
                             changePage(
                                 generation = generation,
                                 current = "3",
@@ -51,7 +51,9 @@ class BudgetSyncCoordinatorTest {
                                 hasMore = true,
                                 changes = listOf(BudgetChange.Upsert(transaction(revision = "revision-2", amount = 1200L))),
                             )
-                        cursor == "2" && through == "3" ->
+                        }
+
+                        cursor == "2" && through == "3" -> {
                             changePage(
                                 generation = generation,
                                 current = "3",
@@ -60,7 +62,11 @@ class BudgetSyncCoordinatorTest {
                                 hasMore = false,
                                 changes = listOf(BudgetChange.Delete(BUDGET, "transaction", "txn-2", "revision-2")),
                             )
-                        else -> error("Unexpected feed cursor $cursor/$through")
+                        }
+
+                        else -> {
+                            error("Unexpected feed cursor $cursor/$through")
+                        }
                     }
                 }
 

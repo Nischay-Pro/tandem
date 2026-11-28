@@ -95,12 +95,19 @@ internal fun reviewStatement(
             val own = candidates[index]
             val duplicate = duplicates[index]
             when {
-                index in existing -> StatementRowReview(index, row, StatementRowStatus.IMPORTED, existing = existing[index])
-                duplicate?.second == true ->
+                index in existing -> {
+                    StatementRowReview(index, row, StatementRowStatus.IMPORTED, existing = existing[index])
+                }
+
+                duplicate?.second == true -> {
                     StatementRowReview(index, row, StatementRowStatus.DUPLICATE, duplicateOf = duplicate.first, provenDuplicate = true)
-                own.size == 1 && claims[own.single().transaction.id] == 1 ->
+                }
+
+                own.size == 1 && claims[own.single().transaction.id] == 1 -> {
                     StatementRowReview(index, row, StatementRowStatus.MATCHED, own, duplicateOf = duplicate?.first)
-                own.isNotEmpty() ->
+                }
+
+                own.isNotEmpty() -> {
                     StatementRowReview(
                         index,
                         row,
@@ -109,8 +116,15 @@ internal fun reviewStatement(
                         group = groups[index],
                         duplicateOf = duplicate?.first,
                     )
-                duplicate != null -> StatementRowReview(index, row, StatementRowStatus.DUPLICATE, duplicateOf = duplicate.first)
-                else -> StatementRowReview(index, row, StatementRowStatus.NEW, reason = noMatchReason(row, ledger, claimed))
+                }
+
+                duplicate != null -> {
+                    StatementRowReview(index, row, StatementRowStatus.DUPLICATE, duplicateOf = duplicate.first)
+                }
+
+                else -> {
+                    StatementRowReview(index, row, StatementRowStatus.NEW, reason = noMatchReason(row, ledger, claimed))
+                }
             }
         }
     val unmatched = reviewed.filter { it.status == StatementRowStatus.NEW }

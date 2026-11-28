@@ -91,13 +91,19 @@ private class ExpressionParser(
         while (true) {
             value =
                 when (peek()) {
-                    '*' -> value * (next().let { factor() } ?: return null) / unit
+                    '*' -> {
+                        value * (next().let { factor() } ?: return null) / unit
+                    }
+
                     '/' -> {
                         next()
                         val divisor = factor()?.takeIf { it != 0.0 } ?: return null
                         value / divisor * unit
                     }
-                    else -> return value
+
+                    else -> {
+                        return value
+                    }
                 }
         }
     }

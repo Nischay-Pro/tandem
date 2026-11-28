@@ -78,14 +78,21 @@ internal fun BudgetReorderQueueState.complete(
     val nextCount = (current.pendingCount - 1).coerceAtLeast(0)
     val nextStatus =
         when {
-            refreshFailed ->
+            refreshFailed -> {
                 current.copy(
                     pendingCount = nextCount,
                     message = message ?: REFRESH_FAILED_MESSAGE,
                     warning = true,
                 )
-            nextCount == 0 -> BudgetReorderStatus()
-            else -> current.copy(pendingCount = nextCount)
+            }
+
+            nextCount == 0 -> {
+                BudgetReorderStatus()
+            }
+
+            else -> {
+                current.copy(pendingCount = nextCount)
+            }
         }
     return copy(
         moves = remainingMoves,

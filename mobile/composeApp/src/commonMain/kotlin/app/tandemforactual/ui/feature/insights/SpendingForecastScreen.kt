@@ -232,10 +232,17 @@ private fun ForecastRow(
                 "${state.formatCurrency(category.spentMinor)} spent",
                 limit?.let { "${state.formatCurrency(it)} budgeted" } ?: "Nothing budgeted",
                 when (category.basis) {
-                    ForecastBasis.HISTORY ->
+                    ForecastBasis.HISTORY -> {
                         "from ${category.historyMonths} ${if (category.historyMonths == 1) "month" else "months"} of history"
-                    ForecastBasis.PACE -> "from this month’s pace"
-                    ForecastBasis.FINAL -> null
+                    }
+
+                    ForecastBasis.PACE -> {
+                        "from this month’s pace"
+                    }
+
+                    ForecastBasis.FINAL -> {
+                        null
+                    }
                 },
             ).joinToString(" · "),
             color = palette.muted,
@@ -253,14 +260,19 @@ private fun warning(
     val limit = category.limitMinor ?: 0
     val runOut = category.runOutDate
     return when {
-        category.status == ForecastStatus.OVER ->
+        category.status == ForecastStatus.OVER -> {
             "$name is already ${state.formatCurrency(category.spentMinor - limit)} over budget."
+        }
+
         runOut != null -> {
             val early = daysInMonth - runOut.substring(8, 10).toInt()
             val days = if (early == 1) "1 day" else "$early days"
             val whenText = if (early <= 0) "by the end of the month" else "around ${formatLiveDate(runOut)}, $days early"
             "At this pace, $name could run out $whenText and end ${state.formatCurrency(category.projectedMinor - limit)} over."
         }
-        else -> "$name could end ${state.formatCurrency(category.projectedMinor - limit)} over budget."
+
+        else -> {
+            "$name could end ${state.formatCurrency(category.projectedMinor - limit)} over budget."
+        }
     }
 }

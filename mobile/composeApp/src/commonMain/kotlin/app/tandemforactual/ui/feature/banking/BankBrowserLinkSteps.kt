@@ -114,7 +114,7 @@ internal fun BanksStep(
     }
     val list = banks
     when {
-        failure != null ->
+        failure != null -> {
             EmptyStateCard(
                 "Couldn’t load banks",
                 failure,
@@ -122,8 +122,13 @@ internal fun BanksStep(
                 "Choose another country",
                 onBack,
             )
-        list == null -> CenteredProgress("Loading banks in ${countryName(country)}…")
-        list.isEmpty() ->
+        }
+
+        list == null -> {
+            CenteredProgress("Loading banks in ${countryName(country)}…")
+        }
+
+        list.isEmpty() -> {
             EmptyStateCard(
                 "No banks found",
                 "${provider.displayName} didn’t list any banks in ${countryName(country)}.",
@@ -131,6 +136,8 @@ internal fun BanksStep(
                 "Choose another country",
                 onBack,
             )
+        }
+
         else -> {
             val shown = list.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
             StepColumn { bankListItems(shown, query, { query = it.take(60) }, onPick) }
@@ -209,8 +216,11 @@ internal fun WaitingStep(
     LaunchedEffect(step.link?.handle) {
         val link = step.link ?: return@LaunchedEffect
         when (val status = mobileSession.banking.awaitBankLink(provider, link.handle)) {
-            is BrowserLinkStatus.Linked -> onLinked(status.accounts)
-            is BrowserLinkStatus.Failed ->
+            is BrowserLinkStatus.Linked -> {
+                onLinked(status.accounts)
+            }
+
+            is BrowserLinkStatus.Failed -> {
                 onFailed(
                     if (status.reason == "timeout") {
                         "The bank sign-in took too long. Try again."
@@ -218,7 +228,11 @@ internal fun WaitingStep(
                         "${step.institution.name} didn’t finish linking. Try again."
                     },
                 )
-            BrowserLinkStatus.Pending -> Unit
+            }
+
+            BrowserLinkStatus.Pending -> {
+                Unit
+            }
         }
     }
     Column(

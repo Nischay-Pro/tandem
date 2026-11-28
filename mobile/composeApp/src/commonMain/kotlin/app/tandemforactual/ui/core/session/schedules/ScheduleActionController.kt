@@ -68,8 +68,11 @@ internal class ScheduleActionController(
 
     fun performScheduleActionStatusAction(operation: OutboxOperationEntity) {
         when (scheduleActionStatusActionLabel(operation)) {
-            "Check status" -> retryScheduleActionStatus(operation.operationId)
-            "Undo" ->
+            "Check status" -> {
+                retryScheduleActionStatus(operation.operationId)
+            }
+
+            "Undo" -> {
                 host.sessionScope.launch {
                     val localRepository = host.repository ?: return@launch
                     if (localRepository.cancelQueuedScheduleAction(operation.operationId)) {
@@ -77,7 +80,11 @@ internal class ScheduleActionController(
                         host.reportBudgetActionMessage(null)
                     }
                 }
-            "Try again" -> retryQueuedScheduleActions()
+            }
+
+            "Try again" -> {
+                retryQueuedScheduleActions()
+            }
         }
     }
 
@@ -167,8 +174,14 @@ internal class ScheduleActionController(
                     !isRetryingScheduleAction
             }.first { it }
             when (val prepared = prepare(request)) {
-                Prepared.Wait -> observedRetrySignal = awaitRetrySignal(observedRetrySignal)
-                Prepared.Skip -> Unit
+                Prepared.Wait -> {
+                    observedRetrySignal = awaitRetrySignal(observedRetrySignal)
+                }
+
+                Prepared.Skip -> {
+                    Unit
+                }
+
                 is Prepared.Ready -> {
                     pauseUntilRetrySignal = send(request, prepared)
                     observedRetrySignal = scheduleActionRetrySignal
@@ -289,19 +302,23 @@ internal class ScheduleActionController(
                     localRepository.markScheduleActionConflict(request.operationId, "schedule_changed")
                     false
                 }
+
                 error.errorCode in setOf("invalid_device_credential", "sign_in_required", "sign_in_expired") -> {
                     localRepository.returnScheduleActionToQueue(request.operationId, error.errorCode)
                     true
                 }
+
                 error.errorCode in setOf("operation_uncertain", "operation_in_progress", "operation_result_unavailable") -> {
                     localRepository.markScheduleActionUncertain(request.operationId, error.errorCode)
                     false
                 }
+
                 shouldKeepBudgetMutationQueued(error.httpStatus) -> {
                     localRepository.returnScheduleActionToQueue(request.operationId, error.errorCode)
                     host.markServerReachable(error.indicatesTandemReachable())
                     true
                 }
+
                 else -> {
                     localRepository.markScheduleActionRejected(request.operationId, error.errorCode)
                     false

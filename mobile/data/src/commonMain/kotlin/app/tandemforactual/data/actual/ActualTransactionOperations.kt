@@ -77,8 +77,11 @@ class ActualTransactionOperations(
         writer.batch {
             val outcome =
                 when (action) {
-                    "create" -> create(operationId, transactionId, patch)
-                    "update", "delete" ->
+                    "create" -> {
+                        create(operationId, transactionId, patch)
+                    }
+
+                    "update", "delete" -> {
                         change(
                             operationId,
                             transactionId,
@@ -86,7 +89,11 @@ class ActualTransactionOperations(
                             patch,
                             baseSnapshot ?: throw InvalidTransactionRequestException("baseSnapshot is required"),
                         )
-                    else -> throw InvalidTransactionRequestException("Unsupported action $action")
+                    }
+
+                    else -> {
+                        throw InvalidTransactionRequestException("Unsupported action $action")
+                    }
                 }
             db.execute(
                 "INSERT INTO tandem_operations " +
@@ -507,26 +514,38 @@ class ActualTransactionOperations(
         patch.mapValues { (field, element) ->
             val primitive = element as? JsonPrimitive ?: throw InvalidTransactionRequestException("$field must be a scalar")
             when (field) {
-                "account" ->
+                "account" -> {
                     primitive.takeIf { it.isString && it.content.isNotBlank() }?.content
                         ?: throw InvalidTransactionRequestException("account must be a non-empty string")
-                "amount" ->
+                }
+
+                "amount" -> {
                     primitive.takeIf { !it.isString }?.longOrNull
                         ?: throw InvalidTransactionRequestException("amount must be an integer")
-                "date" ->
+                }
+
+                "date" -> {
                     primitive.takeIf { it.isString && DATE.matches(it.content) }?.content
                         ?: throw InvalidTransactionRequestException("date must use YYYY-MM-DD format")
-                "cleared", "reconciled" ->
+                }
+
+                "cleared", "reconciled" -> {
                     primitive.takeIf { !it.isString }?.booleanOrNull
                         ?: throw InvalidTransactionRequestException("$field must be a boolean")
-                "notes" -> if (primitive is JsonNull) null else primitive.contentOrNull?.ifEmpty { null }
-                else ->
+                }
+
+                "notes" -> {
+                    if (primitive is JsonNull) null else primitive.contentOrNull?.ifEmpty { null }
+                }
+
+                else -> {
                     if (primitive is JsonNull) {
                         null
                     } else {
                         primitive.takeIf { it.isString && it.content.isNotBlank() }?.content
                             ?: throw InvalidTransactionRequestException("$field must be a non-empty string or null")
                     }
+                }
             }
         }
 
@@ -596,13 +615,20 @@ internal fun JsonObject.value(key: String): Any? = scalar(this[key])
 
 internal fun scalar(element: JsonElement?): Any? =
     when (element) {
-        null, JsonNull -> null
-        is JsonPrimitive ->
+        null, JsonNull -> {
+            null
+        }
+
+        is JsonPrimitive -> {
             if (element.isString) {
                 element.content
             } else {
                 element.booleanOrNull ?: element.longOrNull
                     ?: element.content.toDouble()
             }
-        else -> element
+        }
+
+        else -> {
+            element
+        }
     }

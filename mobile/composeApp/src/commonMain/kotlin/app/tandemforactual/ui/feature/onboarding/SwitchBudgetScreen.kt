@@ -99,10 +99,17 @@ internal fun SwitchBudgetScreen(
                     options = ListRowOptions(trailingColor = tandemPalette.accent),
                     onClick = {
                         when {
-                            current && !(budget.isEncrypted && state.encryptedPassword.isBlank()) -> navigation.back()
-                            budget.isEncrypted && !vaultAvailable && !(current && state.encryptedPassword.isNotBlank()) ->
+                            current && !(budget.isEncrypted && state.encryptedPassword.isBlank()) -> {
+                                navigation.back()
+                            }
+
+                            budget.isEncrypted && !vaultAvailable && !(current && state.encryptedPassword.isNotBlank()) -> {
                                 onPrepareBudgetUnlock(budget)
-                            else -> onOpenSelectedBudget(budget)
+                            }
+
+                            else -> {
+                                onOpenSelectedBudget(budget)
+                            }
                         }
                     },
                 )

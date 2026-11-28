@@ -135,17 +135,24 @@ private fun JsonObject.toConditionDraft(formatAmount: (Long) -> String): RuleCon
             val high = (range["num2"] as? JsonPrimitive)?.longOrNull ?: return null
             RuleConditionDraft(field, op, amountText = formatAmount(low), amountMaxText = formatAmount(high))
         }
-        field.usesAmount ->
+
+        field.usesAmount -> {
             RuleConditionDraft(field, op, amountText = formatAmount((value as? JsonPrimitive)?.longOrNull ?: return null))
+        }
+
         field.usesIds && op in setOf("oneOf", "notOneOf") -> {
             val ids = (value as? JsonArray)?.map { (it as? JsonPrimitive)?.contentOrNull ?: return null } ?: return null
             RuleConditionDraft(field, op, ids = ids)
         }
+
         field.usesIds -> {
             val id = (value as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: return null
             RuleConditionDraft(field, op, ids = listOf(id))
         }
-        else -> RuleConditionDraft(field, op, text = (value as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: return null)
+
+        else -> {
+            RuleConditionDraft(field, op, text = (value as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: return null)
+        }
     }
 }
 
@@ -196,17 +203,33 @@ private fun RuleConditionDraft.problem(parseAmount: (String) -> Long?): String? 
     val low = signedAmount(amountText, parseAmount)
     val high = signedAmount(amountMaxText, parseAmount)
     return when {
-        field.usesAmount && op == "isbetween" ->
+        field.usesAmount && op == "isbetween" -> {
             when {
                 low == null || high == null -> "Enter both amounts for “${field.label}”."
                 low > high -> "Enter the lower amount first for “${field.label}”."
                 else -> null
             }
-        field.usesAmount -> if (low == null) "Enter an amount for “${field.label}”." else null
-        field.usesIds -> if (ids.isEmpty()) "Choose a ${field.label.lowercase()} for this condition." else null
-        text.isBlank() -> "Enter text for “${field.label}”."
-        op == "matches" && runCatching { Regex(text) }.isFailure -> "Enter a valid pattern for “${field.label}”."
-        else -> null
+        }
+
+        field.usesAmount -> {
+            if (low == null) "Enter an amount for “${field.label}”." else null
+        }
+
+        field.usesIds -> {
+            if (ids.isEmpty()) "Choose a ${field.label.lowercase()} for this condition." else null
+        }
+
+        text.isBlank() -> {
+            "Enter text for “${field.label}”."
+        }
+
+        op == "matches" && runCatching { Regex(text) }.isFailure -> {
+            "Enter a valid pattern for “${field.label}”."
+        }
+
+        else -> {
+            null
+        }
     }
 }
 
@@ -222,7 +245,7 @@ private fun RuleConditionDraft.toWire(parseAmount: (String) -> Long?): JsonObjec
         put("field", field.wire)
         put("op", op)
         when {
-            field.usesAmount && op == "isbetween" ->
+            field.usesAmount && op == "isbetween" -> {
                 put(
                     "range",
                     buildJsonObject {
@@ -230,10 +253,23 @@ private fun RuleConditionDraft.toWire(parseAmount: (String) -> Long?): JsonObjec
                         put("num2", signedAmount(amountMaxText, parseAmount)!!.signedFor(field))
                     },
                 )
-            field.usesAmount -> put("amountMinor", signedAmount(amountText, parseAmount)!!.signedFor(field))
-            field.usesIds && op in setOf("oneOf", "notOneOf") -> put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
-            field.usesIds -> put("text", ids.first())
-            else -> put("text", text)
+            }
+
+            field.usesAmount -> {
+                put("amountMinor", signedAmount(amountText, parseAmount)!!.signedFor(field))
+            }
+
+            field.usesIds && op in setOf("oneOf", "notOneOf") -> {
+                put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
+            }
+
+            field.usesIds -> {
+                put("text", ids.first())
+            }
+
+            else -> {
+                put("text", text)
+            }
         }
         if (field == RuleConditionField.MONEY_IN) put("inflow", true)
         if (field == RuleConditionField.MONEY_OUT) put("outflow", true)

@@ -99,13 +99,19 @@ internal fun FormShortcutHost(
                 .onPreviewKeyEvent { event -> event.formAction(ShortcutScope.TEXT_FIELD) == ShortcutAction.SAVE && actions.submit() }
                 .onKeyEvent { event ->
                     when (event.formAction(ShortcutScope.EDITOR)) {
-                        ShortcutAction.SUBMIT -> actions.submit()
+                        ShortcutAction.SUBMIT -> {
+                            actions.submit()
+                        }
+
                         ShortcutAction.CLOSE -> {
                             val close = currentOnEscape.value
                             close?.invoke()
                             close != null
                         }
-                        else -> false
+
+                        else -> {
+                            false
+                        }
                     }
                 }.onFocusChanged { hasFocus.value = it.hasFocus }
                 .focusRequester(focusRequester)

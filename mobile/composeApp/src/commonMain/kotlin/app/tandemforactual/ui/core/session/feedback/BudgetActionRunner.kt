@@ -240,15 +240,22 @@ internal class BudgetActionRunner(
         failure: Failure,
     ) {
         when {
-            actionApplied -> reportAppliedButNotRefreshed(budgetId, encryptionPassword, messageOwner, REFRESH_FAILED_MESSAGE)
-            failure.canRetry ->
+            actionApplied -> {
+                reportAppliedButNotRefreshed(budgetId, encryptionPassword, messageOwner, REFRESH_FAILED_MESSAGE)
+            }
+
+            failure.canRetry -> {
                 setBudgetActionMessage(
                     failure.message,
                     ownerRoute = messageOwner,
                     actionLabel = "Try again",
                     retryAction = { performBudgetAction(budgetId, encryptionPassword, failureMessage, messageOwner, action) },
                 )
-            failure.showRejection -> setBudgetActionMessage(failure.message, ownerRoute = messageOwner)
+            }
+
+            failure.showRejection -> {
+                setBudgetActionMessage(failure.message, ownerRoute = messageOwner)
+            }
         }
     }
 

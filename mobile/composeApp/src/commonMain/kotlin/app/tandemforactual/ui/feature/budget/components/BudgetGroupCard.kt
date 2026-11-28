@@ -148,6 +148,7 @@ private fun RowScope.BudgetGroupHeading(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
             else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(TandemSpacing.xxSmall)) {
                     PrivacyAmountText(

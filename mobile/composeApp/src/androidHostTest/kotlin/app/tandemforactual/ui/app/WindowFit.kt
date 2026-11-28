@@ -67,11 +67,17 @@ private fun SemanticsNode.edgeProblems(where: String): List<String> {
     val right = left + size.width / density
     val shown = boundsInRoot
     return when {
-        left < -EDGE_DP || right > rootWidth + EDGE_DP ->
+        left < -EDGE_DP || right > rootWidth + EDGE_DP -> {
             listOf("$where: '${label()}' spans ${left.inDp()} to ${right.inDp()}, past the ${rootWidth.inDp()} window")
-        shown.height > 0f && shown.width / density < size.width / density - EDGE_DP ->
+        }
+
+        shown.height > 0f && shown.width / density < size.width / density - EDGE_DP -> {
             listOf("$where: '${label()}' is cut off, showing ${(shown.width / density).inDp()} of ${(size.width / density).inDp()}")
-        else -> emptyList()
+        }
+
+        else -> {
+            emptyList()
+        }
     }
 }
 

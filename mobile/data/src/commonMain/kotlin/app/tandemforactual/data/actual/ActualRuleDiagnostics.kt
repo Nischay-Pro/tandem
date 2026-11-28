@@ -403,18 +403,38 @@ class ActualRuleDiagnostics(
                 val (x, y) = (at(bounds["num1"]) ?: return null) to (at(bounds["num2"]) ?: return null)
                 Range(minOf(x, y), false, maxOf(x, y), false)
             }
-            "is" -> if (c.type == "date") dateRange(c.text) else at(c.value)?.let { Range(it, false, it, false) }
-            "isapprox" ->
+
+            "is" -> {
+                if (c.type == "date") dateRange(c.text) else at(c.value)?.let { Range(it, false, it, false) }
+            }
+
+            "isapprox" -> {
                 if (c.type == "number") {
                     at(c.value)?.let { v -> jsMathRound(kotlin.math.abs(v) * 0.075).let { t -> Range(v - t, false, v + t, false) } }
                 } else {
                     null
                 }
-            "gt" -> at(c.value)?.let { Range(it, true, inf, true) }
-            "gte" -> at(c.value)?.let { Range(it, false, inf, true) }
-            "lt" -> at(c.value)?.let { Range(-inf, true, it, true) }
-            "lte" -> at(c.value)?.let { Range(-inf, true, it, false) }
-            else -> null
+            }
+
+            "gt" -> {
+                at(c.value)?.let { Range(it, true, inf, true) }
+            }
+
+            "gte" -> {
+                at(c.value)?.let { Range(it, false, inf, true) }
+            }
+
+            "lt" -> {
+                at(c.value)?.let { Range(-inf, true, it, true) }
+            }
+
+            "lte" -> {
+                at(c.value)?.let { Range(-inf, true, it, false) }
+            }
+
+            else -> {
+                null
+            }
         }
     }
 

@@ -81,13 +81,19 @@ private fun tagSuggestions(
 
 private fun ActivitySearchSuggestionList.addDateQuery(dateQuery: ActivitySearchDateQuery) {
     when {
-        dateQuery.monthOfYear != null ->
+        dateQuery.monthOfYear != null -> {
             add(ActivitySearchField.DATE_MONTH_OF_YEAR, dateQuery.monthOfYear.toString(), dateQuery.label)
-        dateQuery.monthDay != null ->
+        }
+
+        dateQuery.monthDay != null -> {
             add(ActivitySearchField.DATE_MONTH_DAY, dateQuery.monthDay, dateQuery.label)
-        dateQuery.startInclusive == dateQuery.endInclusive && dateQuery.startInclusive != null ->
+        }
+
+        dateQuery.startInclusive == dateQuery.endInclusive && dateQuery.startInclusive != null -> {
             add(ActivitySearchField.DATE_ON, dateQuery.startInclusive, dateQuery.label)
-        dateQuery.startInclusive != null && dateQuery.endInclusive != null ->
+        }
+
+        dateQuery.startInclusive != null && dateQuery.endInclusive != null -> {
             searchDateMonthId(dateQuery)?.let { monthId ->
                 add(ActivitySearchField.DATE_MONTH, monthId, dateQuery.label)
             } ?: add(
@@ -95,6 +101,7 @@ private fun ActivitySearchSuggestionList.addDateQuery(dateQuery: ActivitySearchD
                 "${dateQuery.startInclusive}..${dateQuery.endInclusive}",
                 dateQuery.label,
             )
+        }
     }
 }
 

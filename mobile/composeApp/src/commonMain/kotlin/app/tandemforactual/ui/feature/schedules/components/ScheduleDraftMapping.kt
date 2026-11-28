@@ -93,23 +93,57 @@ internal fun ScheduleEditDraft.validationError(
     val occurrences = endOccurrencesDraft.toIntOrNull()
     val repeats = frequencyDraft != "once"
     return when {
-        nameRequired && nameDraft.isBlank() -> ScheduleDraftError("name", "Enter a schedule name.")
-        nameDraft.trim().length > 100 -> ScheduleDraftError("name", "Schedule names can be up to 100 characters.")
-        amountMinor == null -> ScheduleDraftError("amount", "Enter a valid amount.")
-        amountRuleDraft == "isbetween" && amountMaxMinor == null -> ScheduleDraftError("maximum", "Enter a valid maximum amount.")
-        amountRuleDraft == "isbetween" && amountMinor > amountMaxMinor!! ->
+        nameRequired && nameDraft.isBlank() -> {
+            ScheduleDraftError("name", "Enter a schedule name.")
+        }
+
+        nameDraft.trim().length > 100 -> {
+            ScheduleDraftError("name", "Schedule names can be up to 100 characters.")
+        }
+
+        amountMinor == null -> {
+            ScheduleDraftError("amount", "Enter a valid amount.")
+        }
+
+        amountRuleDraft == "isbetween" && amountMaxMinor == null -> {
+            ScheduleDraftError("maximum", "Enter a valid maximum amount.")
+        }
+
+        amountRuleDraft == "isbetween" && amountMinor > amountMaxMinor!! -> {
             ScheduleDraftError("maximum", "The maximum must be at least the minimum.")
-        accountIdDraft.isBlank() -> ScheduleDraftError("account", "Choose an account.")
-        payeeIdDraft.isBlank() -> ScheduleDraftError("payee", "Choose a payee.")
-        repeats && (interval == null || interval !in 1..999) -> ScheduleDraftError("interval", "Repeat interval must be between 1 and 999.")
-        parseIsoDate(dateDraft) == null -> ScheduleDraftError("startDate", "Choose a valid start date.")
-        repeats && endModeDraft == "after_n_occurrences" && (occurrences == null || occurrences !in 1..100_000) ->
+        }
+
+        accountIdDraft.isBlank() -> {
+            ScheduleDraftError("account", "Choose an account.")
+        }
+
+        payeeIdDraft.isBlank() -> {
+            ScheduleDraftError("payee", "Choose a payee.")
+        }
+
+        repeats && (interval == null || interval !in 1..999) -> {
+            ScheduleDraftError("interval", "Repeat interval must be between 1 and 999.")
+        }
+
+        parseIsoDate(dateDraft) == null -> {
+            ScheduleDraftError("startDate", "Choose a valid start date.")
+        }
+
+        repeats && endModeDraft == "after_n_occurrences" && (occurrences == null || occurrences !in 1..100_000) -> {
             ScheduleDraftError("occurrences", "Enter a valid number of repeats.")
-        repeats && endModeDraft == "on_date" && parseIsoDate(endDateDraft) == null ->
+        }
+
+        repeats && endModeDraft == "on_date" && parseIsoDate(endDateDraft) == null -> {
             ScheduleDraftError("endDate", "Choose a valid end date.")
-        repeats && endModeDraft == "on_date" && endDateDraft < dateDraft ->
+        }
+
+        repeats && endModeDraft == "on_date" && endDateDraft < dateDraft -> {
             ScheduleDraftError("endDate", "The end date must be on or after the start date.")
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 }
 

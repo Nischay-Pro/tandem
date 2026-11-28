@@ -261,10 +261,17 @@ internal fun categoryGroupHero(
     format: (Long) -> String,
 ): Triple<String, Long, String?> =
     when {
-        group.isIncome ->
+        group.isIncome -> {
             Triple("Received this month", group.activityMinor, "${format(group.assignedMinor)} expected".takeIf { isTrackingBudget })
-        isTrackingBudget -> Triple("Budgeted this month", group.assignedMinor, "${format(group.balanceMinor)} remaining")
-        else -> Triple("Assigned this month", group.assignedMinor, "${format(group.balanceMinor)} available")
+        }
+
+        isTrackingBudget -> {
+            Triple("Budgeted this month", group.assignedMinor, "${format(group.balanceMinor)} remaining")
+        }
+
+        else -> {
+            Triple("Assigned this month", group.assignedMinor, "${format(group.balanceMinor)} available")
+        }
     }
 
 /** One category's month in a line: spending and what is left, or income received against what was expected. */

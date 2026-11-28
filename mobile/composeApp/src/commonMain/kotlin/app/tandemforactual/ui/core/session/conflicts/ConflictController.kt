@@ -234,8 +234,14 @@ internal class ConflictController(
         if (host.refuseWriteInReadOnlyMode()) return
         val localRepository = host.repository ?: return
         when (localRepository.findWrite(operationId)?.status) {
-            "uncertain" -> localRepository.retryUncertainWrite(operationId)
-            "queued" -> Unit
+            "uncertain" -> {
+                localRepository.retryUncertainWrite(operationId)
+            }
+
+            "queued" -> {
+                Unit
+            }
+
             else -> {
                 host.reportTransactionWriteMessage("This edit is no longer waiting for confirmation. Refresh Pending Changes.")
                 host.loadLocalRecords(budgetId)

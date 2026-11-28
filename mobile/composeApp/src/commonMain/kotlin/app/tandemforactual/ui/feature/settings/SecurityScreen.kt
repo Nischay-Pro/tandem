@@ -103,15 +103,20 @@ private fun BiometricUnlockToggle(state: AppState) {
             val secretId = budgetPasswordSecretId(state.selectedBudgetId)
             val password = state.encryptedPassword
             when {
-                authenticator == null -> if (!enable) state.biometricLockEnabled = false
-                !enable ->
+                authenticator == null -> {
+                    if (!enable) state.biometricLockEnabled = false
+                }
+
+                !enable -> {
                     authenticator.authenticate("Turn off biometric unlock") { success ->
                         if (success) {
                             authenticator.deleteAllSecrets()
                             state.biometricLockEnabled = false
                         }
                     }
-                state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() ->
+                }
+
+                state.selectedBudgetEncrypted && password.isNotBlank() && authenticator.canStoreSecrets() -> {
                     authenticator.storeSecret(
                         secretId,
                         unlockSecret(vault, state.selectedBudgetId, password),
@@ -119,10 +124,13 @@ private fun BiometricUnlockToggle(state: AppState) {
                     ) { stored ->
                         if (stored) state.biometricLockEnabled = true
                     }
-                else ->
+                }
+
+                else -> {
                     authenticator.authenticate("Turn on biometric unlock") { success ->
                         if (success) state.biometricLockEnabled = true
                     }
+                }
             }
         },
     )

@@ -260,7 +260,7 @@ private fun tandemSurfaceColors(
     isDark: Boolean,
 ): TandemSurfaceColors =
     when {
-        accent == AccentChoice.CLARITY && isDark ->
+        accent == AccentChoice.CLARITY && isDark -> {
             TandemSurfaceColors(
                 background = Color(0xFF09180F),
                 surface = Color(0xFF11251A),
@@ -270,7 +270,9 @@ private fun tandemSurfaceColors(
                 text = Color(0xFFEEF8F0),
                 muted = Color(0xFFB6CCBA),
             )
-        accent == AccentChoice.CLARITY ->
+        }
+
+        accent == AccentChoice.CLARITY -> {
             TandemSurfaceColors(
                 background = Color(0xFFF3F8F4),
                 surface = Color.White,
@@ -280,7 +282,9 @@ private fun tandemSurfaceColors(
                 text = Color(0xFF19251D),
                 muted = Color(0xFF526358),
             )
-        accent == AccentChoice.WARM && isDark ->
+        }
+
+        accent == AccentChoice.WARM && isDark -> {
             TandemSurfaceColors(
                 background = Color(0xFF1A100B),
                 surface = Color(0xFF291A12),
@@ -290,7 +294,9 @@ private fun tandemSurfaceColors(
                 text = Color(0xFFFFF3EA),
                 muted = Color(0xFFE3C6B0),
             )
-        accent == AccentChoice.WARM ->
+        }
+
+        accent == AccentChoice.WARM -> {
             TandemSurfaceColors(
                 background = Color(0xFFFBF5F0),
                 surface = Color.White,
@@ -300,7 +306,9 @@ private fun tandemSurfaceColors(
                 text = Color(0xFF2E251F),
                 muted = Color(0xFF69564B),
             )
-        isDark ->
+        }
+
+        isDark -> {
             TandemSurfaceColors(
                 background = Color(0xFF100F19),
                 surface = Color(0xFF171622),
@@ -310,7 +318,9 @@ private fun tandemSurfaceColors(
                 text = Color(0xFFF6F3FF),
                 muted = Color(0xFFC2BDD2),
             )
-        else ->
+        }
+
+        else -> {
             TandemSurfaceColors(
                 background = Color(0xFFF6F4FC),
                 surface = Color.White,
@@ -320,6 +330,7 @@ private fun tandemSurfaceColors(
                 text = Color(0xFF1E1B2B),
                 muted = Color(0xFF5B576D),
             )
+        }
     }
 
 internal val tandemPalette: TandemPalette

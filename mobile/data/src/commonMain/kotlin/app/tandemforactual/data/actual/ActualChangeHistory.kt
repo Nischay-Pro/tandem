@@ -131,14 +131,21 @@ class ActualChangeHistory(
         field: FieldChange,
     ): Restore? =
         when (val before = field.before) {
-            null ->
+            null -> {
                 when {
                     field.column == "tombstone" -> Restore(0L)
                     dataset in BLANK_TABLES && field.column in BLANK_VALUES -> Restore(BLANK_VALUES.getValue(field.column))
                     else -> null
                 }
-            is CrdtValue.Unknown -> null
-            else -> Restore(before.raw())
+            }
+
+            is CrdtValue.Unknown -> {
+                null
+            }
+
+            else -> {
+                Restore(before.raw())
+            }
         }
 
     private class Restore(

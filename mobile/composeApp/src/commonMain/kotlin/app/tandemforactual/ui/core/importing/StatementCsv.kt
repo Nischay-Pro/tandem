@@ -93,11 +93,16 @@ internal fun parseCsvRows(
                 cell.append('"')
                 index++
             }
-            char == '"' -> quoted = !quoted
+
+            char == '"' -> {
+                quoted = !quoted
+            }
+
             char == delimiter && !quoted -> {
                 row += cell.toString().trim()
                 cell.clear()
             }
+
             (char == '\n' || char == '\r') && !quoted -> {
                 row += cell.toString().trim()
                 cell.clear()
@@ -105,7 +110,10 @@ internal fun parseCsvRows(
                 row.clear()
                 if (char == '\r' && content.getOrNull(index + 1) == '\n') index++
             }
-            else -> cell.append(char)
+
+            else -> {
+                cell.append(char)
+            }
         }
         index++
     }

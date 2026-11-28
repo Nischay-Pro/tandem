@@ -41,12 +41,18 @@ private class Ledger(
         for (t in s.transactions) {
             if (t.deleted) continue
             when {
-                t.splits.isNotEmpty() -> t.splits.forEach { post(t.account, t.date, it.category, it.amount) }
+                t.splits.isNotEmpty() -> {
+                    t.splits.forEach { post(t.account, t.date, it.category, it.amount) }
+                }
+
                 t.transferTo != null -> {
                     val keepsCategory = offBudget.getValue(t.account) != offBudget.getValue(t.transferTo)
                     post(t.account, t.date, if (keepsCategory) t.category else null, t.amount)
                 }
-                else -> post(t.account, t.date, t.category, t.amount)
+
+                else -> {
+                    post(t.account, t.date, t.category, t.amount)
+                }
             }
         }
     }

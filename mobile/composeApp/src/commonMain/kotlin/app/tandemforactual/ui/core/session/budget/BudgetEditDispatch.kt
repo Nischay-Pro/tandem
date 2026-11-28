@@ -51,35 +51,44 @@ internal suspend fun BudgetEditQueue.dispatch(request: QueuedBudgetReorder): Dis
         BudgetReorderKind.HIDE_CATEGORY_GROUP,
         BudgetReorderKind.SHOW_CATEGORY_GROUP,
         -> sendStructureEdit(request)
+
         BudgetReorderKind.SET_CATEGORY_AMOUNT,
         BudgetReorderKind.SET_CATEGORY_CARRYOVER,
         BudgetReorderKind.COPY_BUDGET_MONTH,
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE,
         -> Dispatched(sendAssignmentEdit(request))
+
         BudgetReorderKind.APPLY_GOAL_TEMPLATES -> Dispatched(sendGoalTemplates(request))
+
         BudgetReorderKind.HOLD_BUDGET_NEXT_MONTH,
         BudgetReorderKind.RESET_BUDGET_HOLD,
         BudgetReorderKind.MOVE_BUDGET_MONEY,
         -> Dispatched(sendMoneyMove(request))
+
         BudgetReorderKind.CLOSE_ACCOUNT,
         BudgetReorderKind.RENAME_ACCOUNT,
         BudgetReorderKind.REOPEN_ACCOUNT,
         -> Dispatched(sendAccountEdit(request))
+
         BudgetReorderKind.SET_ORDER,
         BudgetReorderKind.MOVE_ACCOUNT,
         -> Dispatched(sendAccountOrderEdit(request))
+
         BudgetReorderKind.RENAME_PAYEE,
         BudgetReorderKind.MERGE_PAYEE,
         BudgetReorderKind.DELETE_PAYEE,
         BudgetReorderKind.SET_PAYEE_DEFAULT_CATEGORY,
         BudgetReorderKind.IMPORT_STATEMENT,
         -> Dispatched(sendPayeeEdit(request))
+
         BudgetReorderKind.SET_CATEGORY_NOTE,
         BudgetReorderKind.SET_CATEGORY_GROUP_NOTE,
         BudgetReorderKind.SET_ACCOUNT_NOTE,
         BudgetReorderKind.SET_MONTH_NOTE,
         -> Dispatched(sendNote(request))
+
         BudgetReorderKind.SET_BUDGET_TYPE -> Dispatched(sendBudgetType(request))
+
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_CREATE,
         BudgetReorderKind.REFRESH_CATEGORY_GROUP_RENAME,
         BudgetReorderKind.REFRESH_CATEGORY_CREATE,
@@ -104,30 +113,73 @@ private suspend fun BudgetEditQueue.sendStructureEdit(request: QueuedBudgetReord
         target: String?,
     ) = edits.manageBudgetCategoryGroup(request.budgetId, request.itemId, action, name, target, password, key)
     return when (request.kind) {
-        BudgetReorderKind.CATEGORY -> Dispatched(category("move", request.targetId))
-        BudgetReorderKind.HIDE_CATEGORY -> Dispatched(category("hide", null))
-        BudgetReorderKind.SHOW_CATEGORY -> Dispatched(category("show", null))
-        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> Dispatched(category("move", null, request.parentGroupId))
-        BudgetReorderKind.RENAME_CATEGORY ->
+        BudgetReorderKind.CATEGORY -> {
+            Dispatched(category("move", request.targetId))
+        }
+
+        BudgetReorderKind.HIDE_CATEGORY -> {
+            Dispatched(category("hide", null))
+        }
+
+        BudgetReorderKind.SHOW_CATEGORY -> {
+            Dispatched(category("show", null))
+        }
+
+        BudgetReorderKind.MOVE_CATEGORY_TO_GROUP -> {
+            Dispatched(category("move", null, request.parentGroupId))
+        }
+
+        BudgetReorderKind.RENAME_CATEGORY -> {
             Dispatched(edits.renameBudgetCategory(request.budgetId, request.itemId, request.name.orEmpty(), password, key))
-        BudgetReorderKind.DELETE_CATEGORY ->
+        }
+
+        BudgetReorderKind.DELETE_CATEGORY -> {
             Dispatched(edits.deleteBudgetCategory(request.budgetId, request.itemId, request.targetId, password, key))
-        BudgetReorderKind.RENAME_CATEGORY_GROUP -> Dispatched(group("rename", request.name, null))
-        BudgetReorderKind.DELETE_CATEGORY_GROUP -> Dispatched(group("delete", null, request.targetId))
-        BudgetReorderKind.CATEGORY_GROUP -> Dispatched(group("move", null, request.targetId))
-        BudgetReorderKind.HIDE_CATEGORY_GROUP -> Dispatched(group("hide", null, null))
-        BudgetReorderKind.SHOW_CATEGORY_GROUP -> Dispatched(group("show", null, null))
-        BudgetReorderKind.CREATE_CATEGORY_GROUP ->
+        }
+
+        BudgetReorderKind.RENAME_CATEGORY_GROUP -> {
+            Dispatched(group("rename", request.name, null))
+        }
+
+        BudgetReorderKind.DELETE_CATEGORY_GROUP -> {
+            Dispatched(group("delete", null, request.targetId))
+        }
+
+        BudgetReorderKind.CATEGORY_GROUP -> {
+            Dispatched(group("move", null, request.targetId))
+        }
+
+        BudgetReorderKind.HIDE_CATEGORY_GROUP -> {
+            Dispatched(group("hide", null, null))
+        }
+
+        BudgetReorderKind.SHOW_CATEGORY_GROUP -> {
+            Dispatched(group("show", null, null))
+        }
+
+        BudgetReorderKind.CREATE_CATEGORY_GROUP -> {
             edits
                 .createBudgetCategoryGroup(request.budgetId, request.name.orEmpty(), request.isIncome, password, key)
                 .let { Dispatched(it != null, categoryGroupId = it) }
-        BudgetReorderKind.CREATE_CATEGORY ->
+        }
+
+        BudgetReorderKind.CREATE_CATEGORY -> {
             edits
                 .createBudgetCategory(request.budgetId, request.name.orEmpty(), request.parentGroupId.orEmpty(), password, key)
                 .let { Dispatched(it != null, categoryId = it) }
-        BudgetReorderKind.CREATE_PAYEE -> edits.createQueuedBudgetPayee(request).let { Dispatched(it != null, payeeId = it) }
-        BudgetReorderKind.CREATE_ACCOUNT -> edits.createQueuedBudgetAccount(request).let { Dispatched(it != null, accountId = it) }
-        else -> error("Not a structure edit: ${request.kind}")
+        }
+
+        BudgetReorderKind.CREATE_PAYEE -> {
+            edits.createQueuedBudgetPayee(request).let { Dispatched(it != null, payeeId = it) }
+        }
+
+        BudgetReorderKind.CREATE_ACCOUNT -> {
+            edits.createQueuedBudgetAccount(request).let { Dispatched(it != null, accountId = it) }
+        }
+
+        else -> {
+            error("Not a structure edit: ${request.kind}")
+        }
     }
 }
 
@@ -152,6 +204,7 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
                 )
             }
         }
+
         BudgetReorderKind.SET_CATEGORY_CARRYOVER -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -170,6 +223,7 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
                 )
             }
         }
+
         BudgetReorderKind.COPY_BUDGET_MONTH -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -186,6 +240,7 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
                 )
             }
         }
+
         BudgetReorderKind.APPLY_BUDGET_TEMPLATE -> {
             val payload = request.requirePayload()
             val assignments = payload.requiredAssignments()
@@ -204,7 +259,10 @@ private suspend fun BudgetEditQueue.sendAssignmentEdit(request: QueuedBudgetReor
                 )
             }
         }
-        else -> error("Not a AssignmentEdit edit: ${request.kind}")
+
+        else -> {
+            error("Not a AssignmentEdit edit: ${request.kind}")
+        }
     }
 
 /** Actual's "Apply budget templates", worked out again from the budget as it is when the edit is sent. */
@@ -247,6 +305,7 @@ private suspend fun BudgetEditQueue.sendMoneyMove(request: QueuedBudgetReorder):
                 )
             }
         }
+
         BudgetReorderKind.RESET_BUDGET_HOLD -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -263,6 +322,7 @@ private suspend fun BudgetEditQueue.sendMoneyMove(request: QueuedBudgetReorder):
                 )
             }
         }
+
         BudgetReorderKind.MOVE_BUDGET_MONEY -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -282,7 +342,10 @@ private suspend fun BudgetEditQueue.sendMoneyMove(request: QueuedBudgetReorder):
                 )
             }
         }
-        else -> error("Not a MoneyMove edit: ${request.kind}")
+
+        else -> {
+            error("Not a MoneyMove edit: ${request.kind}")
+        }
     }
 
 /** Closing, renaming and reopening accounts. */
@@ -306,6 +369,7 @@ private suspend fun BudgetEditQueue.sendAccountEdit(request: QueuedBudgetReorder
                 )
             }
         }
+
         BudgetReorderKind.RENAME_ACCOUNT -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -323,7 +387,8 @@ private suspend fun BudgetEditQueue.sendAccountEdit(request: QueuedBudgetReorder
                 )
             }
         }
-        BudgetReorderKind.REOPEN_ACCOUNT ->
+
+        BudgetReorderKind.REOPEN_ACCOUNT -> {
             host.feedback.performBudgetAction(
                 request.budgetId,
                 request.encryptionPassword,
@@ -337,7 +402,11 @@ private suspend fun BudgetEditQueue.sendAccountEdit(request: QueuedBudgetReorder
                     request.operationId,
                 )
             }
-        else -> error("Not an account edit: ${request.kind}")
+        }
+
+        else -> {
+            error("Not an account edit: ${request.kind}")
+        }
     }
 
 /** Reordering accounts. */
@@ -361,6 +430,7 @@ private suspend fun BudgetEditQueue.sendAccountOrderEdit(request: QueuedBudgetRe
                 )
             }
         }
+
         BudgetReorderKind.MOVE_ACCOUNT -> {
             val payload = request.requirePayload()
             host.feedback.performBudgetAction(
@@ -378,7 +448,10 @@ private suspend fun BudgetEditQueue.sendAccountOrderEdit(request: QueuedBudgetRe
                 )
             }
         }
-        else -> error("Not an account edit: ${request.kind}")
+
+        else -> {
+            error("Not an account edit: ${request.kind}")
+        }
     }
 
 /** A note saved in Actual's notes table; the item id is the category, group or account id, or the `YYYY-MM` month. */
@@ -444,6 +517,7 @@ private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder):
                 )
             }
         }
+
         BudgetReorderKind.IMPORT_STATEMENT -> {
             val payload = request.requirePayload()
             val imported = payload.requiredStatementItems()
@@ -463,5 +537,8 @@ private suspend fun BudgetEditQueue.sendPayeeEdit(request: QueuedBudgetReorder):
                 )
             }
         }
-        else -> error("Not a PayeeEdit edit: ${request.kind}")
+
+        else -> {
+            error("Not a PayeeEdit edit: ${request.kind}")
+        }
     }

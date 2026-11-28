@@ -66,7 +66,9 @@ internal fun FeedbackMessageView(
             InlineMessageKind.ERROR,
             InlineMessageKind.WARNING,
             -> Lucide.CircleAlert
+
             InlineMessageKind.INFO -> Lucide.Info
+
             InlineMessageKind.SUCCESS -> Lucide.Check
         }
     val kindDescription = message.kind.accessibilityLabel()

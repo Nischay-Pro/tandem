@@ -169,12 +169,14 @@ internal fun RuleActionEditor(
         }
         val kind = action.kind
         when {
-            kind == RuleActionKind.SET_CLEARED ->
+            kind == RuleActionKind.SET_CLEARED -> {
                 Column(Modifier.padding(start = TandemSpacing.medium, end = TandemSpacing.medium, bottom = TandemSpacing.medium)) {
                     SegmentedSelector(listOf("Cleared" to action.cleared, "Not cleared" to !action.cleared)) {
                         onChange(action.copy(cleared = it == 0))
                     }
                 }
+            }
+
             kind.usesId -> {
                 DividerLine()
                 val field = kind.field!!
@@ -185,10 +187,12 @@ internal fun RuleActionEditor(
                     selectedIds = setOfNotNull(action.id.takeIf { it.isNotBlank() }),
                 ) { onChange(action.copy(id = it.first())) }
             }
-            else ->
+
+            else -> {
                 Column(Modifier.padding(start = TandemSpacing.medium, end = TandemSpacing.medium, bottom = TandemSpacing.medium)) {
                     TextFieldCard("Notes", action.text, { onChange(action.copy(text = it)) })
                 }
+            }
         }
     }
 }

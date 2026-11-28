@@ -141,12 +141,17 @@ internal fun DataHealthScreen(
         item(key = "summary") { DataHealthSummary(state.selectedBudget, found, ruleFindings.size, loading) }
         failure?.let { text -> item(key = "failure") { InlineMessage(text, InlineMessageKind.ERROR, onDismiss = { failure = null }) } }
         when {
-            found == null && loading -> item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
-            found == null ->
+            found == null && loading -> {
+                item(key = "loading") { TandemLoadingIndicator(Modifier.size(24.dp), palette.accent, 2.dp) }
+            }
+
+            found == null -> {
                 item(key = "error") {
                     EmptyStateCard("Couldn’t check this budget", "Open it while connected to Actual, then pull to try again.")
                 }
-            found.isEmpty() && ruleFindings.isEmpty() ->
+            }
+
+            found.isEmpty() && ruleFindings.isEmpty() -> {
                 item(key = "clear") {
                     SectionCard("Nothing needs attention", "Categories, payees, rules and reconciliation all look good") {
                         ListRow(
@@ -156,6 +161,7 @@ internal fun DataHealthScreen(
                         )
                     }
                 }
+            }
         }
         found?.forEach { issue ->
             item(key = issue.kind.name) {

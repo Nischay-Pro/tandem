@@ -188,6 +188,7 @@ private fun BudgetChoices(
                 ) { onChoose(budget) }
             }
         }
+
         selectableBudgets.isNotEmpty() -> {
             selectableBudgets.forEach { budget ->
                 val isOnServer = mobileSession.budgets.any { it.budgetId == budget.budgetId }
@@ -201,7 +202,11 @@ private fun BudgetChoices(
                 ChoiceRow(budget.name, detail, selected = chooserSelectedBudgetId == budget.budgetId) { onChoose(budget) }
             }
         }
-        mobileSession.isLoadingBudgets -> BodyText(stringResource(Res.string.setup_loading_budgets))
+
+        mobileSession.isLoadingBudgets -> {
+            BodyText(stringResource(Res.string.setup_loading_budgets))
+        }
+
         mobileSession.budgets.isEmpty() && mobileSession.isAuthenticated -> {
             mobileSession.budgetError?.let { error ->
                 InlineMessage(error, InlineMessageKind.ERROR)
@@ -212,6 +217,7 @@ private fun BudgetChoices(
                 )
             SecondaryButton(stringResource(Res.string.setup_try_again), onClick = onRefreshBudgets)
         }
+
         mobileSession.budgets.isEmpty() -> {
             SurfaceCard {
                 Column(

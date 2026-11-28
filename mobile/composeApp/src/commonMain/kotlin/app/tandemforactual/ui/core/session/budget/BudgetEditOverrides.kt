@@ -61,10 +61,17 @@ internal fun BudgetEditQueue.pendingCategoryBudgetOverrides(
         val payload = move.payloadJson?.let(::parseQueuePayload) ?: return@forEach
         if (payload.stringValue("month") != month) return@forEach
         when (move.kind) {
-            BudgetReorderKind.SET_CATEGORY_AMOUNT -> payload.longValue("amountMinor")?.let { overrides[move.itemId] = it }
-            BudgetReorderKind.APPLY_BUDGET_TEMPLATE, BudgetReorderKind.APPLY_GOAL_TEMPLATES ->
+            BudgetReorderKind.SET_CATEGORY_AMOUNT -> {
+                payload.longValue("amountMinor")?.let { overrides[move.itemId] = it }
+            }
+
+            BudgetReorderKind.APPLY_BUDGET_TEMPLATE, BudgetReorderKind.APPLY_GOAL_TEMPLATES -> {
                 payload.requiredAssignments().forEach { (categoryId, amountMinor) -> overrides[categoryId] = amountMinor }
-            else -> Unit
+            }
+
+            else -> {
+                Unit
+            }
         }
     }
     return overrides

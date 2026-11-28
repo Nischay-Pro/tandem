@@ -196,14 +196,16 @@ private fun SignOutSection(
 ) {
     SectionCard("Sign out", "Your budgets in Actual are never changed.") {
         when {
-            device == null ->
+            device == null -> {
                 ListRow(
                     "Sign in to this server",
                     "Link this device to Tandem again",
                     leading = RowLeading.Icon(Lucide.LogIn),
                     onClick = { navigation.open(AppRoute.SERVER_ADDRESS) },
                 )
-            mobileSession.deviceRevocationError != null ->
+            }
+
+            mobileSession.deviceRevocationError != null -> {
                 ListRow(
                     "Sign out on this device only",
                     "Tandem couldn’t be reached. The server keeps this device linked until you unlink it from another device.",
@@ -211,7 +213,9 @@ private fun SignOutSection(
                     options = ListRowOptions(muted = mobileSession.isRevokingDevice),
                     onClick = { if (!mobileSession.isRevokingDevice) onConfirm("local") },
                 )
-            else ->
+            }
+
+            else -> {
                 ListRow(
                     if (mobileSession.isRevokingDevice) "Signing out…" else "Sign out",
                     "Unlinks this device. Budgets and unsynced edits stay here for when you sign in again.",
@@ -219,6 +223,7 @@ private fun SignOutSection(
                     options = ListRowOptions(muted = mobileSession.isRevokingDevice),
                     onClick = { if (!mobileSession.isRevokingDevice) onConfirm("server") },
                 )
+            }
         }
         DividerLine()
         ListRow(
@@ -244,8 +249,11 @@ private fun ServerDeviceConfirmation(
     onForgetDeviceLocally: () -> Unit,
 ) {
     when (confirmation) {
-        "signout" -> EraseDataConfirmation(mobileSession, openBudgetId, onDismiss, onBackUpFirst, onSignOut)
-        "server" ->
+        "signout" -> {
+            EraseDataConfirmation(mobileSession, openBudgetId, onDismiss, onBackUpFirst, onSignOut)
+        }
+
+        "server" -> {
             DestructiveConfirmationDialog(
                 title = "Sign out?",
                 message =
@@ -260,7 +268,9 @@ private fun ServerDeviceConfirmation(
                     onForgetDevice()
                 },
             )
-        "local" ->
+        }
+
+        "local" -> {
             DestructiveConfirmationDialog(
                 title = "Sign out on this device only?",
                 message =
@@ -273,6 +283,7 @@ private fun ServerDeviceConfirmation(
                     onForgetDeviceLocally()
                 },
             )
+        }
     }
 }
 

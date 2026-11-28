@@ -47,8 +47,14 @@ internal class TransactionSaveConfirmationState(
                 futureDateConfirmationTarget = dateValidation.date.orEmpty()
                 confirmFutureDate = true
             }
-            dateValidation.status != TransactionDateValidationStatus.VALID -> onSave(null)
-            else -> continueSave(null, budgetAmountPreview, onSave)
+
+            dateValidation.status != TransactionDateValidationStatus.VALID -> {
+                onSave(null)
+            }
+
+            else -> {
+                continueSave(null, budgetAmountPreview, onSave)
+            }
         }
     }
 

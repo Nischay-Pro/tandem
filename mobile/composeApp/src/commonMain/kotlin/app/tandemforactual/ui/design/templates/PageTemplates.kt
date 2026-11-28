@@ -194,9 +194,15 @@ internal fun appBackgroundBrush(
     pureBlack: Boolean,
 ): Brush =
     when {
-        pureBlack || style == "Solid surface" -> Brush.verticalGradient(listOf(palette.background, palette.background))
-        style == "Low-motion glow" -> Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
-        else ->
+        pureBlack || style == "Solid surface" -> {
+            Brush.verticalGradient(listOf(palette.background, palette.background))
+        }
+
+        style == "Low-motion glow" -> {
+            Brush.radialGradient(listOf(palette.accentSurface, palette.background), radius = 1_300f)
+        }
+
+        else -> {
             Brush.verticalGradient(
                 colorStops =
                     arrayOf(
@@ -205,4 +211,5 @@ internal fun appBackgroundBrush(
                         1f to palette.background,
                     ),
             )
+        }
     }

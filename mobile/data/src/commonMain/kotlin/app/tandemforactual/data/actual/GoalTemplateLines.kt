@@ -10,21 +10,44 @@ fun goalTemplateLine(template: GoalTemplate): String? {
     val prefix = if (template.priority == null || template.priority == 0) TEMPLATE_PREFIX else "$TEMPLATE_PREFIX-${template.priority}"
     val limit = template.limit?.let { " ${limitText(it)}" }.orEmpty()
     return when (template.type) {
-        "simple" -> (prefix + template.monthly?.let { " ${jsText(it)}" }.orEmpty() + limit).trim()
-        "schedule" -> "$prefix schedule${if (template.full) " full" else ""} ${template.name}${adjustmentText(template)}"
-        "percentage" -> "$prefix ${jsText(template.percent)}% of ${if (template.previous) "previous " else ""}${template.category}".trim()
-        "periodic" ->
+        "simple" -> {
+            (prefix + template.monthly?.let { " ${jsText(it)}" }.orEmpty() + limit).trim()
+        }
+
+        "schedule" -> {
+            "$prefix schedule${if (template.full) " full" else ""} ${template.name}${adjustmentText(template)}"
+        }
+
+        "percentage" -> {
+            "$prefix ${jsText(template.percent)}% of ${if (template.previous) "previous " else ""}${template.category}".trim()
+        }
+
+        "periodic" -> {
             "$prefix ${jsText(
                 template.amount,
             )} repeat every ${template.periodCount} ${template.period}s starting ${template.starting}$limit"
+        }
+
         "by", "spend" -> {
             val from = if (template.type == "spend" && template.from != null) " spend from ${template.from}" else ""
             "$prefix ${jsText(template.amount)} by ${template.month}$from${repeatText(template)}"
         }
-        "remainder" -> "$prefix remainder${if (template.weight != 1) " ${template.weight}" else ""}$limit"
-        "average" -> "$prefix average ${template.numMonths} months${adjustmentText(template)}"
-        "copy" -> "$prefix copy from ${template.lookBack} months ago"
-        else -> null
+
+        "remainder" -> {
+            "$prefix remainder${if (template.weight != 1) " ${template.weight}" else ""}$limit"
+        }
+
+        "average" -> {
+            "$prefix average ${template.numMonths} months${adjustmentText(template)}"
+        }
+
+        "copy" -> {
+            "$prefix copy from ${template.lookBack} months ago"
+        }
+
+        else -> {
+            null
+        }
     }
 }
 

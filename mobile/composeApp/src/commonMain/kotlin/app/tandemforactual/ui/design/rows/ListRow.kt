@@ -169,6 +169,7 @@ private fun ListRowLeadingTile(
                         contentScale = ContentScale.Fit,
                     )
                 }
+
                 resolvedVector != null -> {
                     Icon(
                         imageVector = resolvedVector,
@@ -180,6 +181,7 @@ private fun ListRowLeadingTile(
                         tint = if (options.muted) palette.muted else palette.accent,
                     )
                 }
+
                 leading is RowLeading.Letter -> {
                     Text(
                         leading.value,

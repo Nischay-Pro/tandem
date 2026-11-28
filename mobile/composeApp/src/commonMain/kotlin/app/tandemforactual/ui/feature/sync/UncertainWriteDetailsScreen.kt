@@ -211,6 +211,7 @@ private fun UncertainWriteActions(
                 onRemove = onRemove,
             )
         }
+
         canRetryOrRemove -> {
             UncertainWriteRecoveryActions(
                 showCheckAgain = isNotFound,
@@ -222,6 +223,7 @@ private fun UncertainWriteActions(
                 onRemove = onRemove,
             )
         }
+
         status == "uncertain" -> {
             PrimaryButton(
                 if (isChecked) "Check again" else "Check status",
@@ -229,8 +231,12 @@ private fun UncertainWriteActions(
                 loading = isSyncing,
             ) { onCheckStatus() }
         }
-        status == "queued" -> Spacer(Modifier.height(72.dp))
-        status == "sending" ->
+
+        status == "queued" -> {
+            Spacer(Modifier.height(72.dp))
+        }
+
+        status == "sending" -> {
             PrimaryButton(
                 if (isSyncing) "Syncing" else "Check status",
                 enabled = !isSyncing,
@@ -238,8 +244,18 @@ private fun UncertainWriteActions(
             ) {
                 if (!isSyncing) onCheckStatus()
             }
-        status == "conflict" -> PrimaryButton("Review", onClick = onReviewConflict)
-        status == "rejected" -> PrimaryButton("Review change", onClick = onReviewRejected)
-        else -> PrimaryButton("Done", onClick = onDone)
+        }
+
+        status == "conflict" -> {
+            PrimaryButton("Review", onClick = onReviewConflict)
+        }
+
+        status == "rejected" -> {
+            PrimaryButton("Review change", onClick = onReviewRejected)
+        }
+
+        else -> {
+            PrimaryButton("Done", onClick = onDone)
+        }
     }
 }

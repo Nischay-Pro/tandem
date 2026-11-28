@@ -94,12 +94,19 @@ internal suspend fun TandemMobileSession.downloadAgainBlocker(
     password: String?,
 ): String? =
     when {
-        encryptedStorageMissing(budgetId) -> "Unlock this budget first so Tandem can keep the changes Actual doesn’t have yet."
+        encryptedStorageMissing(budgetId) -> {
+            "Unlock this budget first so Tandem can keep the changes Actual doesn’t have yet."
+        }
+
         boundEncryptedBudgetId == budgetId &&
             replayPassword(budgetId, password) == null &&
-            repository?.unsentWrites(budgetId).orEmpty().isNotEmpty() ->
+            repository?.unsentWrites(budgetId).orEmpty().isNotEmpty() -> {
             "Lock and unlock this budget again first so Tandem can keep the changes Actual doesn’t have yet."
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }
 
 private fun TandemMobileSession.replayPassword(

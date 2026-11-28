@@ -18,9 +18,15 @@ fun jsMathRound(value: Double): Double {
 /** A JSON number as JavaScript prints it: integral values without a fraction. */
 internal fun jsonNumber(value: Any?): JsonElement =
     when (value) {
-        null -> JsonNull
-        is Long -> JsonPrimitive(value)
-        is Double ->
+        null -> {
+            JsonNull
+        }
+
+        is Long -> {
+            JsonPrimitive(value)
+        }
+
+        is Double -> {
             if (value == kotlin.math.floor(value) &&
                 kotlin.math.abs(value) < 9.007199254740992E15
             ) {
@@ -28,7 +34,11 @@ internal fun jsonNumber(value: Any?): JsonElement =
             } else {
                 JsonPrimitive(value)
             }
-        else -> JsonPrimitive(value.toString())
+        }
+
+        else -> {
+            JsonPrimitive(value.toString())
+        }
     }
 
 internal fun jsonString(value: Any?): JsonElement = if (value == null) JsonNull else JsonPrimitive(value.toString())
@@ -56,15 +66,25 @@ internal fun canonicalJson(value: JsonElement): String =
 /** `JSON.stringify` keeping key order. */
 internal fun stringifyJson(value: JsonElement): String =
     when (value) {
-        JsonNull -> "null"
-        is JsonObject -> value.entries.joinToString(",", "{", "}") { (k, v) -> quoteJson(k) + ":" + stringifyJson(v) }
-        is JsonArray -> value.joinToString(",", "[", "]") { stringifyJson(it) }
-        is JsonPrimitive ->
+        JsonNull -> {
+            "null"
+        }
+
+        is JsonObject -> {
+            value.entries.joinToString(",", "{", "}") { (k, v) -> quoteJson(k) + ":" + stringifyJson(v) }
+        }
+
+        is JsonArray -> {
+            value.joinToString(",", "[", "]") { stringifyJson(it) }
+        }
+
+        is JsonPrimitive -> {
             when {
                 value.isString -> quoteJson(value.content)
                 value.booleanOrNull != null -> value.content
                 else -> value.doubleOrNull?.let { jsNumberString(it, value.content) } ?: value.content
             }
+        }
     }
 
 private fun jsNumberString(

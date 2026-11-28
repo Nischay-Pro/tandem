@@ -125,18 +125,23 @@ private fun KeyRow(
         keys.forEach { key ->
             val modifier = Modifier.width(width).height(width * KEY_HEIGHT)
             when (key) {
-                "✓" ->
+                "✓" -> {
                     Key(modifier, WearColors.accent, enabled = draft.amount.minor > 0, onClick = onNext) {
                         Icon(painterResource(R.drawable.ic_check), contentDescription = "Next", tint = WearColors.onAccent)
                     }
-                "⌫" ->
+                }
+
+                "⌫" -> {
                     Key(modifier, Color.Transparent, onClick = { draft.amount = draft.amount.backspace() }) {
                         Icon(painterResource(R.drawable.ic_backspace), contentDescription = "Delete a digit")
                     }
-                else ->
+                }
+
+                else -> {
                     Key(modifier, WearColors.surfaceHigh, onClick = { draft.amount = draft.amount.digit(key.toInt()) }) {
                         Text(key, style = MaterialTheme.typography.titleMedium)
                     }
+                }
             }
         }
     }

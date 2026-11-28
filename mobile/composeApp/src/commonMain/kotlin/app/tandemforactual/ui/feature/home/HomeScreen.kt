@@ -222,11 +222,23 @@ private fun HomeEntryCard(
     }
     val open = accounts.filterNot { it.closed }
     when (module) {
-        HomeModule.UPCOMING_BILLS -> LiveUpcomingBillsCard(state, navigation, schedules)
-        HomeModule.REVIEW_INBOX -> ReviewInboxCard(module, state, navigation, uncategorized, money)
-        HomeModule.CATEGORY_PROGRESS -> CategoryProgressCard(module, state, navigation, month, settings, money)
-        HomeModule.MONTH_SUMMARY -> MonthSummaryCard(module, navigation, month, money)
-        HomeModule.BUDGET_SUMMARY ->
+        HomeModule.UPCOMING_BILLS -> {
+            LiveUpcomingBillsCard(state, navigation, schedules)
+        }
+
+        HomeModule.REVIEW_INBOX -> {
+            ReviewInboxCard(module, state, navigation, uncategorized, money)
+        }
+
+        HomeModule.CATEGORY_PROGRESS -> {
+            CategoryProgressCard(module, state, navigation, month, settings, money)
+        }
+
+        HomeModule.MONTH_SUMMARY -> {
+            MonthSummaryCard(module, navigation, month, money)
+        }
+
+        HomeModule.BUDGET_SUMMARY -> {
             SectionCard(
                 stringResource(module.title()),
                 stringResource(module.detail()),
@@ -241,7 +253,9 @@ private fun HomeEntryCard(
                     options = ListRowOptions(showChevron = false),
                 )
             }
-        HomeModule.DEBT_OVERVIEW ->
+        }
+
+        HomeModule.DEBT_OVERVIEW -> {
             DebtOverviewCard(
                 open.filter { (it.balanceMinor ?: 0) < 0 },
                 mobileSession.planning.debtTerms,
@@ -249,7 +263,9 @@ private fun HomeEntryCard(
                 state.privacyModeEnabled,
                 money,
             ) { editors.debtAccount = it }
-        HomeModule.ACCOUNTS, HomeModule.NET_WORTH ->
+        }
+
+        HomeModule.ACCOUNTS, HomeModule.NET_WORTH -> {
             AccountsSummaryCard(
                 module,
                 state,
@@ -258,9 +274,17 @@ private fun HomeEntryCard(
                 mobileSession.budgetCurrencyConverter(state),
                 money,
             )
-        HomeModule.RECENT_ACTIVITY -> RecentActivityCard(module, state, navigation, transactions, money)
-        HomeModule.SHARED_BILLS -> SharedBillsHomeCard(module, state, mobileSession, navigation)
-        HomeModule.SAVINGS_GOALS ->
+        }
+
+        HomeModule.RECENT_ACTIVITY -> {
+            RecentActivityCard(module, state, navigation, transactions, money)
+        }
+
+        HomeModule.SHARED_BILLS -> {
+            SharedBillsHomeCard(module, state, mobileSession, navigation)
+        }
+
+        HomeModule.SAVINGS_GOALS -> {
             SavingsGoalsCard(
                 mobileSession.planning.savingsGoals,
                 month,
@@ -270,6 +294,7 @@ private fun HomeEntryCard(
                 state.privacyModeEnabled,
                 editors::editGoal,
             )
+        }
     }
 }
 

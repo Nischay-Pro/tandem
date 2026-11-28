@@ -81,7 +81,7 @@ internal fun BudgetRulesScreen(
             RulesCountRow(searchQuery.isBlank(), visibleRules.size, summaries.size, canAddRules) { onOpenRule("") }
         }
         when {
-            summaries.isEmpty() ->
+            summaries.isEmpty() -> {
                 item(key = "budget-rules-empty") {
                     SurfaceCard {
                         EmptyState(
@@ -91,13 +91,17 @@ internal fun BudgetRulesScreen(
                         )
                     }
                 }
-            visibleRules.isEmpty() ->
+            }
+
+            visibleRules.isEmpty() -> {
                 item(key = "budget-rules-no-matches") {
                     SurfaceCard {
                         EmptyState("No matching rules", modifier = Modifier.fillMaxWidth().padding(TandemSpacing.large))
                     }
                 }
-            else ->
+            }
+
+            else -> {
                 items(visibleRules.size, key = { index -> visibleRules[index].id }) { index ->
                     val rule = visibleRules[index]
                     SurfaceCard(highlighted = rule.id == selectedRuleId) {
@@ -111,6 +115,7 @@ internal fun BudgetRulesScreen(
                         )
                     }
                 }
+            }
         }
     }
 }

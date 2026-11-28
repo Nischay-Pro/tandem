@@ -71,12 +71,14 @@ internal fun parseActivitySearchDateQuery(value: String): ActivitySearchDateQuer
     val endpoint = parseActivitySearchDateEndpoint(expression) ?: return null
     if (endpoint.year == null) {
         return when {
-            endpoint.day == null ->
+            endpoint.day == null -> {
                 ActivitySearchDateQuery(
                     monthOfYear = endpoint.month,
                     label = "Date: ${activitySearchMonthNames[endpoint.month - 1][0].replaceFirstChar(Char::uppercase)} (any year)",
                 )
-            else ->
+            }
+
+            else -> {
                 ActivitySearchDateQuery(
                     monthDay = "${endpoint.month.toString().padStart(2, '0')}-${endpoint.day.toString().padStart(2, '0')}",
                     label =
@@ -84,6 +86,7 @@ internal fun parseActivitySearchDateQuery(value: String): ActivitySearchDateQuer
                             Char::uppercase,
                         )} (any year)",
                 )
+            }
         }
     }
 

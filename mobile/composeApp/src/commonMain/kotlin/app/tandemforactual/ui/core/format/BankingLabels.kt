@@ -18,9 +18,16 @@ internal fun bankFailureMessage(
 ): String =
     "Last sync failed because ${bankFailureLabel(code)}. " +
         when {
-            code.uppercase() == "UNREADABLE_TRANSACTION" ->
+            code.uppercase() == "UNREADABLE_TRANSACTION" -> {
                 "Tandem skipped this account’s sync so nothing wrong was saved. " +
                     "Try again later; if it keeps happening, sync it from Actual’s web app."
-            browser -> "Sign in at the bank again to reconnect it."
-            else -> "Reconnect it in Actual’s web app, or link a different account."
+            }
+
+            browser -> {
+                "Sign in at the bank again to reconnect it."
+            }
+
+            else -> {
+                "Reconnect it in Actual’s web app, or link a different account."
+            }
         }

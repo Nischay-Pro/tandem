@@ -100,22 +100,29 @@ internal fun ActivitySearchSuggestion(
                     ActivitySearchField.DATE_MONTH_OF_YEAR,
                     ActivitySearchField.DATE_MONTH_DAY,
                     -> Lucide.CalendarDays
+
                     ActivitySearchField.ACCOUNT -> Lucide.WalletCards
+
                     ActivitySearchField.CATEGORY, ActivitySearchField.TAG -> Lucide.Tags
+
                     ActivitySearchField.TRANSFER -> Lucide.Zap
+
                     ActivitySearchField.CLEARED,
                     ActivitySearchField.RECONCILED,
                     ActivitySearchField.APPROVED,
                     ActivitySearchField.MATCHED,
                     -> Lucide.Check
+
                     ActivitySearchField.UNCLEARED,
                     ActivitySearchField.UNRECONCILED,
                     ActivitySearchField.UNAPPROVED,
                     ActivitySearchField.UNMATCHED,
                     -> Lucide.CircleDot
+
                     ActivitySearchField.OUTFLOW_IS, ActivitySearchField.OUTFLOW_AT_LEAST, ActivitySearchField.OUTFLOW_AT_MOST,
                     ActivitySearchField.INFLOW_IS, ActivitySearchField.INFLOW_AT_LEAST, ActivitySearchField.INFLOW_AT_MOST,
                     -> Lucide.Receipt
+
                     else -> Lucide.Search
                 },
                 contentDescription = null,

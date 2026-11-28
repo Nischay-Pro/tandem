@@ -22,9 +22,16 @@ internal fun bankLinkBadge(
     val palette = tandemPalette
     val last = link.lastSyncMillis
     return when {
-        link.failure != null -> RowBadge(null, palette.negative, "Bank sync failed")
-        last == null || nowMillis - last > STALE_AFTER_MILLIS ->
+        link.failure != null -> {
+            RowBadge(null, palette.negative, "Bank sync failed")
+        }
+
+        last == null || nowMillis - last > STALE_AFTER_MILLIS -> {
             RowBadge(Lucide.Clock, palette.warning, "Bank sync is behind")
-        else -> RowBadge(Lucide.Link, palette.positive, "Linked to a bank")
+        }
+
+        else -> {
+            RowBadge(Lucide.Link, palette.positive, "Linked to a bank")
+        }
     }
 }

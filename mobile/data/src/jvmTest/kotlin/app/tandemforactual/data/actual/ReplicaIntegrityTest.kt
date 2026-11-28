@@ -161,6 +161,7 @@ class ReplicaIntegrityTest {
                             null,
                         )
                     }
+
                     in 25..44 -> {
                         val id = created.randomOrNull(random) ?: return@repeat
                         val base = device.reader.transaction(id) ?: return@repeat
@@ -174,11 +175,13 @@ class ReplicaIntegrityTest {
                             }
                         device.submit(id, "update", patch, base)
                     }
+
                     in 45..52 -> {
                         val id = created.randomOrNull(random) ?: return@repeat
                         val base = device.reader.transaction(id) ?: return@repeat
                         device.submit(id, "delete", JsonObject(emptyMap()), base)
                     }
+
                     in 53..60 -> {
                         val previous = history.getValue(device).randomOrNull(random) ?: return@repeat
                         val again =
@@ -191,6 +194,7 @@ class ReplicaIntegrityTest {
                             )
                         assertEquals(previous.outcome, again, "seed $seed: a retried operation must return its first outcome")
                     }
+
                     in 61..66 -> {
                         val messages = device.count("SELECT count(*) FROM messages_crdt")
                         val stamp = device.clock.clock.timestamp
@@ -210,9 +214,18 @@ class ReplicaIntegrityTest {
                         assertEquals(stamp, device.clock.clock.timestamp)
                         assertEquals(merkle, device.clock.merkle)
                     }
-                    in 67..74 -> server.down = !server.down
-                    in 75..79 -> server.loseResponse = !server.loseResponse
-                    else -> runCatching { device.sync() }.onFailure { if (!server.down && !server.loseResponse) throw it }
+
+                    in 67..74 -> {
+                        server.down = !server.down
+                    }
+
+                    in 75..79 -> {
+                        server.loseResponse = !server.loseResponse
+                    }
+
+                    else -> {
+                        runCatching { device.sync() }.onFailure { if (!server.down && !server.loseResponse) throw it }
+                    }
                 }
             }
 

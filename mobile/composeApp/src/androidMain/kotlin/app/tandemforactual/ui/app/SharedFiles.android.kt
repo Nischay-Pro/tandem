@@ -27,10 +27,14 @@ fun receiveSharedFile(
             QuickActionEvents.shareReceiptPhoto(uri.toString())
             true
         }
+
         DroppedFileKind.STATEMENT -> {
             scope.launch { QuickActionEvents.shareStatement(withContext(Dispatchers.IO) { readStatementFile(resolver, uri) }) }
             true
         }
-        null -> false
+
+        null -> {
+            false
+        }
     }
 }

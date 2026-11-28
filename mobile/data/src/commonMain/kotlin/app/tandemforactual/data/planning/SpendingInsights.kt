@@ -196,7 +196,10 @@ object SpendingInsights {
         val remainingDays = length - day
         val (basis, projected) =
             when {
-                remainingDays == 0 -> ForecastBasis.FINAL to spent
+                remainingDays == 0 -> {
+                    ForecastBasis.FINAL to spent
+                }
+
                 history.isNotEmpty() -> {
                     val toDate =
                         average(
@@ -215,8 +218,14 @@ object SpendingInsights {
                         }
                     ForecastBasis.HISTORY to projected.coerceAtLeast(spent)
                 }
-                day == 0 -> ForecastBasis.PACE to spent
-                else -> ForecastBasis.PACE to spent + (spent.coerceAtLeast(0) * remainingDays + day - 1) / day
+
+                day == 0 -> {
+                    ForecastBasis.PACE to spent
+                }
+
+                else -> {
+                    ForecastBasis.PACE to spent + (spent.coerceAtLeast(0) * remainingDays + day - 1) / day
+                }
             }
         val status =
             when {

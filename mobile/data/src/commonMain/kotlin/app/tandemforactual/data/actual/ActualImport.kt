@@ -95,15 +95,24 @@ class ActualImport(
                 val match = step.match
                 val trans = step.trans
                 when {
-                    match == null && (truthy(trans["tombstone"]) || step.missing) -> ImportOutcome.UNCHANGED
+                    match == null && (truthy(trans["tombstone"]) || step.missing) -> {
+                        ImportOutcome.UNCHANGED
+                    }
+
                     match == null -> {
                         val rows = newRows(trans, defaultCleared)
                         addedIds += rows.first()["id"] as String
                         added += rows
                         ImportOutcome.ADD
                     }
-                    truthy(match["reconciled"]) -> ImportOutcome.RECONCILED
-                    else -> updateMatch(match, trans, updateDates, reviewed, updated)
+
+                    truthy(match["reconciled"]) -> {
+                        ImportOutcome.RECONCILED
+                    }
+
+                    else -> {
+                        updateMatch(match, trans, updateDates, reviewed, updated)
+                    }
                 }
             }
         val now = writer.nowMillis()

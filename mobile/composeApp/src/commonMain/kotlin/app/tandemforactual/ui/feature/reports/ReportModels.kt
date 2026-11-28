@@ -138,6 +138,7 @@ internal fun createReportWindow(
                 reportMonthsBetween(startMonth, todayMonthId),
             )
         }
+
         ReportRangePreset.LAST_YEAR -> {
             val year = todayMonth.year - 1
             val firstMonth = "${year.toString().padStart(4, '0')}-01"
@@ -150,8 +151,14 @@ internal fun createReportWindow(
                 reportMonthsBetween(firstMonth, lastMonth),
             )
         }
-        ReportRangePreset.ALL_TIME -> createReportHistoryWindow(availableMonthIds, today)
-        else -> createReportWindow(endMonthId, ReportPeriodMode.RANGE, 6)
+
+        ReportRangePreset.ALL_TIME -> {
+            createReportHistoryWindow(availableMonthIds, today)
+        }
+
+        else -> {
+            createReportWindow(endMonthId, ReportPeriodMode.RANGE, 6)
+        }
     }
 }
 

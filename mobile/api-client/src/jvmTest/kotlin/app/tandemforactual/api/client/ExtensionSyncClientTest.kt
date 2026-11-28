@@ -35,38 +35,53 @@ class ExtensionSyncClientTest {
                             }?.let { "?$it" }.orEmpty()} ${request.headers["x-actual-token"]}"
                         val body = (request.body as? TextContent)?.text.orEmpty()
                         when {
-                            request.url.encodedPath.endsWith("/key") && request.method == HttpMethod.Get ->
+                            request.url.encodedPath.endsWith("/key") && request.method == HttpMethod.Get -> {
                                 if (keyStored) {
                                     respond("""{"keyId":"k","wrappedKey":"AQI=","wrapSalt":"Aw==","keyCheck":"BA=="}""", headers = json)
                                 } else {
                                     respond("", HttpStatusCode.NotFound)
                                 }
-                            request.url.encodedPath.endsWith("/key") ->
+                            }
+
+                            request.url.encodedPath.endsWith("/key") -> {
                                 if ("\"expectedKeyId\":null" in body && !keyStored) {
                                     keyStored = true
                                     respond("""{"status":"stored"}""", headers = json)
                                 } else {
                                     respond("""{"error":{"code":"key_conflict","message":"x"}}""", HttpStatusCode.Conflict, json)
                                 }
-                            request.url.encodedPath.endsWith("/changes") ->
+                            }
+
+                            request.url.encodedPath.endsWith("/changes") -> {
                                 respond(
                                     """{"records":[{"recordId":"r","recordType":"planning.savings_goal","schemaVersion":1,"revision":2,"deleted":false,"iv":"AQ==","ciphertext":"Ag==","seq":7}],"cursor":7,"hasMore":false${if ("anchor" in request.url.encodedQuery) ""","restored":true""" else ""}}""",
                                     headers = json,
                                 )
-                            request.url.encodedPath.endsWith("/records/fresh") -> respond("""{"seq":8}""", headers = json)
-                            request.url.encodedPath.endsWith("/records/stale") ->
+                            }
+
+                            request.url.encodedPath.endsWith("/records/fresh") -> {
+                                respond("""{"seq":8}""", headers = json)
+                            }
+
+                            request.url.encodedPath.endsWith("/records/stale") -> {
                                 respond(
                                     """{"error":{"code":"revision_conflict","message":"x"},"current":{"recordId":"stale","recordType":"t","schemaVersion":1,"revision":4,"deleted":true,"iv":"AQ==","ciphertext":"Ag==","seq":3}}""",
                                     HttpStatusCode.Conflict,
                                     json,
                                 )
-                            request.url.encodedPath.endsWith("/records/new") ->
+                            }
+
+                            request.url.encodedPath.endsWith("/records/new") -> {
                                 respond(
                                     """{"error":{"code":"revision_conflict","message":"x"},"current":null}""",
                                     HttpStatusCode.Conflict,
                                     json,
                                 )
-                            else -> respond("""{"error":{"code":"budget_forbidden","message":"x"}}""", HttpStatusCode.Forbidden, json)
+                            }
+
+                            else -> {
+                                respond("""{"error":{"code":"budget_forbidden","message":"x"}}""", HttpStatusCode.Forbidden, json)
+                            }
                         }
                     },
                 )

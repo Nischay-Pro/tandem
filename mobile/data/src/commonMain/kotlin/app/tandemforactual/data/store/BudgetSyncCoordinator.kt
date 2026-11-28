@@ -492,7 +492,10 @@ class BudgetSyncCoordinator(
             RemoteOperationStatus.QUEUED,
             RemoteOperationStatus.APPLYING,
             RemoteOperationStatus.UNCERTAIN,
-            -> WriteOutcome.PENDING
+            -> {
+                WriteOutcome.PENDING
+            }
+
             RemoteOperationStatus.COMMITTED -> {
                 if (local.action == "DELETE") {
                     repository.markWriteCommitted(local.operationId, null)
@@ -507,6 +510,7 @@ class BudgetSyncCoordinator(
                 }
                 WriteOutcome.COMMITTED
             }
+
             RemoteOperationStatus.CONFLICT -> {
                 val transaction = remote.readTransaction(local.budgetId, local.recordId, encryptionPassword)
                 repository.markWriteConflict(
@@ -521,6 +525,7 @@ class BudgetSyncCoordinator(
                 )
                 WriteOutcome.CONFLICTED
             }
+
             RemoteOperationStatus.REJECTED -> {
                 if (remoteResult.errorCode == "discarded-by-user") {
                     repository.discardWrite(local.operationId)

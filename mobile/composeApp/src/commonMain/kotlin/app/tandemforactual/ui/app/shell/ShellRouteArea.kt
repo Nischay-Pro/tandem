@@ -223,9 +223,11 @@ private fun AnimatedContentTransitionScope<AppRouteEntry>.routeTransform(
         reduceMotion ||
             shell.skipNextRouteTransition ||
             initialState.route == AppRoute.STARTUP ||
-            targetState.route == AppRoute.STARTUP ->
+            targetState.route == AppRoute.STARTUP -> {
             EnterTransition.None togetherWith ExitTransition.None
-        initialState.route.isTab() && targetState.route.isTab() ->
+        }
+
+        initialState.route.isTab() && targetState.route.isTab() -> {
             (
                 fadeIn(
                     tween(
@@ -246,20 +248,28 @@ private fun AnimatedContentTransitionScope<AppRouteEntry>.routeTransform(
                 fadeOut(
                     tween(TandemMotion.TAB_EXIT_MILLIS, easing = TandemMotion.exitEasing),
                 ) using null
-        shell.routeTransitionDirection > 0f ->
+        }
+
+        shell.routeTransitionDirection > 0f -> {
             slideInHorizontally(routeSlideSpec) { it } togetherWith
                 (
                     slideOutHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
                         fadeOut(routeFadeSpec, targetAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
                 ) using null
-        shell.routeTransitionDirection < 0f ->
+        }
+
+        shell.routeTransitionDirection < 0f -> {
             (
                 (
                     slideInHorizontally(routeSlideSpec) { -(it * TandemMotion.ROUTE_PARALLAX).toInt() } +
                         fadeIn(routeFadeSpec, initialAlpha = TandemMotion.ROUTE_COVERED_ALPHA)
                 ) togetherWith slideOutHorizontally(routeSlideSpec) { it } using null
             ).apply { targetContentZIndex = -1f }
-        else -> EnterTransition.None togetherWith ExitTransition.None
+        }
+
+        else -> {
+            EnterTransition.None togetherWith ExitTransition.None
+        }
     }
 }
 

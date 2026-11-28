@@ -92,10 +92,17 @@ private fun OverlapMessage(
     val countries = "${first.region.displayName} and ${second.region.displayName}"
     InlineMessage(
         when (first.kind) {
-            PeriodKind.TAX_RESIDENCE ->
+            PeriodKind.TAX_RESIDENCE -> {
                 "Tax resident of $countries in the same months. Cross-border tax is worth checking with a professional."
-            PeriodKind.RESIDENCE -> "Lived in $countries in the same months. Check the dates."
-            PeriodKind.EMPLOYMENT -> "Worked in $countries in the same months."
+            }
+
+            PeriodKind.RESIDENCE -> {
+                "Lived in $countries in the same months. Check the dates."
+            }
+
+            PeriodKind.EMPLOYMENT -> {
+                "Worked in $countries in the same months."
+            }
         },
         if (first.kind == PeriodKind.EMPLOYMENT) InlineMessageKind.INFO else InlineMessageKind.WARNING,
     )

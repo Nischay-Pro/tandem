@@ -14,8 +14,14 @@ internal fun spendingOverTimeSummary(
     formatCount: (Int) -> String,
 ): String =
     when {
-        average == null -> "No monthly spending is available for this period."
-        average.isCurrentMonthSoFar -> "Spending so far this month is ${formatCurrency(average.averageMinor)}."
+        average == null -> {
+            "No monthly spending is available for this period."
+        }
+
+        average.isCurrentMonthSoFar -> {
+            "Spending so far this month is ${formatCurrency(average.averageMinor)}."
+        }
+
         else -> {
             val months = if (average.monthCount == 1) "full month" else "full months"
             "Average monthly spending was ${formatCurrency(average.averageMinor)} across ${formatCount(average.monthCount)} $months."

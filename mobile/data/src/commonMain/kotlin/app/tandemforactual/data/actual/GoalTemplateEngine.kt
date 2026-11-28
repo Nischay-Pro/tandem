@@ -67,12 +67,21 @@ class GoalTemplateEngine(
         return noteTemplates().flatMap { category ->
             category.templates.mapNotNull { template ->
                 when {
-                    template.type == "error" && "adjustment" in template.error ->
+                    template.type == "error" && "adjustment" in template.error -> {
                         "${category.name}: ${template.line}\nError: ${template.error}"
-                    template.type == "error" -> "${category.name}: ${template.line}"
-                    template.type == "schedule" && template.name != null && template.name !in schedules ->
+                    }
+
+                    template.type == "error" -> {
+                        "${category.name}: ${template.line}"
+                    }
+
+                    template.type == "schedule" && template.name != null && template.name !in schedules -> {
                         "${category.name}: Schedule \"${template.name}\" does not exist"
-                    else -> null
+                    }
+
+                    else -> {
+                        null
+                    }
                 }
             }
         }
@@ -225,13 +234,19 @@ class GoalTemplateEngine(
         val names = active.mapNotNull { (it["name"] as String?)?.trim() }.toSet()
         timed.filter { it.type == "schedule" }.forEach { template ->
             when {
-                template.scheduleId != null && template.scheduleId !in ids ->
+                template.scheduleId != null && template.scheduleId !in ids -> {
                     throw GoalTemplateException("Schedule ${template.name ?: template.scheduleId} does not exist")
-                template.scheduleId == null && template.name == null -> throw GoalTemplateException(
-                    "Schedule template has no scheduleId or name",
-                )
-                template.scheduleId == null && template.name!!.trim() !in names ->
+                }
+
+                template.scheduleId == null && template.name == null -> {
+                    throw GoalTemplateException(
+                        "Schedule template has no scheduleId or name",
+                    )
+                }
+
+                template.scheduleId == null && template.name!!.trim() !in names -> {
                     throw GoalTemplateException("Schedule ${template.name.trim()} does not exist")
+                }
             }
         }
         val lowest = timed.minOf { it.priority ?: 0 }
