@@ -20,6 +20,7 @@ import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.CardNetwork
 import app.tandemforactual.ui.design.icons.logoTileColor
 import app.tandemforactual.ui.design.icons.rememberMerchantArtwork
+import app.tandemforactual.ui.design.rows.AccountPhotoFill
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.theme.TandemLayout
 import app.tandemforactual.ui.design.theme.TandemShapes
@@ -38,6 +39,7 @@ internal fun AccountIconTile(
 ) {
     val logos = LocalRowLogos.current
     val chosen = logos?.chosenIcon?.invoke(accountName)
+    val photo = logos?.photo?.invoke(accountName)
     val bankIcon = logos?.bankIcon?.invoke(accountName)
     val packLogo = rememberMerchantArtwork(logos?.account?.invoke(accountName))
     val artwork = (bankIcon ?: packLogo).takeIf { chosen == null }
@@ -50,7 +52,9 @@ internal fun AccountIconTile(
                 .background(logoTileColor(artwork, tandemPalette.raised)),
             contentAlignment = Alignment.Center,
         ) {
-            if (artwork != null) {
+            if (photo != null) {
+                AccountPhotoFill(photo)
+            } else if (artwork != null) {
                 Image(
                     artwork,
                     contentDescription = null,
