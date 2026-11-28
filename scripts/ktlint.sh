@@ -17,7 +17,7 @@ verify() {
 if [ ! -f "$jar" ] || ! verify "$jar"; then
   mkdir -p "$cache_dir"
   partial="$jar.partial"
-  curl -fsSL --retry 3 -o "$partial" "$url"
+  curl -fsSL --retry 5 --retry-delay 15 --retry-all-errors -o "$partial" "$url"
   if ! verify "$partial"; then
     rm -f "$partial"
     printf '%s\n' "The downloaded ktlint $version doesn't match its pinned checksum." >&2
