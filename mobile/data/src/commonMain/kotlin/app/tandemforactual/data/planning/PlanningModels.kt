@@ -81,6 +81,9 @@ data class DebtTerms(
     /** A card whose full statement balance is paid each month, so it never carries interest. */
     val paysInFull: Boolean = false,
     val shared: Boolean = true,
+    /** The day of the month a card's statement closes. */
+    val statementCloseDay: Int? = null,
+    val creditLimitMinor: Long? = null,
 ) {
     val aprProvenance: Provenance get() = if (aprBasisPoints == null) Provenance.UNKNOWN else Provenance.USER_SUPPLIED
 
@@ -94,6 +97,8 @@ data class DebtTerms(
             "promoEndsOn" to promoEndsOn.json(),
             "kind" to (if (kind == DebtKind.UNSPECIFIED) JsonNull else JsonPrimitive(kind.name)),
             "paysInFull" to (if (paysInFull) JsonPrimitive(true) else JsonNull),
+            "statementCloseDay" to statementCloseDay.json(),
+            "creditLimitMinor" to creditLimitMinor.json(),
             PRIVATE to privateFlag(shared),
         )
 
@@ -114,6 +119,8 @@ data class DebtTerms(
             kind = DebtKind.entries.firstOrNull { it.name == body.text("kind") } ?: DebtKind.UNSPECIFIED,
             paysInFull = body.text("paysInFull") == "true",
             shared = !isPrivate(body),
+            statementCloseDay = body.int("statementCloseDay"),
+            creditLimitMinor = body.long("creditLimitMinor"),
         )
     }
 }
