@@ -43,6 +43,7 @@ import app.tandemforactual.ui.core.state.decodeAppTabBackStacks
 import app.tandemforactual.ui.core.state.isTab
 import app.tandemforactual.ui.core.state.routeContentStateKey
 import app.tandemforactual.ui.core.state.shouldRenderStandaloneRouteHeader
+import app.tandemforactual.ui.core.ui.accountIconFor
 import app.tandemforactual.ui.design.rows.LocalRowLogos
 import app.tandemforactual.ui.design.rows.RowLogos
 import app.tandemforactual.ui.design.templates.LocalFloatingActionClearance
@@ -150,13 +151,20 @@ private fun ShellRouteContent(
     val bankLinks = ctx.mobileSession.banking.bankLinks
     val bankIds = remember(bankLinks) { bankLinks.mapNotNull { link -> link.bankId?.let { link.name to it } }.toMap() }
     val downloadBankIcons = ctx.state.bankIconsEnabled
+    val pickedIcons = ctx.mobileSession.planning.accountIcons
+    val liveAccounts = ctx.shell.liveAccounts
+    val iconsByName =
+        remember(pickedIcons, liveAccounts) {
+            liveAccounts.mapNotNull { account -> accountIconFor(pickedIcons[account.id])?.let { account.name to it } }.toMap()
+        }
     val logos =
-        remember(matcher, bankIds, downloadBankIcons) {
+        remember(matcher, bankIds, downloadBankIcons, iconsByName) {
             RowLogos(
                 payee = { matcher?.iconFor(it) },
                 account = { matcher?.accountIconFor(it) },
                 bankIcon = { name -> rememberBankIcon(bankIds[name], downloadBankIcons) },
                 bySlug = { matcher?.iconForSlug(it) },
+                chosenIcon = { iconsByName[it] },
             )
         }
     CompositionLocalProvider(

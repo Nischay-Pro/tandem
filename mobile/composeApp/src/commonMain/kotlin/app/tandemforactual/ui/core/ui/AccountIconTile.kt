@@ -37,9 +37,10 @@ internal fun AccountIconTile(
     network: CardNetwork? = null,
 ) {
     val logos = LocalRowLogos.current
+    val chosen = logos?.chosenIcon?.invoke(accountName)
     val bankIcon = logos?.bankIcon?.invoke(accountName)
     val packLogo = rememberMerchantArtwork(logos?.account?.invoke(accountName))
-    val artwork = bankIcon ?: packLogo
+    val artwork = (bankIcon ?: packLogo).takeIf { chosen == null }
     val badge = rememberMerchantArtwork(network?.let { logos?.bySlug?.invoke(it.iconSlug) })
     Box(modifier.size(TandemLayout.listRowLeadingSize)) {
         Box(
@@ -58,7 +59,7 @@ internal fun AccountIconTile(
                 )
             } else {
                 Icon(
-                    accountTypeIcon(accountName, kind),
+                    chosen ?: accountTypeIcon(accountName, kind),
                     contentDescription = null,
                     modifier = Modifier.size(TandemLayout.listRowIconSize),
                     tint = tandemPalette.accent,
