@@ -188,7 +188,7 @@ class BudgetSyncRemoteException(
         get() = !awaitingUpload && httpStatus != null && httpStatus in setOf(400, 409, 422)
 
     val isRetryableBeforeSubmission: Boolean
-        get() = awaitingUpload || httpStatus != null && httpStatus in setOf(401, 403, 404)
+        get() = awaitingUpload || (httpStatus != null && httpStatus in setOf(401, 403, 404))
 }
 
 class BudgetSyncProtocolException(

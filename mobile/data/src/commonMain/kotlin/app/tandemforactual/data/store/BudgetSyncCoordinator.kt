@@ -259,15 +259,10 @@ class BudgetSyncCoordinator(
         var pagePreviousType = previousType
         var pagePreviousId = previousId
         for (record in records) {
-            if (record.generation != generation ||
+            val outOfOrder =
                 pagePreviousType != null &&
-                compareSnapshotRecordKeys(
-                    record.recordType,
-                    record.recordId,
-                    pagePreviousType,
-                    pagePreviousId.orEmpty(),
-                ) <= 0
-            ) {
+                    compareSnapshotRecordKeys(record.recordType, record.recordId, pagePreviousType, pagePreviousId.orEmpty()) <= 0
+            if (record.generation != generation || outOfOrder) {
                 throw BudgetSyncProtocolException("Snapshot page records are out of order")
             }
             pagePreviousType = record.recordType

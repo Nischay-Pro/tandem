@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Runs the pinned ktlint on Kotlin files without Gradle. With no file arguments it checks all mobile Kotlin, as the
+# Runs the pinned ktlint on Kotlin files without Gradle. Without file arguments it checks all mobile Kotlin, as the
 # Gradle ktlintCheck tasks do. The version must match ktlint in mobile/gradle/libs.versions.toml.
 set -eu
 
@@ -31,7 +31,11 @@ if ! grep -qx "ktlint = \"$version\"" mobile/gradle/libs.versions.toml; then
   printf '%s\n' "mobile/gradle/libs.versions.toml doesn't use ktlint $version; update it and this script together." >&2
   exit 1
 fi
-if [ "$#" -eq 0 ]; then
-  set -- 'mobile/**/src/**/*.kt' 'mobile/**/*.kts' '!**/build/**' '!mobile/settings.gradle.kts'
+has_files=false
+for argument in "$@"; do
+  case $argument in -*) ;; *) has_files=true ;; esac
+done
+if [ "$has_files" = false ]; then
+  set -- "$@" 'mobile/**/src/**/*.kt' 'mobile/**/*.kts' '!**/build/**' '!mobile/settings.gradle.kts'
 fi
 exec java -jar "$jar" --relative "$@"

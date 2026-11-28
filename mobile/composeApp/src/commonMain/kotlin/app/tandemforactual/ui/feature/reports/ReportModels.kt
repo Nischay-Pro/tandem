@@ -186,7 +186,7 @@ private fun reportMonthsBetween(
     if (start.year * 12 + start.month > end.year * 12 + end.month) return emptyList()
     val result = mutableListOf<String>()
     var current = start
-    while (current.year < end.year || current.year == end.year && current.month <= end.month) {
+    while (current.year < end.year || (current.year == end.year && current.month <= end.month)) {
         result += reportMonthId(current)
         current = shiftReportMonth(current, 1)
     }

@@ -229,6 +229,6 @@ internal fun bankIconFormat(bytes: ByteArray): BankIconFormat? {
 private fun isSafeSvg(bytes: ByteArray): Boolean {
     val text = runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }.getOrNull()?.lowercase() ?: return false
     val head = text.take(1024).trimStart('\uFEFF', ' ', '\n', '\r', '\t')
-    val opens = head.startsWith("<svg") || (head.startsWith("<?xml") || head.startsWith("<!--")) && "<svg" in head
+    val opens = head.startsWith("<svg") || ((head.startsWith("<?xml") || head.startsWith("<!--")) && "<svg" in head)
     return opens && "<script" !in text && "<foreignobject" !in text && "javascript:" !in text
 }

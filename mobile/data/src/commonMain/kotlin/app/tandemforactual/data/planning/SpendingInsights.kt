@@ -249,7 +249,7 @@ object SpendingInsights {
         val share = if (baseline > 0) (change * 10_000 / baseline).toInt() else null
         val direction =
             when {
-                change == 0L || share != null && kotlin.math.abs(share) < FLAT_BASIS_POINTS -> TrendDirection.FLAT
+                change == 0L || (share != null && kotlin.math.abs(share) < FLAT_BASIS_POINTS) -> TrendDirection.FLAT
                 change > 0 -> TrendDirection.UP
                 else -> TrendDirection.DOWN
             }

@@ -61,5 +61,3 @@ internal fun cachedBudgetName(
     selectedBudgetName: String,
     cached: BudgetCatalogItem,
 ): String = if (cached.budgetId == selectedBudgetId && selectedBudgetName.isNotBlank()) selectedBudgetName else cached.name
-
-/** Shared preview-first Tandem UI used by the Android app and iOS host. */
