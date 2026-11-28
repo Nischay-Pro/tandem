@@ -155,6 +155,27 @@ struct LeftToSpendIntent: AppIntent {
     }
 }
 
+/// Reads an account's balance from this device's copy of the budget.
+struct AccountBalanceIntent: AppIntent {
+    static let title: LocalizedStringResource = "Account balance"
+    static let description: IntentDescription? = IntentDescription(
+        "Shows an account’s balance, including changes not yet synced. Turn on Allow automation apps to read balances in Tandem’s settings first."
+    )
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Account")
+    var account: AccountEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Balance of \(\.$account)")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<Double> & ProvidesDialog {
+        let balance = try await TandemAutomation.accountBalance(accountId: account.id, accountName: account.name)
+        return .result(value: Double(balance.value) ?? 0, dialog: "\(balance.sentence)")
+    }
+}
+
 /// Opens one of Tandem's main screens.
 struct OpenFeatureIntent: AppIntent {
     static let title: LocalizedStringResource = "Open in Tandem"
@@ -358,6 +379,14 @@ enum TandemAutomation {
                 externalId: externalId
             ) { added, failure in
                 TandemAutomation.resume(continuation, with: added, failure)
+            }
+        }
+    }
+
+    static func accountBalance(accountId: String, accountName: String) async throws -> AutomationAccountBalance {
+        try await withCheckedThrowingContinuation { continuation in
+            IosAutomation.shared.accountBalance(accountId: accountId, accountName: accountName) { balance, failure in
+                TandemAutomation.resume(continuation, with: balance, failure)
             }
         }
     }

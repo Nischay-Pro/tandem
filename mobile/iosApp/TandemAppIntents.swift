@@ -56,6 +56,13 @@ struct TandemAppShortcuts: AppShortcutsProvider {
             ]
         )
         AppShortcut(
+            intent: AccountBalanceIntent(),
+            phrases: [
+                "What’s the balance of \(\.$account) in \(.applicationName)",
+                "Account balance in \(.applicationName)",
+            ]
+        )
+        AppShortcut(
             intent: OpenFeatureIntent(),
             phrases: [
                 "Open \(\.$feature) in \(.applicationName)",

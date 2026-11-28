@@ -125,3 +125,15 @@ data class AssistantLeftToSpend(
     val overspent: Boolean,
     val sentence: String,
 )
+
+/**
+ * An account's balance.
+ *
+ * @property balance The balance as a decimal number with a dot in the budget's currency; negative when the account owes.
+ * @property sentence The balance as a sentence to say or show, such as "Checking has $1,240.00."
+ */
+@AppFunctionSerializable(isDescribedByKDoc = true)
+data class AssistantAccountBalance(
+    val balance: String,
+    val sentence: String,
+)

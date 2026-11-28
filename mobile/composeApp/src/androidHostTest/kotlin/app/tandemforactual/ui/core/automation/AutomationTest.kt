@@ -217,6 +217,17 @@ class AutomationTest {
         }
 
     @Test
+    fun anAccountBalanceReadsAsHeldOrOwed() {
+        val held = AutomationBudgetNumbers(null, null, null, 124_000, null, null).accountBalance("Checking")
+        assertEquals("1240.00", held.value)
+        assertTrue(held.sentence.startsWith("Checking has ") && held.sentence.endsWith("1,240.00."), held.sentence)
+        val owed = AutomationBudgetNumbers(null, null, null, -4_050, null, null).accountBalance("Card")
+        assertEquals("-40.50", owed.value)
+        assertTrue(owed.sentence.startsWith("Card owes ") && owed.sentence.endsWith("40.50."), owed.sentence)
+        assertEquals("0.00", AutomationBudgetNumbers(null, null, null, null, null, null).accountBalance("Cash").value)
+    }
+
+    @Test
     fun readsBudgetNumbersFromThisDevice() =
         withBudget { database ->
             val month = readAutomationBudget(database, BUDGET, AutomationReadInput(), TODAY)
