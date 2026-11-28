@@ -83,10 +83,30 @@ test("CLI reads piped JSON and prints the publishing decision", () => {
 test("finds the newest main commit whose push CI passed", () => {
   const runs = [
     { event: "push", status: "queued", conclusion: "", headSha: "c3" },
-    { event: "push", status: "completed", conclusion: "cancelled", headSha: "c2" },
-    { event: "workflow_dispatch", status: "completed", conclusion: "success", headSha: "x" },
-    { event: "push", status: "completed", conclusion: "success", headSha: "c1" },
-    { event: "push", status: "completed", conclusion: "success", headSha: "c0" },
+    {
+      event: "push",
+      status: "completed",
+      conclusion: "cancelled",
+      headSha: "c2",
+    },
+    {
+      event: "workflow_dispatch",
+      status: "completed",
+      conclusion: "success",
+      headSha: "x",
+    },
+    {
+      event: "push",
+      status: "completed",
+      conclusion: "success",
+      headSha: "c1",
+    },
+    {
+      event: "push",
+      status: "completed",
+      conclusion: "success",
+      headSha: "c0",
+    },
   ];
   assert.equal(latestGreenCommit(runs, "c0"), "c1");
   assert.equal(latestGreenCommit(runs, "c1"), "");
@@ -100,7 +120,12 @@ test("reports the newest green commit from the command line", () => {
     ["scripts/nightly-ci-status.mjs", "latest-green", "old"],
     {
       input: JSON.stringify([
-        { event: "push", status: "completed", conclusion: "success", headSha: "new" },
+        {
+          event: "push",
+          status: "completed",
+          conclusion: "success",
+          headSha: "new",
+        },
       ]),
     },
   ).toString();
