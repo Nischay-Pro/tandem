@@ -19,6 +19,7 @@ import app.tandemforactual.android.watch.PhoneWatch
 import app.tandemforactual.api.client.DirectBudgetSyncRemote
 import app.tandemforactual.api.client.TandemApiClient
 import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.client.TrustedCertificates
 import app.tandemforactual.api.client.claimDueBankSync
 import app.tandemforactual.api.client.runBudgetBankSync
 import app.tandemforactual.data.database.TandemDatabase
@@ -119,7 +120,7 @@ class BackgroundBudgetSyncWorker(
         var notificationPreferences: Map<String, String>? = null
         val progress = BackgroundWorkProgress(applicationContext, BackgroundWork.SYNC)
         return try {
-            val preferences = AppPreferencesStore(database).read()
+            val preferences = AppPreferencesStore(database).read().also(TrustedCertificates::restoreFrom)
             notificationPreferences = preferences
             val requested = inputData.getBoolean(BackgroundBudgetSyncScheduler.AFTER_AUTOMATION, false)
             if (preferences["backgroundSyncEnabled"] != "true" && !requested) return Result.success()

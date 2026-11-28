@@ -27,6 +27,10 @@ class TrustedCertificatesTest {
         assertFalse(TrustedCertificates.trusts("budget.home", "AA:BB"))
         TrustedCertificates.restore("$saved\nnot a line\n=EE\nhost=\n")
         assertEquals(saved, TrustedCertificates.encode())
+        TrustedCertificates.restoreFrom(emptyMap())
+        assertEquals("", TrustedCertificates.encode())
+        TrustedCertificates.restoreFrom(mapOf(TrustedCertificates.PREFERENCE_KEY to saved))
+        assertEquals(saved, TrustedCertificates.encode())
         assertEquals("BA:78:16:BF", certificateFingerprint("abc".encodeToByteArray()).take(11))
     }
 

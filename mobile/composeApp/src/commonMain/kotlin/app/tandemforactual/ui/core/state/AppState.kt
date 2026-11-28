@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.TrustedCertificates
 import app.tandemforactual.data.planning.MonthStart
 import app.tandemforactual.data.store.BudgetDisplaySettings
 import app.tandemforactual.data.store.NotificationPolicy
@@ -157,6 +158,16 @@ internal class AppState {
 
     /** Whether a two-finger double tap anywhere turns Hide budget amounts on or off. */
     var hideAmountsGesture by mutableStateOf(false)
+
+    private var trustedCertificatesState by mutableStateOf("")
+
+    /** Certificates trusted for their own servers, as `host=fingerprint` lines; every API client uses them. */
+    var trustedCertificates: String
+        get() = trustedCertificatesState
+        set(value) {
+            trustedCertificatesState = value
+            TrustedCertificates.restore(value)
+        }
 
     /** The tab the app opens on, by route name; Home when blank or not shown. */
     var startPageName by mutableStateOf("")
@@ -317,6 +328,7 @@ internal class AppState {
             "privacyModeEnabled" to privacyModeEnabled.toString(),
             "bankIconsEnabled" to bankIconsEnabled.toString(),
             "hideAmountsGesture" to hideAmountsGesture.toString(),
+            TrustedCertificates.PREFERENCE_KEY to trustedCertificates,
             "startPage" to startPageName,
             "defaultTransactionAccountId" to defaultTransactionAccountId,
             "balanceAfterSaveEnabled" to balanceAfterSaveEnabled.toString(),
@@ -395,6 +407,7 @@ internal class AppState {
         privacyModeEnabled = saved["privacyModeEnabled"]?.toBooleanStrictOrNull() ?: privacyModeEnabled
         bankIconsEnabled = saved["bankIconsEnabled"]?.toBooleanStrictOrNull() ?: bankIconsEnabled
         hideAmountsGesture = saved["hideAmountsGesture"]?.toBooleanStrictOrNull() ?: hideAmountsGesture
+        trustedCertificates = saved[TrustedCertificates.PREFERENCE_KEY] ?: trustedCertificates
         startPageName = saved["startPage"] ?: startPageName
         defaultTransactionAccountId = saved["defaultTransactionAccountId"] ?: defaultTransactionAccountId
         balanceAfterSaveEnabled = saved["balanceAfterSaveEnabled"]?.toBooleanStrictOrNull() ?: balanceAfterSaveEnabled

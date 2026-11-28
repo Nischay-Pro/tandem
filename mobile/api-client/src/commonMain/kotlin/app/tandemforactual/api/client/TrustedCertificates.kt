@@ -14,6 +14,9 @@ data class PresentedCertificate(
  * SHA-256 fingerprint. Every client in the process uses them, background sync included.
  */
 object TrustedCertificates {
+    /** The app preference trusted certificates are kept under, so background work trusts them too. */
+    const val PREFERENCE_KEY = "trustedCertificates"
+
     private var byHost: Map<String, Set<String>> = emptyMap()
 
     /** The last certificate refused, so sign-in can offer to trust it. */
@@ -49,6 +52,9 @@ object TrustedCertificates {
             .flatMap { (host, fingerprints) -> fingerprints.map { "$host=$it" } }
             .sorted()
             .joinToString("\n")
+
+    /** Restores what's trusted from the app's saved [preferences], for work that runs without the app open. */
+    fun restoreFrom(preferences: Map<String, String>) = restore(preferences[PREFERENCE_KEY])
 
     /** Replaces what's trusted with [encoded], skipping lines that aren't `host=fingerprint`. */
     fun restore(encoded: String?) {

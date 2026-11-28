@@ -19,6 +19,7 @@ internal fun apiFailureMessage(
     return when (errorCode) {
         "actual_only" -> "Actual Budget is responding here, but Tandem isn’t. Check that Tandem is running at this address."
         "address_unreachable", "network-error" -> "Actual isn’t responding at this address. Check the server address."
+        "certificate_untrusted" -> "This server’s certificate isn’t one this device trusts. Check its fingerprint below before trusting it."
         "actual_unavailable" -> "Tandem can’t connect to Actual. Check that the Actual server is running."
         "server_unavailable" -> "The Actual server isn’t responding right now. Try again shortly."
         "rate_limited" -> "The Actual server is busy. Wait a moment and try again."
