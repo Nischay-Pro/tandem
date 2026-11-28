@@ -30,12 +30,16 @@ import app.tandemforactual.ui.core.format.rememberTodayIsoDate
 import app.tandemforactual.ui.core.navigation.openTransaction
 import app.tandemforactual.ui.core.search.ActivitySearchField
 import app.tandemforactual.ui.core.search.ActivitySearchRecord
+import app.tandemforactual.ui.core.search.ActivitySortOrder
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.state.AppNavigation
 import app.tandemforactual.ui.core.state.AppState
 import app.tandemforactual.ui.core.state.LocalRouteLazyListState
 import app.tandemforactual.ui.core.state.MerchantIconMatcherPack
 import app.tandemforactual.ui.core.state.ScheduledOccurrence
+import app.tandemforactual.ui.core.state.formatCurrency
+import app.tandemforactual.ui.core.state.longValue
+import app.tandemforactual.ui.core.state.recordBody
 import app.tandemforactual.ui.core.ui.ActivitySearchInput
 import app.tandemforactual.ui.core.ui.ScheduledOccurrencesCard
 import app.tandemforactual.ui.core.ui.TransactionRow
@@ -180,6 +184,12 @@ private fun ColumnScope.ActivitySearchResults(
     val filters = state.activitySearchFilters
     val registerAccount = filters.singleOrNull()?.takeIf { it.field == ActivitySearchField.ACCOUNT && search.isBlank() }?.value
     val scheduled = rememberRegisterOccurrences(mobileSession, registerAccount)
+    val balanceNow =
+        registerAccount
+            ?.takeIf { state.activitySortOrder == ActivitySortOrder.NEWEST_FIRST }
+            ?.let { id -> mobileSession.accountRecords.firstOrNull { it.recordId == id } }
+            ?.recordBody()
+            ?.longValue("balance_current")
     if (
         isLiveBudget &&
         (
@@ -215,6 +225,7 @@ private fun ColumnScope.ActivitySearchResults(
             selection,
             resultsListState,
             scheduled,
+            balanceNow,
         )
     }
 }
@@ -230,8 +241,14 @@ private fun ColumnScope.ActivitySearchResultList(
     selection: ActivitySelectionState,
     resultsListState: LazyListState,
     scheduled: List<ScheduledOccurrence>,
+    balanceNow: Long?,
 ) {
     val todayIso = rememberTodayIsoDate()
+    val balances =
+        remember(sortedResultIndices, searchableRecords, balanceNow) {
+            val amounts = sortedResultIndices.mapNotNull { searchableRecords.getOrNull(it)?.amountMinorUnits }
+            balanceNow?.let { runningBalances(amounts, it) }
+        }
     val isLiveBudget = state.selectedBudgetId.isNotBlank()
     LazyColumn(
         state = resultsListState,
@@ -277,6 +294,7 @@ private fun ColumnScope.ActivitySearchResultList(
                             null
                         },
                     selectionMenuActions = activitySelectionMenuActions(selection),
+                    runningBalance = balances?.getOrNull(position)?.let { state.formatCurrency(it) },
                 ) {
                     if (selection.selectionMode && transactionId != null) {
                         selection.toggle(transactionId)

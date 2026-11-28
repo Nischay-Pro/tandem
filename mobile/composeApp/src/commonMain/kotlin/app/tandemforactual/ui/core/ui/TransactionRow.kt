@@ -63,6 +63,7 @@ internal fun TransactionRow(
     onSwipeDelete: (() -> Unit)? = null,
     highlighted: Boolean = false,
     selectionMenuActions: List<RowMenuAction> = emptyList(),
+    runningBalance: String? = null,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
@@ -85,7 +86,7 @@ internal fun TransactionRow(
                 selectionMode,
                 selected,
                 showAccount,
-                syncStatus,
+                TrailingExtras(syncStatus, runningBalance),
                 highlighted,
                 onLongClick,
                 onClick,
@@ -135,14 +136,14 @@ private fun TransactionRowContent(
     selectionMode: Boolean,
     selected: Boolean,
     showAccount: Boolean,
-    syncStatus: String?,
+    extras: TrailingExtras,
     highlighted: Boolean,
     onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     val palette = tandemPalette
     val secondaryLabel = activityTransactionSubtitle(transaction, showAccount)
-    val customTrailing = activityStyle || syncStatus != null || privacyModeEnabled
+    val customTrailing = activityStyle || extras.syncStatus != null || extras.runningBalance != null || privacyModeEnabled
     Box(
         Modifier
             .padding(horizontal = if (highlighted) TandemSpacing.extraSmall else 0.dp)
@@ -169,7 +170,7 @@ private fun TransactionRowContent(
             onLongClick = onLongClick,
             trailingContent =
                 if (customTrailing) {
-                    { TransactionRowTrailing(transaction, amountText, privacyModeEnabled, syncStatus) }
+                    { TransactionRowTrailing(transaction, amountText, privacyModeEnabled, extras) }
                 } else {
                     null
                 },
@@ -177,13 +178,19 @@ private fun TransactionRowContent(
     }
 }
 
-/** The amount and sync chip shown at the end of an activity-style transaction row. */
+/** What can sit under a row's amount: its sync state and the account's balance after it. */
+private data class TrailingExtras(
+    val syncStatus: String?,
+    val runningBalance: String?,
+)
+
+/** The amount, the balance after it and the sync chip shown at the end of an activity-style transaction row. */
 @Composable
 private fun TransactionRowTrailing(
     transaction: TransactionItem,
     amountText: String,
     privacyModeEnabled: Boolean,
-    syncStatus: String?,
+    extras: TrailingExtras,
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -198,7 +205,10 @@ private fun TransactionRowTrailing(
                     ?.takeUnless { it.hideFraction }
                     ?.currencyFractionDigits ?: 0,
         )
-        syncStatus?.let { TransactionSyncChip(it) }
+        extras.runningBalance?.takeUnless { privacyModeEnabled }?.let {
+            Text(it, color = tandemPalette.muted, fontSize = TandemTypography.micro)
+        }
+        extras.syncStatus?.let { TransactionSyncChip(it) }
     }
 }
 
