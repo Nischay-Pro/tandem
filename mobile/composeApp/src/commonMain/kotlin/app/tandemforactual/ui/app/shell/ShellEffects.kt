@@ -30,6 +30,7 @@ import app.tandemforactual.ui.core.state.loadMerchantIconCatalog
 import app.tandemforactual.ui.core.state.loadMerchantIconMatcherPack
 import app.tandemforactual.ui.design.theme.TandemMotion
 import app.tandemforactual.ui.feature.auth.needsEncryptedBudgetUnlock
+import app.tandemforactual.ui.feature.transactions.receipt.fillFromSharedText
 import app.tandemforactual.ui.feature.transactions.receipt.fillNewTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -120,15 +121,9 @@ internal fun NavigationEffects(ctx: ShellContext) {
             if (QuickActionEvents.consumeReceiptScan()) state.receiptScanRequested = true
             QuickActionEvents.consumeSharedReceiptPhoto()?.let { state.pendingReceiptPhoto = it }
             ctx.navigator.newTransaction(QuickActionEvents.consumeRequestedAccount())
-            QuickActionEvents.consumeSharedText()?.let(::parseSharedTransactionText)?.let { shared ->
-                fillNewTransaction(
-                    state,
-                    mobileSession,
-                    shared.amountMinor,
-                    shared.payeeHint,
-                    isIncome = shared.isIncome,
-                    unmatchedNote = shared.original,
-                )
+            QuickActionEvents.consumeSharedText()?.let { parseSharedTransactionText(it) }?.let { shared ->
+                val accounts = shell.liveAccounts.filterNot { it.closed }.map { it.id to it.name }
+                fillFromSharedText(state, mobileSession, shared, accounts)
             }
             QuickActionEvents.consumeQuickAddDraft()?.let { draft ->
                 val fractionDigits = state.budgetDisplaySettings?.currencyFractionDigits ?: 2
