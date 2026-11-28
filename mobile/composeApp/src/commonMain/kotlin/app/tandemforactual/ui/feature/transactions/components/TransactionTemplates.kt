@@ -115,8 +115,7 @@ private fun TemplateChip(
                 onLongClickLabel = "Remove template".takeIf { onLongClick != null },
                 onLongClick = onLongClick,
                 onClick = onClick,
-            )
-            .padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
+            ).padding(horizontal = TandemSpacing.medium, vertical = TandemSpacing.small),
         color = palette.text,
         fontSize = TandemTypography.compactBody,
     )
