@@ -10,6 +10,7 @@ import app.tandemforactual.data.planning.AccountCurrency
 import app.tandemforactual.data.planning.AccountKind
 import app.tandemforactual.data.planning.AccountKindChoice
 import app.tandemforactual.data.planning.CardNetwork
+import app.tandemforactual.data.planning.CustomPaymentFormat
 import app.tandemforactual.data.planning.CustomReport
 import app.tandemforactual.data.planning.DebtTerms
 import app.tandemforactual.data.planning.DeviceName
@@ -143,6 +144,9 @@ internal class PlanningController(
     var customReports by mutableStateOf<List<CustomReport>>(emptyList())
         private set
     var savedSearches by mutableStateOf<List<SavedSearch>>(emptyList())
+
+    /** Payment message formats the user wrote, tried before the built-in ones. */
+    var paymentFormats by mutableStateOf<List<CustomPaymentFormat>>(emptyList())
         private set
 
     internal fun planningStore(budgetId: String): PlanningStore? =
@@ -376,6 +380,18 @@ internal class PlanningController(
         planningStore(budgetId)?.deleteSavedSearch(id)
     }
 
+    suspend fun savePaymentFormat(
+        budgetId: String,
+        format: CustomPaymentFormat,
+    ): Boolean = planningStore(budgetId)?.save(format) != null
+
+    suspend fun deletePaymentFormat(
+        budgetId: String,
+        id: String,
+    ) {
+        planningStore(budgetId)?.deletePaymentFormat(id)
+    }
+
     /** Every planning and profile record in the budget, or null when its planning store isn't open. */
     suspend fun backupRecords(budgetId: String): List<Triple<String, String, kotlinx.serialization.json.JsonObject>>? =
         planningStore(budgetId)?.backupRecords()
@@ -416,6 +432,7 @@ internal class PlanningController(
         launch { store.deviceNames().collect { list -> deviceNames = list.associate { it.node to it.name } } }
         launch { store.customReports().collect { customReports = it } }
         launch { store.savedSearches().collect { savedSearches = it } }
+        launch { store.paymentFormats().collect { paymentFormats = it } }
     }
 }
 

@@ -89,4 +89,4 @@ internal fun matchAccountByDigits(
 
 private fun String.normalizedPayee(): String = lowercase().filter(Char::isLetterOrDigit)
 
-private const val MAX_SHARED_TEXT = 1_000
+internal const val MAX_SHARED_TEXT = 1_000

@@ -200,6 +200,15 @@ class PlanningStore(
 
     suspend fun deleteSavedSearch(id: String) = delete(id, SavedSearch.TYPE)
 
+    fun paymentFormats(): Flow<List<CustomPaymentFormat>> =
+        observe(CustomPaymentFormat.TYPE).map { list ->
+            list.map { (id, body) -> CustomPaymentFormat.fromJson(id, body) }.sortedBy { it.name.lowercase() }
+        }
+
+    suspend fun save(format: CustomPaymentFormat) = put(format.id, CustomPaymentFormat.TYPE, format.toJson())
+
+    suspend fun deletePaymentFormat(id: String) = delete(id, CustomPaymentFormat.TYPE)
+
     companion object {
         const val SCHEMA_VERSION = 1
 

@@ -16,6 +16,8 @@ import app.tandemforactual.ui.app.QuickAction
 import app.tandemforactual.ui.app.QuickActionEvents
 import app.tandemforactual.ui.app.isBackPreviewStale
 import app.tandemforactual.ui.app.navigationRoutes
+import app.tandemforactual.ui.core.format.BUILT_IN_PAYMENT_FORMATS
+import app.tandemforactual.ui.core.format.customPaymentFormats
 import app.tandemforactual.ui.core.format.parseSharedTransactionText
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
 import app.tandemforactual.ui.core.format.platformTodayIsoDate
@@ -121,7 +123,8 @@ internal fun NavigationEffects(ctx: ShellContext) {
             if (QuickActionEvents.consumeReceiptScan()) state.receiptScanRequested = true
             QuickActionEvents.consumeSharedReceiptPhoto()?.let { state.pendingReceiptPhoto = it }
             ctx.navigator.newTransaction(QuickActionEvents.consumeRequestedAccount())
-            QuickActionEvents.consumeSharedText()?.let { parseSharedTransactionText(it) }?.let { shared ->
+            val formats = customPaymentFormats(mobileSession.planning.paymentFormats) + BUILT_IN_PAYMENT_FORMATS
+            QuickActionEvents.consumeSharedText()?.let { parseSharedTransactionText(it, formats) }?.let { shared ->
                 val accounts = shell.liveAccounts.filterNot { it.closed }.map { it.id to it.name }
                 fillFromSharedText(state, mobileSession, shared, accounts)
             }
