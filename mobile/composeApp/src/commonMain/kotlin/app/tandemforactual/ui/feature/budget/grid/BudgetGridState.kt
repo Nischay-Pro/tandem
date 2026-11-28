@@ -29,6 +29,9 @@ internal class BudgetGridState {
     /** Which figures each cell shows. */
     var value by mutableStateOf(GridValue.ALL)
 
+    /** The fill sheet for the selected cells is open. */
+    var bulkOpen by mutableStateOf(false)
+
     /** Set when the focused cell should take keyboard focus as soon as it is on screen. */
     var focusRequested by mutableStateOf(false)
 

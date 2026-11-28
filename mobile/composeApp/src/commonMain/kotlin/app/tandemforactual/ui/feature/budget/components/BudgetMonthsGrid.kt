@@ -41,6 +41,7 @@ import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.RotateCcw
 import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.WalletCards
 
 internal const val BUDGET_MONTHS_HEADER_KEY = "budget-months-header"
@@ -84,9 +85,20 @@ internal fun budgetGridMenu(
                 RowMenuAction("Copy last month", Lucide.Copy) { run(ShortcutAction.GRID_COPY_PREVIOUS) },
                 RowMenuAction("Budget what was spent", Lucide.Receipt) { run(ShortcutAction.GRID_SET_SPENT) },
                 RowMenuAction("Set to zero", Lucide.RotateCcw) { run(ShortcutAction.GRID_CLEAR) },
+                RowMenuAction("Fill…", Lucide.Sparkles) { openBulkFill(cells, key) },
             ) + moveMoneyActions(cells, key, onOpen)
         }
     return edits + RowMenuAction("Open category", Lucide.ExternalLink, onClick = onOpen)
+}
+
+private fun openBulkFill(
+    cells: GridCellContext,
+    key: GridKey,
+) {
+    val cell = cells.data.cell(key)
+    val range = cells.grid.range(cells.data)
+    if (cell == null || range == null || cell !in range) cells.grid.focusOn(key)
+    cells.grid.bulkOpen = true
 }
 
 private fun moveMoneyActions(
