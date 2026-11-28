@@ -1,6 +1,8 @@
 #!/bin/sh
 # Builds the private SQLCipher library for one iOS SDK: build-ios.sh <sdk> <target-triple> <output-dir>
 set -eu
+# Archives without timestamps, so the same sources make the same library and Gradle can reuse what depends on it.
+export ZERO_AR_DATE=1
 sdk="$1"
 target="$2"
 out="$3"
