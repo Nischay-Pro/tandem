@@ -1,4 +1,4 @@
-package app.tandemforactual.ui.feature.onboarding
+package app.tandemforactual.ui.core.format
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,5 +17,13 @@ class ServerHeadersTest {
         val problem = parseServerHeaders("Good: 1\nno colon here").exceptionOrNull()?.message.orEmpty()
         assertTrue("no colon here" in problem, problem)
         assertTrue(parseServerHeaders("Bad Name: x").isFailure)
+    }
+
+    @Test
+    fun savedHeadersAreWrittenBackSoTheyReadTheSame() {
+        val headers = mapOf("CF-Access-Client-Id" to "abc", "X-Token" to "s3cr:et")
+        assertEquals("CF-Access-Client-Id: abc\nX-Token: s3cr:et", formatServerHeaders(headers))
+        assertEquals(headers, parseServerHeaders(formatServerHeaders(headers)).getOrThrow())
+        assertEquals("", formatServerHeaders(emptyMap()))
     }
 }

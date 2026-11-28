@@ -62,6 +62,7 @@ internal fun ServerDeviceScreen(
     var confirmation by rememberSaveable { mutableStateOf("") }
     PageColumn {
         ServerSection(state, mobileSession, navigation)
+        CustomHeadersSection(mobileSession)
         ThisDeviceSection(mobileSession, device, deviceName)
         InfoBubble("Passwords are used to sign in and aren’t saved on this device.")
         if (mobileSession.signOutError != null) {

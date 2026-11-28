@@ -329,6 +329,12 @@ internal suspend fun TandemMobileSession.restorePreviousSessionAfterSignIn(previ
     }
 }
 
+/** Switches the headers sent to the signed-in server and keeps them with the saved sign-in. */
+internal suspend fun TandemMobileSession.updateCustomHeaders(headers: Map<String, String>) {
+    apiClient.customHeaders = headers
+    persistCurrentSession()
+}
+
 internal suspend fun TandemMobileSession.persistCurrentSession() {
     val store = credentialStore ?: return
     val storedSession = apiClient.exportStoredSession() ?: return

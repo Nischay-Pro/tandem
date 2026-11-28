@@ -57,7 +57,13 @@ internal class ShellNavigator(
             shell.transactionSheetClosing = false
             // A new transaction clears the selected one, so a transaction's details underneath close along with the form.
             shell.transactionSheetPopCount = if (backStack.lastOrNull()?.route == AppRoute.TRANSACTION_DETAIL) 2 else 1
-            val defaultAccount = defaultNewTransactionAccount(shell.liveAccounts, requestedAccountId, state.lastTransactionAccountId)
+            val defaultAccount =
+                defaultNewTransactionAccount(
+                    shell.liveAccounts,
+                    requestedAccountId,
+                    state.lastTransactionAccountId,
+                    state.defaultTransactionAccountId.ifBlank { null },
+                )
             state.transactionAmount = state.formatAmount(0)
             state.transactionAccount = defaultAccount?.name ?: "Checking"
             state.newTransactionAccountId = defaultAccount?.id.orEmpty()
