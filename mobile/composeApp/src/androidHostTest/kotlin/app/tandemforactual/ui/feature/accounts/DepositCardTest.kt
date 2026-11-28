@@ -25,8 +25,12 @@ class DepositCardTest {
         val terms = depositTermsFrom("d", "fd", "7.25", Compounding.QUARTERLY, "50", "2028-06-30", null).getOrThrow()
         assertEquals(DepositTerms("d", "fd", 725, Compounding.QUARTERLY, 5_000, "2028-06-30"), terms)
         assertEquals(0L, depositTermsFrom("d", "fd", "5", Compounding.YEARLY, "", "", null).getOrThrow().monthlyContributionMinor)
-        fun problem(rate: String, amount: String, date: String) =
-            depositTermsFrom("d", "fd", rate, Compounding.MONTHLY, amount, date, null).exceptionOrNull()?.message
+
+        fun problem(
+            rate: String,
+            amount: String,
+            date: String,
+        ) = depositTermsFrom("d", "fd", rate, Compounding.MONTHLY, amount, date, null).exceptionOrNull()?.message
         assertEquals("Enter the yearly rate as a percentage, like 7.25.", problem("abc", "", ""))
         assertEquals("Enter the monthly amount.", problem("5", "-3", ""))
         assertEquals("Enter the maturity date as YYYY-MM-DD.", problem("5", "", "June 2028"))
