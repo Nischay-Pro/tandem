@@ -19,6 +19,7 @@ import app.tandemforactual.data.store.largeTransactionAlert
 import app.tandemforactual.data.store.overspendingAlert
 import app.tandemforactual.data.store.overspendingForBudget
 import app.tandemforactual.data.store.readBudgetDisplaySettings
+import app.tandemforactual.data.store.uncategorizedAlert
 import app.tandemforactual.data.store.upcomingBillsAlert
 import app.tandemforactual.ui.core.format.formatCurrency
 import app.tandemforactual.ui.core.format.platformMinuteOfDay
@@ -215,6 +216,7 @@ private suspend fun postSyncAlerts(
     if (policy.allows(AlertKind.LARGE_TRANSACTION, minute)) {
         largeTransactionAlert(repository, store, budgetId, today, policy, format)?.let(post)
     }
+    uncategorizedAlert(repository, store, budgetId, today, policy, minute, format)?.let(post)
     return if (policy.quietHours?.contains(minute) == true) {
         IosBackgroundSyncAlerts(taskSucceeded = true)
     } else {
