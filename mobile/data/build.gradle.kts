@@ -36,6 +36,7 @@ kotlin {
         onlyIf { System.getProperty("os.name").startsWith("Mac") }
         inputs.dir(sqlcipherSources)
         outputs.dir(libraryDirectory)
+        outputs.cacheIf { true }
         commandLine(
           "sh",
           sqlcipherSources.file("build-ios.sh").asFile.absolutePath,
