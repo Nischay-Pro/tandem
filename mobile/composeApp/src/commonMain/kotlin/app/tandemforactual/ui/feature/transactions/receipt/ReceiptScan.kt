@@ -1,7 +1,10 @@
 package app.tandemforactual.ui.feature.transactions.receipt
 import androidx.compose.runtime.Composable
+import app.tandemforactual.ui.core.format.SharedTransactionText
 import app.tandemforactual.ui.core.format.formatAmount
+import app.tandemforactual.ui.core.format.matchAccountByDigits
 import app.tandemforactual.ui.core.format.matchSharedPayee
+import app.tandemforactual.ui.core.format.platformTodayIsoDate
 import app.tandemforactual.ui.core.session.TandemMobileSession
 import app.tandemforactual.ui.core.session.budget.suggestedCategoryForPayee
 import app.tandemforactual.ui.core.state.AppState
@@ -106,7 +109,7 @@ private fun receiptMerchant(lines: List<String>): String? =
 private fun capitalizeWords(name: String) =
     name.lowercase().split(' ').joinToString(" ") { word -> word.replaceFirstChar(Char::uppercaseChar) }
 
-private fun receiptDate(
+internal fun receiptDate(
     lines: List<String>,
     today: String,
 ): String? {
@@ -163,6 +166,21 @@ private fun validDate(
     val days = intArrayOf(31, if (leap) 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[m - 1]
     if (d !in 1..days) return null
     return "$y-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
+}
+
+/** Fills the new transaction from shared bank or payment text: amount, direction, payee, date and the account it names. */
+internal suspend fun fillFromSharedText(
+    state: AppState,
+    mobileSession: TandemMobileSession,
+    shared: SharedTransactionText,
+    accounts: List<Pair<String, String>>,
+) {
+    matchAccountByDigits(shared.accountDigits, accounts)?.let { (id, name) ->
+        state.newTransactionAccountId = id
+        state.transactionAccount = name
+    }
+    val date = shared.dateText?.let { receiptDate(listOf(it), platformTodayIsoDate()) }
+    fillNewTransaction(state, mobileSession, shared.amountMinor, shared.payeeHint, date, shared.isIncome, shared.original)
 }
 
 /** Fills the new transaction from what was read, matching the payee to an existing one and suggesting its usual category. */

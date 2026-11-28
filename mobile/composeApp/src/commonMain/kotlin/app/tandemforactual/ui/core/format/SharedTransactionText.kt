@@ -6,6 +6,9 @@ internal data class SharedTransactionText(
     val isIncome: Boolean,
     val payeeHint: String?,
     val original: String,
+    val accountDigits: String? = null,
+    val dateText: String? = null,
+    val reference: String? = null,
 )
 
 private const val CURRENCY_CODES = "USD|EUR|GBP|INR|CAD|AUD|NZD|JPY|CHF|SEK|NOK|DKK|PLN|BRL|MXN|ZAR|SGD|HKD|CNY|KRW"
@@ -22,9 +25,24 @@ private val payeePattern =
     )
 private val incomeWords = Regex("""\b(received|credited|deposit|refund|incoming|paid you|sent you)\b""", RegexOption.IGNORE_CASE)
 
-internal fun parseSharedTransactionText(text: String): SharedTransactionText? {
+/** A known payment format first, then a general reading of the amount, direction and payee for anything else. */
+internal fun parseSharedTransactionText(
+    text: String,
+    formats: List<PaymentTextFormat> = BUILT_IN_PAYMENT_FORMATS,
+): SharedTransactionText? {
     val trimmed = text.trim().take(MAX_SHARED_TEXT)
     if (trimmed.isEmpty()) return null
+    readPaymentText(trimmed, formats)?.let { read ->
+        return SharedTransactionText(
+            read.amountMinor,
+            read.isIncome,
+            read.payee,
+            trimmed,
+            read.accountDigits,
+            read.dateText,
+            read.reference,
+        )
+    }
     val amountText = (amountPattern.find(trimmed) ?: trailingCurrencyPattern.find(trimmed))?.groupValues?.get(1)
     val amountMinor = amountText?.let(::sharedAmountHundredths)
     val payee =
@@ -39,7 +57,7 @@ internal fun parseSharedTransactionText(text: String): SharedTransactionText? {
  * Reads “1,234.50”, “1.234,50”, “1 234,50” or “1’234.50” as hundredths: a mark followed by one or two digits at the end
  * is the decimal mark and every other mark groups thousands.
  */
-private fun sharedAmountHundredths(text: String): Long? {
+internal fun sharedAmountHundredths(text: String): Long? {
     val fraction = sharedFraction.find(text)
     val wholeText = if (fraction != null) text.substring(0, fraction.range.first) else text
     val whole = wholeText.filter(Char::isDigit).toLongOrNull() ?: return null
@@ -58,6 +76,15 @@ internal fun matchSharedPayee(
         ?: payees
             .filter { (_, name) -> name.normalizedPayee().let { it.length >= 3 && (needle.startsWith(it) || it.startsWith(needle)) } }
             .maxByOrNull { it.second.length }
+}
+
+/** The one account whose name carries [digits], such as "Visa 1234" for a message about the card ending 1234. */
+internal fun matchAccountByDigits(
+    digits: String?,
+    accounts: List<Pair<String, String>>,
+): Pair<String, String>? {
+    val needle = digits?.takeIf { it.length >= 3 } ?: return null
+    return accounts.filter { (_, name) -> Regex("""(?<!\d)${Regex.escape(needle)}(?!\d)""").containsMatchIn(name) }.singleOrNull()
 }
 
 private fun String.normalizedPayee(): String = lowercase().filter(Char::isLetterOrDigit)
