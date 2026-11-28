@@ -4,6 +4,10 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+# Light mode, for machines that can't run Gradle: ktlint checks staged Kotlin instead of a Gradle compile, and
+# workflow checks are skipped when Go is missing. Turn it on with: git config tandem.lightHooks true
+light_hooks=$(git config --bool tandem.lightHooks || printf 'false')
+
 if [ -x "$repo_root/node_modules/.bin/prettier" ]; then
   node scripts/check-prettier-files.mjs "$repo_root/node_modules/.bin/prettier"
 elif command -v pnpm >/dev/null 2>&1; then
@@ -41,15 +45,26 @@ fi
 
 staged_workflows=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^\.github/workflows/.*\.ya?ml$' || true)
 if [ -n "$staged_workflows" ]; then
-  if ! command -v go >/dev/null 2>&1; then
+  if command -v go >/dev/null 2>&1; then
+    "$repo_root/scripts/check-github-workflows.sh"
+  elif [ "$light_hooks" = true ]; then
+    printf '%s\n' 'Skipping workflow checks: Go is not installed. CI still runs them.' >&2
+  else
     printf '%s\n' 'Workflow checks need Go to run the pinned actionlint version.' >&2
     exit 1
   fi
-  "$repo_root/scripts/check-github-workflows.sh"
 fi
 
 staged_mobile_kotlin=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^mobile/.*\.(kt|kts)$' || true)
-if [ -n "$staged_mobile_kotlin" ]; then
+if [ -n "$staged_mobile_kotlin" ] && [ "$light_hooks" = true ]; then
+  ktlint=${KTLINT:-$(command -v ktlint || true)}
+  if [ -z "$ktlint" ]; then
+    printf '%s\n' 'Light hooks need ktlint 1.5.0, the version CI uses, on PATH or in KTLINT.' >&2
+    exit 1
+  fi
+  # shellcheck disable=SC2086
+  "$ktlint" --relative $staged_mobile_kotlin
+elif [ -n "$staged_mobile_kotlin" ]; then
   unstaged_mobile=$(git diff --name-only -- mobile)
   untracked_mobile=$(git ls-files --others --exclude-standard -- mobile)
   if [ -n "$unstaged_mobile$untracked_mobile" ]; then

@@ -3,6 +3,7 @@ set -eu
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
+light_hooks=$(git config --bool tandem.lightHooks || printf 'false')
 
 uncommitted_mobile=$(git status --porcelain --untracked-files=all -- mobile)
 if [ -n "$uncommitted_mobile" ]; then
@@ -26,11 +27,30 @@ python3 scripts/check-mobile-design-tokens.py
 python3 scripts/check-mobile-ui-vocabulary.py
 node scripts/check-docs.mjs
 node --test scripts/check-docs.test.mjs
-if ! command -v go >/dev/null 2>&1; then
+if command -v go >/dev/null 2>&1; then
+  "$repo_root/scripts/check-github-workflows.sh"
+elif [ "$light_hooks" = true ]; then
+  printf '%s\n' 'Skipping workflow checks: Go is not installed. CI still runs them.' >&2
+else
   printf '%s\n' 'Workflow checks need Go to run the pinned actionlint version.' >&2
   exit 1
 fi
-"$repo_root/scripts/check-github-workflows.sh"
+
+if [ "$light_hooks" = true ]; then
+  # Light mode can't run Gradle: ktlint checks the Kotlin this branch changes, and CI builds and tests it.
+  changed_kotlin=$(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- 'mobile/*.kt' 'mobile/*.kts' | grep -v '/build/' || true)
+  if [ -n "$changed_kotlin" ]; then
+    ktlint=${KTLINT:-$(command -v ktlint || true)}
+    if [ -z "$ktlint" ]; then
+      printf '%s\n' 'Light hooks need ktlint 1.5.0, the version CI uses, on PATH or in KTLINT.' >&2
+      exit 1
+    fi
+    # shellcheck disable=SC2086
+    "$ktlint" --relative $changed_kotlin
+  fi
+  "$repo_root/node_modules/.bin/eslint" .
+  exit 0
+fi
 
 if [ -z "${ANDROID_HOME:-}" ]; then
   if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
