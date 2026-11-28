@@ -383,6 +383,44 @@ jobs:
       - name: Verify merchant icon resources
         run: test -f mobile/composeApp/build/generated/thesvg-icon-pack/composeResources/files/merchant-icon-catalog.json
 
+      # A simulator's first boot on a fresh runner takes about ten minutes, so they boot while Kotlin compiles.
+      - name: Start booting the iPhone and iPad simulators
+        env:
+          EXTRA_DESTINATIONS: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          pick() {
+            xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          runtimes = {k: v for k, v in json.load(sys.stdin)["devices"].items() if ".iOS-" in k}
+          for runtime in sorted(runtimes, key=lambda k: [int(n) for n in re.findall(r"\d+", k.split(".iOS-")[1])], reverse=True):
+              for device in runtimes[runtime]:
+                  if re.search(sys.argv[1], device["name"]):
+                      print(device["udid"])
+                      sys.exit()
+          ' "$1"
+          }
+          iphone="$(pick '^iPhone (?!Duo)')"
+          ipad="$(pick '^iPad')"
+          test -n "$iphone"
+          test -n "$ipad"
+          devices=("$iphone" "$ipad")
+          {
+            echo "IOS_TEST_IPHONE=$iphone"
+            echo "IOS_TEST_IPAD=$ipad"
+          } >> "$GITHUB_ENV"
+          if [[ "$EXTRA_DESTINATIONS" == true ]]; then
+            duo="$(pick '^iPhone Duo')"
+            if [[ -n "$duo" ]]; then
+              devices+=("$duo")
+              echo "IOS_TEST_DUO=$duo" >> "$GITHUB_ENV"
+            else
+              echo "::notice::No iPhone Duo simulator on this runner image; testing iPhone and iPad only."
+            fi
+          fi
+          for device in "${devices[@]}"; do
+            nohup xcrun simctl boot "$device" > "$RUNNER_TEMP/boot-$device.log" 2>&1 &
+          done
+
       - name: Compile, link and test the Kotlin iOS targets
         working-directory: mobile
         env:
@@ -403,32 +441,10 @@ jobs:
 
       - name: Test iOS app host, watch app build and background scheduler on iPhone and iPad
         working-directory: mobile
-        env:
-          EXTRA_DESTINATIONS: ${{ github.ref == 'refs/heads/main' }}
         run: |
-          pick() {
-            xcrun simctl list devices available -j | python3 -c '
-          import json, re, sys
-          runtimes = {k: v for k, v in json.load(sys.stdin)["devices"].items() if ".iOS-" in k}
-          for runtime in sorted(runtimes, key=lambda k: [int(n) for n in re.findall(r"\d+", k.split(".iOS-")[1])], reverse=True):
-              for device in runtimes[runtime]:
-                  if re.search(sys.argv[1], device["name"]):
-                      print(device["udid"])
-                      sys.exit()
-          ' "$1"
-          }
-          iphone="$(pick '^iPhone (?!Duo)')"
-          ipad="$(pick '^iPad')"
-          test -n "$iphone"
-          test -n "$ipad"
-          destinations=(-destination "platform=iOS Simulator,id=$iphone" -destination "platform=iOS Simulator,id=$ipad")
-          if [[ "$EXTRA_DESTINATIONS" == true ]]; then
-            duo="$(pick '^iPhone Duo')"
-            if [[ -n "$duo" ]]; then
-              destinations+=(-destination "platform=iOS Simulator,id=$duo")
-            else
-              echo "::notice::No iPhone Duo simulator on this runner image; testing iPhone and iPad only."
-            fi
+          destinations=(-destination "platform=iOS Simulator,id=$IOS_TEST_IPHONE" -destination "platform=iOS Simulator,id=$IOS_TEST_IPAD")
+          if [[ -n "${IOS_TEST_DUO:-}" ]]; then
+            destinations+=(-destination "platform=iOS Simulator,id=$IOS_TEST_DUO")
           fi
           xcodebuild \
             -project iosApp/TandemForActual.xcodeproj \
