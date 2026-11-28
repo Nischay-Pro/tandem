@@ -216,6 +216,11 @@ class ActualServerClient(
         filePost("reset-user-file", buildJsonObject { put("fileId", fileId) })
     }
 
+    /** Removes the file from the server, as Actual's Delete from server does; every device loses access to it. */
+    suspend fun deleteFile(fileId: String) {
+        filePost("delete-user-file", buildJsonObject { put("fileId", fileId) })
+    }
+
     suspend fun createKey(
         fileId: String,
         keyId: String,

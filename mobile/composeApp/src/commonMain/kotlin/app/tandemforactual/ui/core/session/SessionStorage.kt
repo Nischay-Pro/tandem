@@ -2,6 +2,8 @@ package app.tandemforactual.ui.core.session
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.tandemforactual.api.client.TandemApiException
+import app.tandemforactual.api.client.deleteBudgetFromServer
 import app.tandemforactual.data.database.OutboxOperationEntity
 import app.tandemforactual.data.database.TandemDatabase
 import app.tandemforactual.data.database.closeDatabase
@@ -77,6 +79,34 @@ internal suspend fun TandemMobileSession.removeBudgetFromDevice(
     forgetSealedInboxKeys(budgetId)
     cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
     loadLocalRecords(budgetId)
+    return null
+}
+
+/**
+ * Deletes [budgetId] from the Actual server for every device, then forgets it here; this device's copy is kept as a
+ * dated backup. Returns why it couldn't be deleted, or null once it's gone.
+ */
+internal suspend fun TandemMobileSession.deleteBudgetFromServer(
+    budgetId: String,
+    vault: EncryptedBudgetVault?,
+): String? {
+    val fallback = "Tandem couldn’t delete this budget. Check your connection and try again."
+    try {
+        apiClient.deleteBudgetFromServer(budgetId)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: TandemApiException) {
+        return error.userFacingMessage(fallback, ApiFailureContext.GENERAL)
+    } catch (_: Exception) {
+        return fallback
+    }
+    if (boundEncryptedBudgetId == budgetId) unbindEncryptedBudgetDatabase()
+    mainStorage?.repository?.removeBudget(budgetId)
+    vault?.delete(budgetId)
+    forgetSealedInboxKeys(budgetId)
+    cachedBudgets = cachedBudgets.filterNot { it.budgetId == budgetId }
+    loadLocalRecords(budgetId)
+    loadBudgets()
     return null
 }
 
