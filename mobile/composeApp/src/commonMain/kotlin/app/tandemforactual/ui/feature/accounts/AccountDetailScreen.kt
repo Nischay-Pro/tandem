@@ -119,7 +119,7 @@ private fun AccountDetailFooter(
     navigation: AppNavigation,
     liveAccount: LiveAccountSummary,
 ) {
-    CardStatementsCard(state, mobileSession, liveAccount)
+    CardStatementsCard(state, mobileSession, navigation, liveAccount)
     AccountNoteSection(state, mobileSession, liveAccount)
     SettingRow("Account options", "Close account", onClick = { navigation.open(AppRoute.ACCOUNT_OPTIONS) })
 }
