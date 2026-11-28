@@ -56,6 +56,10 @@ internal fun LoanCard(
     val base = remember(owed, apr, payment) { PlanningMath.amortisation(owed, apr, payment) }
     val faster = remember(owed, apr, payment, extra) { PlanningMath.amortisation(owed, apr, payment + extra).takeIf { extra > 0 } }
     val money = { minor: Long -> if (state.privacyModeEnabled) "•••" else state.formatCurrency(minor) }
+    var paying by remember(account.id) { mutableStateOf(false) }
+    loanPayment(owed, apr, payment, 0)?.let { split ->
+        LoanPaymentSheet(paying, account, split, state, mobileSession) { paying = false }
+    }
     SectionCard("Loan", detail = "From its APR and monthly payment") {
         if (base == null) {
             BodyText("The monthly payment doesn’t cover the interest, so this loan wouldn’t be paid off.")
@@ -68,6 +72,7 @@ internal fun LoanCard(
             trailing = "${money(base.sumOf { it.interestMinor })} interest",
             options = ListRowOptions(showChevron = false),
         )
+        if (!state.readOnlyMode) ListRow("Record a payment", "Principal, interest and escrow", onClick = { paying = true })
         MoneyAmountInput("Extra each month", extraText, state.formatCurrency(0), { extraText = it })
         faster?.let { extraPaymentSavings(base, it) }?.let { (months, interest) ->
             BodyText("Paid off $months months sooner, saving ${money(interest)} in interest.")
