@@ -65,7 +65,7 @@ suspend fun sealAutomatedTransaction(
                 AutomationErrorCode.BUDGET_LOCKED,
                 "This encrypted budget is locked. Open Tandem and unlock it once so automation apps can save to it.",
             )
-    val payload = sealedPayload(checkedForSealing(input, todayIso), source, nowEpochMs)
+    val payload = sealedPayload(checkedForSealing(input.signedForTransfer(), todayIso), source, nowEpochMs)
     val entryId =
         try {
             SealedInbox(inbox, budgetId).seal(publicKey, payload.toString().encodeToByteArray())
@@ -141,6 +141,7 @@ private suspend fun applySealedEntry(
             cleared = text("cleared"),
             externalId = text("external"),
             amountFormat = AutomationAmountFormat.entries.firstOrNull { it.name == text("format") } ?: AutomationAmountFormat.BUDGET,
+            transferTo = text("transfer"),
         )
     val at = (payload["at"] as? JsonPrimitive)?.longOrNull ?: 0L
     val source = text("source") ?: "Automation"
@@ -187,6 +188,7 @@ private fun sealedPayload(
         automationInput(input.notes)?.let { put("notes", it) }
         automationInput(input.cleared)?.let { put("cleared", it) }
         automationInput(input.externalId)?.let { put("external", it) }
+        automationInput(input.transferTo)?.let { put("transfer", it) }
         put("format", input.amountFormat.name)
         put("source", source)
         put("at", nowEpochMs)

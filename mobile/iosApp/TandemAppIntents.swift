@@ -42,6 +42,13 @@ struct TandemAppShortcuts: AppShortcutsProvider {
             ]
         )
         AppShortcut(
+            intent: TransferMoneyIntent(),
+            phrases: [
+                "Transfer money in \(.applicationName)",
+                "Move money between accounts in \(.applicationName)",
+            ]
+        )
+        AppShortcut(
             intent: LeftToSpendIntent(),
             phrases: [
                 "How much is left for \(\.$category) in \(.applicationName)",

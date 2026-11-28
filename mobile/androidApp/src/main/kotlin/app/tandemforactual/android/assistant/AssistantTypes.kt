@@ -64,6 +64,37 @@ data class AssistantTransaction(
 }
 
 /**
+ * Money moved between two accounts.
+ *
+ * @property amount The amount to move as a decimal number with a dot, such as 250.00.
+ * @property fromAccount The account the money leaves, such as Checking.
+ * @property toAccount The account the money goes to, such as Savings.
+ * @property date The date as year-month-day, such as 2026-11-27. Leave it out for today.
+ * @property notes Notes to keep with the transfer.
+ * @property externalId An ID from the source. Moving money with the same ID again within 30 days adds nothing.
+ */
+@AppFunctionSerializable(isDescribedByKDoc = true)
+data class AssistantTransfer(
+    val amount: String,
+    val fromAccount: String,
+    val toAccount: String,
+    val date: String? = null,
+    val notes: String? = null,
+    val externalId: String? = null,
+) {
+    internal fun toAutomation() =
+        AutomationTransactionInput(
+            amount = amount.trim().trimStart('+', '-', '−'),
+            account = fromAccount,
+            date = date,
+            notes = notes,
+            externalId = externalId,
+            amountFormat = AutomationAmountFormat.PLAIN,
+            transferTo = toAccount,
+        )
+}
+
+/**
  * A logged transaction.
  *
  * @property transactionId The transaction's ID in Tandem.
