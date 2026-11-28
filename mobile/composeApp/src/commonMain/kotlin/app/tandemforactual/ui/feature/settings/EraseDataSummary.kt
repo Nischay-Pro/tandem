@@ -9,6 +9,7 @@ import app.tandemforactual.data.planning.RetirementProfile
 import app.tandemforactual.data.planning.SavedSearch
 import app.tandemforactual.data.planning.SavingsGoal
 import app.tandemforactual.data.planning.SharedBill
+import app.tandemforactual.data.planning.TransactionTemplate
 import app.tandemforactual.data.planning.UnsyncedPlanningRecord
 import app.tandemforactual.ui.core.format.formatInteger
 
@@ -18,6 +19,7 @@ private val NAMED_KINDS =
         SharedBill.TYPE to ("shared bill" to "shared bills"),
         CustomReport.TYPE to ("saved report" to "saved reports"),
         SavedSearch.TYPE to ("saved search" to "saved searches"),
+        TransactionTemplate.TYPE to ("transaction template" to "transaction templates"),
         DepositTerms.TYPE to ("deposit" to "deposits"),
         CustomPaymentFormat.TYPE to ("payment format" to "payment formats"),
         DebtTerms.TYPE to ("debt detail" to "debt details"),

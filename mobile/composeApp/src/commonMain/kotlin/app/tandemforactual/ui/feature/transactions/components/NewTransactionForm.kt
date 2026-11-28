@@ -80,7 +80,7 @@ private fun NewTransactionFormContent(
                 onShowKeypad = { amountEntry.keypadVisible = true },
                 onDismissKeypad = dismissKeypad,
             )
-            NewTransactionTools(state, liveAccounts.isOffBudget(state.newTransactionAccountId), receiptScan, dismissKeypad)
+            NewTransactionTools(state, mobileSession, liveAccounts.isOffBudget(state.newTransactionAccountId), receiptScan, dismissKeypad)
             val offBudget = liveAccounts.isOffBudget(state.newTransactionAccountId)
             val splitting = state.transactionSplit != null && state.transactionType != "Transfer" && !offBudget
             TransactionFormDetailsCard(state, navigation, pickers, offBudget, dismissKeypad, showCategory = !splitting)
@@ -119,14 +119,16 @@ private fun NewTransactionFormContent(
     TransactionSaveConfirmationDialogs(confirmations, budgetAmountPreview, onCreateTransaction)
 }
 
-/** Split transaction and the receipt scanner side by side, for spending and income. */
+/** Saved templates, then split transaction and the receipt scanner side by side, for spending and income. */
 @Composable
 private fun NewTransactionTools(
     state: AppState,
+    mobileSession: TandemMobileSession,
     offBudget: Boolean,
     receiptScan: TransactionReceiptScanState,
     onDismissKeypad: () -> Unit,
 ) {
+    TransactionTemplatesRow(state, mobileSession)
     if (state.transactionType == "Transfer") return
     TransactionToolsRow {
         if (state.transactionSplit == null && !offBudget) TransactionSplitButton(state, onDismissKeypad)
